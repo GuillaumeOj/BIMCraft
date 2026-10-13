@@ -1,0 +1,20 @@
+format = 1
+
+[entity]
+name = "Containment"
+kind = "relationship"
+doc = "Places elements in the spatial structure, such as a storey."
+
+[ifc]
+entity = "IfcRelContainedInSpatialStructure"
+
+[[role]]
+name = "structure"
+targets = ["kind:spatial"]
+cardinality = "one"
+
+[[role]]
+name = "elements"
+targets = ["kind:element"]
+cardinality = "many"
+exclusive = true

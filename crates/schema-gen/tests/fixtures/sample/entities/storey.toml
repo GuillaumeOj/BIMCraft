@@ -1,0 +1,24 @@
+format = 1
+
+[entity]
+name = "Storey"
+kind = "spatial"
+doc = "A level of a building."
+
+[ifc]
+entity = "IfcBuildingStorey"
+
+[[attribute]]
+name = "name"
+value = "text"
+required = true
+
+[[attribute]]
+name = "elevation"
+value = "quantity:length"
+default = 0.0
+
+[[attribute]]
+name = "index"
+value = "integer"
+default = 1000000
