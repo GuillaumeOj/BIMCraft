@@ -20,5 +20,6 @@ Copy [`_template.md`](_template.md) and follow its comments.
 | ADR | Title | Status |
 | --- | --- | --- |
 | [0001](0001-geometry-tolerance-policy.md) | Geometry tolerance policy | Accepted |
+| [0002](0002-schema-definition-format.md) | Schema definition format | Accepted |
 
 One decision predates this folder and stays in the specification: the web UI over an all-Rust UI ([specification §13](../../specifications.md#13-ui-and-rendering), "Decision record").
