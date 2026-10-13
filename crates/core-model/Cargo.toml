@@ -7,5 +7,15 @@ rust-version.workspace = true
 license.workspace = true
 publish = false
 
+[dependencies]
+thiserror = { workspace = true }
+
+[dev-dependencies]
+proptest = { workspace = true }
+
+[features]
+# Exposes SeededIdSource for other crates' tests. Never enable it in a shipped build.
+test-support = []
+
 [lints]
 workspace = true
