@@ -54,6 +54,13 @@ function cargoDepTables(manifest: Table): Table[] {
       if (isTable(target)) collect(target);
     }
   }
+  // Overrides can swap any crate for a git fork or a range, so they follow the same rules.
+  if (isTable(manifest.patch)) {
+    for (const registry of Object.values(manifest.patch)) {
+      if (isTable(registry)) tables.push(registry);
+    }
+  }
+  if (isTable(manifest.replace)) tables.push(manifest.replace);
   return tables;
 }
 

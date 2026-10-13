@@ -53,6 +53,20 @@ odd = 3
     expect(messages.join("\n")).toContain('"odd" has an unsupported');
   });
 
+  test("checks [patch] and [replace] overrides", () => {
+    const toml = `
+[patch.crates-io]
+serde = { git = "https://example.com/serde" }
+pinned = "=1.0.0"
+[replace]
+"foo:0.1.0" = { version = "^0.1" }
+`;
+    const messages = checkCargoToml("Cargo.toml", toml).map((i) => i.message);
+    expect(messages).toHaveLength(2);
+    expect(messages.join("\n")).toContain('"serde" is a git dependency');
+    expect(messages.join("\n")).toContain('"foo:0.1.0" must use an exact version');
+  });
+
   test("accepts a manifest without dependencies", () => {
     expect(checkCargoToml("Cargo.toml", "[workspace]\nmembers = []\n")).toEqual([]);
   });
