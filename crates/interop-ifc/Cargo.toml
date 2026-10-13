@@ -1,0 +1,17 @@
+[package]
+name = "interop-ifc"
+version = "0.0.0"
+description = "IFC import and export: STEP Part 21 reading and writing, IFC 4.3 mapping."
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+thiserror = { workspace = true }
+
+[dev-dependencies]
+proptest = { workspace = true }
+
+[lints]
+workspace = true
