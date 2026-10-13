@@ -1,8 +1,8 @@
 //! The display units a project uses for each dimension.
 
 use super::{
-    AngleUnit, AreaUnit, DisplayFormat, ForceUnit, LengthUnit, MassUnit, MomentUnit, StressUnit,
-    VolumeUnit,
+    AngleFormat, AngleUnit, AreaUnit, DisplayFormat, ForceUnit, LengthUnit, MassUnit, MomentUnit,
+    StressUnit, VolumeUnit,
 };
 
 /// The unit and precision a project displays each dimension in (CORE-09). The model itself
@@ -16,7 +16,7 @@ pub struct ProjectUnits {
     /// Volumes: concrete, rooms.
     pub volume: DisplayFormat<VolumeUnit>,
     /// Angles: rotations, slopes.
-    pub angle: DisplayFormat<AngleUnit>,
+    pub angle: AngleFormat,
     /// Forces: loads and reactions.
     pub force: DisplayFormat<ForceUnit>,
     /// Bending moments.
@@ -35,7 +35,7 @@ impl Default for ProjectUnits {
             length: DisplayFormat::new(LengthUnit::Millimetre, 0),
             area: DisplayFormat::new(AreaUnit::SquareMetre, 2),
             volume: DisplayFormat::new(VolumeUnit::CubicMetre, 3),
-            angle: DisplayFormat::new(AngleUnit::Degree, 2),
+            angle: AngleFormat::Decimal(DisplayFormat::new(AngleUnit::Degree, 2)),
             force: DisplayFormat::new(ForceUnit::Kilonewton, 2),
             moment: DisplayFormat::new(MomentUnit::KilonewtonMetre, 2),
             stress: DisplayFormat::new(StressUnit::Megapascal, 1),
@@ -62,7 +62,7 @@ mod tests {
         );
         assert_eq!(
             Angle::new(90.0, AngleUnit::Degree)
-                .display(units.angle)
+                .display_angle(units.angle)
                 .to_string(),
             "90.00°"
         );

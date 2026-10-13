@@ -3,14 +3,14 @@
 use std::f64::consts::PI;
 
 use super::sealed::Sealed;
-use super::{Dimension, Unit};
+use super::{Dimension, ParseQuantityError, Unit, dms};
 
 /// Defines the unit enum of one dimension: each unit's factor to SI, display symbol and parsing
-/// aliases.
+/// aliases, and optionally the parser of a compound form (see [`Unit::parse_compound`]).
 macro_rules! unit_kind {
     (
         $(#[$doc:meta])*
-        $name:ident: $dimension:ident, SI = $si:ident;
+        $name:ident: $dimension:ident, SI = $si:ident $(, compound = $compound:path)?;
         $( $(#[$unit_doc:meta])* $unit:ident = $factor:expr, $symbol:literal $(| $alias:literal)*; )+
     ) => {
         $(#[$doc])*
@@ -37,6 +37,12 @@ macro_rules! unit_kind {
             fn aliases(self) -> &'static [&'static str] {
                 match self { $(Self::$unit => &[$($alias),*]),+ }
             }
+
+            $(
+                fn parse_compound(text: &str) -> Option<Result<f64, ParseQuantityError>> {
+                    $compound(text)
+                }
+            )?
         }
     };
 }
@@ -78,7 +84,7 @@ unit_kind! {
 
 unit_kind! {
     /// Units of [`Angle`](super::Angle).
-    AngleUnit: Angle, SI = Radian;
+    AngleUnit: Angle, SI = Radian, compound = dms::parse_si;
     /// Radian (`rad`), the SI unit.
     Radian = 1.0, "rad";
     /// Degree (`°`).
@@ -130,7 +136,8 @@ unit_kind! {
 }
 
 /// Instantiates the generic function `$f` for every unit kind, as an array of function
-/// pointers. Adding a dimension here is enough for parsing and the tests to cover it.
+/// pointers. Adding a dimension here is enough for parsing and the tests to cover it; also add
+/// it to `KINDS` in `fuzz/fuzz_targets/parse_quantity.rs`.
 macro_rules! each_kind {
     ($f:ident) => {
         [

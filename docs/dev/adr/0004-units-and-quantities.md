@@ -2,7 +2,7 @@
 
 - Status: Accepted
 - Requirements: CORE-09, CORE-04, ANA-11, UI-04
-- Issues: [#22](https://github.com/GuillaumeOj/BIMCraft/issues/22)
+- Issues: [#22](https://github.com/GuillaumeOj/BIMCraft/issues/22), [#160](https://github.com/GuillaumeOj/BIMCraft/issues/160)
 
 ## Context
 
@@ -17,6 +17,7 @@ The core crates must build for `wasm32-unknown-unknown` (ARCH-01) and new depend
 - Conversions happen only at the text boundary. `Quantity::new(value, unit)` and `Quantity::get(unit)` convert; `Quantity::display(DisplayFormat)` formats in a unit with a fixed number of decimals; `Quantity::parse(text, default_unit)` reads user input, using the project unit when the text has no symbol.
 - Parse failures are typed (`ParseQuantityError`), including `WrongDimension` when the symbol belongs to another dimension (`"5 kN"` read as a length). Input is bounded to 64 bytes, and error messages never repeat it (SEC-03).
 - `ProjectUnits` holds one `DisplayFormat` per dimension, with metric building defaults (millimetres, square and cubic metres, kilonewtons, megapascals).
+- Angles have their own `AngleFormat`: a decimal `DisplayFormat`, or degrees, minutes and seconds with a chosen number of decimals on the seconds (`12°30′15.50″`). The angle is rounded once to a whole number of displayed steps and then split, so rounding carries (`0°59′59.99″` with no decimals is `1°00′00″`), and a negative angle has one leading sign. `Quantity::parse` reads the same form for angles through `Unit::parse_compound`, a hook only the angle units implement, so the generic parser has no per-dimension branch. It accepts the ASCII marks `d`, `'` and `"` and partial forms such as `12°30′`; minutes or seconds from 60 and malformed text are typed errors.
 - The `Unit` trait is sealed: symbols stay unique across dimensions, which parsing relies on.
 - Only metric units exist for now. Imperial units (ANA-11, "Later") will be new variants of the same enums. Locale-specific number formatting (UI-04) belongs to the UI: the core displays and parses only `.` as decimal separator, without thousands separators, and the UI converts to and from the user's settings. A comma is rejected rather than guessed, because `1,000` means one thousand in English and one in French.
 

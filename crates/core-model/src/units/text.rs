@@ -11,7 +11,7 @@ pub const MAX_DECIMALS: u8 = 9;
 
 /// `10^n` for every allowed number of decimals. Each is exact in `f64`, and a table avoids
 /// `powi`, whose precision depends on the platform (ENG-04).
-const POWERS_OF_TEN: [f64; MAX_DECIMALS as usize + 1] =
+pub(super) const POWERS_OF_TEN: [f64; MAX_DECIMALS as usize + 1] =
     [1e0, 1e1, 1e2, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8, 1e9];
 
 /// Longest text, in bytes, that [`Quantity::parse`] accepts. Anything longer is not a quantity
@@ -75,11 +75,16 @@ pub(super) fn write_with_symbol<U: Unit>(
 ) -> fmt::Result {
     let symbol = unit.symbol();
     let separator = if symbol == "°" { "" } else { " " };
-    // Padding needs the full text first; schedules rarely pad, so skip the allocation otherwise.
+    write_padded(f, format_args!("{number}{separator}{symbol}"))
+}
+
+/// Writes `text` honouring the formatter's width and alignment. Padding needs the full text
+/// first; schedules rarely pad, so the allocation is skipped otherwise.
+pub(super) fn write_padded(f: &mut fmt::Formatter<'_>, text: fmt::Arguments<'_>) -> fmt::Result {
     if f.width().is_some() {
-        f.pad(&format!("{number}{separator}{symbol}"))
+        f.pad(&text.to_string())
     } else {
-        write!(f, "{number}{separator}{symbol}")
+        f.write_fmt(text)
     }
 }
 
@@ -114,6 +119,16 @@ pub enum ParseQuantityError {
         /// The dimension of the unit found in the text.
         found: Dimension,
     },
+    /// An angle in degrees, minutes and seconds is malformed: parts out of order or repeated,
+    /// a sign inside the angle, or decimals on a part other than the last.
+    #[error("the angle is not written as degrees, minutes and seconds")]
+    InvalidAngle,
+    /// The minutes of an angle are 60 or more.
+    #[error("the minutes must be less than 60")]
+    MinutesOutOfRange,
+    /// The seconds of an angle are 60 or more.
+    #[error("the seconds must be less than 60")]
+    SecondsOutOfRange,
 }
 
 impl<U: Unit> Quantity<U> {
@@ -128,13 +143,15 @@ impl<U: Unit> Quantity<U> {
 
     /// Reads a quantity typed by a user: a number, optionally followed by a unit symbol such as
     /// `mm` or `kN·m`. Without a symbol the number is in `default_unit`, normally the project
-    /// unit. The decimal separator is `.` and there are no thousands separators: the UI converts
+    /// unit. Angles may also be written in degrees, minutes and seconds, such as `12°30′15.5″`
+    /// or `12d30'15.5"`. The decimal separator is `.` and there are no thousands separators: the UI converts
     /// text written in the user's locale before calling this (UI-04).
     ///
     /// # Errors
     ///
     /// Returns a [`ParseQuantityError`] when the text is too long or empty, the number is
-    /// malformed or overflows, or the unit is unknown or measures another dimension.
+    /// malformed or overflows, the unit is unknown or measures another dimension, or an angle in
+    /// degrees, minutes and seconds is malformed or has minutes or seconds from 60.
     pub fn parse(text: &str, default_unit: U) -> Result<Self, ParseQuantityError> {
         if text.len() > MAX_TEXT_LEN {
             return Err(ParseQuantityError::TooLong { len: text.len() });
@@ -142,6 +159,9 @@ impl<U: Unit> Quantity<U> {
         let text = text.trim();
         if text.is_empty() {
             return Err(ParseQuantityError::Empty);
+        }
+        if let Some(si) = U::parse_compound(text) {
+            return si.map(Self::from_si);
         }
         // No unit symbol starts with a character a number can contain, so the first other
         // character starts the unit. A comma stays in the number so that "1,5" or "1,000" is
@@ -361,10 +381,26 @@ mod tests {
                 },
                 "expected a unit of length, got a unit of force",
             ),
+            (
+                ParseQuantityError::InvalidAngle,
+                "the angle is not written as degrees, minutes and seconds",
+            ),
+            (
+                ParseQuantityError::MinutesOutOfRange,
+                "the minutes must be less than 60",
+            ),
+            (
+                ParseQuantityError::SecondsOutOfRange,
+                "the seconds must be less than 60",
+            ),
         ];
         for (error, message) in cases {
             assert_eq!(error.to_string(), message);
         }
+    }
+
+    fn parse_any<U: Unit>(text: &str) {
+        let _ = Quantity::<U>::parse(text, U::SI);
     }
 
     /// Writes `si` in every unit of `U` at full precision and checks it parses back.
@@ -415,8 +451,12 @@ mod tests {
         }
 
         #[test]
-        fn parsing_any_string_never_panics(text in "\\PC{0,80}") {
-            let _ = Length::parse(&text, LengthUnit::Millimetre);
+        // The first alternative is the alphabet of numbers and angle marks, which random text
+        // rarely combines.
+        fn parsing_any_string_never_panics(text in "[-+0-9. °′″'\"d]{0,24}|\\PC{0,80}") {
+            for parse in each_kind!(parse_any) {
+                parse(&text);
+            }
         }
     }
 }
