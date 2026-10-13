@@ -32,7 +32,7 @@ check actionlint "https://github.com/rhysd/actionlint/releases/tag/v$ACTIONLINT_
 check mdbook  "cargo install --locked mdbook@$MDBOOK_VERSION"
 
 if command -v bun >/dev/null 2>&1 && [ "$(bun --version)" != "$BUN_VERSION" ]; then
-  echo "  WARNING  bun $(bun --version) found, project uses $BUN_VERSION: bun upgrade --version $BUN_VERSION" >&2
+  echo "  WARNING  bun $(bun --version) found, project uses $BUN_VERSION: curl -fsSL https://bun.sh/install | bash -s bun-v$BUN_VERSION" >&2
 fi
 
 [ "$missing" -eq 0 ] && echo "Setup complete." || echo "Install the missing tools above, then re-run scripts/setup.sh."
