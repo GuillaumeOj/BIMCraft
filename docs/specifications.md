@@ -67,7 +67,7 @@ flowchart TD
     subgraph CORE["Platform-agnostic core (wasm32-compatible)"]
         DISC["Architecture · Structure · MEP · Thermal"]
         SVC["Analysis · Documentation · Interop · Georeferencing"]
-        KERNEL["Core model, transactions, geometry, units"]
+        KERNEL["Schema registry, core model, transactions, geometry, units"]
     end
     CORE --> TRAITS["Platform traits<br/>Storage, TaskExecutor, Clock, ComputeBackend"]
     DESK["Desktop host (first)<br/>Tauri, native files, rayon, child processes"] -. implements .-> TRAITS
@@ -83,7 +83,7 @@ Arrows point from a caller to what it calls; the two hosts implement the platfor
 | Crate group | Content | Platform rule |
 | --- | --- | --- |
 | `schema` | Entity definition parser, validator, canonical model and registry | wasm32-compatible |
-| `schema-gen` | Generators for Rust types, JSON Schema, IFC mapping, reference documentation and Python stubs | Build-time only |
+| `schema-gen` | Generators for Rust types, serialization, the API schema, Python type stubs, IFC mapping code and reference documentation | Build-time only |
 | `core-model` | Entities, attribute tables, relationships, IDs, units | wasm32-compatible |
 | `core-txn` | Commands, transactions, undo/redo, events | wasm32-compatible |
 | `geom` | Geometry kernel, representations, tessellation | wasm32-compatible |
@@ -111,7 +111,7 @@ The model is proprietary and IFC-aligned: every internal concept maps to an IFC 
 
 **5.1 Schema as the single source of truth**
 
-Each entity definition declares its attributes, property sets, allowed relationships, representations and IFC mapping. Generators produce the Rust types, serialization, the API schema, Python type stubs, the IFC mapping code and the reference documentation. Core entities are generated into Rust types at build time by `schema-gen`; plugin entities (PY-04) are written in the same format and loaded at runtime by `schema` into the same registry, so the parser, validator and canonical model are runtime code that builds for wasm32.
+Each entity definition declares its attributes, property sets, allowed relationships, representations and IFC mapping. For core entities, generators produce at build time the Rust types, serialization, the API schema, Python type stubs, the IFC mapping code and the reference documentation. Plugin entities (PY-04) use the same format and are loaded at runtime into the same registry; CORE-10 and PY-07 apply to them as to core entities.
 
 **5.2 Requirements**
 
