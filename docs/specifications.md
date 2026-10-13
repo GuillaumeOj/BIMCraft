@@ -16,7 +16,7 @@ The product produces three kinds of deliverables from a single source of truth: 
 4. IFC-aligned, not IFC-bound: a proprietary model whose concepts map one-to-one onto IFC 4.3.
 5. Progressive detail: any element can exist at a coarse level of detail and be refined without being redrawn.
 
-**Conventions.** MUST marks a requirement for the release where it is scheduled. SHOULD marks a strong recommendation that can be deferred with a written reason. Requirement IDs (CORE-01, GEO-01…) are stable and referenced by tests and issues. Priority column values: MVP, V1, Later.
+**Conventions.** MUST marks a requirement for the release where it is scheduled. SHOULD marks a strong recommendation that can be deferred with a written reason. Requirement IDs (CORE-01, GEO-01…) are stable and referenced by tests and issues. Priority column values: MVP, V1, Later. Applied to model elements, component, type and instance have their glossary meaning (16.3).
 
 **Status.** First draft for discussion. Sections 5, 6 and 12 are the most structuring and should be reviewed first.
 
@@ -27,12 +27,12 @@ The MVP is a structure-and-architecture desktop tool: design a reinforced concre
 | Area | MVP | V1 | Later |
 | --- | --- | --- | --- |
 | Platforms | Windows, macOS desktop | Linux desktop | Browser (WASM) |
-| Disciplines | Structure (RC with reinforcement, steel); core architecture (building elements, door and window families, curtain walls, massing, spaces and area schemes) | Timber; advanced architecture (section 8.2); phases and design options; embodied carbon; MEP networks; fire safety | Thermal, acoustics, accessibility, daylight analysis, freeform architecture, bridges and civil works |
+| Disciplines | Structure (RC with reinforcement, steel); core architecture (building elements, door and window components, curtain walls, massing, spaces and area schemes) | Timber; advanced architecture (section 8.2); phases and design options; embodied carbon; MEP networks; fire safety | Thermal, acoustics, accessibility, daylight analysis, freeform architecture, bridges and civil works |
 | Geometry | Extrusions, sweeps, planar booleans, rebar detailing, steel connections | — | Freeform / NURBS surfaces |
 | Documentation | Plans, sections, elevations, details, sheets, area tables, room, door, window, quantity and rebar schedules, PDF export | Other schedules, colour-filled and presentation views, DXF export | DWG export |
 | Analysis | Linear static FEM (bars) | Shells, Eurocode checks | Dynamic, thermal (RE2020 energy) |
 | Interop | IFC 4.3 import/export, rebar and steel fabrication export (BVBS, DSTV/NC1) | DXF, BCF, point clouds, glTF export | DWG, RVT via Revit add-in |
-| Extensibility | Command API, Python SDK | MCP server, visual node editor, object editor | Plugin marketplace |
+| Extensibility | Command API, Python SDK | MCP server, visual node editor, component editor | Plugin marketplace |
 | Collaboration | Single user, local files | Model linking | Real-time multi-user |
 
 **Out of scope** (no plan to build): photorealistic rendering, construction scheduling (4D) and costing (5D), site management, and facility management. These are served by exporting to specialised tools (glTF for rendering, see INT-06).
@@ -47,7 +47,7 @@ The primary user is the engineer or designer in a design office from feasibility
 | --- | --- | --- |
 | Structural engineer | Model RC, steel and timber structures, run analysis, produce reports | Analytical model derived from the physical one, code checks, traceable results |
 | Structural draftsperson | Formwork and reinforcement drawings, rebar schedules | Fast detailing tools, reliable live views, DWG/PDF output |
-| Architect | Massing, programme, site, façades, spaces, interiors, renovation, permit, tender and construction drawings | Massing linked to building elements, parametric families at several levels of detail, live area tables against the programme, planning-rule checks, presentation views |
+| Architect | Massing, programme, site, façades, spaces, interiors, renovation, permit, tender and construction drawings | Massing linked to building elements, parametric components at several levels of detail, live area tables against the programme, planning-rule checks, presentation views |
 | MEP engineer (HVAC, electrical, plumbing) | Networks, equipment, sizing | System graphs, sizing calculations, clash detection |
 | Thermal engineer | Envelope, zones, energy calculations | Thermal zones and envelope data extracted from the model |
 | BIM manager | Coordination, IFC exchanges, standards | Robust IFC round-trip, BCF issues, project templates |
@@ -83,11 +83,11 @@ Arrows point from a caller to what it calls; the two hosts implement the platfor
 | Crate group | Content | Platform rule |
 | --- | --- | --- |
 | `schema` | Declarative entity definitions and code generators | Build-time only |
-| `core-model` | Entities, components, relationships, IDs, units | wasm32-compatible |
+| `core-model` | Entities, attribute tables, relationships, IDs, units | wasm32-compatible |
 | `core-txn` | Commands, transactions, undo/redo, events | wasm32-compatible |
 | `geom` | Geometry kernel, representations, tessellation | wasm32-compatible |
 | `georef` | Coordinate systems, map conversion | wasm32-compatible |
-| `disc-arch`, `disc-struct`, `disc-mep`, `disc-thermal` | Discipline types, tools, rules | wasm32-compatible |
+| `disc-arch`, `disc-struct`, `disc-mep`, `disc-thermal` | Discipline entities, tools, rules | wasm32-compatible |
 | `analysis` | Analytical models, solver orchestration, results | wasm32-compatible |
 | `docgen` | Views, hidden lines, annotation, sheets | wasm32-compatible |
 | `interop-ifc`, `interop-dxf`, `interop-bcf` | Import and export | wasm32-compatible |
@@ -117,15 +117,15 @@ Each entity definition declares its attributes, property sets, allowed relations
 | ID | Requirement | Priority |
 | --- | --- | --- |
 | CORE-01 | Every object MUST carry a stable 128-bit GUID, convertible to and from IFC GlobalId. | MVP |
-| CORE-02 | Types and occurrences MUST be separate: an occurrence inherits from its type and may override allowed properties. | MVP |
+| CORE-02 | Components, types and instances MUST be separate: an instance inherits from its type and may override allowed properties. | MVP |
 | CORE-03 | Relationships MUST be first-class objects (aggregation, containment, connection, voiding, assignment), mirroring IfcRel\* semantics. | MVP |
 | CORE-04 | Properties MUST be grouped in property sets with typed values and units; custom property sets MUST be definable by users and plugins. | MVP |
-| CORE-05 | Storage SHOULD use an entity-component layout (entities plus typed component tables) for memory locality on large models. | MVP |
+| CORE-05 | Storage SHOULD keep entity data in typed attribute tables for memory locality on large models. | MVP |
 | CORE-06 | Every change MUST go through a command executed inside a transaction; transactions are atomic and undoable. | MVP |
 | CORE-07 | Every transaction MUST emit a change event listing created, modified and deleted objects. | MVP |
 | CORE-08 | Derived data (geometry, views, analytical models) MUST be recomputed through a dependency graph, lazily and incrementally. | MVP |
 | CORE-09 | Units MUST be explicit everywhere; internal storage uses SI, display follows project settings. | MVP |
-| CORE-10 | Each internal type MUST have an entry in the IFC mapping table (entity + predefined type), covered by round-trip tests. | MVP |
+| CORE-10 | Each schema entity MUST have an entry in the IFC mapping table (entity + predefined type), covered by round-trip tests. | MVP |
 | CORE-11 | Commands MUST be serializable, so that history, macros, replay and future collaboration share one mechanism. | MVP |
 | CORE-12 | The model SHOULD support partial loading by storey, zone or discipline. | V1 |
 | CORE-13 | Projects MUST be able to link other project files read-only (model linking). | V1 |
@@ -140,6 +140,7 @@ The native file format is a SQLite database with a versioned schema. It works na
 - PERS-01 (MVP): files MUST carry a schema version; the application MUST open files from all earlier versions through migrations.
 - PERS-02 (MVP): a crash MUST never corrupt a saved file; autosave runs at a configurable interval.
 - PERS-03 (V1): large binary data (point clouds, images) SHOULD be stored in side files referenced from the database.
+- PERS-04 (MVP): components MUST be storable as standalone files in the native file format, versioned and migrated like project files (PERS-01); the component library (COM-03) is made of these files. Loading a component file is an import: INT-01 and INT-02 apply.
 
 ## 6. Geometry kernel
 
@@ -154,7 +155,7 @@ Every element holds several representations, computed on demand from the same pa
 | LOD 100 | Bounding volume or symbol | Massing, early studies |
 | LOD 200 | Simplified body, correct envelope | Coordination, overall plans |
 | LOD 300 | Precise geometry of the element | Detailed design, quantities |
-| LOD 400 | Sub-components (hardware, rebar, connections) | Execution details, fabrication |
+| LOD 400 | Detailed parts (hardware, rebar, connections) | Execution details, fabrication |
 
 **6.2 Requirements**
 
@@ -170,8 +171,8 @@ Every element holds several representations, computed on demand from the same pa
 | GEO-08 | Rebar geometry (bending shapes, covers, anchorage) MUST be generated from parameters. | MVP |
 | GEO-09 | Curved surfaces (cylinders, cones, then NURBS) SHOULD be supported for complex façades and bridges. | Later |
 | GEO-10 | Meshes from imports MUST be usable as-is when no solid can be rebuilt. | MVP |
-| GEO-11 | Joins between elements (walls, slabs, beams, columns) MUST be resolved at L, T and X junctions, layer by layer for layered elements following their layer priority (MAT-03). Users MUST be able to allow or disallow each join, choose its type (butt, mitre, square-off) and which element runs through, and override layer priorities. | MVP |
-| GEO-12 | An object editor MUST let users author parametric objects of any discipline (profiles, parameters, constraints, LOD representations) without code. | V1 |
+| GEO-11 | Joins between elements (walls, slabs, beams, columns) MUST be resolved at L, T and X junctions, layer by layer for layered elements following their layer priority (MAT-03). Users MUST be able to allow or disallow each join, choose its style (butt, mitre, square-off) and which element runs through, and override layer priorities. | MVP |
+| GEO-12 | A component editor MUST let users author parametric components (CORE-02) of any discipline (profiles, parameters, constraints, LOD representations) without code. | V1 |
 
 **Acceptance target.** A test corpus of at least 1,000 boolean cases, including degenerate ones (coplanar faces, touching edges, near-zero volumes), runs in CI and MUST pass before each release.
 
@@ -202,7 +203,7 @@ Every project is placed on Earth through a projected coordinate reference system
 
 ## 8. Discipline modules
 
-Each discipline is a package that registers its types, tools and rules through the same extension interfaces as third-party plugins. Disciplines share the core model, so a structural beam, an architectural wall and an HVAC duct can be checked against each other without export.
+Each discipline is a package that registers its entities, tools and rules through the same extension interfaces as third-party plugins. Disciplines share the core model, so a structural beam, an architectural wall and an HVAC duct can be checked against each other without export.
 
 **8.1 Materials (shared)**
 
@@ -228,7 +229,7 @@ Architecture covers the architect's whole job from feasibility to construction d
 
 *8.2.2 Façades and envelope*
 
-- ARC-09 (MVP): parametric families for doors and windows at LOD 100 to 400 (frames, leaves, sills); hardware sets are ARC-27.
+- ARC-09 (MVP): parametric components for doors and windows at LOD 100 to 400 (frames, leaves, sills); hardware sets are ARC-27.
 - ARC-10 (MVP): curtain walls (glazed façades hung from the structure) on planar grids, with mullions, transoms and panels; doors and windows can replace panels.
 - ARC-11 (V1): façade panelling, extending the curtain wall grids of ARC-10 to any surface: divide it into panels, group panels into types within a tolerance, and schedule the panel types (DOC-16).
 - ARC-12 (V1): parametric envelope details (parapets, sills, lintels, roof-to-wall junctions) that feed detail views (DOC-09).
@@ -243,11 +244,11 @@ Architecture covers the architect's whole job from feasibility to construction d
 *8.2.4 Programme and spaces*
 
 - ARC-17 (MVP): spaces MUST carry a function, an occupancy, a required area and intended floor, wall and ceiling finishes. Their boundaries follow the bounding elements live. These finishes are the defaults of the finishes per face (ARC-25).
-- ARC-18 (MVP): area schemes per national rules (France: SDP or surface de plancher, SHAB or surface habitable, surface utile), applied to spaces and massing slices, as schedules (DOC-16) grouped by space, level and building; grouping by apartment or tenant comes with zone types (ARC-22).
+- ARC-18 (MVP): area schemes per national rules (France: SDP or surface de plancher, SHAB or surface habitable, surface utile), applied to spaces and massing slices, as schedules (DOC-16) grouped by space, level and building; grouping by apartment or tenant comes with zone categories (ARC-22).
 - ARC-19 (V1): a space programme (required rooms and areas) MUST be importable from CSV and compared with the designed spaces, flagging deviations.
 - ARC-20 (V1): adjacency requirements between spaces, and stacking and blocking diagram views.
 - ARC-21 (V1): room data sheets generated per space (finishes, equipment, requirements) and exported to PDF.
-- ARC-22 (V1): architectural zone types (apartments, tenants, departments) built on zones (CORE-14).
+- ARC-22 (V1): architectural zone categories (apartments, tenants, departments) built on zones (CORE-14).
 
 *8.2.5 Site and planning*
 
@@ -257,7 +258,7 @@ Architecture covers the architect's whole job from feasibility to construction d
 *8.2.6 Interiors and finishes*
 
 - ARC-25 (V1): finishes per face and per side of a space, defaulting to the space finishes (ARC-17), with split faces and finish schedules (DOC-16).
-- ARC-26 (V1): casework, furniture, equipment and sanitary layouts placed from library objects.
+- ARC-26 (V1): casework, furniture, equipment and sanitary layouts placed from the component library (COM-03).
 - ARC-27 (V1): door hardware sets.
 
 *8.2.7 Existing buildings and renovation*
@@ -288,7 +289,7 @@ Architecture covers the architect's whole job from feasibility to construction d
 - MEP-03 (V1): clash detection between disciplines, with results exportable as BCF.
 - MEP-04 (V1): electrical design: circuits, distribution boards, load balancing, cable sizing, lighting layouts.
 - MEP-05 (V1): named sizing methods per network: duct pressure drop, pipe sizing by fixture units, voltage drop.
-- MEP-06 (Later): sprinklers and fire mains as network types.
+- MEP-06 (Later): sprinklers and fire mains as additional networks.
 - MEP-07 (Later): import of manufacturer product data and catalogues.
 - MEP-08 (Later): room loads from the thermal module feed equipment sizing.
 - MEP-09 (Later): pipework spools and isometric drawings for prefabrication.
@@ -371,7 +372,7 @@ All 2D documentation is a live view of the model: a change in the model updates 
 
 ## 11. Interoperability
 
-IFC 4.3 is the primary exchange format and MUST round-trip without loss for every mapped type. Every importer and exporter is written from scratch in Rust, except the Revit bridge.
+IFC 4.3 is the primary exchange format and MUST round-trip without loss for every mapped entity. The exception is components (CORE-02): IFC cannot hold parametric definitions, so they follow INT-07 and INT-08. Every importer and exporter is written from scratch in Rust, except the Revit bridge.
 
 | Format | Direction | Approach | Priority |
 | --- | --- | --- | --- |
@@ -398,6 +399,9 @@ IFC 4.3 is the primary exchange format and MUST round-trip without loss for ever
 - INT-04 (MVP): IFC round-trip tests MUST run in CI on a public corpus of sample files (e.g. buildingSMART samples).
 - INT-05 (V1): the product SHOULD seek buildingSMART IFC certification for the export.
 - INT-06 (V1): export to glTF 2.0 for external visualisation and rendering tools; walkthrough animations come later.
+- INT-07 (MVP): components MUST export to IFC as type objects with shared geometry (representation maps), each carrying its library reference (component ID and version) and its parameter values in a property set; instances export as occurrences with their overridden values, plus their own geometry when an override touches a parameter the component declares geometric.
+- INT-08 (MVP): on IFC import, a type carrying a library reference MUST be rebuilt as parametric through the normal type-creation command when that component version is available; otherwise, or when the command rejects its values, it stays static. A rebuilt type replaces the geometry stored in the file. The import report (INT-02) MUST list static types, version mismatches and rejected values.
+- INT-09 (V1): a component library MUST be exportable as an IFC project library (IfcProjectLibrary) of static types for other tools.
 
 **RVT position.** The .rvt format is closed, undocumented and changes with each Revit version. Native reading is a non-goal; the only planned route is the Revit add-in. The add-in writes the BIMCraft native format directly, so no information is lost through an intermediate IFC step.
 
@@ -430,10 +434,10 @@ The command and query protocol is the product's central contract: the UI, Python
 - PY-01 (MVP): the Python SDK is a thin, typed client over the protocol, generated from the schema, with type stubs for IDE completion.
 - PY-02 (MVP): on desktop, plugins run in a separate Python process; a plugin crash MUST NOT affect the application.
 - PY-03 (V1): plugins MUST declare permissions (file system, network, model write) in a manifest; the user grants them at install.
-- PY-04 (V1): plugins can add commands, panels, element types, solvers and import/export formats.
+- PY-04 (V1): plugins can add commands, panels, schema entities, solvers and import/export formats.
 - PY-05 (Later): in the browser, the same SDK runs in Pyodide inside a worker, or plugins run server-side.
 - PY-06 (MVP): a script console inside the application for quick automation.
-- PY-07 (V1): plugin-defined types and property sets MUST carry versions and migrations, like the core schema.
+- PY-07 (V1): plugin-defined entities and property sets MUST carry versions and migrations, like the core schema.
 - PY-08 (V1): plugin permissions are declarative, not enforced; this MUST be stated plainly, with plugin signing and a reviewed plugin registry.
 
 **12.3 MCP server**
@@ -491,7 +495,7 @@ The figures below are proposed targets, to be validated against a reference mode
 - SEC-01 (MVP): no unsafe Rust outside a small, audited list of modules.
 - SEC-02 (MVP): plugins and imports run isolated from the core (see PY-02, INT-01).
 - SEC-03 (MVP): crash reports are opt-in and never include model content without explicit consent.
-- SEC-04 (Later): server components (solvers, collaboration, MCP endpoint) MUST ship as self-hostable services (e.g. container images), letting each operator choose data location and meet GDPR.
+- SEC-04 (Later): server-side parts (solvers, collaboration, MCP endpoint) MUST ship as self-hostable services (e.g. container images), letting each operator choose data location and meet GDPR.
 - SEC-05 (MVP): dependency auditing (cargo-deny, cargo-audit) in CI and an SBOM published with each release.
 
 **Engineering practices**
@@ -508,7 +512,7 @@ The figures below are proposed targets, to be validated against a reference mode
 
 - COM-01 (MVP): Developer Certificate of Origin, code of conduct and a written governance model.
 - COM-02 (MVP): starter templates per discipline and country (levels, view templates, title blocks, materials).
-- COM-03 (MVP): sample projects and a shared, versioned object library.
+- COM-03 (MVP): sample projects and a shared, versioned component library.
 - COM-04 (MVP): user guide, tutorials and API reference generated from the schema, published with each release.
 - COM-05 (MVP): contributor onboarding: architecture guide, "good first issue" labels, local build in one command.
 - COM-06 (V1): in-app feedback and issue reporting linked to the public tracker.
@@ -521,7 +525,7 @@ Each phase ends with a usable product, and the next phase starts only once its g
 | --- | --- | --- | --- |
 | 0 | Foundations | Workspace and CI, schema and generators, model and transactions, SQLite persistence, IFC 4.3 parser, geometry test corpus | IFC round-trip and 1,000 boolean cases pass |
 | 1 | MVP, structure and architecture | RC with reinforcement, steel with connections, analytical model, bar FEM and report, core architecture, documentation on sheets with schedules, Python SDK and console (MVP column of section 2) | Design, analyse and document a building from planning permit to construction drawings |
-| 2 | V1, multi-discipline | Linux desktop, timber, Eurocode checks, advanced architecture (section 8.2), phases and design options, embodied carbon, presentation views and glTF export, node and object editors, MEP and clash detection, other schedules, BCF, DXF and MCP server | A pilot office uses it on a real project |
+| 2 | V1, multi-discipline | Linux desktop, timber, Eurocode checks, advanced architecture (section 8.2), phases and design options, embodied carbon, presentation views and glTF export, node and component editors, MEP and clash detection, other schedules, BCF, DXF and MCP server | A pilot office uses it on a real project |
 | 3 | Later, platform | Browser host (WASM), thermal and RE2020 energy, freeform architecture and daylight analysis, bridges and alignments, DWG and RVT add-in, collaboration, plugin marketplace | — |
 
 Phase 0 is invisible to users but decides the rest: the schema, transactions and test corpora are expensive to change later. The browser host sits in phase 3, but ARCH-01 keeps it buildable from the first commit.
@@ -547,7 +551,7 @@ Phase 0 is invisible to users but decides the rest: the schema, transactions and
 - [x] Revit add-in output: IFC, or the BIMCraft native format? Decided: the add-in writes the BIMCraft native format directly.
 - [x] Which national annexes beyond France, and in what order? Decided: France, Germany, Spain, Italy, then other European countries; then North America, then South America; long term, every country worldwide.
 - [x] Is collaboration built on serialized commands alone, or on a CRDT layer? Decided: server-ordered commands, last-writer-wins per property, plus element or discipline ownership.
-- [ ] Hosting and pricing model for the browser product and server-side solvers? Currently none planned: every server component is self-hostable.
+- [ ] Hosting and pricing model for the browser product and server-side solvers? Currently none planned: every server-side part is self-hostable.
 - [ ] Register the BIMCraft trademark before public launch (deferred in the specialist review).
 
 **16.3 Glossary**
@@ -559,12 +563,15 @@ Phase 0 is invisible to users but decides the rest: the schema, transactions and
 | LOD | Level of detail (geometry) and of information |
 | Analytical model | Idealised structural model (bars, shells, nodes) used by solvers |
 | Area scheme | A set of rules defining how floor areas are measured for a given purpose (e.g. French SDP for planning permits) |
+| Component | A reusable parametric definition of an element (e.g. a hinged door), from which types are made |
 | CRS | Coordinate reference system |
 | Curtain wall | A non-load-bearing façade, usually glazed, hung from the structure on a grid of mullions and transoms |
 | EPD | Environmental product declaration: the life-cycle environmental data of a product, used for embodied carbon |
+| Instance | A placement of a type in a project (IFC occurrence) |
 | Massing | Simple volumes used in early design to study the form and floor areas of a building |
 | MCP | Model Context Protocol, used to connect AI assistants to tools |
 | OPFS | Origin Private File System, browser storage used for project files |
 | PLU | Plan local d'urbanisme: the French local planning rules (setbacks, heights, footprint) |
 | RE2020 | The French environmental regulation for new buildings, covering energy and carbon |
+| Type | A named set of parameter values for a component, e.g. a 90 × 215 cm single-leaf door (IFC type object) |
 | WASM | WebAssembly, the browser compilation target of the core |

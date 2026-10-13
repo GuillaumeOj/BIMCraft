@@ -82,7 +82,7 @@ Users are architects and engineers, not developers. For every user-facing featur
 
 - Biome for formatting, linting **and import sorting** (`ui/biome.json`). No ESLint or Prettier.
 - `tsc --noEmit` in strict mode (`ui/tsconfig.base.json`); no `any`, no non-null assertions, no `@ts-ignore`.
-- The UI talks to the core only through the command API (`UI-01`); all strings are externalised (`UI-04`); components are accessible (labels, keyboard, contrast — `UI-06`).
+- The UI talks to the core only through the command API (`UI-01`); all strings are externalised (`UI-04`); UI components are accessible (labels, keyboard, contrast — `UI-06`).
 
 **Everywhere**
 
