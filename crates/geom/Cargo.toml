@@ -17,6 +17,7 @@ thiserror = { workspace = true }
 
 [dev-dependencies]
 criterion = { workspace = true }
+libm = { workspace = true }
 num-rational = { workspace = true }
 proptest = { workspace = true }
 

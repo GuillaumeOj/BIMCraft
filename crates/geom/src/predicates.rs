@@ -273,8 +273,8 @@ mod tests {
 
     #[test]
     fn range_bounds_are_powers_of_two() {
-        assert_eq!(MAX_COORDINATE.to_bits(), 2f64.powi(100).to_bits());
-        assert_eq!(MIN_COORDINATE.to_bits(), 2f64.powi(-100).to_bits());
+        assert_eq!(MAX_COORDINATE.to_bits(), libm::scalbn(1.0, 100).to_bits());
+        assert_eq!(MIN_COORDINATE.to_bits(), libm::scalbn(1.0, -100).to_bits());
     }
 
     #[test]

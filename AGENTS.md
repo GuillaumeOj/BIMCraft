@@ -76,6 +76,7 @@ Users are architects and engineers, not developers. For every user-facing featur
 - `taplo fmt` for TOML files.
 - Errors: typed errors (`thiserror`) in libraries; no panics on bad input.
 - Core crates build for `wasm32-unknown-unknown` (`ARCH-01`) and never use `std::fs`, `std::thread`, `std::time::Instant`, sockets or blocking I/O (`ARCH-02`); go through `platform` traits. `clippy.toml` rejects these APIs; core crates start with `#![forbid(clippy::disallowed_methods, clippy::disallowed_types)]`, and only crates outside `scripts/wasm-crates.txt` may opt out, at their crate root.
+- Core crates compute transcendental functions with `libm` (`libm::sin`, `libm::pow`…), never the std float methods (`f64::sin`, `f64::powi`…), whose precision depends on the platform (`ENG-04`); `clippy.toml` rejects them.
 - No crate depends on a crate in a higher layer (`ARCH-04`). Layers are declared in `scripts/crate-layers.txt`; add every new crate there.
 - Public items are documented (`missing_docs`).
 
