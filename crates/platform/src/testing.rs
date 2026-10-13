@@ -6,7 +6,7 @@
 
 use std::cell::{Cell, RefCell};
 use std::collections::BTreeMap;
-use std::future::ready;
+use std::fmt;
 use std::mem;
 use std::pin::pin;
 use std::task::{Context, Poll, Waker};
@@ -59,7 +59,10 @@ impl Clock for ManualClock {
     }
 }
 
-/// A [`Storage`] that keeps values in memory; every operation completes immediately.
+/// A [`Storage`] that keeps values in memory.
+///
+/// Like a real host, an operation takes effect only when its future is polled, so a forgotten
+/// `.await` fails the test; once polled, it completes immediately.
 #[derive(Debug, Default)]
 pub struct MemoryStorage {
     values: RefCell<BTreeMap<String, Vec<u8>>>,
@@ -81,8 +84,10 @@ impl MemoryStorage {
 
 impl Storage for MemoryStorage {
     fn read<'a>(&'a self, key: &'a str) -> BoxFuture<'a, Result<Vec<u8>, StorageError>> {
-        let value = self.values.borrow().get(key).cloned();
-        Box::pin(ready(value.ok_or(StorageError::NotFound)))
+        Box::pin(async move {
+            let value = self.values.borrow().get(key).cloned();
+            value.ok_or(StorageError::NotFound)
+        })
     }
 
     fn write<'a>(
@@ -90,15 +95,19 @@ impl Storage for MemoryStorage {
         key: &'a str,
         bytes: &'a [u8],
     ) -> BoxFuture<'a, Result<(), StorageError>> {
-        self.values
-            .borrow_mut()
-            .insert(key.to_owned(), bytes.to_vec());
-        Box::pin(ready(Ok(())))
+        Box::pin(async move {
+            self.values
+                .borrow_mut()
+                .insert(key.to_owned(), bytes.to_vec());
+            Ok(())
+        })
     }
 
     fn remove<'a>(&'a self, key: &'a str) -> BoxFuture<'a, Result<(), StorageError>> {
-        let removed = self.values.borrow_mut().remove(key);
-        Box::pin(ready(removed.map(drop).ok_or(StorageError::NotFound)))
+        Box::pin(async move {
+            let removed = self.values.borrow_mut().remove(key);
+            removed.map(drop).ok_or(StorageError::NotFound)
+        })
     }
 }
 
@@ -125,7 +134,7 @@ impl InlineExecutor {
         self.waiting.borrow().len()
     }
 
-    /// Polls waiting tasks again and again until none finishes and none is spawned.
+    /// Polls waiting tasks again and again until a whole pass finishes none of them.
     pub fn run_until_stalled(&self) {
         loop {
             // Taken out of the cell so tasks can call `spawn` while they are polled.
@@ -137,13 +146,22 @@ impl InlineExecutor {
                 .collect();
             let finished = still_waiting.len() < polled;
             let mut waiting = self.waiting.borrow_mut();
-            let spawned = !waiting.is_empty();
             still_waiting.append(&mut waiting);
             *waiting = still_waiting;
-            if !finished && !spawned {
+            // Stopping on "nothing finished" rather than "nothing spawned" also ends the loop
+            // when a waiting task spawns another waiting task every time it is polled.
+            if !finished {
                 return;
             }
         }
+    }
+}
+
+impl fmt::Debug for InlineExecutor {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("InlineExecutor")
+            .field("pending", &self.pending())
+            .finish()
     }
 }
 
@@ -183,25 +201,34 @@ impl FakeComputeBackend {
     }
 }
 
+impl fmt::Debug for FakeComputeBackend {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("FakeComputeBackend")
+            .field("solvers", &self.solvers.keys().collect::<Vec<_>>())
+            .finish()
+    }
+}
+
 impl ComputeBackend for FakeComputeBackend {
     fn run<'a>(
         &'a self,
         solver: &'a str,
         input: Vec<u8>,
     ) -> BoxFuture<'a, Result<Vec<u8>, ComputeError>> {
-        let output = match self.solvers.get(solver) {
-            Some(run) => run(input),
-            None => Err(ComputeError::UnknownSolver {
-                name: solver.to_owned(),
-            }),
-        };
-        Box::pin(ready(output))
+        Box::pin(async move {
+            match self.solvers.get(solver) {
+                Some(run) => run(input),
+                None => Err(ComputeError::UnknownSolver {
+                    name: solver.to_owned(),
+                }),
+            }
+        })
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::future::{pending, poll_fn};
+    use std::future::{pending, poll_fn, ready};
     use std::rc::Rc;
 
     use super::*;
@@ -239,6 +266,16 @@ mod tests {
             now_or_never(dyn_storage.read("a")),
             Some(Ok(b"two".to_vec()))
         );
+    }
+
+    #[test]
+    fn memory_storage_ignores_operations_that_are_never_awaited() {
+        let storage = MemoryStorage::new();
+        drop(storage.write("a", b"one"));
+        assert!(storage.keys().is_empty());
+        assert_eq!(now_or_never(storage.write("a", b"one")), Some(Ok(())));
+        drop(storage.remove("a"));
+        assert_eq!(storage.keys(), ["a"]);
     }
 
     #[test]
@@ -339,15 +376,38 @@ mod tests {
     fn inline_executor_keeps_tasks_spawned_while_waiting() {
         let executor = Rc::new(InlineExecutor::new());
         let gate = Rc::new(Cell::new(false));
-        let (outer_gate, inner_gate) = (wait_for(&gate), Rc::clone(&gate));
-        let spawner = Rc::clone(&executor);
+        let (wait, spawner) = (wait_for(&gate), Rc::clone(&executor));
         executor.spawn(Box::pin(async move {
-            outer_gate.await;
+            wait.await;
             spawner.spawn(Box::pin(pending()));
         }));
-        inner_gate.set(true);
+        gate.set(true);
         executor.run_until_stalled();
         assert_eq!(executor.pending(), 1);
+    }
+
+    #[test]
+    fn inline_executor_stops_when_a_task_keeps_spawning_waiting_tasks() {
+        let executor = Rc::new(InlineExecutor::new());
+        let spawner = Rc::clone(&executor);
+        executor.spawn(Box::pin(poll_fn(move |_| {
+            spawner.spawn(Box::pin(pending()));
+            Poll::<()>::Pending
+        })));
+        executor.run_until_stalled();
+        assert_eq!(executor.pending(), 3);
+    }
+
+    #[test]
+    fn doubles_describe_themselves() {
+        let executor = InlineExecutor::new();
+        executor.spawn(Box::pin(pending()));
+        assert_eq!(format!("{executor:?}"), "InlineExecutor { pending: 1 }");
+        let backend = FakeComputeBackend::new().with_solver("echo", Ok);
+        assert_eq!(
+            format!("{backend:?}"),
+            r#"FakeComputeBackend { solvers: ["echo"] }"#
+        );
     }
 
     #[test]

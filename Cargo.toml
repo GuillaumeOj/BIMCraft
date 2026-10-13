@@ -10,7 +10,8 @@ edition = "2024"
 rust-version = "1.98"
 license = "MIT"
 
-# Every dependency is declared here once, with an exact version ("=x.y.z").
+# Every dependency is declared here once: external crates with an exact version ("=x.y.z"),
+# workspace crates by path.
 # Member crates use `name = { workspace = true }`.
 [workspace.dependencies]
 criterion = { version = "=0.8.2", default-features = false }
