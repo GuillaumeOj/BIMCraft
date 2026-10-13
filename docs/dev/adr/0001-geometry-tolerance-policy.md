@@ -35,7 +35,7 @@ A predicate result is a sign. It is never compared against an epsilon, and no co
 - 1 µm is far below construction precision (about 0.1 mm) and below anything a drawing shows, so users never see it.
 - There is **no angular tolerance**. Deviations are always measured as distances: a face is planar if all its vertices lie within the tolerance of its plane; two planes are coincident over a face if the face's vertices lie within the tolerance of the other plane.
 
-`LINEAR_TOLERANCE` is read only by the merge pass below.
+`LINEAR_TOLERANCE` is read only by the merge pass below and by the B-rep validity checks, which apply the distance rules above (planar faces, no edge or face narrower than the tolerance).
 
 ### Constructed geometry
 
