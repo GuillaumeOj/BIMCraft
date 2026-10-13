@@ -13,6 +13,7 @@ license = "MIT"
 # Every dependency is declared here once, with an exact version ("=x.y.z").
 # Member crates use `name = { workspace = true }`.
 [workspace.dependencies]
+proptest = "=1.11.0"
 thiserror = "=2.0.21"
 
 # Member crates opt in with `[lints] workspace = true`.
