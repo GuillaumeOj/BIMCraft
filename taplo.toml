@@ -1,0 +1,8 @@
+include = ["**/*.toml"]
+exclude = ["target/**", "ui/node_modules/**"]
+
+[formatting]
+align_comments = false
+array_auto_collapse = true
+indent_string = "  "
+reorder_keys = false

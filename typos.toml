@@ -1,0 +1,7 @@
+[files]
+extend-exclude = ["*.lock", "target/", "ui/node_modules/"]
+
+[default.extend-words]
+# Domain abbreviations used in the specification.
+LOD = "LOD" # level of detail
+THM = "THM" # thermal requirement family

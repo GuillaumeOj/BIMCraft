@@ -1,0 +1,9 @@
+# Bun configuration for the UI (AGENTS.md §4).
+
+[install]
+# Always save exact versions, never ^ or ~ ranges.
+exact = true
+# Supply-chain delay: refuse package versions published less than 14 days ago.
+minimumReleaseAge = 1209600
+# Bun never runs dependency lifecycle scripts unless the package is listed in
+# package.json "trustedDependencies". Justify every entry in the commit message.
