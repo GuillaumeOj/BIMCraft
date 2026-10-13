@@ -2,7 +2,7 @@
 
 **An open-source BIM authoring tool for buildings and civil works, written from scratch in Rust.**
 
-BIMCraft takes a construction project from early studies to detailed design in one shared model, across architecture, structure, MEP and thermal engineering. From that single model it produces 3D models, live 2D documentation (plans, sections, sheets) and traceable calculation reports.
+BIMCraft takes a construction project from early studies to construction drawings in one shared model, across architecture, structure, MEP and thermal engineering. From that single model it produces 3D models, live 2D documentation (plans, sections, sheets) and traceable calculation reports.
 
 > **Status: specification phase.** There is no code yet. The current work is the [specification](docs/specifications.md); reviews and comments from practitioners are the most useful contribution right now.
 
@@ -19,9 +19,9 @@ BIMCraft takes a construction project from early studies to detailed design in o
 | Area | MVP | Later |
 | --- | --- | --- |
 | Platforms | Windows and macOS desktop | Linux, browser (WASM) |
-| Disciplines | Structure (reinforced concrete, steel), architecture (building elements, curtain walls, massing, spaces, area tables) | Advanced architecture, timber, MEP, thermal, fire safety, civil works, bridges |
+| Disciplines | Structure (reinforced concrete and rebar, steel), architecture (building elements, curtain walls, massing, spaces, area tables) | Advanced architecture, timber, MEP, thermal, fire safety, civil works, bridges |
 | Analysis | Linear static FEM, load takedown | Shells, Eurocode and other design-code checks |
-| Interop | IFC 4.3 import and export | DXF, DWG, BCF, IDS, SAF, point clouds, glTF, Revit add-in |
+| Interop | IFC 4.3 import and export, rebar and steel fabrication data (BVBS, DSTV) | DXF, DWG, BCF, IDS, SAF, point clouds, glTF, Revit add-in |
 | Extensibility | Command API, Python SDK | MCP server for AI assistants, plugin registry |
 
 See the [roadmap](docs/specifications.md#15-roadmap-and-phases) for phases and their gates.

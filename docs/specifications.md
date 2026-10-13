@@ -4,7 +4,7 @@ Status: draft for discussion · October 13, 2026
 
 ## 1. Purpose and vision
 
-BIMCraft is an open-source (MIT licence), multi-discipline BIM authoring tool, written from scratch in Rust, that takes a construction project from early studies to detailed design in one shared model. It runs on desktop first and in the browser later, from the same core code.
+BIMCraft is an open-source (MIT licence), multi-discipline BIM authoring tool, written from scratch in Rust, that takes a construction project from early studies to construction drawings in one shared model. It runs on desktop first and in the browser later, from the same core code.
 
 The product produces three kinds of deliverables from a single source of truth: 3D models, 2D documentation (plans, sections, elevations, sheets) and calculation reports. It covers buildings and civil works, including bridges, across architecture, structure, MEP and thermal engineering.
 
@@ -22,32 +22,32 @@ The product produces three kinds of deliverables from a single source of truth: 
 
 ## 2. Scope
 
-The MVP is a structure-and-architecture desktop tool: design the architecture and structure of a reinforced concrete and steel building, georeference it, produce plans, sections, elevations and area tables at the level of detail of a planning permit (site plans follow in V1), a basic calculation report, and round-trip it through IFC. Everything else is scoped in, but scheduled later.
+The MVP is a structure-and-architecture desktop tool: design a reinforced concrete and steel building, georeference it, document it from planning permit to construction drawings, produce a basic calculation report and round-trip it through IFC. Everything else is scoped in, but scheduled later.
 
 | Area | MVP | V1 | Later |
 | --- | --- | --- | --- |
 | Platforms | Windows, macOS desktop | Linux desktop | Browser (WASM) |
-| Disciplines | Structure (RC, steel); core architecture (building elements, door and window families, curtain walls, massing, spaces and area schemes) | Timber; advanced architecture (façade panelling, computational design, programme, site and planning rules, interiors, survey of existing buildings, embodied carbon, presentation views); MEP networks; fire safety | Thermal, acoustics, accessibility, daylight analysis, freeform architecture, bridges and civil works |
-| Geometry | Extrusions, sweeps, planar booleans | Rebar detailing, connections | Freeform / NURBS surfaces |
-| Documentation | Plans, sections, elevations, area tables, room, door and window schedules, PDF export | Sheets, other schedules, DXF export | DWG export |
+| Disciplines | Structure (RC with reinforcement, steel); core architecture (building elements, door and window families, curtain walls, massing, spaces and area schemes) | Timber; advanced architecture (section 8.2); phases and design options; embodied carbon; MEP networks; fire safety | Thermal, acoustics, accessibility, daylight analysis, freeform architecture, bridges and civil works |
+| Geometry | Extrusions, sweeps, planar booleans, rebar detailing, steel connections | — | Freeform / NURBS surfaces |
+| Documentation | Plans, sections, elevations, details, sheets, area tables, room, door, window, quantity and rebar schedules, PDF export | Other schedules, colour-filled and presentation views, DXF export | DWG export |
 | Analysis | Linear static FEM (bars) | Shells, Eurocode checks | Dynamic, thermal (RE2020 energy) |
-| Interop | IFC 4.3 import/export | DXF, BCF, point clouds, glTF export | DWG, RVT via Revit add-in |
-| Extensibility | Command API, Python SDK | MCP server | Plugin marketplace |
+| Interop | IFC 4.3 import/export, rebar and steel fabrication export (BVBS, DSTV/NC1) | DXF, BCF, point clouds, glTF export | DWG, RVT via Revit add-in |
+| Extensibility | Command API, Python SDK | MCP server, visual node editor, object editor | Plugin marketplace |
 | Collaboration | Single user, local files | Model linking | Real-time multi-user |
 
-**Out of scope** (no plan to build): photorealistic rendering, construction scheduling (4D) and costing (5D), site management, and facility management. These are served by exporting to specialised tools (glTF for rendering, see ARC-38).
+**Out of scope** (no plan to build): photorealistic rendering, construction scheduling (4D) and costing (5D), site management, and facility management. These are served by exporting to specialised tools (glTF for rendering, see INT-06).
 
 **Explicit non-goal.** Reading native .rvt files without Revit. See section 11.
 
 ## 3. Users and disciplines
 
-The primary user is the engineer or designer in a design office during the study phases (feasibility through detailed design). Secondary users are developers who extend the product and project stakeholders who only review.
+The primary user is the engineer or designer in a design office from feasibility to construction drawings. Secondary users are developers who extend the product and project stakeholders who only review.
 
 | Persona | Main tasks | What they need most |
 | --- | --- | --- |
 | Structural engineer | Model RC, steel and timber structures, run analysis, produce reports | Analytical model derived from the physical one, code checks, traceable results |
 | Structural draftsperson | Formwork and reinforcement drawings, rebar schedules | Fast detailing tools, reliable live views, DWG/PDF output |
-| Architect | Massing, programme, site, façades, spaces, interiors, renovation, permit and tender drawings | Massing linked to building elements, parametric families at several levels of detail, live area tables against the programme, planning-rule checks, presentation views |
+| Architect | Massing, programme, site, façades, spaces, interiors, renovation, permit, tender and construction drawings | Massing linked to building elements, parametric families at several levels of detail, live area tables against the programme, planning-rule checks, presentation views |
 | MEP engineer (HVAC, electrical, plumbing) | Networks, equipment, sizing | System graphs, sizing calculations, clash detection |
 | Thermal engineer | Envelope, zones, energy calculations | Thermal zones and envelope data extracted from the model |
 | BIM manager | Coordination, IFC exchanges, standards | Robust IFC round-trip, BCF issues, project templates |
@@ -130,6 +130,8 @@ Each entity definition declares its attributes, property sets, allowed relations
 | CORE-12 | The model SHOULD support partial loading by storey, zone or discipline. | V1 |
 | CORE-13 | Projects MUST be able to link other project files read-only (model linking). | V1 |
 | CORE-14 | Zones MUST be first-class groups of objects (IfcZone), usable by every discipline (apartments, fire compartments, thermal zones). | V1 |
+| CORE-15 | Phases (existing, demolished, new, temporary) MUST be assignable to any object, with phase filters in views. | V1 |
+| CORE-16 | Design options MUST let variants of a part of the model be compared before one is retained. | V1 |
 
 **5.3 Persistence**
 
@@ -165,9 +167,11 @@ Every element holds several representations, computed on demand from the same pa
 | GEO-05 | Tessellation MUST be incremental: only changed elements are re-meshed. | MVP |
 | GEO-06 | Each element MUST expose representations per level of detail; views pick the level they need. | MVP |
 | GEO-07 | Model coordinates MUST be stored in double precision; rendering MUST use a local origin to avoid float32 jitter. | MVP |
-| GEO-08 | Rebar geometry (bending shapes, covers, anchorage) MUST be generated from parameters. | V1 |
+| GEO-08 | Rebar geometry (bending shapes, covers, anchorage) MUST be generated from parameters. | MVP |
 | GEO-09 | Curved surfaces (cylinders, cones, then NURBS) SHOULD be supported for complex façades and bridges. | Later |
 | GEO-10 | Meshes from imports MUST be usable as-is when no solid can be rebuilt. | MVP |
+| GEO-11 | Joins between elements (walls, slabs, beams, columns) MUST be resolved at L, T and X junctions, layer by layer for layered elements following their layer priority (MAT-03). Users MUST be able to allow or disallow each join, choose its type (butt, mitre, square-off) and which element runs through, and override layer priorities. | MVP |
+| GEO-12 | An object editor MUST let users author parametric objects of any discipline (profiles, parameters, constraints, LOD representations) without code. | V1 |
 
 **Acceptance target.** A test corpus of at least 1,000 boolean cases, including degenerate ones (coplanar faces, touching edges, near-zero volumes), runs in CI and MUST pass before each release.
 
@@ -185,6 +189,7 @@ Every project is placed on Earth through a projected coordinate reference system
 | GEOREF-06 | Terrain MUST be importable from LandXML and point clouds, and represented as a surface. | V1 |
 | GEOREF-07 | Linear referencing (alignments, stations) MUST be supported for roads and bridges, following IfcAlignment. | Later |
 | GEOREF-08 | Context data (CityGML buildings, map tiles) SHOULD be displayable around the project. | Later |
+| GEOREF-09 | Sun position MUST be computed from the georeference and a date, with static and animated shadow studies in plans and 3D views. | V1 |
 
 **CRS strategy.** Projection maths is built from scratch; CRS definitions are data, not code.
 
@@ -203,84 +208,69 @@ Each discipline is a package that registers its types, tools and rules through t
 
 - MAT-01 (MVP): materials MUST be generic objects with a behaviour law and properties per design code (e.g. concrete C25/30 to EN 1992, steel S355 to EN 1993, timber GL24h to EN 1995).
 - MAT-02 (MVP): a material library MUST ship with common European grades and be extensible by users and plugins.
-- MAT-03 (MVP): layered materials (wall build-ups, slab build-ups) MUST be supported, each layer carrying its material properties; thermal values are optional until THM-01.
+- MAT-03 (MVP): layered materials (wall build-ups, slab build-ups) MUST be supported, each layer carrying its material properties and a join priority (structural core, insulation, finish); thermal values are optional until the thermal module (section 8.5).
+- MAT-04 (V1): materials MUST carry environmental product data (EPDs), imported with their sources (France: INIES database).
 
 **8.2 Architecture**
 
-Architecture covers the architect's whole job from feasibility to detailed design, not only building elements: form and façades, programme and spaces, site and planning rules, interiors, existing buildings, sustainability and presentation. Advanced subjects use the same model, levels of detail and API as the rest of the product. "Live" below means kept up to date through the dependency graph (CORE-08).
+Architecture covers the architect's whole job from feasibility to construction drawings, using the same model, levels of detail and API as the rest of the product. "Live" below means kept up to date through the dependency graph (CORE-08).
 
 *8.2.1 Building elements*
 
-- ARC-01 (MVP): walls, slabs, roofs, columns, openings (doors, windows), stairs and spaces.
+- ARC-01 (MVP): walls, slabs, roofs, columns, openings (doors, windows), stairs and spaces (ARC-17).
 - ARC-02 (MVP): openings MUST void their host automatically and follow it when moved.
-- ARC-04 (MVP): grids and levels MUST be first-class objects (IfcGrid, IfcBuildingStorey); elements are hosted on levels and snap to grids.
-- ARC-10 (MVP): layered walls and slabs (MAT-03) MUST join cleanly at L, T and X junctions as whole-thickness solids, with their layers shown in plans and sections.
-- ARC-08 (V1): ceilings and railings.
-- ARC-11 (V1): wall sweeps and reveals, stacked walls and custom wall profiles.
-- ARC-12 (V1): complex roofs: slope per footprint edge, hips, valleys, dormers, and walls attached to the roof above.
-- ARC-39 (V1): layer-by-layer cleanup of wall and slab junctions, following a layer priority (structural core, insulation, finish).
-- ARC-13 (V1): advanced stairs and ramps: drawn from a sketch, with landings, several flights or a spiral, and checks of rise and going as a rule set of the rule engine (INFO-03).
+- ARC-03 (MVP): grids and levels MUST be first-class objects (IfcGrid, IfcBuildingStorey); elements are hosted on levels and snap to grids.
+- ARC-04 (MVP): layered walls and slabs (MAT-03) MUST join cleanly at junctions (GEO-11), with their layers shown in plans and sections.
+- ARC-05 (V1): ceilings and railings.
+- ARC-06 (V1): wall sweeps and reveals, stacked walls and custom wall profiles.
+- ARC-07 (V1): complex roofs: slope per footprint edge, hips, valleys, dormers, and walls attached to the roof above.
+- ARC-08 (V1): advanced stairs and ramps: drawn from a sketch, with landings, several flights or a spiral, and rise and going checks (INFO-03).
 
 *8.2.2 Façades and envelope*
 
-- ARC-03 (MVP): parametric families for doors and windows at LOD 100 to 300; LOD 400 representations come with hardware sets (ARC-32).
-- ARC-14 (MVP): curtain walls (glazed façades hung from the structure) on planar grids, with mullions, transoms and panels; doors and windows can replace panels.
-- ARC-15 (V1): façade panelling: divide a surface into panels, group panels into types within a tolerance, and schedule the panel types (DOC-16).
-- ARC-16 (V1): parametric envelope details (parapets, sills, lintels, roof-to-wall junctions) that feed detail views (DOC-09).
-- ARC-17 (Later): freeform façades and roofs on curved surfaces (GEO-09), panelled with planar or single-curved approximations.
+- ARC-09 (MVP): parametric families for doors and windows at LOD 100 to 400 (frames, leaves, sills); hardware sets are ARC-27.
+- ARC-10 (MVP): curtain walls (glazed façades hung from the structure) on planar grids, with mullions, transoms and panels; doors and windows can replace panels.
+- ARC-11 (V1): façade panelling, extending the curtain wall grids of ARC-10 to any surface: divide it into panels, group panels into types within a tolerance, and schedule the panel types (DOC-16).
+- ARC-12 (V1): parametric envelope details (parapets, sills, lintels, roof-to-wall junctions) that feed detail views (DOC-09).
+- ARC-13 (Later): freeform façades and roofs on curved surfaces (GEO-09), panelled with planar or single-curved approximations.
 
-*8.2.3 Conceptual and computational design*
+*8.2.3 Massing*
 
-- ARC-18 (MVP): massing objects (volumes used in early design) MUST be sliceable by levels, giving the gross floor area per level and per use through an area scheme (ARC-07).
-- ARC-19 (V1): faces of a massing object MUST be convertible to walls, slabs, roofs and curtain walls, keeping a link so that a change of the mass updates them.
-- ARC-20 (V1): a visual node editor for computational design, whose nodes are API commands and queries; results are native model objects; graphs are saved in the project and runnable from Python.
-- ARC-05 (V1): an object editor MUST let users author parametric objects (profiles, parameters, constraints, LOD representations) without code.
-- ARC-09 (V1): design options, letting variants of a part of the model be compared before one is retained.
+- ARC-14 (MVP): massing objects (volumes used in early design) MUST be sliceable by levels, giving the gross floor area per level and per use (ARC-18).
+- ARC-15 (V1): faces of a massing object MUST be convertible to walls, slabs, roofs and curtain walls, keeping a link so that a change of the mass updates them.
+- ARC-16 (V1): early-design metrics computed on massing and on the model: compactness, glazing ratio per orientation.
 
 *8.2.4 Programme and spaces*
 
-- ARC-21 (MVP): spaces MUST carry a function, an occupancy, a required area and intended floor, wall and ceiling finishes. Their boundaries follow the bounding elements live. Finishes per face are ARC-30.
-- ARC-07 (MVP): area schemes per national rules (France: SDP, SHAB, surface utile), applied to spaces and massing slices; their area tables are schedules (DOC-16).
-- ARC-22 (V1): a space programme (required rooms and areas) MUST be importable from CSV and compared with the designed spaces, flagging deviations.
-- ARC-23 (V1): adjacency requirements between spaces, and stacking and blocking diagram views.
-- ARC-24 (V1): room data sheets generated per space (finishes, equipment, requirements) and exported to PDF.
-- ARC-25 (V1): architectural zone types (apartments, tenants, departments) built on zones (CORE-14).
+- ARC-17 (MVP): spaces MUST carry a function, an occupancy, a required area and intended floor, wall and ceiling finishes. Their boundaries follow the bounding elements live. These finishes are the defaults of the finishes per face (ARC-25).
+- ARC-18 (MVP): area schemes per national rules (France: SDP or surface de plancher, SHAB or surface habitable, surface utile), applied to spaces and massing slices, as schedules (DOC-16) grouped by space, level and building; grouping by apartment or tenant comes with zone types (ARC-22).
+- ARC-19 (V1): a space programme (required rooms and areas) MUST be importable from CSV and compared with the designed spaces, flagging deviations.
+- ARC-20 (V1): adjacency requirements between spaces, and stacking and blocking diagram views.
+- ARC-21 (V1): room data sheets generated per space (finishes, equipment, requirements) and exported to PDF.
+- ARC-22 (V1): architectural zone types (apartments, tenants, departments) built on zones (CORE-14).
 
 *8.2.5 Site and planning*
 
-- ARC-26 (V1): site modelling on the terrain (GEOREF-06): building pads, slopes, paving, parking, landscape, and property lines entered from survey bearings and distances.
-- ARC-27 (V1): planning constraints as model objects, such as setbacks, height limits, building envelopes and footprint ratio from French local plans (PLU), checked live against massing and building elements as a rule set of the rule engine (INFO-03).
-- ARC-28 (V1): sun position computed from the georeference (section 7) and a date; static and animated shadow studies in plans and 3D views.
-- ARC-29 (Later): daylight analysis (daylight factor, sunlight hours per space), run through the `ComputeBackend` trait.
+- ARC-23 (V1): site modelling on the terrain (GEOREF-06): building pads, slopes, paving, parking, landscape, and property lines entered from survey bearings and distances.
+- ARC-24 (V1): planning constraints as model objects, such as setbacks, height limits, building envelopes and footprint ratio from French local plans (PLU), checked live against massing and building elements (INFO-03).
 
 *8.2.6 Interiors and finishes*
 
-- ARC-30 (V1): finishes per face and per side of a space, with split faces and finish schedules (DOC-16).
-- ARC-31 (V1): casework, furniture, equipment and sanitary layouts placed from library objects.
-- ARC-32 (V1): door hardware sets.
+- ARC-25 (V1): finishes per face and per side of a space, defaulting to the space finishes (ARC-17), with split faces and finish schedules (DOC-16).
+- ARC-26 (V1): casework, furniture, equipment and sanitary layouts placed from library objects.
+- ARC-27 (V1): door hardware sets.
 
 *8.2.7 Existing buildings and renovation*
 
-- ARC-06 (V1): phases (existing, demolished, new, temporary) with phase filters in views.
-- ARC-33 (V1): existing buildings MUST be modellable over point clouds (snapping to points, horizontal and vertical slices), with a condition and a confidence level per element.
-- ARC-34 (Later): assisted recognition of walls, slabs and openings in point clouds.
-
-*8.2.8 Sustainability*
-
-- ARC-35 (V1): embodied carbon for the whole project, all disciplines included: quantities from the schedule engine (DOC-16) multiplied by environmental product data attached to materials (EPDs; France: INIES database), per element and per work package, with the RE2020 carbon indicators; the data is imported with its sources.
-- ARC-36 (V1): early-design metrics computed on massing and on the model: compactness, glazing ratio per orientation.
-
-*8.2.9 Presentation*
-
-- ARC-37 (V1): presentation views: shaded and textured, perspective cameras, sun-lit, ghosted, sketch line styles, and plans colour-filled by function or department with legends.
-- ARC-38 (V1): export to glTF 2.0 for external visualisation and rendering tools; walkthrough animations come later.
+- ARC-28 (V1): existing buildings MUST be modellable over point clouds (VP-07), with a condition and a confidence level per element; phases are CORE-15.
+- ARC-29 (Later): assisted recognition of walls, slabs and openings in point clouds.
 
 **8.3 Structure**
 
 - STR-01 (MVP): physical elements — beams, columns, slabs, walls, foundations — in reinforced concrete and steel.
 - STR-02 (MVP): an analytical model (bars, shells, nodes, supports, releases) MUST be derived automatically from the physical model and stay synchronized; manual adjustments MUST survive regeneration.
 - STR-03 (MVP): loads, load cases and combinations per EN 1990.
-- STR-04 (V1): reinforcement — bars, meshes, bending schedules, covers — and steel connections.
+- STR-04 (MVP): reinforcement — bars, meshes, covers — with its drawings and bending schedules (DOC-14) and its fabrication data (BVBS).
 - STR-05 (V1): timber members and connections.
 - STR-06 (Later): bridge-specific elements (decks, piers, abutments, bearings) along alignments.
 - STR-07 (MVP): load takedown (descente de charges) floor by floor down to foundations, with a report.
@@ -289,6 +279,7 @@ Architecture covers the architect's whole job from feasibility to detailed desig
 - STR-10 (Later): second-order effects, cracked sections and construction stages.
 - STR-11 (Later): fire resistance checks per EN 1992-1-2, EN 1993-1-2 and EN 1995-1-2.
 - STR-12 (Later): precast elements with joints; prestressing tendons.
+- STR-13 (MVP): steel connections, with their fabrication data (DSTV/NC1).
 
 **8.4 MEP**
 
@@ -305,9 +296,9 @@ Architecture covers the architect's whole job from feasibility to detailed desig
 **8.5 Thermal**
 
 - THM-01 (Later): thermal zones (CORE-14) derived from spaces; envelope surfaces with their build-ups.
-- THM-02 (Later): export to gbXML and to French regulatory calculation tools (RE2020 energy indicators; carbon indicators are ARC-35).
+- THM-02 (Later): export to gbXML and to French regulatory calculation tools (RE2020 energy indicators; carbon indicators are ANA-13).
 - THM-03 (Later): linear and point thermal bridges at junctions.
-- THM-04 (Later): climate files and solar shading analysis.
+- THM-04 (Later): climate files and solar shading analysis for energy calculations; sun position and shadow studies are GEOREF-09.
 - THM-05 (Later): export to dynamic simulation engines (e.g. EnergyPlus).
 
 **8.6 Civil works and infrastructure**
@@ -342,6 +333,8 @@ The `analysis` crate orchestrates calculations; the solvers themselves run outsi
 | ANA-10 | Country rollout order: France, Germany, Spain, Italy, other European countries, then North America, then South America; long term, every country worldwide. | V1 to Later |
 | ANA-11 | Imperial units (feet-inches, kips, psi) MUST be first-class for input, display and reports. | Later |
 | ANA-12 | Solvers MUST be validated against NAFEMS-style benchmarks and published reference cases, run in CI. | MVP |
+| ANA-13 | Embodied carbon for all disciplines: schedule quantities (DOC-16) times the environmental data of materials (MAT-04), per element and work package, with the RE2020 carbon indicators. | V1 |
+| ANA-14 | Daylight analysis (daylight factor, sunlight hours per space), run through the `ComputeBackend` trait. | Later |
 
 **Calculation reports**
 
@@ -363,17 +356,18 @@ All 2D documentation is a live view of the model: a change in the model updates 
 | DOC-03 | Views MUST update incrementally when the model changes. | MVP |
 | DOC-04 | Annotations — dimensions, levels, tags, text — MUST attach to model objects and follow them. | MVP |
 | DOC-05 | Views MUST export to PDF at true scale. | MVP |
-| DOC-06 | Sheets with title blocks, multiple views and revision tables. | V1 |
-| DOC-07 | Structural schedules and quantity take-offs (concrete volumes, steel tonnage, rebar schedules), as templates on the schedule engine (DOC-16). | V1 |
+| DOC-06 | Sheets with title blocks, multiple views and revision tables. | MVP |
+| DOC-07 | Structural schedules and quantity take-offs (concrete volumes, steel tonnage), as templates on the schedule engine (DOC-16). | MVP |
 | DOC-08 | View templates MUST be shareable across projects and companies. | V1 |
-| DOC-09 | 2D detail views mixing model cuts and drafted lines. | V1 |
+| DOC-09 | 2D detail views mixing model cuts and drafted lines. | MVP |
 | DOC-10 | Export to DXF (V1) and DWG (Later) with layer mapping. | V1 |
-| DOC-11 | Graphic standards per country (line weights, hatches, symbols, text styles), shipped as templates. | V1 |
-| DOC-12 | Scale-dependent representations (e.g. a door symbol at 1:100 versus 1:20). | V1 |
+| DOC-11 | Graphic standards per country (line weights, hatches, symbols, text styles), shipped as templates. | MVP |
+| DOC-12 | Scale-dependent representations (e.g. a door symbol at 1:100 versus 1:20). | MVP |
 | DOC-13 | Revision clouds, a revision index per drawing and transmittal lists. | V1 |
-| DOC-14 | Bar marks, bar tables and bending schedules on formwork and reinforcement drawings. | V1 |
+| DOC-14 | Bar marks on formwork and reinforcement drawings; bar tables and bending schedules as templates on the schedule engine (DOC-16). | MVP |
 | DOC-15 | Batch printing and export of a set of sheets to PDF and DWG. | V1 |
 | DOC-16 | A schedule engine: tables filtered, grouped and computed over any property, saved as templates. It ships with room, door and window schedules and area tables. | MVP |
+| DOC-17 | Views MUST be colour-fillable by any property (function, department, fire rating, system), with legends. | V1 |
 
 ## 11. Interoperability
 
@@ -392,8 +386,8 @@ IFC 4.3 is the primary exchange format and MUST round-trip without loss for ever
 | gbXML | Export | Thermal zones and envelope | Later |
 | RVT | Import (indirect) | A Revit add-in, written in C#, exports from inside Revit to the BIMCraft native format | Later |
 | SAF (Structural Analysis Format) | Import + export | Analytical model exchange with other analysis software | V1 |
-| BVBS, DSTV/NC1 | Export | Rebar and steel fabrication data | V1 |
-| glTF 2.0 | Export | Meshes with materials for visualisation and rendering tools (ARC-38) | V1 |
+| BVBS, DSTV/NC1 | Export | Rebar and steel fabrication data | MVP |
+| glTF 2.0 | Export | Meshes with materials (INT-06) | V1 |
 | COBie | Export | Facility management handover | Later |
 
 **Requirements**
@@ -403,6 +397,7 @@ IFC 4.3 is the primary exchange format and MUST round-trip without loss for ever
 - INT-03 (MVP): unknown IFC data MUST be preserved and written back on export.
 - INT-04 (MVP): IFC round-trip tests MUST run in CI on a public corpus of sample files (e.g. buildingSMART samples).
 - INT-05 (V1): the product SHOULD seek buildingSMART IFC certification for the export.
+- INT-06 (V1): export to glTF 2.0 for external visualisation and rendering tools; walkthrough animations come later.
 
 **RVT position.** The .rvt format is closed, undocumented and changes with each Revit version. Native reading is a non-goal; the only planned route is the Revit add-in. The add-in writes the BIMCraft native format directly, so no information is lost through an intermediate IFC step.
 
@@ -428,6 +423,7 @@ The command and query protocol is the product's central contract: the UI, Python
 | API-04 | The same protocol MUST work in-process, over local IPC and over a network transport. | MVP |
 | API-05 | Every command MUST be undoable and logged with its origin (UI, plugin name, AI session). | MVP |
 | API-06 | Breaking changes MUST follow semantic versioning, with a deprecation period of at least one minor version. | V1 |
+| API-07 | A visual node editor whose nodes are commands and queries; results are native model objects, and graphs are saved in the project and runnable from Python. | V1 |
 
 **12.2 Python SDK**
 
@@ -470,12 +466,14 @@ The frontend is a web application (TypeScript and React) shared by desktop and b
 - VP-04 (MVP): rendering MUST use a local origin near the camera (see GEO-07).
 - VP-05 (V1): WebGL2 fallback where WebGPU is unavailable (notably Linux WebKitGTK).
 - VP-06 (V1): GPU picking returns the object GUID under the cursor in under 16 ms.
+- VP-07 (V1): snapping to point clouds, with horizontal and vertical slices through them.
+- VP-08 (V1): presentation styles in any view: shaded and textured, perspective cameras, sun-lit (GEOREF-09), ghosted and sketch line styles.
 
 **Decision record.** An all-Rust UI (egui, Slint, Iced) was considered and set aside for the MVP: it removes the UI-core boundary but makes a professional CAD interface much more costly to build. To be revisited if the IPC boundary becomes a bottleneck.
 
 ## 14. Non-functional requirements
 
-The figures below are proposed targets, to be validated against a reference model once the first prototype exists. The reference model is a 10-storey RC office building of about 20,000 elements, with full architectural fit-out (curtain walls, partitions, doors, spaces).
+The figures below are proposed targets, to be validated against a reference model once the first prototype exists. The reference model is a 10-storey RC office building of about 100,000 elements, with full architectural fit-out (curtain walls, partitions, doors, spaces) and reinforcement.
 
 | ID | Requirement | Target | Priority |
 | --- | --- | --- | --- |
@@ -522,8 +520,8 @@ Each phase ends with a usable product, and the next phase starts only once its g
 | Phase | Focus | Main content | Gate |
 | --- | --- | --- | --- |
 | 0 | Foundations | Workspace and CI, schema and generators, model and transactions, SQLite persistence, IFC 4.3 parser, geometry test corpus | IFC round-trip and 1,000 boolean cases pass |
-| 1 | MVP, structure and architecture | Extrusions and booleans, RC and steel elements, analytical model, bar FEM and PDF report, architectural elements and layered walls, door and window families, curtain walls, massing, spaces and area tables, plans, sections and elevations, architectural schedules, Python SDK and console | Design, analyse and document a building: permit-level floor plans, sections, elevations and area tables, plus structural analysis and report |
-| 2 | V1, multi-discipline | Linux desktop, rebar and timber, Eurocode checks, advanced architecture (§8.2), MEP and clash detection, sheets and other schedules, BCF, DXF and MCP server | A pilot office uses it on a real project |
+| 1 | MVP, structure and architecture | RC with reinforcement, steel with connections, analytical model, bar FEM and report, core architecture, documentation on sheets with schedules, Python SDK and console (MVP column of section 2) | Design, analyse and document a building from planning permit to construction drawings |
+| 2 | V1, multi-discipline | Linux desktop, timber, Eurocode checks, advanced architecture (section 8.2), phases and design options, embodied carbon, presentation views and glTF export, node and object editors, MEP and clash detection, other schedules, BCF, DXF and MCP server | A pilot office uses it on a real project |
 | 3 | Later, platform | Browser host (WASM), thermal and RE2020 energy, freeform architecture and daylight analysis, bridges and alignments, DWG and RVT add-in, collaboration, plugin marketplace | — |
 
 Phase 0 is invisible to users but decides the rest: the schema, transactions and test corpora are expensive to change later. The browser host sits in phase 3, but ARCH-01 keeps it buildable from the first commit.
@@ -535,8 +533,7 @@ Phase 0 is invisible to users but decides the rest: the schema, transactions and
 | Risk | Impact | Mitigation |
 | --- | --- | --- |
 | Robust booleans take far longer than planned | Blocks modelling and views | Narrow MVP to planar geometry; large CI test corpus from week one; study existing Rust kernels (truck, Fornjot) for pitfalls |
-| Overall scope (comparable products represent hundreds of person-years) | Nothing usable ships | MVP limited to structure and core architecture on planar geometry; each phase ends with a usable product |
-| A co-equal structure and architecture MVP stretches a small team | MVP slips | Both disciplines share elements, openings, levels and views; advanced architecture is deferred to V1 |
+| Overall scope (comparable products represent hundreds of person-years) | Nothing usable ships | MVP limited to structure and core architecture on planar geometry, both sharing elements, openings, levels, views and sheets; advanced architecture in V1; each phase ends with a usable product |
 | IFC round-trip loses information | Users cannot exchange with other tools | Mapping table and round-trip tests in CI from the first entity |
 | UI–core IPC becomes a bottleneck on large models | Sluggish interaction | Keep interaction in Rust (VP-01); binary channel for geometry; benchmark early |
 | Browser memory limits (4 GB in wasm32) | Large projects fail in browser | Partial loading (CORE-12); Memory64 as browsers adopt it |
@@ -569,4 +566,5 @@ Phase 0 is invisible to users but decides the rest: the schema, transactions and
 | MCP | Model Context Protocol, used to connect AI assistants to tools |
 | OPFS | Origin Private File System, browser storage used for project files |
 | PLU | Plan local d'urbanisme: the French local planning rules (setbacks, heights, footprint) |
+| RE2020 | The French environmental regulation for new buildings, covering energy and carbon |
 | WASM | WebAssembly, the browser compilation target of the core |
