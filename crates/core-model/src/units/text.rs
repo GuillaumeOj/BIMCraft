@@ -9,6 +9,11 @@ use super::{Dimension, Quantity, Unit};
 /// millimetre is already below `f64` resolution at building scale.
 pub const MAX_DECIMALS: u8 = 9;
 
+/// `10^n` for every allowed number of decimals. Each is exact in `f64`, and a table avoids
+/// `powi`, whose precision depends on the platform (ENG-04).
+const POWERS_OF_TEN: [f64; MAX_DECIMALS as usize + 1] =
+    [1e0, 1e1, 1e2, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8, 1e9];
+
 /// Longest text, in bytes, that [`Quantity::parse`] accepts. Anything longer is not a quantity
 /// a person typed, so it is rejected before any work is done.
 pub const MAX_TEXT_LEN: usize = 64;
@@ -49,7 +54,7 @@ impl<U: Unit> fmt::Display for Formatted<U> {
 /// Rounds ties away from zero, as drawings and schedules do. Formatting alone rounds ties to
 /// even, which would show 2.5 mm as "2 mm" but 3.5 mm as "4 mm".
 fn round_half_away_from_zero(value: f64, decimals: u8) -> f64 {
-    let scale = 10_f64.powi(i32::from(decimals));
+    let scale = POWERS_OF_TEN[usize::from(decimals.min(MAX_DECIMALS))];
     let scaled = value * scale;
     if scaled.is_finite() {
         // A small negative value rounds to -0.0, which would print as "-0.00"; adding +0.0
@@ -398,7 +403,7 @@ mod tests {
             let quantity = Length::from_si(si);
             let text = quantity.display(DisplayFormat::new(unit, decimals)).to_string();
             let parsed = Length::parse(&text, LengthUnit::Metre).map(|parsed| parsed.get(unit));
-            let half_step = 0.5 * 10_f64.powi(-i32::from(decimals));
+            let half_step = 0.5 / POWERS_OF_TEN[usize::from(decimals)];
             let within = |parsed: f64| (parsed - quantity.get(unit)).abs() <= half_step * (1.0 + 1e-6);
             prop_assert!(parsed.is_ok_and(within), "{text}");
         }
