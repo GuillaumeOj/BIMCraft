@@ -1,5 +1,9 @@
 # Versions are pinned exactly (AGENTS.md §4); Dependabot proposes the bumps.
 # A 14-day cooldown matches the minimum release age rule.
+# cargo and bun only accept `auto` or `lockfile-only`. With exact pins, `auto`
+# rewrites the requirement itself, since a new version never matches the pin.
+# For bun this holds only for applications: keep `ui/package.json` private, or
+# Dependabot treats it as a library and widens pins into ranges.
 version: 2
 updates:
   - package-ecosystem: cargo
@@ -8,7 +12,7 @@ updates:
       interval: weekly
     cooldown:
       default-days: 14
-    versioning-strategy: increase
+    versioning-strategy: auto
     groups:
       rust-minor-patch:
         update-types: [minor, patch]
@@ -36,7 +40,7 @@ updates:
       interval: weekly
     cooldown:
       default-days: 14
-    versioning-strategy: increase
+    versioning-strategy: auto
     groups:
       ui-minor-patch:
         update-types: [minor, patch]
