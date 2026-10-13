@@ -3,6 +3,9 @@
 //! This crate builds for native targets and `wasm32-unknown-unknown` (ARCH-01) and never touches
 //! the platform directly (ARCH-02).
 
+// ARCH-02: forbid, not deny, so nothing in this crate can opt out. See docs/dev/quality.md.
+#![forbid(clippy::disallowed_methods, clippy::disallowed_types)]
+
 use std::fmt;
 
 /// The stable 128-bit GUID every object carries (CORE-01).
