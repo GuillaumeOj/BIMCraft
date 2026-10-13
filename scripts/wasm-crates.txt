@@ -12,3 +12,4 @@ interop-ifc
 interop-dxf
 interop-bcf
 api
+platform
