@@ -13,7 +13,12 @@ license = "MIT"
 # Every dependency is declared here once, with an exact version ("=x.y.z").
 # Member crates use `name = { workspace = true }`.
 [workspace.dependencies]
+criterion = { version = "=0.8.2", default-features = false }
+num-rational = { version = "=0.4.2", default-features = false, features = [
+  "num-bigint-std",
+] }
 proptest = "=1.11.0"
+robust = "=1.2.0"
 thiserror = "=2.0.21"
 
 # Member crates opt in with `[lints] workspace = true`.
@@ -33,6 +38,14 @@ todo = "deny"
 undocumented_unsafe_blocks = "deny"
 unimplemented = "deny"
 unwrap_used = "deny"
+
+# The exact BigRational reference in geom's property tests is slow unoptimised; optimising only
+# these two dev-dependencies cuts the test time without touching how geom itself is built.
+[profile.dev.package.num-bigint]
+opt-level = 3
+
+[profile.dev.package.num-rational]
+opt-level = 3
 
 [profile.release]
 lto = "thin"

@@ -1,0 +1,28 @@
+[package]
+name = "geom"
+version = "0.0.0"
+description = "Geometry kernel: exact predicates, profiles, solids and booleans."
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+# Only the criterion harness benches; libtest would reject criterion's options.
+[lib]
+bench = false
+
+[dependencies]
+robust = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+criterion = { workspace = true }
+num-rational = { workspace = true }
+proptest = { workspace = true }
+
+[[bench]]
+name = "predicates"
+harness = false
+
+[lints]
+workspace = true

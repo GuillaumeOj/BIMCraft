@@ -29,6 +29,10 @@ Ranges let a build change without a commit, which breaks reproducibility and ope
 
 90 % lines globally catches untested features without forcing tests of trivial glue. Critical areas — the schema and its generators, the model, transactions, geometry, georeferencing, analysis, the API and file parsers — corrupt user data or produce wrong engineering results when they fail, so they need 98 % (aim for 100 %). Rust branch coverage needs a nightly compiler, so on the Rust side the gate is lines; UI critical code is gated on lines and branches. Coverage measures what was executed, not what was verified: reviews check that tests assert meaningful behaviour.
 
+## Benchmarks
+
+Hot paths of the geometry kernel, starting with the exact predicates, keep [criterion](https://docs.rs/criterion) benchmarks in their crate's `benches/` (run them with `cargo bench -p geom`). CI compiles them through `clippy --all-targets` but does not run them: timings on shared runners are too noisy to gate on. Run them before and after a change to a hot path and quote the numbers in the pull request.
+
 ## Linters, formatters and import sorting
 
 Formatting and import order are never discussed in review: tools decide. Rust uses `rustfmt` and `clippy` (pedantic, warnings as errors); the UI uses Biome, which formats, lints and sorts imports in one tool; TOML uses `taplo`; spelling uses `typos`. Agents' edits are formatted automatically by `.claude/hooks/format-file.sh`.
