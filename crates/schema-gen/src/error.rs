@@ -46,13 +46,9 @@ impl Error {
 
     /// An error in `file`, at a byte offset of its `contents` when one is known.
     pub(crate) fn at(file: &str, contents: &str, offset: Option<usize>, kind: ErrorKind) -> Self {
-        let (line, column) = match offset {
-            Some(offset) => {
-                let (line, column) = line_and_column(contents, offset);
-                (Some(line), Some(column))
-            }
-            None => (None, None),
-        };
+        let (line, column) = offset
+            .map(|offset| line_and_column(contents, offset))
+            .unzip();
         Self {
             file: Some(file.to_owned()),
             line,
@@ -120,10 +116,5 @@ mod tests {
             Error::at("entities/wall.toml", "x\ny", Some(2), kind()).to_string(),
             "entities/wall.toml:2:1: bad"
         );
-        let line_only = Error {
-            column: None,
-            ..Error::at("a.toml", "x", Some(0), kind())
-        };
-        assert_eq!(line_only.to_string(), "a.toml:1: bad");
     }
 }

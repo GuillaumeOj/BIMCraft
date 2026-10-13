@@ -78,6 +78,7 @@ struct Field {
     /// Rust identifier, without the `r#` prefix.
     name: String,
     doc: Vec<String>,
+    /// The value type; [`FieldKind::Optional`] fields are emitted as `Option` of it.
     ty: String,
     kind: FieldKind,
 }
@@ -174,7 +175,6 @@ fn property_set_struct(property_set: &PropertySet, options: &RustOptions) -> Str
 }
 
 fn attribute_field(attribute: &Attribute, options: &RustOptions) -> Field {
-    let ty = rust_type(&attribute.value, options);
     let kind = match &attribute.presence {
         Presence::Required => FieldKind::Required,
         Presence::Default(value) => FieldKind::Default(literal(value)),
@@ -183,15 +183,11 @@ fn attribute_field(attribute: &Attribute, options: &RustOptions) -> Field {
         }
         Presence::Optional => FieldKind::Optional,
     };
-    let ty = match kind {
-        FieldKind::Optional => format!("Option<{ty}>"),
-        _ => ty,
-    };
     Field {
         schema_name: attribute.name.clone(),
         name: attribute.name.clone(),
         doc: attribute_doc(attribute),
-        ty,
+        ty: rust_type(&attribute.value, options),
         kind,
     }
 }
@@ -205,21 +201,19 @@ fn override_field(attribute: &Attribute, options: &RustOptions) -> Field {
         schema_name: attribute.name.clone(),
         name: attribute.name.clone(),
         doc,
-        ty: format!("Option<{}>", rust_type(&attribute.value, options)),
+        ty: rust_type(&attribute.value, options),
         kind: FieldKind::Optional,
     }
 }
 
 fn role_field(role: &Role, options: &RustOptions) -> Field {
-    let (ty, kind, doc) = match role.cardinality {
+    let (ty, doc) = match role.cardinality {
         Cardinality::One => (
             options.id_type.clone(),
-            FieldKind::Required,
             format!("The object playing the `{}` role.", role.name),
         ),
         Cardinality::Many => (
             format!("Vec<{}>", options.id_type),
-            FieldKind::Required,
             format!("The objects playing the `{}` role.", role.name),
         ),
     };
@@ -228,7 +222,7 @@ fn role_field(role: &Role, options: &RustOptions) -> Field {
         name: role.name.clone(),
         doc: vec![doc],
         ty,
-        kind,
+        kind: FieldKind::Required,
     }
 }
 
@@ -471,7 +465,12 @@ fn write_struct(out: &mut String, item: &Struct) {
                 out.push_str("    #[serde(default, skip_serializing_if = \"Vec::is_empty\")]\n");
             }
         }
-        let _ = writeln!(out, "    pub {}: {},", identifier(&field.name), field.ty);
+        let name = identifier(&field.name);
+        if matches!(field.kind, FieldKind::Optional) {
+            let _ = writeln!(out, "    pub {name}: Option<{}>,", field.ty);
+        } else {
+            let _ = writeln!(out, "    pub {name}: {},", field.ty);
+        }
     }
     out.push_str("}\n");
     write_defaults(out, item);

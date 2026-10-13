@@ -140,15 +140,10 @@ impl<'a> Builder<'a> {
         let name_span = file.entity.name.span().start;
         let name = file.entity.name.into_inner();
         let owner = Owner::Entity(name.clone());
-        let position = |offset: usize| (source, offset);
-        self.positions
-            .insert((owner.clone(), None), position(name_span));
+        self.mark(&owner, None, source, name_span);
 
         let type_def = file.type_def.map(|section| {
-            self.positions.insert(
-                (owner.clone(), Some(Item::Type)),
-                position(section.span().start),
-            );
+            self.mark(&owner, Some(Item::Type), source, section.span().start);
             let section = section.into_inner();
             TypeDef {
                 name: section.name.unwrap_or_else(|| format!("{name}Type")),
@@ -156,10 +151,7 @@ impl<'a> Builder<'a> {
             }
         });
         let ifc = file.ifc.map(|section| {
-            self.positions.insert(
-                (owner.clone(), Some(Item::Ifc)),
-                position(section.span().start),
-            );
+            self.mark(&owner, Some(Item::Ifc), source, section.span().start);
             let section = section.into_inner();
             // The IFC type entity follows the IFC convention unless the definition overrides it.
             let type_entity = section
@@ -172,27 +164,13 @@ impl<'a> Builder<'a> {
                 type_entity,
             }
         });
-        let attributes = file
-            .attributes
-            .into_iter()
-            .filter_map(|definition| {
-                let item = Item::Attribute(definition.name.get_ref().clone());
-                self.positions.insert(
-                    (owner.clone(), Some(item)),
-                    position(definition.name.span().start),
-                );
-                self.attribute(source, definition)
-            })
-            .collect();
+        let attributes = self.attributes(source, &owner, file.attributes, Item::Attribute);
         let roles = file
             .roles
             .into_iter()
             .filter_map(|definition| {
                 let item = Item::Role(definition.name.get_ref().clone());
-                self.positions.insert(
-                    (owner.clone(), Some(item)),
-                    position(definition.name.span().start),
-                );
+                self.mark(&owner, Some(item), source, definition.name.span().start);
                 self.role(source, definition)
             })
             .collect();
@@ -201,10 +179,8 @@ impl<'a> Builder<'a> {
             .into_iter()
             .enumerate()
             .map(|(index, definition)| {
-                self.positions.insert(
-                    (owner.clone(), Some(Item::Representation(index))),
-                    position(definition.lod.span().start),
-                );
+                let item = Item::Representation(index);
+                self.mark(&owner, Some(item), source, definition.lod.span().start);
                 Representation {
                     lod: definition.lod.into_inner(),
                     context: definition.context,
@@ -244,20 +220,8 @@ impl<'a> Builder<'a> {
         let name_span = file.property_set.name.span().start;
         let name = file.property_set.name.into_inner();
         let owner = Owner::PropertySet(name.clone());
-        self.positions
-            .insert((owner.clone(), None), (source, name_span));
-        let properties = file
-            .properties
-            .into_iter()
-            .filter_map(|definition| {
-                let item = Item::Property(definition.name.get_ref().clone());
-                self.positions.insert(
-                    (owner.clone(), Some(item)),
-                    (source, definition.name.span().start),
-                );
-                self.attribute(source, definition)
-            })
-            .collect();
+        self.mark(&owner, None, source, name_span);
+        let properties = self.attributes(source, &owner, file.properties, Item::Property);
         let property_set = PropertySet {
             name: name.clone(),
             applies_to: file.property_set.applies_to,
@@ -272,6 +236,35 @@ impl<'a> Builder<'a> {
         } else {
             self.property_sets.insert(name, (property_set, source));
         }
+    }
+
+    /// Records where a definition or one of its items starts, to place validation errors.
+    fn mark(&mut self, owner: &Owner, item: Option<Item>, source: &'a Source, offset: usize) {
+        self.positions
+            .insert((owner.clone(), item), (source, offset));
+    }
+
+    /// Converts attributes or properties, skipping (and reporting) invalid ones.
+    fn attributes(
+        &mut self,
+        source: &'a Source,
+        owner: &Owner,
+        definitions: Vec<AttributeDef>,
+        item: fn(String) -> Item,
+    ) -> Vec<Attribute> {
+        definitions
+            .into_iter()
+            .filter_map(|definition| {
+                let name = definition.name.get_ref().clone();
+                self.mark(
+                    owner,
+                    Some(item(name)),
+                    source,
+                    definition.name.span().start,
+                );
+                self.attribute(source, definition)
+            })
+            .collect()
     }
 
     fn attribute(&mut self, source: &Source, definition: AttributeDef) -> Option<Attribute> {

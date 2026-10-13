@@ -142,8 +142,10 @@ describe("checkRustToolchain", () => {
     );
   });
 
-  test("accepts a dated nightly", () => {
-    expect(checkRustToolchain("t", '[toolchain]\nchannel = "nightly-2026-09-28"\n')).toEqual([]);
+  test("accepts a dated nightly outside the root", () => {
+    const nightly = '[toolchain]\nchannel = "nightly-2026-09-28"\n';
+    expect(checkRustToolchain("fuzz/rust-toolchain.toml", nightly)).toEqual([]);
+    expect(checkRustToolchain("rust-toolchain.toml", nightly)).toHaveLength(1);
   });
 
   test("rejects floating or missing channels", () => {

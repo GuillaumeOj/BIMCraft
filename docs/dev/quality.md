@@ -31,7 +31,7 @@ Ranges let a build change without a commit, which breaks reproducibility and ope
 
 ## Fuzzing
 
-Parsers read hostile input (AGENTS.md §8), so each one has a property test in its crate and a [cargo-fuzz](https://rust-fuzz.github.io/book/cargo-fuzz.html) target in `fuzz/` (ENG-02). `fuzz/` is a workspace of its own because libFuzzer needs a nightly compiler, pinned by date in `fuzz/rust-toolchain.toml`; the main workspace stays on stable. Starting inputs live in `fuzz/seeds/<target>/`.
+Parsers read hostile input (AGENTS.md §8), so each one has a property test in its crate and a [cargo-fuzz](https://rust-fuzz.github.io/book/cargo-fuzz.html) target in `fuzz/` (ENG-02). `fuzz/` is a workspace of its own because libFuzzer needs a nightly compiler, pinned by date in `fuzz/rust-toolchain.toml`; the main workspace stays on stable. Starting inputs live in `fuzz/seeds/<target>/`, a link to the test fixtures when a crate already has suitable ones, so seeds never go stale.
 
 `scripts/check-all.sh fuzz` lints the targets and runs each one for a fixed number of inputs with a fixed seed, so CI stays reproducible; set `FUZZ_RUNS` to change the count. To hunt for bugs, run a target for longer from `fuzz/`, for example `cargo fuzz run --fuzz-dir . schema_definition corpus/schema_definition seeds/schema_definition -- -max_total_time=600`. A crash is saved in `fuzz/artifacts/`: turn it into a regression test in the crate before fixing it.
 

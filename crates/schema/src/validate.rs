@@ -228,6 +228,24 @@ impl Errors {
             kind,
         });
     }
+
+    /// Reports every `(count, limit, what)` over its limit; true when any is.
+    fn too_many(
+        &mut self,
+        owner: &Owner,
+        item: Option<&Item>,
+        checks: &[(usize, usize, &'static str)],
+    ) -> bool {
+        let mut over = false;
+        for &(count, limit, what) in checks {
+            if count > limit {
+                let kind = ValidationErrorKind::TooMany { what, limit };
+                self.push(owner, item.cloned(), kind);
+                over = true;
+            }
+        }
+        over
+    }
 }
 
 fn validate_namespace(namespace: &Namespace, errors: &mut Errors) {
@@ -237,7 +255,7 @@ fn validate_namespace(namespace: &Namespace, errors: &mut Errors) {
         errors.push(&owner, None, ValidationErrorKind::ZeroVersion);
     }
     // Stop before any per-definition work: an oversized bundle is rejected cheaply.
-    let too_many = [
+    let limits = [
         (namespace.entities.len(), MAX_ENTITIES, "entities"),
         (
             namespace.property_sets.len(),
@@ -245,14 +263,7 @@ fn validate_namespace(namespace: &Namespace, errors: &mut Errors) {
             "property sets",
         ),
     ];
-    let mut oversized = false;
-    for (count, limit, what) in too_many {
-        if count > limit {
-            errors.push(&owner, None, ValidationErrorKind::TooMany { what, limit });
-            oversized = true;
-        }
-    }
-    if oversized {
+    if errors.too_many(&owner, None, &limits) {
         return;
     }
     check_type_names(namespace, errors);
@@ -319,26 +330,12 @@ fn validate_entity(namespace: &Namespace, entity: &Entity, errors: &mut Errors) 
         );
     }
     let limits = [
-        (entity.attributes.len(), "attributes"),
-        (entity.roles.len(), "roles"),
-        (entity.representations.len(), "representations"),
-        (entity.property_sets.len(), "property sets"),
+        (entity.attributes.len(), MAX_ITEMS, "attributes"),
+        (entity.roles.len(), MAX_ITEMS, "roles"),
+        (entity.representations.len(), MAX_ITEMS, "representations"),
+        (entity.property_sets.len(), MAX_ITEMS, "property sets"),
     ];
-    let mut oversized = false;
-    for (count, what) in limits {
-        if count > MAX_ITEMS {
-            errors.push(
-                &owner,
-                None,
-                ValidationErrorKind::TooMany {
-                    what,
-                    limit: MAX_ITEMS,
-                },
-            );
-            oversized = true;
-        }
-    }
-    if oversized {
+    if errors.too_many(&owner, None, &limits) {
         return;
     }
     if let Some(type_def) = &entity.type_def {
@@ -441,12 +438,8 @@ fn check_roles(
         if role.targets.is_empty() {
             errors.push(owner, item(), ValidationErrorKind::RoleWithoutTargets);
         }
-        if role.targets.len() > MAX_ITEMS {
-            let kind = ValidationErrorKind::TooMany {
-                what: "targets",
-                limit: MAX_ITEMS,
-            };
-            errors.push(owner, item(), kind);
+        let limits = [(role.targets.len(), MAX_ITEMS, "targets")];
+        if errors.too_many(owner, item().as_ref(), &limits) {
             continue;
         }
         for target in &role.targets {
@@ -465,6 +458,7 @@ fn check_roles(
 }
 
 fn check_representations(entity: &Entity, owner: &Owner, errors: &mut Errors) {
+    let attributes: BTreeSet<&str> = entity.attributes.iter().map(|a| a.name.as_str()).collect();
     let mut seen = BTreeSet::new();
     for (index, representation) in entity.representations.iter().enumerate() {
         let item = || Some(Item::Representation(index));
@@ -489,16 +483,12 @@ fn check_representations(entity: &Entity, owner: &Owner, errors: &mut Errors) {
             };
             errors.push(owner, item(), kind);
         }
-        if representation.depends_on.len() > MAX_ITEMS {
-            let kind = ValidationErrorKind::TooMany {
-                what: "dependencies",
-                limit: MAX_ITEMS,
-            };
-            errors.push(owner, item(), kind);
+        let limits = [(representation.depends_on.len(), MAX_ITEMS, "dependencies")];
+        if errors.too_many(owner, item().as_ref(), &limits) {
             continue;
         }
         for name in &representation.depends_on {
-            if !entity.attributes.iter().any(|a| &a.name == name) {
+            if !attributes.contains(name.as_str()) {
                 let kind = ValidationErrorKind::UnknownDependency { name: name.clone() };
                 errors.push(owner, item(), kind);
             }
@@ -516,21 +506,14 @@ fn validate_property_set(namespace: &Namespace, property_set: &PropertySet, erro
         errors,
     );
     let limits = [
-        (property_set.applies_to.len(), "entities in applies_to"),
-        (property_set.properties.len(), "properties"),
+        (
+            property_set.applies_to.len(),
+            MAX_ITEMS,
+            "entities in applies_to",
+        ),
+        (property_set.properties.len(), MAX_ITEMS, "properties"),
     ];
-    let mut oversized = false;
-    for (count, what) in limits {
-        if count > MAX_ITEMS {
-            let kind = ValidationErrorKind::TooMany {
-                what,
-                limit: MAX_ITEMS,
-            };
-            errors.push(&owner, None, kind);
-            oversized = true;
-        }
-    }
-    if oversized {
+    if errors.too_many(&owner, None, &limits) {
         return;
     }
     let mut applies_to = BTreeSet::new();
@@ -562,12 +545,12 @@ fn check_attribute(
     check_doc(attribute.doc.as_deref(), owner, item(), errors);
     // Bundles reach here without going through `ValueType::from_str`, so nesting is checked
     // again, without recursion, before anything recurses through the type.
-    if list_depth(&attribute.value) > MAX_LIST_DEPTH {
-        let kind = ValidationErrorKind::TooMany {
-            what: "nested list levels",
-            limit: MAX_LIST_DEPTH,
-        };
-        errors.push(owner, item(), kind);
+    let limits = [(
+        list_depth(&attribute.value),
+        MAX_LIST_DEPTH,
+        "nested list levels",
+    )];
+    if errors.too_many(owner, item().as_ref(), &limits) {
         return;
     }
     check_value_type(namespace, &attribute.value, owner, item(), errors);
@@ -741,18 +724,18 @@ fn is_pascal(name: &str) -> bool {
 }
 
 fn is_snake(name: &str) -> bool {
-    name.starts_with(|c: char| c.is_ascii_lowercase())
-        && name.split('_').all(|word| {
-            !word.is_empty()
-                && word
-                    .chars()
-                    .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit())
-        })
+    is_lower_words(name, '_')
 }
 
 fn is_plugin_id(id: &str) -> bool {
-    id.starts_with(|c: char| c.is_ascii_lowercase())
-        && id.split('-').all(|word| {
+    is_lower_words(id, '-')
+}
+
+/// Lowercase ASCII words of letters and digits, the first starting with a letter, joined by
+/// single `separator`s.
+fn is_lower_words(name: &str, separator: char) -> bool {
+    name.starts_with(|c: char| c.is_ascii_lowercase())
+        && name.split(separator).all(|word| {
             !word.is_empty()
                 && word
                     .chars()

@@ -11,8 +11,10 @@ const SEMVER = String.raw`\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?
 const EXACT_CARGO = new RegExp(`^=${SEMVER}$`);
 const EXACT_NPM = new RegExp(`^${SEMVER}$`);
 const EXACT_BUN = new RegExp(`^bun@${SEMVER}$`);
-// A release, or a dated nightly for tools that need one (the cargo-fuzz targets in fuzz/).
-const EXACT_TOOLCHAIN = /^(?:\d+\.\d+\.\d+|nightly-\d{4}-\d{2}-\d{2})$/;
+const EXACT_TOOLCHAIN = /^\d+\.\d+\.\d+$/;
+// Tools that need nightly (the cargo-fuzz targets in fuzz/) pin a dated one; the main
+// workspace's root toolchain stays a stable release.
+const DATED_NIGHTLY = /^nightly-\d{4}-\d{2}-\d{2}$/;
 const COMMIT_SHA = /^[0-9a-f]{40}$/;
 const CARGO_DEP_SECTIONS = ["dependencies", "dev-dependencies", "build-dependencies"];
 const NPM_DEP_SECTIONS = ["dependencies", "devDependencies", "optionalDependencies", "overrides"];
@@ -110,9 +112,12 @@ export function checkWorkflow(file: string, content: string): Issue[] {
 export function checkRustToolchain(file: string, content: string): Issue[] {
   const toolchain = (Bun.TOML.parse(content) as Table).toolchain;
   const channel = isTable(toolchain) ? toolchain.channel : undefined;
-  return typeof channel === "string" && EXACT_TOOLCHAIN.test(channel)
-    ? []
-    : [{ file, message: `toolchain channel must be an exact version "x.y.z" or "nightly-YYYY-MM-DD", got "${String(channel)}"` }];
+  const isRoot = file === "rust-toolchain.toml";
+  if (typeof channel === "string" && (EXACT_TOOLCHAIN.test(channel) || (!isRoot && DATED_NIGHTLY.test(channel)))) {
+    return [];
+  }
+  const expected = isRoot ? `an exact version "x.y.z"` : `an exact version "x.y.z" or "nightly-YYYY-MM-DD"`;
+  return [{ file, message: `toolchain channel must be ${expected}, got "${String(channel)}"` }];
 }
 
 type Checker = (file: string, content: string) => Issue[];
