@@ -18,7 +18,7 @@ Settings to apply once the GitHub repository exists. They make CI the final gate
 
 ## Labels
 
-Create the labels, milestones and project board described in [project-management.md](project-management.md#one-time-setup). The templates and checks rely on `bug`, `enhancement`, `spec` and `no-user-docs`.
+Create the labels, milestones and project board described in [project-management.md](project-management.md#one-time-setup).
 
 ## DCO
 
