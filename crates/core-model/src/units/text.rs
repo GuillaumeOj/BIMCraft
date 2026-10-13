@@ -39,8 +39,9 @@ pub struct Formatted<U: Unit> {
 
 impl<U: Unit> fmt::Display for Formatted<U> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let decimals = usize::from(self.format.decimals.min(MAX_DECIMALS));
-        let number = format!("{:.*}", decimals, self.quantity.get(self.format.unit));
+        let decimals = self.format.decimals.min(MAX_DECIMALS);
+        let value = round_half_away_from_zero(self.quantity.get(self.format.unit), decimals);
+        let number = format!("{value:.*}", usize::from(decimals));
         // A small negative value rounds to "-0.00"; show it as zero.
         let number = match number.strip_prefix('-') {
             Some(magnitude) if magnitude.bytes().all(|byte| matches!(byte, b'0' | b'.')) => {
@@ -52,8 +53,21 @@ impl<U: Unit> fmt::Display for Formatted<U> {
     }
 }
 
-/// Writes `number` followed by the unit symbol. The degree sign follows the number directly,
-/// every other symbol after a space, as the SI brochure writes them.
+/// Rounds ties away from zero, as drawings and schedules do. Formatting alone rounds ties to
+/// even, which would show 2.5 mm as "2 mm" but 3.5 mm as "4 mm".
+fn round_half_away_from_zero(value: f64, decimals: u8) -> f64 {
+    let scale = 10_f64.powi(i32::from(decimals));
+    let scaled = value * scale;
+    if scaled.is_finite() {
+        scaled.round() / scale
+    } else {
+        value
+    }
+}
+
+/// Writes `number` followed by the unit symbol, honouring the formatter's width and alignment.
+/// The degree sign follows the number directly, every other symbol after a space, as the SI
+/// brochure writes them.
 pub(super) fn write_with_symbol<U: Unit>(
     f: &mut fmt::Formatter<'_>,
     number: &str,
@@ -61,7 +75,7 @@ pub(super) fn write_with_symbol<U: Unit>(
 ) -> fmt::Result {
     let symbol = unit.symbol();
     let separator = if symbol == "°" { "" } else { " " };
-    write!(f, "{number}{separator}{symbol}")
+    f.pad(&format!("{number}{separator}{symbol}"))
 }
 
 /// Why a text is not a quantity of the expected dimension.
@@ -196,6 +210,24 @@ mod tests {
     }
 
     #[test]
+    fn rounds_ties_away_from_zero() {
+        assert_eq!(Length::from_si(0.0025).display(mm(0)).to_string(), "3 mm");
+        assert_eq!(Length::from_si(-0.0025).display(mm(0)).to_string(), "-3 mm");
+        let metres = DisplayFormat::new(LengthUnit::Metre, 1);
+        assert_eq!(Length::from_si(0.25).display(metres).to_string(), "0.3 m");
+        // 1e308 mm cannot be scaled by 100 without overflowing; it is shown unrounded.
+        let huge = Length::from_si(1e305).display(mm(2)).to_string();
+        assert!(huge.ends_with(".00 mm") && !huge.contains("inf"));
+    }
+
+    #[test]
+    fn honours_width_and_alignment() {
+        let quantity = Length::from_si(1.25);
+        assert_eq!(format!("{:>9}", quantity.display(mm(0))), "  1250 mm");
+        assert_eq!(format!("{quantity:<8}|"), "1.25 m  |");
+    }
+
+    #[test]
     fn caps_decimals() {
         assert_eq!(
             Length::from_si(0.001).display(mm(200)).to_string(),
@@ -261,7 +293,10 @@ mod tests {
     #[test]
     fn rejects_bad_input_with_typed_errors() {
         let long = "1".repeat(MAX_TEXT_LEN + 1);
-        assert_eq!(length(&long), Err(ParseQuantityError::TooLong { len: 65 }));
+        assert_eq!(
+            length(&long),
+            Err(ParseQuantityError::TooLong { len: long.len() })
+        );
         assert_eq!(length(""), Err(ParseQuantityError::Empty));
         assert_eq!(length("   "), Err(ParseQuantityError::Empty));
         for text in ["mm", "1.2.3 mm", "1,000.5", "--1", "e", "inf", "NaN"] {
