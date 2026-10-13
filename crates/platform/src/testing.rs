@@ -138,16 +138,12 @@ impl InlineExecutor {
     pub fn run_until_stalled(&self) {
         loop {
             // Taken out of the cell so tasks can call `spawn` while they are polled.
-            let tasks = mem::take(&mut *self.waiting.borrow_mut());
+            let mut tasks = mem::take(&mut *self.waiting.borrow_mut());
             let polled = tasks.len();
-            let mut still_waiting: Vec<_> = tasks
-                .into_iter()
-                .filter_map(|mut task| now_or_never(task.as_mut()).is_none().then_some(task))
-                .collect();
-            let finished = still_waiting.len() < polled;
-            let mut waiting = self.waiting.borrow_mut();
-            still_waiting.append(&mut waiting);
-            *waiting = still_waiting;
+            tasks.retain_mut(|task| now_or_never(task.as_mut()).is_none());
+            let finished = tasks.len() < polled;
+            // Older tasks stay ahead of the ones spawned during this pass.
+            self.waiting.borrow_mut().splice(0..0, tasks);
             // Stopping on "nothing finished" rather than "nothing spawned" also ends the loop
             // when a waiting task spawns another waiting task every time it is polled.
             if !finished {
