@@ -128,7 +128,7 @@ Users are architects and engineers, not developers. For every user-facing featur
 | `docs/specifications.md` | Specification and requirement IDs |
 | `docs/user/` | End-user guide (mdBook) |
 | `docs/dev/` | Developer documentation, quality rationale, GitHub setup |
-| `crates/` | Rust crates (to come) |
+| `crates/` | Rust crates |
 | `ui/` | Web frontend (Bun, React, TypeScript) |
 | `scripts/` | Repository tooling |
 | `.githooks/` | Git hooks shared by everyone (enable with `scripts/setup.sh`) |
