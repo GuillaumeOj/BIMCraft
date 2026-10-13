@@ -19,7 +19,7 @@ BIMCraft takes a construction project from early studies to detailed design in o
 | Area | MVP | Later |
 | --- | --- | --- |
 | Platforms | Windows and macOS desktop | Linux, browser (WASM) |
-| Disciplines | Structure (reinforced concrete, steel), basic architecture | Timber, MEP, thermal, fire safety, civil works, bridges |
+| Disciplines | Structure (reinforced concrete, steel), architecture (building elements, curtain walls, massing, spaces, area tables) | Advanced architecture (façades, programme, site, interiors, renovation, embodied carbon), timber, MEP, thermal, fire safety, civil works, bridges |
 | Analysis | Linear static FEM, load takedown | Shells, Eurocode and other design-code checks |
 | Interop | IFC 4.3 import and export | DXF, DWG, BCF, IDS, SAF, point clouds, Revit add-in |
 | Extensibility | Command API, Python SDK | MCP server for AI assistants, plugin registry |
