@@ -33,7 +33,7 @@ A single user-level project, **BIMCraft**, linked to the repository.
 
 | Field | Type | Values |
 | --- | --- | --- |
-| Status | Single select (built in) | `Triage`, `Backlog`, `Todo`, `In progress`, `In review`, `Done` |
+| Status | Single select (built in) | `Triage`, `Backlog`, `Todo`, `In Progress`, `In Review`, `Done` |
 | Priority | Single select | `Urgent`, `High`, `Medium`, `Low` |
 | Size | Single select | `XS` (< 2 h), `S` (½ day), `M` (1–2 days), `L` (≤ 1 week), `XL` (split it) |
 | Cycle | Iteration | 2-week iterations |
@@ -57,14 +57,14 @@ Enable these built-in workflows (project → ⋯ → Workflows):
 - **Item added to project** → set Status to `Triage`.
 - **Auto-add to project** → filter `is:issue is:open` on the repository, so every new issue lands in Triage. Pull requests stay off the board: the issue they close carries the status.
 - **Item closed** → set Status to `Done`.
-- **Pull request linked to issue** → set Status to `In review`.
+- **Pull request linked to issue** → set Status to `In Review`.
 - **Auto-archive items** → `is:closed updated:<@today-30d`.
 
 ## Workflow
 
 1. **Triage** (at least weekly): for each item in *Triage*, check it is clear and not a duplicate, add type and area labels, Priority and Size, then move it to *Backlog*. Close what will not be done, with the reason. Split anything sized `XL` into sub-issues.
 2. **Plan a cycle**: at the start of each 2-week cycle, pull items from *Backlog* into the cycle and set them to *Todo*. Prefer finishing a parent issue's sub-issues over starting new ones.
-3. **Work**: assign yourself, move the item to *In progress*, branch from `main` (`gh issue develop <issue> --checkout`), follow [AGENTS.md](../../AGENTS.md) and open the pull request with `Closes #<issue>`. The automations do the rest.
+3. **Work**: assign yourself, move the item to *In Progress*, branch from `main` (`gh issue develop <issue> --checkout`), follow [AGENTS.md](../../AGENTS.md) and open the pull request with `Closes #<issue>`. The automations do the rest.
 
 Coding agents follow the same workflow. They may read issues and the board with the `gh` CLI, but any change on GitHub (creating, editing, labelling, closing or commenting on an issue, or moving a card) publishes something remote, so they do it only when the user explicitly asks ([AGENTS.md](../../AGENTS.md) §1).
 
