@@ -53,7 +53,7 @@ check_wasm() {
   has_rust || { step "wasm32: no crates yet, skipped"; return; }
   step "wasm32: core crates build for the browser (ARCH-01)"
   for crate in $(existing_crates scripts/wasm-crates.txt); do
-    cargo build --package "$crate" --target wasm32-unknown-unknown --locked
+    cargo build --package "$crate" --target wasm32-unknown-unknown --all-features --locked
   done
 }
 
