@@ -22,7 +22,7 @@ check_repo() {
   require bun; require typos; require taplo; require gitleaks
   typos
   taplo fmt --check
-  gitleaks dir --no-banner --redact .
+  gitleaks git --no-banner --redact
   bun scripts/check-pinned-deps.ts
   (cd scripts && bun test)
   if command -v actionlint >/dev/null 2>&1; then actionlint; fi
