@@ -64,6 +64,11 @@ check_wasm() {
     in_scope "$crate" || continue
     cargo build --package "$crate" --target wasm32-unknown-unknown --all-features --locked
   done
+  step "wasm32: geometry results match the native golden output (ENG-04)"
+  require wasmtime
+  # wasm32 aborts on panic, which hides captured output; --nocapture keeps the diverging value.
+  CARGO_TARGET_WASM32_WASIP1_RUNNER=wasmtime \
+    cargo test --package geom-golden --target wasm32-wasip1 --locked -- --nocapture
 }
 
 # Bounded and seeded, so a run is reproducible and fits in CI; longer runs: docs/dev/quality.md.

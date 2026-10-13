@@ -36,7 +36,7 @@ These stay allowed because IEEE 754 defines their result exactly: `sqrt`, `mul_a
 
 ## Consequences
 
-- Results are reproducible across targets for a given `libm` version. Upgrading `libm` can change last bits, so an upgrade is a deliberate change reviewed like a change to `LINEAR_TOLERANCE` ([ADR 0001](0001-geometry-tolerance-policy.md)), and the cross-target comparison ([#10](https://github.com/GuillaumeOj/BIMCraft/issues/10), a separate task) must pass on it.
+- Results are reproducible across targets for a given `libm` version. Upgrading `libm` can change last bits, so an upgrade is a deliberate change reviewed like a change to `LINEAR_TOLERANCE` ([ADR 0001](0001-geometry-tolerance-policy.md)), and the cross-target golden-output test (`crates/geom-golden`, [#10](https://github.com/GuillaumeOj/BIMCraft/issues/10)) must pass on it, with its regenerated `golden.txt` reviewed as part of the change.
 - `libm` functions are accurate to within about one unit in the last place, not correctly rounded. That is enough for geometry, where decisions use exact predicates and constructed points are rounded anyway.
 - `libm` may be slower than the platform library on desktop. No hot path uses transcendentals yet; benchmarks will show if one does.
 - The lint sees only our own code. A dependency added to a core crate must not call the std methods itself; for example, `num-traits` must use its `libm` feature, not `std`. Reviewing a new core dependency (AGENTS.md §4) includes this check.
