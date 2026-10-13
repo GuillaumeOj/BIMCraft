@@ -1,6 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 
+use crate::value_type::MAX_LIST_DEPTH;
 use crate::{
     Attribute, Entity, EntityKind, IfcMapping, Namespace, Placement, Presence, PropertySet,
     RoleTarget, Value, ValueType,
@@ -559,6 +560,16 @@ fn check_attribute(
     let item = || Some(item.clone());
     check_name(&attribute.name, rule, owner, item(), errors);
     check_doc(attribute.doc.as_deref(), owner, item(), errors);
+    // Bundles reach here without going through `ValueType::from_str`, so nesting is checked
+    // again, without recursion, before anything recurses through the type.
+    if list_depth(&attribute.value) > MAX_LIST_DEPTH {
+        let kind = ValidationErrorKind::TooMany {
+            what: "nested list levels",
+            limit: MAX_LIST_DEPTH,
+        };
+        errors.push(owner, item(), kind);
+        return;
+    }
     check_value_type(namespace, &attribute.value, owner, item(), errors);
     if let Presence::Default(value) = &attribute.presence {
         if !value_matches(value, &attribute.value) {
@@ -570,6 +581,15 @@ fn check_attribute(
             errors.push(owner, item(), ValidationErrorKind::NonFiniteDefault);
         }
     }
+}
+
+fn list_depth(mut value: &ValueType) -> usize {
+    let mut depth = 0;
+    while let ValueType::List(inner) = value {
+        depth += 1;
+        value = inner;
+    }
+    depth
 }
 
 fn check_value_type(

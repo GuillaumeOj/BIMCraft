@@ -367,6 +367,21 @@ fn escapes_keywords_and_rejects_unusable_names() {
 }
 
 #[test]
+fn rejects_struct_names_the_generated_code_relies_on() {
+    for name in ["Option", "String", "Vec", "Self"] {
+        let entity = STOREY
+            .replace("\"Storey\"", &format!("{name:?}"))
+            .replace("IfcBuildingStorey", "IfcSpace");
+        let namespace = parse_with(&[("entities/reserved.toml", &entity)]).unwrap();
+        let errors = emit_rust(&namespace, &options()).unwrap_err();
+        assert_eq!(
+            errors[0].to_string(),
+            format!("`{name}` cannot be a generated struct name")
+        );
+    }
+}
+
+#[test]
 fn rejects_names_that_collide_in_rust() {
     let property_set = "format = 1\n[property_set]\nname = \"Pset_Storey\"\napplies_to = \
                         [\"Storey\"]\n\n[[property]]\nname = \"IsExternal\"\nvalue = \
@@ -438,6 +453,26 @@ fn loading_rejects_stray_files() {
             "{error}"
         );
     }
+}
+
+#[test]
+fn loading_rejects_a_definition_path_that_is_not_a_directory() {
+    let dir = TempNamespace::new(
+        "not-dir",
+        &[("namespace.toml", NAMESPACE), ("entities", "")],
+    )
+    .unwrap();
+    let error = load_dir(&dir.0).unwrap_err();
+    assert_eq!(
+        error.to_string(),
+        "entities: must be a directory of *.toml files"
+    );
+}
+
+#[test]
+fn loading_skips_absent_definition_directories() {
+    let dir = TempNamespace::new("absent", &[("namespace.toml", NAMESPACE)]).unwrap();
+    assert_eq!(load_dir(&dir.0).unwrap().len(), 1);
 }
 
 #[test]

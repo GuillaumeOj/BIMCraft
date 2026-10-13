@@ -33,7 +33,7 @@ mod rust;
 use std::path::{Path, PathBuf};
 
 pub use error::{Error, ErrorKind};
-pub use load::{Loaded, load_dir};
+pub use load::load_dir;
 pub use parse::{FORMAT, MAX_FILE_SIZE, Source, parse_sources};
 pub use rust::{RustOptions, emit_rust};
 
@@ -42,7 +42,8 @@ pub use rust::{RustOptions, emit_rust};
 pub struct Generated {
     /// The generated source code.
     pub code: String,
-    /// Files and directories read, for `cargo::rerun-if-changed`.
+    /// What to pass to `cargo::rerun-if-changed`: the namespace directory, which Cargo scans
+    /// recursively, so editing, adding or removing any definition reruns the build script.
     pub inputs: Vec<PathBuf>,
 }
 
@@ -53,11 +54,11 @@ pub struct Generated {
 /// Returns every [`Error`] found: unreadable files, invalid TOML, definitions that do not
 /// follow the format, and validation failures.
 pub fn generate_rust(dir: &Path, options: &RustOptions) -> Result<Generated, Vec<Error>> {
-    let loaded = load_dir(dir).map_err(|error| vec![error])?;
-    let namespace = parse_sources(&loaded.sources)?;
+    let sources = load_dir(dir).map_err(|error| vec![error])?;
+    let namespace = parse_sources(&sources)?;
     let code = emit_rust(&namespace, options)?;
     Ok(Generated {
         code,
-        inputs: loaded.inputs,
+        inputs: vec![dir.to_owned()],
     })
 }

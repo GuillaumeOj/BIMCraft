@@ -151,7 +151,9 @@ jobs:
       - uses: taiki-e/install-action@4cef1412cce204788f482e778a0b9187f9626a29 # v2.87.21
         with:
           tool: cargo-deny@${{ env.CARGO_DENY_VERSION }}
+      # From fuzz/, so it builds with the nightly installed above, not the root toolchain.
       - name: Install cargo-fuzz
+        working-directory: fuzz
         run: cargo install --locked "cargo-fuzz@$CARGO_FUZZ_VERSION"
       - run: scripts/check-all.sh fuzz
 

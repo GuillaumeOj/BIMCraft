@@ -565,6 +565,28 @@ fn checks_defaults_against_value_types() {
 }
 
 #[test]
+fn limits_list_nesting_in_value_types() {
+    let nested =
+        |depth| (0..depth).fold(ValueType::Real, |inner, _| ValueType::List(Box::new(inner)));
+    let mut namespace = sample();
+    wall(&mut namespace)
+        .attributes
+        .push(attribute("deepest", nested(MAX_LIST_DEPTH)));
+    assert_eq!(validate(&namespace), Ok(()));
+    wall(&mut namespace)
+        .attributes
+        .push(attribute("too_deep", nested(MAX_LIST_DEPTH + 1)));
+    assert_single(
+        &namespace,
+        entity_at("Wall", Some(Item::Attribute("too_deep".into()))),
+        ValidationErrorKind::TooMany {
+            what: "nested list levels",
+            limit: MAX_LIST_DEPTH,
+        },
+    );
+}
+
+#[test]
 fn rejects_non_finite_defaults() {
     for value in [f64::NAN, f64::INFINITY] {
         for (value_type, default) in [

@@ -33,6 +33,9 @@ const ALLOWED_LINTS: &str = "#[allow(
 /// Rust keywords that cannot be used even as raw identifiers.
 const NOT_RAW: [&str; 4] = ["crate", "self", "super", "Self"];
 
+/// Names the emitted code uses unqualified; a struct with one of them would shadow it.
+const USED_TYPES: [&str; 4] = ["Option", "String", "Vec", "Self"];
+
 /// Emits the Rust types of a namespace.
 ///
 /// The namespace is validated first, so the output only depends on valid input. Entities and
@@ -251,11 +254,24 @@ fn deprecation(version: u32) -> String {
     format!("Deprecated since schema version {version}.")
 }
 
+/// Schema docs become rustdoc, where code blocks are compiled as doctests. Lines lose their
+/// indentation, so no indented code block can form, and every fence opens as `text`: rustdoc
+/// compiles untagged fences and many tags (`no_run`, `ignore`…) as Rust.
 fn doc_lines(doc: Option<&str>, fallback: impl FnOnce() -> String) -> Vec<String> {
-    match doc.map(str::trim).filter(|doc| !doc.is_empty()) {
-        Some(doc) => doc.lines().map(|line| line.trim_end().to_owned()).collect(),
-        None => vec![fallback()],
-    }
+    let Some(doc) = doc.map(str::trim).filter(|doc| !doc.is_empty()) else {
+        return vec![fallback()];
+    };
+    let mut in_fence = false;
+    doc.lines()
+        .map(|line| {
+            let line = line.trim();
+            if !line.starts_with("```") {
+                return line.to_owned();
+            }
+            in_fence = !in_fence;
+            if in_fence { "```text" } else { "```" }.to_owned()
+        })
+        .collect()
 }
 
 fn rust_type(value: &ValueType, options: &RustOptions) -> String {
@@ -287,7 +303,8 @@ fn literal(value: &Value) -> String {
 }
 
 /// Groups the digits of a number literal by three, as `clippy::unreadable_literal` asks for
-/// numbers longer than five digits: `1234567.25` becomes `1_234_567.25`.
+/// runs longer than five digits: `1234567.25` becomes `1_234_567.25`. Once one part is grouped,
+/// every part longer than three digits is, or `clippy::inconsistent_digit_grouping` objects.
 fn group_digits(number: &str) -> String {
     let (mantissa, exponent) = number
         .find('e')
@@ -295,14 +312,12 @@ fn group_digits(number: &str) -> String {
     let (sign, mantissa) = mantissa
         .strip_prefix('-')
         .map_or(("", mantissa), |rest| ("-", rest));
-    let (whole, fraction) = mantissa
-        .split_once('.')
-        .map_or((mantissa, None), |(whole, fraction)| {
-            (whole, Some(fraction))
-        });
-    let mut out = String::from(sign);
-    out.push_str(&group(whole, true));
-    if let Some(fraction) = fraction {
+    let (whole, fraction) = mantissa.split_once('.').unwrap_or((mantissa, ""));
+    if whole.len() <= 5 && fraction.len() <= 5 {
+        return number.to_owned();
+    }
+    let mut out = format!("{sign}{}", group(whole, true));
+    if mantissa.contains('.') {
         out.push('.');
         out.push_str(&group(fraction, false));
     }
@@ -311,11 +326,8 @@ fn group_digits(number: &str) -> String {
 }
 
 /// Inserts `_` every three digits, from the right for whole parts and from the left for
-/// fractions, when the run is longer than five digits.
+/// fractions.
 fn group(digits: &str, from_right: bool) -> String {
-    if digits.len() <= 5 {
-        return digits.to_owned();
-    }
     let chars: Vec<char> = digits.chars().collect();
     let offset = if from_right { chars.len() % 3 } else { 0 };
     let mut out = String::new();
@@ -367,7 +379,9 @@ fn check_names(structs: &[Struct]) -> Result<(), Vec<Error>> {
     let mut errors = Vec::new();
     let mut struct_names = BTreeSet::new();
     for item in structs {
-        if !struct_names.insert(item.name.as_str()) {
+        if USED_TYPES.contains(&item.name.as_str()) {
+            errors.push(format!("`{}` cannot be a generated struct name", item.name));
+        } else if !struct_names.insert(item.name.as_str()) {
             errors.push(format!("two generated structs are named `{}`", item.name));
         }
         let mut field_names = BTreeSet::new();
@@ -500,6 +514,9 @@ mod tests {
         assert_eq!(group_digits("1.2345678e-7"), "1.234_567_8e-7");
         assert_eq!(group_digits("2.5"), "2.5");
         assert_eq!(group_digits("1e20"), "1e20");
+        assert_eq!(group_digits("1234567.12345"), "1_234_567.123_45");
+        assert_eq!(group_digits("12345.123456"), "12_345.123_456");
+        assert_eq!(group_digits("12.123456"), "12.123_456");
     }
 
     #[test]
@@ -511,6 +528,28 @@ mod tests {
         assert_eq!(snake_case("HTTPProxy"), "http_proxy");
         assert_eq!(snake_case("Level2Height"), "level2_height");
         assert_eq!(snake_case("ABC"), "abc");
+    }
+
+    #[test]
+    fn keeps_schema_docs_out_of_doctests() {
+        let doc = "Example:\n\n```\nlet x = 1;\n```\n\n    indented();\n\n```toml\na = 1\n```";
+        assert_eq!(
+            doc_lines(Some(doc), String::new),
+            [
+                "Example:",
+                "",
+                "```text",
+                "let x = 1;",
+                "```",
+                "",
+                "indented();",
+                "",
+                "```text",
+                "a = 1",
+                "```",
+            ]
+        );
+        assert_eq!(doc_lines(Some("  "), || "fallback".into()), ["fallback"]);
     }
 
     #[test]

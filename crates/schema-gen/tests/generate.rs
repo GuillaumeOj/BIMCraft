@@ -71,28 +71,9 @@ fn passes_rustfmt() {
 }
 
 #[test]
-fn lists_every_input() {
+fn reruns_on_any_change_in_the_namespace() {
     let generated = generate_rust(&sample_dir(), &options()).unwrap();
-    let relative: Vec<_> = generated
-        .inputs
-        .iter()
-        .map(|path| path.strip_prefix(sample_dir()).unwrap().to_owned())
-        .collect();
-    let expected = [
-        "namespace.toml",
-        "entities",
-        "entities/beam.toml",
-        "entities/opening.toml",
-        "entities/recess.toml",
-        "entities/storey.toml",
-        "entities/wall.toml",
-        "relationships",
-        "relationships/containment.toml",
-        "relationships/voiding.toml",
-        "property-sets",
-        "property-sets/Pset_WallCommon.toml",
-    ];
-    assert_eq!(relative, expected.map(PathBuf::from));
+    assert_eq!(generated.inputs, [sample_dir()]);
 }
 
 #[test]
@@ -111,7 +92,7 @@ proptest! {
     /// The order files are given in never changes the result.
     #[test]
     fn file_order_does_not_matter(seed in any::<u64>()) {
-        let mut sources = load_dir(&sample_dir()).unwrap().sources;
+        let mut sources = load_dir(&sample_dir()).unwrap();
         let expected = parse_sources(&sources).unwrap();
         // A seeded Fisher–Yates shuffle with a small LCG keeps the permutation reproducible.
         let mut state = seed;
