@@ -1,0 +1,6 @@
+# A small namespace exercising every feature of the definition format; not the real core schema.
+format = 1
+
+[namespace]
+name = "core"
+version = 2

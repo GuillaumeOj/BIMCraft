@@ -1,0 +1,17 @@
+[package]
+name = "schema"
+version = "0.0.0"
+description = "Canonical schema model and validator shared by the generators and the runtime registry."
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+thiserror = { workspace = true }
+
+[dev-dependencies]
+proptest = { workspace = true }
+
+[lints]
+workspace = true

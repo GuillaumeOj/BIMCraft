@@ -1,0 +1,5 @@
+# libFuzzer's sanitizer instrumentation needs nightly; dated, so every run uses the same compiler.
+[toolchain]
+channel = "nightly-2026-09-28"
+components = ["clippy", "rustfmt"]
+profile = "minimal"

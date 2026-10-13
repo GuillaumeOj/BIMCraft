@@ -1,6 +1,6 @@
 #!/bin/sh
 # Runs the project checks (AGENTS.md §9). CI calls the same sections, so local and remote never drift.
-# Usage: scripts/check-all.sh [section...]   sections: repo rust coverage wasm ui e2e docs (default: all)
+# Usage: scripts/check-all.sh [section...]   sections: repo rust coverage wasm fuzz ui e2e docs (default: all)
 # A section is skipped only when the code it checks does not exist yet.
 set -eu
 
@@ -15,6 +15,7 @@ require() {
 }
 has_rust() { ls crates/*/Cargo.toml >/dev/null 2>&1; }
 has_ui() { [ -f ui/package.json ]; }
+has_fuzz() { [ -f fuzz/Cargo.toml ]; }
 existing_crates() { while read -r crate; do [ -f "crates/$crate/Cargo.toml" ] && echo "$crate"; done < "$1"; }
 
 check_repo() {
@@ -57,6 +58,26 @@ check_wasm() {
   done
 }
 
+# Bounded and seeded, so a run is reproducible and fits in CI; longer runs: docs/dev/quality.md.
+check_fuzz() {
+  has_fuzz || { step "Fuzzing: no fuzz targets yet, skipped"; return; }
+  step "Fuzzing: parsers survive hostile input (ENG-02)"
+  require cargo-fuzz; require cargo-deny
+  (
+    # Inside fuzz/, rustup picks the nightly pinned in fuzz/rust-toolchain.toml.
+    cd fuzz
+    cargo fmt --check
+    cargo clippy --all-targets --locked -- -D warnings
+    cargo deny --locked check
+    for target in $(cargo fuzz list --fuzz-dir .); do
+      corpus=$(mktemp -d)
+      cargo fuzz run --fuzz-dir . "$target" "$corpus" "seeds/$target" -- \
+        -runs="${FUZZ_RUNS:-200000}" -seed=1 -timeout=10
+      rm -rf "$corpus"
+    done
+  )
+}
+
 check_ui() {
   has_ui || { step "UI: no package.json yet, skipped"; return; }
   step "UI: lint, format, imports, types, unit tests + coverage, audit"
@@ -83,10 +104,10 @@ check_docs() {
   mdbook build docs/user
 }
 
-sections=${*:-repo rust coverage wasm ui e2e docs}
+sections=${*:-repo rust coverage wasm fuzz ui e2e docs}
 for section in $sections; do
   case "$section" in
-    repo|rust|coverage|wasm|ui|e2e|docs) "check_$section" ;;
+    repo|rust|coverage|wasm|fuzz|ui|e2e|docs) "check_$section" ;;
     *) echo "check-all: unknown section '$section'" >&2; exit 2 ;;
   esac
 done
