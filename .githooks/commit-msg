@@ -1,0 +1,23 @@
+#!/bin/sh
+# Enforces Conventional Commits and DCO sign-off (CONTRIBUTING.md).
+set -eu
+
+msg_file="$1"
+subject=$(grep -v '^#' "$msg_file" | sed -n '1p')
+
+# Let git's own merge/revert/fixup messages through.
+case "$subject" in
+  Merge\ *|Revert\ *|fixup!\ *|squash!\ *) exit 0 ;;
+esac
+
+pattern='^(feat|fix|docs|test|refactor|perf|build|ci|chore|style|revert)(\([a-z0-9._/-]+\))?!?: .{1,100}$'
+if ! printf '%s\n' "$subject" | grep -Eq "$pattern"; then
+  echo "commit-msg: subject must follow Conventional Commits, e.g. 'feat(geom): add orientation predicate'." >&2
+  echo "            got: $subject" >&2
+  exit 1
+fi
+
+if ! grep -Eq '^Signed-off-by: .+ <.+>$' "$msg_file"; then
+  echo "commit-msg: missing 'Signed-off-by:' line. Commit with 'git commit -s' (DCO)." >&2
+  exit 1
+fi

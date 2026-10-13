@@ -1,0 +1,23 @@
+#!/bin/sh
+# Refuses to push unless HEAD was stamped as reviewed (AGENTS.md §1).
+set -eu
+
+root=$(git rev-parse --show-toplevel)
+stamp="$(git rev-parse --git-dir)/bimcraft-review-stamp"
+head=$(git rev-parse HEAD)
+
+if [ ! -f "$stamp" ] || [ "$(cat "$stamp")" != "$head" ]; then
+  cat >&2 <<MSG
+pre-push: HEAD ($head) has not been marked as reviewed.
+
+Before pushing:
+  1. The user runs a code review of the changes   (Claude Code: /code-review)
+  2. The user runs a simplification pass          (Claude Code: /simplify)
+  3. Fixes are committed, then the user approves:  scripts/mark-reviewed.sh
+
+Any new commit after the stamp requires a new review.
+MSG
+  exit 1
+fi
+
+"$root/scripts/check-all.sh"

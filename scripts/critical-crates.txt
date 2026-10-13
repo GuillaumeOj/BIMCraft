@@ -1,0 +1,9 @@
+core-model
+core-txn
+geom
+georef
+analysis
+api
+interop-ifc
+interop-dxf
+interop-bcf

@@ -1,0 +1,14 @@
+core-model
+core-txn
+geom
+georef
+disc-arch
+disc-struct
+disc-mep
+disc-thermal
+analysis
+docgen
+interop-ifc
+interop-dxf
+interop-bcf
+api

@@ -1,0 +1,47 @@
+#!/bin/sh
+# Fast checks on staged files. Full checks run in pre-push and CI.
+set -eu
+
+root=$(git rev-parse --show-toplevel)
+cd "$root"
+
+staged=$(git diff --cached --name-only --diff-filter=ACMR)
+[ -n "$staged" ] || exit 0
+
+has() { command -v "$1" >/dev/null 2>&1; }
+skip() { echo "pre-commit: '$1' not installed, skipping (run scripts/setup.sh). CI will still check." >&2; }
+staged_match() { printf '%s\n' "$staged" | grep -E "$1" || true; }
+
+if has gitleaks; then
+  gitleaks git --staged --no-banner --redact --exit-code 1
+else
+  skip gitleaks
+fi
+
+if has typos; then
+  printf '%s\n' "$staged" | xargs typos --force-exclude
+else
+  skip typos
+fi
+
+toml=$(staged_match '\.toml$')
+if [ -n "$toml" ]; then
+  if has taplo; then printf '%s\n' "$toml" | xargs taplo fmt --check; else skip taplo; fi
+fi
+
+rs=$(staged_match '\.rs$')
+if [ -n "$rs" ]; then
+  printf '%s\n' "$rs" | xargs rustfmt --check --edition 2024
+fi
+
+ui=$(staged_match '^ui/.*\.(ts|tsx|js|jsx|json|jsonc|css)$')
+if [ -n "$ui" ] && [ -x ui/node_modules/.bin/biome ]; then
+  printf '%s\n' "$ui" | sed 's|^ui/||' | (cd ui && xargs node_modules/.bin/biome check --no-errors-on-unmatched)
+elif [ -n "$ui" ]; then
+  skip "biome (run 'bun install' in ui/)"
+fi
+
+manifests=$(staged_match '(Cargo\.toml|package\.json|rust-toolchain\.toml|^\.github/workflows/.*\.ya?ml)$')
+if [ -n "$manifests" ]; then
+  if has bun; then bun scripts/check-pinned-deps.ts; else skip bun; fi
+fi
