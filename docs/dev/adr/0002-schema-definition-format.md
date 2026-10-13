@@ -2,7 +2,7 @@
 
 - Status: Accepted
 - Requirements: spec §5.1; CORE-02, CORE-03, CORE-04, CORE-09, CORE-10, GEO-06, API-02, PY-01, PY-04, PY-07, PERS-01, PERS-04, ARCH-01, ARCH-02
-- Issues: [#15](https://github.com/GuillaumeOj/BIMCraft/issues/15) (epic [#14](https://github.com/GuillaumeOj/BIMCraft/issues/14)), [#16](https://github.com/GuillaumeOj/BIMCraft/issues/16), [#17](https://github.com/GuillaumeOj/BIMCraft/issues/17), [#18](https://github.com/GuillaumeOj/BIMCraft/issues/18), [#19](https://github.com/GuillaumeOj/BIMCraft/issues/19), [#36](https://github.com/GuillaumeOj/BIMCraft/issues/36), [#142](https://github.com/GuillaumeOj/BIMCraft/issues/142)
+- Issues: [#15](https://github.com/GuillaumeOj/BIMCraft/issues/15) (epic [#14](https://github.com/GuillaumeOj/BIMCraft/issues/14)), [#16](https://github.com/GuillaumeOj/BIMCraft/issues/16), [#17](https://github.com/GuillaumeOj/BIMCraft/issues/17), [#18](https://github.com/GuillaumeOj/BIMCraft/issues/18), [#19](https://github.com/GuillaumeOj/BIMCraft/issues/19), [#36](https://github.com/GuillaumeOj/BIMCraft/issues/36), [#142](https://github.com/GuillaumeOj/BIMCraft/issues/142), [#153](https://github.com/GuillaumeOj/BIMCraft/issues/153)
 
 ## Context
 
@@ -22,7 +22,7 @@ Decision drivers, most important first:
 
 ## Decision
 
-**Schema definitions are TOML files** (option B), one file per entity, property set or relationship kind, parsed into one canonical model that every generator and the runtime registry share.
+**Schema definitions are TOML files** (option B), one file per entity or property set, parsed into one canonical model that every generator and the runtime registry share.
 
 ### Layout
 
@@ -32,6 +32,7 @@ schema/
     namespace.toml            # namespace name and current schema version
     entities/wall.toml        # one entity (with its type, see CORE-02)
     entities/beam.toml
+    entities/voids.toml       # a relationship entity (kind = "relationship"), see CORE-03
     property-sets/Pset_WallCommon.toml
     migrations/0002.toml      # from version 1 to version 2
     snapshot.json             # canonical model of the current version, generated and committed
@@ -42,7 +43,7 @@ A plugin ships the same tree, with its own namespace, inside its package.
 ### Processing
 
 1. **Parse** each file into typed Rust structures with `serde`; unknown keys are errors.
-2. **Validate** the whole namespace: unique names, existing references (types, property sets, relationship targets), known IFC entities and predefined types, known quantities and units, `since` not above the namespace version, size and nesting limits.
+2. **Validate** the whole namespace: unique names, existing references (types, property sets, relationship targets), known IFC entities and predefined types, known quantities, `since` not above the namespace version, size and nesting limits.
 3. **Build the canonical model**: one sorted, normalised description of the namespace. Same input, same output.
 4. **Emit**, at build time, for the core namespace: Rust types and serialization ([#16](https://github.com/GuillaumeOj/BIMCraft/issues/16)), JSON Schema ([#17](https://github.com/GuillaumeOj/BIMCraft/issues/17)), the IFC mapping table ([#18](https://github.com/GuillaumeOj/BIMCraft/issues/18)), reference documentation ([#19](https://github.com/GuillaumeOj/BIMCraft/issues/19)) and Python stubs ([#142](https://github.com/GuillaumeOj/BIMCraft/issues/142)).
 5. **Load at runtime**, for plugin namespaces: steps 1–3 run when a plugin is installed or a file using it is opened, and the result is registered in the same schema registry as the core. Plugin entities are stored in generic attribute tables keyed by the registry; no Rust code is generated for them.
@@ -58,13 +59,13 @@ Every definition file starts with `format`, the version of the definition file f
 | `[entity]` | `name`, `kind` (`element`, `spatial`, `relationship`, …), `doc`, `since`, optional `deprecated` (version), `property_sets`: names of the property sets it carries (CORE-04) |
 | `[type]` | For elements with types (CORE-02): the type entity's `name` and `doc` |
 | `[ifc]` | `entity` and `predefined_type` for the occurrence; `type_entity` for the type (CORE-10) |
-| `[[attribute]]` | `name`, `value` (`bool`, `integer`, `real`, `text`, `quantity`, `enum`, `ref:<Entity>`, `list` with `items`), `quantity` and `unit` for quantities (CORE-09: storage in SI, `unit` is the SI unit), `required` or `default`, `on` (`type` or `instance`), `override` (`allowed` or `forbidden`) for type attributes, `since`, `doc` |
-| `[[relationship]]` | `kind` (`aggregation`, `containment`, `connection`, `voiding`, `assignment`), the entity's `role`, allowed `targets`, `cardinality` (CORE-03) |
+| `[[attribute]]` | `name`, `value` (`bool`, `integer`, `real`, `text`, `quantity`, `enum`, `ref:<Entity>`, `list` with `items`), `quantity` for quantities (`length`, `plane_angle`…; CORE-09: values are stored in the quantity's SI unit, so no unit is written), `required` or `default`, `on` (`type` or `instance`), `override` (`allowed` or `forbidden`) for type attributes, `since`, `doc` |
+| `[[relationship]]` | `kind`: a relationship entity, defined in its own file with `kind = "relationship"` (core: `aggregation`, `containment`, `connection`, `voiding`, `assignment`), the entity's `role`, allowed `targets`, `cardinality` (CORE-03) |
 | `[[representation]]` | `lod`, `context` (`body`, `axis`, `footprint`, `analytical`…), the `generator` function that computes it, and `depends_on`, the attributes it reads (GEO-06) |
 
 `depends_on` is the dependency graph's input (CORE-08) and tells IFC export which parameters are geometric (INT-07).
 
-A property set file has `[property_set]` (`name`, `applies_to`, `since`) and `[[property]]` entries with the same keys as attributes. User-defined property sets (CORE-04) are model data that follow this same structure, but they live in the project file, not in `schema/`.
+A property set file has `[property_set]` (`name`, `applies_to`, `since`) and `[[property]]` entries with the same keys as attributes except `on` and `override`; a property without `since` inherits the set's. User-defined property sets (CORE-04) are model data that follow this same structure, but they live in the project file, not in `schema/`.
 
 ### Worked example: a wall
 
@@ -109,7 +110,6 @@ doc = "Location line in the storey plane."
 name = "height"
 value = "quantity"
 quantity = "length"
-unit = "m"
 on = "type"
 default = 2.5
 override = "allowed"
@@ -119,7 +119,6 @@ since = 1
 name = "base_offset"
 value = "quantity"
 quantity = "length"
-unit = "m"
 on = "instance"
 default = 0.0
 since = 1
@@ -209,7 +208,6 @@ since = 1
 name = "roll"
 value = "quantity"
 quantity = "plane_angle"
-unit = "rad"
 on = "instance"
 default = 0.0
 since = 1
@@ -276,13 +274,12 @@ doc = "Fire resistance class as written in the project's regulation."
 name = "ThermalTransmittance"
 value = "quantity"
 quantity = "thermal_transmittance"
-unit = "W/(m2.K)"
 ```
 
 ### Versioning and migrations
 
 - Each **namespace** — `core`, or `plugin:<plugin-id>` — has one integer schema version in its `namespace.toml`, increased by one for every released change.
-- Entities, attributes and properties record the version that introduced them (`since`) and, once removed from use, the version that deprecated them (`deprecated`).
+- Entities, attributes and properties record the version that introduced them (`since`) and, when discouraged, the version that deprecated them (`deprecated`). A deprecated item still loads and stays in the API for the deprecation period (API-06); removing it takes a migration.
 - A **project or component file** stores the schema version of every namespace it uses (PERS-01, PERS-04).
 - Each version step has a **migration file**, `migrations/NNNN.toml`, migrating from version `NNNN - 1` to `NNNN`. It lists declarative steps, applied in order:
 
@@ -295,8 +292,8 @@ to = 2
 [[step]]
 op = "rename_attribute"
 entity = "Wall"
-from = "base_offset"
-to = "bottom_offset"
+old_name = "base_offset"
+new_name = "bottom_offset"
 
 [[step]]
 op = "add_attribute"
@@ -310,7 +307,7 @@ function = "migrations::v2::split_wall_layers"
 doc = "Splits composite layers into one layer per material."
 ```
 
-  Declarative operations: `add_attribute` (with a value), `remove_attribute`, `rename_attribute`, `rename_entity`, `change_unit`, `add_property_set`, `remove_property_set`. Anything else uses `custom`, naming a Rust function for the core or a Python function (`module:function`) for a plugin, which runs in the plugin process (PY-02).
+  Declarative operations: `add_attribute` (with a value), `remove_attribute`, `rename_attribute`, `rename_entity`, `change_value` (new value type or quantity, with a conversion factor), `add_property_set`, `remove_property_set`. Anything else uses `custom`, naming a Rust function for the core or a Python function (`module:function`) for a plugin, which runs in the plugin process (PY-02).
 - Opening a file runs every migration from the file's version to the current one, namespace by namespace, in one transaction; the file on disk is only rewritten on save.
 - **CI** regenerates `snapshot.json` and fails when the definitions changed but the namespace version did not, or when the version changed without a matching migration file ([#36](https://github.com/GuillaumeOj/BIMCraft/issues/36)). The same check is offered to plugin authors in the plugin SDK.
 - A file using a plugin namespace whose plugin is missing, or older than the file, still opens: that plugin's data is kept unchanged and read-only, and the user is told which plugin is needed.
@@ -353,7 +350,7 @@ Definitions are plain files parsed into one canonical model, from which each out
 | Format | For | Against |
 | --- | --- | --- |
 | **TOML** | Widely known (Cargo, Python packaging); comments; explicit types, no implicit conversions; `taplo` is already pinned in the repository and formats and validates TOML against a JSON Schema, with editor completion | Deeply nested data is verbose (arrays of tables); no references or reuse inside a file |
-| YAML | Compact nesting; widely known | Implicit typing pitfalls (`NO` becomes `false`, `1.10` becomes `1.1`); indentation errors; the main Rust implementation, `serde_yaml`, is unmaintained; anchors and aliases make hostile input costly (“billion laughs”) |
+| YAML | Compact nesting; widely known | Implicit typing pitfalls (`1.10` becomes `1.1`; in YAML 1.1 parsers such as PyYAML, the Python default, `NO` becomes `false`); indentation errors; the main Rust implementation, `serde_yaml`, is unmaintained; anchors and aliases make hostile input costly (“billion laughs”) |
 | KDL | Node syntax fits nested definitions well | Little known; new parser dependency and new editor tooling to adopt |
 | RON | Maps directly onto Rust types | Rust-specific, so foreign to plugin authors; weak editor support |
 | JSON | Universal; JSON Schema validation | No comments; noisy to read and review |
@@ -379,4 +376,4 @@ An EXPRESS-like language with its own grammar, parser and tools.
 - [#19](https://github.com/GuillaumeOj/BIMCraft/issues/19) Generate the reference documentation from `doc` fields.
 - [#36](https://github.com/GuillaumeOj/BIMCraft/issues/36) Migration framework and the CI snapshot check.
 - [#142](https://github.com/GuillaumeOj/BIMCraft/issues/142) Generate the Python client and stubs.
-- Specification: §4 lists the `schema` crate as *build-time only*, but loading plugin definitions needs the parser and validator at runtime. A `spec` issue should split the row into a wasm32-compatible schema model (parser, validator, registry) and build-time generators, and state in §5.1 that plugin entities are loaded at runtime rather than compiled.
+- Specification: §4 lists the `schema` crate as *build-time only*, but loading plugin definitions needs the parser and validator at runtime. [#153](https://github.com/GuillaumeOj/BIMCraft/issues/153) splits the row into a wasm32-compatible schema model (parser, validator, registry) and build-time generators, and states in §5.1 that plugin entities are loaded at runtime rather than compiled.
