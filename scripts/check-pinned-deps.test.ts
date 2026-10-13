@@ -14,6 +14,15 @@ import {
 
 const SHA = "3d3c42e5aac5ba805825da76410c181273ba90b1";
 
+function gitRepo(prefix: string): string {
+  const root = mkdtempSync(join(tmpdir(), prefix));
+  Bun.spawnSync(["git", "init", "-q"], { cwd: root });
+  return root;
+}
+
+const cargoMessages = (toml: string): string[] =>
+  checkCargoToml("Cargo.toml", toml).map((i) => i.message);
+
 describe("checkCargoToml", () => {
   test("accepts exact, workspace and path dependencies", () => {
     const toml = `
@@ -45,12 +54,13 @@ star = "*"
 nover = { features = ["x"] }
 odd = 3
 `;
-    const messages = checkCargoToml("Cargo.toml", toml).map((i) => i.message);
+    const messages = cargoMessages(toml);
+    const text = messages.join("\n");
     expect(messages).toHaveLength(7);
-    expect(messages.join("\n")).toContain('"caret"');
-    expect(messages.join("\n")).toContain("git dependency");
-    expect(messages.join("\n")).toContain('"nover" has no version');
-    expect(messages.join("\n")).toContain('"odd" has an unsupported');
+    expect(text).toContain('"caret"');
+    expect(text).toContain("git dependency");
+    expect(text).toContain('"nover" has no version');
+    expect(text).toContain('"odd" has an unsupported');
   });
 
   test("checks [patch] and [replace] overrides", () => {
@@ -61,10 +71,11 @@ pinned = "=1.0.0"
 [replace]
 "foo:0.1.0" = { version = "^0.1" }
 `;
-    const messages = checkCargoToml("Cargo.toml", toml).map((i) => i.message);
+    const messages = cargoMessages(toml);
+    const text = messages.join("\n");
     expect(messages).toHaveLength(2);
-    expect(messages.join("\n")).toContain('"serde" is a git dependency');
-    expect(messages.join("\n")).toContain('"foo:0.1.0" must use an exact version');
+    expect(text).toContain('"serde" is a git dependency');
+    expect(text).toContain('"foo:0.1.0" must use an exact version');
   });
 
   test("accepts a manifest without dependencies", () => {
@@ -146,8 +157,7 @@ describe("checkFile", () => {
 
 describe("checkRepo", () => {
   test("scans tracked and untracked files and reports parse errors", () => {
-    const root = mkdtempSync(join(tmpdir(), "pins-"));
-    Bun.spawnSync(["git", "init", "-q"], { cwd: root });
+    const root = gitRepo("pins-");
     mkdirSync(join(root, ".github/workflows"), { recursive: true });
     writeFileSync(join(root, "Cargo.toml"), '[dependencies]\nok = "=1.0.0"\n');
     writeFileSync(join(root, ".github/workflows/ci.yml"), "- uses: a/b@v1\n");
@@ -158,8 +168,7 @@ describe("checkRepo", () => {
   });
 
   test("skips files deleted from the working tree", () => {
-    const root = mkdtempSync(join(tmpdir(), "deleted-"));
-    Bun.spawnSync(["git", "init", "-q"], { cwd: root });
+    const root = gitRepo("deleted-");
     writeFileSync(join(root, "Cargo.toml"), '[dependencies]\na = "1"\n');
     Bun.spawnSync(["git", "add", "Cargo.toml"], { cwd: root });
     rmSync(join(root, "Cargo.toml"));
@@ -174,8 +183,7 @@ describe("checkRepo", () => {
 
 describe("main", () => {
   test("returns 0 and reports success on a pinned repository", () => {
-    const root = mkdtempSync(join(tmpdir(), "main-ok-"));
-    Bun.spawnSync(["git", "init", "-q"], { cwd: root });
+    const root = gitRepo("main-ok-");
     const log = spyOn(console, "log").mockImplementation(() => undefined);
     expect(main(root)).toBe(0);
     expect(log).toHaveBeenCalledTimes(1);
@@ -183,8 +191,7 @@ describe("main", () => {
   });
 
   test("returns 1 and lists every issue", () => {
-    const root = mkdtempSync(join(tmpdir(), "main-bad-"));
-    Bun.spawnSync(["git", "init", "-q"], { cwd: root });
+    const root = gitRepo("main-bad-");
     writeFileSync(join(root, "Cargo.toml"), '[dependencies]\na = "1"\nb = "2"\n');
     const error = spyOn(console, "error").mockImplementation(() => undefined);
     expect(main(root)).toBe(1);

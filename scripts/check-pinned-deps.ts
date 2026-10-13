@@ -10,6 +10,7 @@ export type Issue = { file: string; message: string };
 const SEMVER = String.raw`\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?`;
 const EXACT_CARGO = new RegExp(`^=${SEMVER}$`);
 const EXACT_NPM = new RegExp(`^${SEMVER}$`);
+const EXACT_BUN = new RegExp(`^bun@${SEMVER}$`);
 const EXACT_TOOLCHAIN = /^\d+\.\d+\.\d+$/;
 const COMMIT_SHA = /^[0-9a-f]{40}$/;
 const CARGO_DEP_SECTIONS = ["dependencies", "dev-dependencies", "build-dependencies"];
@@ -38,30 +39,18 @@ function checkCargoDep(file: string, name: string, spec: unknown): Issue[] {
   return [{ file, message: `crate "${name}" has no version` }];
 }
 
+const sectionsOf = (owner: Table): unknown[] => CARGO_DEP_SECTIONS.map((s) => owner[s]);
+const valuesOf = (value: unknown): unknown[] => (isTable(value) ? Object.values(value) : []);
+
 function cargoDepTables(manifest: Table): Table[] {
-  const tables: Table[] = [];
-  const collect = (owner: Table) => {
-    for (const section of CARGO_DEP_SECTIONS) {
-      if (isTable(owner[section])) tables.push(owner[section]);
-    }
-  };
-  collect(manifest);
-  if (isTable(manifest.workspace) && isTable(manifest.workspace.dependencies)) {
-    tables.push(manifest.workspace.dependencies);
-  }
-  if (isTable(manifest.target)) {
-    for (const target of Object.values(manifest.target)) {
-      if (isTable(target)) collect(target);
-    }
-  }
-  // Overrides can swap any crate for a git fork or a range, so they follow the same rules.
-  if (isTable(manifest.patch)) {
-    for (const registry of Object.values(manifest.patch)) {
-      if (isTable(registry)) tables.push(registry);
-    }
-  }
-  if (isTable(manifest.replace)) tables.push(manifest.replace);
-  return tables;
+  return [
+    ...sectionsOf(manifest),
+    isTable(manifest.workspace) ? manifest.workspace.dependencies : undefined,
+    ...valuesOf(manifest.target).filter(isTable).flatMap(sectionsOf),
+    // Overrides can swap any crate for a git fork or a range, so they follow the same rules.
+    ...valuesOf(manifest.patch),
+    manifest.replace,
+  ].filter(isTable);
 }
 
 export function checkCargoToml(file: string, content: string): Issue[] {
@@ -89,7 +78,7 @@ export function checkPackageJson(file: string, content: string): Issue[] {
     }
   }
   const manager = pkg.packageManager;
-  if (manager !== undefined && !new RegExp(`^bun@${SEMVER}$`).test(String(manager))) {
+  if (manager !== undefined && !EXACT_BUN.test(String(manager))) {
     issues.push({ file, message: `packageManager must be "bun@x.y.z", got "${String(manager)}"` });
   }
   return issues;
@@ -122,13 +111,19 @@ export function checkRustToolchain(file: string, content: string): Issue[] {
     : [{ file, message: `toolchain channel must be an exact version "x.y.z", got "${String(channel)}"` }];
 }
 
-export function checkFile(file: string, content: string): Issue[] {
+type Checker = (file: string, content: string) => Issue[];
+
+function checkerFor(file: string): Checker | undefined {
   const name = basename(file);
-  if (name === "Cargo.toml") return checkCargoToml(file, content);
-  if (name === "package.json") return checkPackageJson(file, content);
-  if (name === "rust-toolchain.toml") return checkRustToolchain(file, content);
-  if (/^\.github\/workflows\/[^/]+\.ya?ml$/.test(file)) return checkWorkflow(file, content);
-  return [];
+  if (name === "Cargo.toml") return checkCargoToml;
+  if (name === "package.json") return checkPackageJson;
+  if (name === "rust-toolchain.toml") return checkRustToolchain;
+  if (/^\.github\/workflows\/[^/]+\.ya?ml$/.test(file)) return checkWorkflow;
+  return undefined;
+}
+
+export function checkFile(file: string, content: string): Issue[] {
+  return checkerFor(file)?.(file, content) ?? [];
 }
 
 function listRepoFiles(root: string): string[] {
@@ -141,7 +136,8 @@ function listRepoFiles(root: string): string[] {
 }
 
 export function checkRepo(root: string): Issue[] {
-  return listRepoFiles(root).flatMap((file) => {
+  // Only read the few files a checker applies to, not the whole tree.
+  return listRepoFiles(root).filter(checkerFor).flatMap((file) => {
     let content: string;
     try {
       content = readFileSync(join(root, file), "utf8");

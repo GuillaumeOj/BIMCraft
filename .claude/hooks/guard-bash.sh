@@ -18,6 +18,9 @@ git_cmd="${at_cmd}git([[:space:]]+(-c[[:space:]]+[^[:space:]]+|--[^[:space:]]+))
 # Case-insensitive: git config keys are (core.hookspath works too).
 matches() { printf '%s\n' "$command" | grep -Eiq "$1"; }
 
+# Fast path: this runs on every Bash call, and most mention none of the trigger words.
+matches 'push|gh|verify|commit|hookspath|review-stamp' || exit 0
+
 matches "${git_cmd}push([[:space:]]|$)" && block "pushing is reserved to the user"
 matches "${at_cmd}gh[[:space:]]+(pr[[:space:]]+(create|merge)|release|repo[[:space:]]+create)" &&
   block "remote publishing is reserved to the user"

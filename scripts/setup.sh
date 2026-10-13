@@ -33,8 +33,9 @@ check gitleaks "https://github.com/gitleaks/gitleaks/releases/tag/v$GITLEAKS_VER
 check actionlint "https://github.com/rhysd/actionlint/releases/tag/v$ACTIONLINT_VERSION"
 check mdbook  "cargo install --locked mdbook@$MDBOOK_VERSION"
 
-if command -v bun >/dev/null 2>&1 && [ "$(bun --version)" != "$BUN_VERSION" ]; then
-  echo "  WARNING  bun $(bun --version) found, project uses $BUN_VERSION: $bun_install" >&2
+bun_version=$(bun --version 2>/dev/null || true)
+if [ -n "$bun_version" ] && [ "$bun_version" != "$BUN_VERSION" ]; then
+  echo "  WARNING  bun $bun_version found, project uses $BUN_VERSION: $bun_install" >&2
 fi
 
 if [ "$missing" -ne 0 ]; then
