@@ -10,19 +10,24 @@ block() {
   exit 2
 }
 
-# Start of a command: line start, or after ; & | ( ` or $(
-at_cmd='(^|[;&|(`]|\$\()[[:space:]]*'
-git_cmd="${at_cmd}git([[:space:]]+-[Cc][[:space:]]+[^[:space:]]+)*[[:space:]]+"
+# Start of a command: line start, or after ; & | ( ` or $(, then optional variable assignments,
+# wrappers (env, command, xargs…) and a directory prefix (/usr/bin/git).
+at_cmd='(^|[;&|(`]|\$\()[[:space:]]*(([a-z_][a-z0-9_]*=[^[:space:]]*|command|env|exec|nohup|time|xargs|sudo)[[:space:]]+)*([^[:space:];&|()]*/)?'
+git_cmd="${at_cmd}git([[:space:]]+(-c[[:space:]]+[^[:space:]]+|--[^[:space:]]+))*[[:space:]]+"
 
-matches() { printf '%s\n' "$command" | grep -Eq "$1"; }
+# Case-insensitive: git config keys are (core.hookspath works too).
+matches() { printf '%s\n' "$command" | grep -Eiq "$1"; }
 
 matches "${git_cmd}push([[:space:]]|$)" && block "pushing is reserved to the user"
 matches "${at_cmd}gh[[:space:]]+(pr[[:space:]]+(create|merge)|release|repo[[:space:]]+create)" &&
   block "remote publishing is reserved to the user"
 matches '(^|[[:space:]])--no-verify([[:space:]]|$)' && block "bypassing git hooks is not allowed"
-# Reading the value (`git config core.hooksPath`, `--get`) is fine; setting or unsetting it is not.
+# `-n` is the short form of --no-verify for git commit (alone or bundled, e.g. -an).
+matches "${git_cmd}commit([[:space:]][^;&|]*)?[[:space:]]-[a-z]*n" && block "bypassing git hooks is not allowed"
+# Reading the value (`git config core.hooksPath`, `--get`) is fine; setting, unsetting or
+# overriding it for one command (`git -c core.hooksPath=…`) is not.
 matches "${git_cmd}config[^;&|]*(--unset[^;&|]*core\.hooksPath|core\.hooksPath[[:space:]]+[^-;&|[:space:]])" &&
   block "changing the git hooks path is not allowed"
-matches '>[[:space:]]*[^[:space:]]*bimcraft-review-stamp' &&
-  block "only scripts/mark-reviewed.sh may write the review stamp"
+matches 'core\.hooksPath=' && block "changing the git hooks path is not allowed"
+matches 'bimcraft-review-stamp' && block "only scripts/mark-reviewed.sh may touch the review stamp"
 exit 0
