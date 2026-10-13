@@ -7,6 +7,9 @@
 //! Every trait is dyn-compatible, so the core can hold a host as `&dyn Storage` instead of
 //! becoming generic over it. The signatures are deliberately minimal; the first crate that uses a
 //! trait refines it.
+//!
+//! The `testing` feature adds the `testing` module: deterministic, in-memory implementations of every trait
+//! for the tests of core crates.
 
 // ARCH-02: forbid, not deny, so nothing in this crate can opt out. See docs/dev/quality.md.
 #![forbid(clippy::disallowed_methods, clippy::disallowed_types)]
@@ -17,6 +20,8 @@ mod clock;
 mod compute;
 mod executor;
 mod storage;
+#[cfg(feature = "testing")]
+pub mod testing;
 
 pub use clock::{Clock, Timestamp};
 pub use compute::{ComputeBackend, ComputeError};
