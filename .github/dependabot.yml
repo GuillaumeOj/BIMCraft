@@ -16,6 +16,20 @@ updates:
       prefix: build
       include: scope
 
+  - package-ecosystem: cargo
+    directory: /fuzz
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 14
+    versioning-strategy: increase
+    groups:
+      fuzz-minor-patch:
+        update-types: [minor, patch]
+    commit-message:
+      prefix: build
+      include: scope
+
   - package-ecosystem: bun
     directory: /ui
     schedule:

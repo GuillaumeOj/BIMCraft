@@ -1,0 +1,39 @@
+format = 1
+
+[entity]
+name = "Beam"
+kind = "element"
+doc = """
+A horizontal or near-horizontal linear structural member.
+
+Its analytical bar is what structural solvers see."""
+
+[type]
+name = "BeamSection"
+
+[ifc]
+entity = "IfcBeam"
+predefined_type = "BEAM"
+type_entity = "IfcBeamType"
+
+[[attribute]]
+name = "section_area"
+value = "quantity:area"
+on = "type"
+required = true
+
+[[attribute]]
+name = "span"
+value = "quantity:length"
+required = true
+
+[[attribute]]
+name = "roll"
+value = "quantity:plane_angle"
+default = 0.0
+
+[[attribute]]
+name = "stations"
+value = "list:quantity:length"
+default = [0.0, 1250000.5]
+doc = "Positions along the axis where results are reported."

@@ -107,7 +107,7 @@ Users are architects and engineers, not developers. For every user-facing featur
 | Check | Command |
 | --- | --- |
 | One-time setup (hooks + tool check) | `scripts/setup.sh` |
-| Everything CI runs that applies | `scripts/check-all.sh` (or one section: `repo rust coverage wasm ui e2e docs`) |
+| Everything CI runs that applies | `scripts/check-all.sh` (or one section: `repo rust coverage wasm fuzz ui e2e docs`) |
 | Commit messages + user-docs rule for a branch | `scripts/check-pr.sh main` |
 | Rust format | `cargo fmt --all --check` |
 | Rust lint | `cargo clippy --workspace --all-targets --all-features -- -D warnings` |

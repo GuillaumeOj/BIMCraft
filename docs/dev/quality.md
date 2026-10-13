@@ -29,6 +29,12 @@ Ranges let a build change without a commit, which breaks reproducibility and ope
 
 90 % lines globally catches untested features without forcing tests of trivial glue. Critical areas — the schema and its generators, the model, transactions, geometry, georeferencing, analysis, the API and file parsers — corrupt user data or produce wrong engineering results when they fail, so they need 98 % (aim for 100 %). Rust branch coverage needs a nightly compiler, so on the Rust side the gate is lines; UI critical code is gated on lines and branches. Coverage measures what was executed, not what was verified: reviews check that tests assert meaningful behaviour.
 
+## Fuzzing
+
+Parsers read hostile input (AGENTS.md §8), so each one has a property test in its crate and a [cargo-fuzz](https://rust-fuzz.github.io/book/cargo-fuzz.html) target in `fuzz/` (ENG-02). `fuzz/` is a workspace of its own because libFuzzer needs a nightly compiler, pinned by date in `fuzz/rust-toolchain.toml`; the main workspace stays on stable. Starting inputs live in `fuzz/seeds/<target>/`.
+
+`scripts/check-all.sh fuzz` lints the targets and runs each one for a fixed number of inputs with a fixed seed, so CI stays reproducible; set `FUZZ_RUNS` to change the count. To hunt for bugs, run a target for longer from `fuzz/`, for example `cargo fuzz run --fuzz-dir . schema_definition corpus/schema_definition seeds/schema_definition -- -max_total_time=600`. A crash is saved in `fuzz/artifacts/`: turn it into a regression test in the crate before fixing it.
+
 ## Benchmarks
 
 Hot paths of the geometry kernel, starting with the exact predicates, keep [criterion](https://docs.rs/criterion) benchmarks in their crate's `benches/` (run them with `cargo bench -p geom`). CI compiles them through `clippy --all-targets` but does not run them: timings on shared runners are too noisy to gate on. Run them before and after a change to a hot path and quote the numbers in the pull request.

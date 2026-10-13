@@ -1,0 +1,27 @@
+# Fuzz targets for the parsers (ENG-02), run with cargo-fuzz on the nightly in rust-toolchain.toml.
+# A workspace of its own: libFuzzer needs nightly sanitizers, and the main workspace stays stable.
+# How to run: docs/dev/quality.md.
+
+[package]
+name = "bimcraft-fuzz"
+version = "0.0.0"
+edition = "2024"
+license = "MIT"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "=0.4.13"
+schema-gen = { path = "../crates/schema-gen" }
+
+[[bin]]
+name = "schema_definition"
+path = "fuzz_targets/schema_definition.rs"
+test = false
+doc = false
+bench = false
+
+[workspace]
+members = ["."]

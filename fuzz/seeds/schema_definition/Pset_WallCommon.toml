@@ -1,0 +1,25 @@
+format = 1
+
+[property_set]
+name = "Pset_WallCommon"
+applies_to = ["Wall"]
+
+[[property]]
+name = "IsExternal"
+value = "bool"
+on = "type_overridable"
+doc = "True when the wall separates the inside from the outside."
+
+[[property]]
+name = "LoadBearing"
+value = "bool"
+default = false
+
+[[property]]
+name = "FireRating"
+value = "text"
+doc = "Fire resistance class as written in the project's regulation."
+
+[[property]]
+name = "UValue"
+value = "quantity:thermal_transmittance"

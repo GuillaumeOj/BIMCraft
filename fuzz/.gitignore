@@ -1,0 +1,5 @@
+# cargo-fuzz output; seeds/ holds the committed starting inputs.
+/target/
+/corpus/
+/artifacts/
+/coverage/

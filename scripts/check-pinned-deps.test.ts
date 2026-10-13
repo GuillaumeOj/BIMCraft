@@ -142,8 +142,13 @@ describe("checkRustToolchain", () => {
     );
   });
 
+  test("accepts a dated nightly", () => {
+    expect(checkRustToolchain("t", '[toolchain]\nchannel = "nightly-2026-09-28"\n')).toEqual([]);
+  });
+
   test("rejects floating or missing channels", () => {
     expect(checkRustToolchain("t", '[toolchain]\nchannel = "stable"\n')).toHaveLength(1);
+    expect(checkRustToolchain("t", '[toolchain]\nchannel = "nightly"\n')).toHaveLength(1);
     expect(checkRustToolchain("t", '[toolchain]\nchannel = "1.98"\n')).toHaveLength(1);
     expect(checkRustToolchain("t", "")).toHaveLength(1);
   });

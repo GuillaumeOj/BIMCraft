@@ -1,0 +1,11 @@
+format = 1
+
+[entity]
+name = "Recess"
+kind = "element"
+deprecated = 2
+
+[ifc]
+entity = "IfcOpeningElement"
+predefined_type = "USERDEFINED"
+object_type = "Recess"

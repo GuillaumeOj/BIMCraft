@@ -11,7 +11,8 @@ const SEMVER = String.raw`\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?
 const EXACT_CARGO = new RegExp(`^=${SEMVER}$`);
 const EXACT_NPM = new RegExp(`^${SEMVER}$`);
 const EXACT_BUN = new RegExp(`^bun@${SEMVER}$`);
-const EXACT_TOOLCHAIN = /^\d+\.\d+\.\d+$/;
+// A release, or a dated nightly for tools that need one (the cargo-fuzz targets in fuzz/).
+const EXACT_TOOLCHAIN = /^(?:\d+\.\d+\.\d+|nightly-\d{4}-\d{2}-\d{2})$/;
 const COMMIT_SHA = /^[0-9a-f]{40}$/;
 const CARGO_DEP_SECTIONS = ["dependencies", "dev-dependencies", "build-dependencies"];
 const NPM_DEP_SECTIONS = ["dependencies", "devDependencies", "optionalDependencies", "overrides"];
@@ -111,7 +112,7 @@ export function checkRustToolchain(file: string, content: string): Issue[] {
   const channel = isTable(toolchain) ? toolchain.channel : undefined;
   return typeof channel === "string" && EXACT_TOOLCHAIN.test(channel)
     ? []
-    : [{ file, message: `toolchain channel must be an exact version "x.y.z", got "${String(channel)}"` }];
+    : [{ file, message: `toolchain channel must be an exact version "x.y.z" or "nightly-YYYY-MM-DD", got "${String(channel)}"` }];
 }
 
 type Checker = (file: string, content: string) => Issue[];
