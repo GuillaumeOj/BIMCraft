@@ -233,6 +233,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "geom-golden"
+version = "0.0.0"
+dependencies = [
+ "geom",
+ "libm",
+]
+
+[[package]]
 name = "getrandom"
 version = "0.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"

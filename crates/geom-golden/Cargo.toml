@@ -1,0 +1,16 @@
+[package]
+name = "geom-golden"
+version = "0.0.0"
+description = "Golden-output test: geometry maths gives the same bits on every target (ENG-04)."
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+# A crate of its own because geom's dev-dependencies do not build for wasm32-wasip1.
+[dependencies]
+geom = { path = "../geom" }
+libm = { workspace = true }
+
+[lints]
+workspace = true
