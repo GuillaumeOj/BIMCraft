@@ -1,4 +1,5 @@
 schema
+schema-gen
 core-model
 core-txn
 geom

@@ -27,7 +27,7 @@ Ranges let a build change without a commit, which breaks reproducibility and ope
 
 ## Coverage thresholds
 
-90 % lines globally catches untested features without forcing tests of trivial glue. Critical areas — the schema, the model, transactions, geometry, georeferencing, analysis, the API and file parsers — corrupt user data or produce wrong engineering results when they fail, so they need 98 % (aim for 100 %). Rust branch coverage needs a nightly compiler, so on the Rust side the gate is lines; UI critical code is gated on lines and branches. Coverage measures what was executed, not what was verified: reviews check that tests assert meaningful behaviour.
+90 % lines globally catches untested features without forcing tests of trivial glue. Critical areas — the schema and its generators, the model, transactions, geometry, georeferencing, analysis, the API and file parsers — corrupt user data or produce wrong engineering results when they fail, so they need 98 % (aim for 100 %). Rust branch coverage needs a nightly compiler, so on the Rust side the gate is lines; UI critical code is gated on lines and branches. Coverage measures what was executed, not what was verified: reviews check that tests assert meaningful behaviour.
 
 ## Linters, formatters and import sorting
 
