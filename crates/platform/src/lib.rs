@@ -8,6 +8,9 @@
 //! becoming generic over it. The signatures are deliberately minimal; the first crate that uses a
 //! trait refines it.
 
+// ARCH-02: forbid, not deny, so nothing in this crate can opt out. See docs/dev/quality.md.
+#![forbid(clippy::disallowed_methods, clippy::disallowed_types)]
+
 use std::pin::Pin;
 
 mod clock;

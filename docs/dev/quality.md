@@ -44,6 +44,18 @@ Formatting and import order are never discussed in review: tools decide. Rust us
 
 None yet.
 
+## Architecture rules
+
+Core crates run unchanged on the desktop and in the browser (`ARCH-01`). In `wasm32-unknown-unknown`, `std::fs`, `std::thread`, `std::time::Instant`, sockets and blocking I/O compile but fail or panic at run time, so a successful wasm32 build proves nothing. Core crates reach the outside world only through the `platform` traits (`Storage`, `TaskExecutor`, `Clock`, `ComputeBackend`), which each host implements (`ARCH-02`).
+
+- `clippy.toml` lists the forbidden functions and types in `disallowed-methods` and `disallowed-types`; `-D warnings` turns any use into a lint error. Clippy checks the paths themselves, so a misspelt entry fails too.
+- The list applies to every crate. Crates outside `scripts/wasm-crates.txt` (desktop host, solvers, plugin host) need these APIs and opt out with `#![allow(clippy::disallowed_methods, clippy::disallowed_types)]` at their crate root.
+- Core crates start their crate root with `#![forbid(clippy::disallowed_methods, clippy::disallowed_types)]`. Unlike `deny`, a `forbid` cannot be undone by an `allow` or `expect` anywhere in the crate, by a lint group such as `clippy::style`, or by Cargo `[lints]`. `scripts/check-architecture.ts` checks that every core crate root carries it and that no core crate has its own `clippy.toml`. Integration tests in `tests/` are separate crates and may opt out, for instance to read parser fixtures.
+
+Layers keep the dependency graph pointing one way (`ARCH-04`): the kernel never learns about disciplines, disciplines never learn about the API, and nothing in the core learns about a host. Without it, a convenient import today becomes a cycle of knowledge that blocks reuse by plugins and the browser host later. `scripts/crate-layers.txt` declares the layers once, lowest first; a crate may depend on its own layer or below. `scripts/check-architecture.ts` reads every `crates/*/Cargo.toml` (normal, dev, build and target-specific dependencies) and fails on an upward dependency, or on a crate missing from the file or listed twice. Only path dependencies count, with `{ workspace = true }` resolved through the root manifest, so renames are followed and a registry crate that shares a member's name is ignored. It parses the manifests itself rather than calling `cargo metadata`, so it runs in the repository checks without a Rust toolchain.
+
+Adding a crate: list it in `scripts/crate-layers.txt`, and in `scripts/wasm-crates.txt` (then add the `forbid` line) and `scripts/critical-crates.txt` when they apply.
+
 ## End-user documentation
 
 BIMCraft users are architects and engineers. A feature they cannot find or understand does not exist for them. The user guide (`docs/user/`, built with mdBook) is organised by task and written in plain language, and `scripts/check-pr.sh` fails a pull request whose `feat`/`fix` commits change product code without touching `docs/user/`, unless it carries the `no-user-docs` label with a reason.

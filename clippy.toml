@@ -3,3 +3,52 @@ allow-expect-in-tests = true
 allow-panic-in-tests = true
 allow-unwrap-in-tests = true
 allow-dbg-in-tests = true
+
+# ARCH-02: core crates run in the browser (wasm32), where these APIs fail at run time, not at compile time.
+# Go through the `platform` traits instead. The list applies to every crate; crates outside
+# scripts/wasm-crates.txt (hosts, solvers) may opt out at their crate root; core crates forbid
+# these lints at theirs, which scripts/check-architecture.ts enforces. Rationale: docs/dev/quality.md.
+disallowed-methods = [
+  { path = "std::fs::canonicalize", reason = "ARCH-02: use platform::Storage" },
+  { path = "std::fs::copy", reason = "ARCH-02: use platform::Storage" },
+  { path = "std::fs::create_dir", reason = "ARCH-02: use platform::Storage" },
+  { path = "std::fs::create_dir_all", reason = "ARCH-02: use platform::Storage" },
+  { path = "std::fs::exists", reason = "ARCH-02: use platform::Storage" },
+  { path = "std::fs::hard_link", reason = "ARCH-02: use platform::Storage" },
+  { path = "std::fs::metadata", reason = "ARCH-02: use platform::Storage" },
+  { path = "std::fs::read", reason = "ARCH-02: use platform::Storage" },
+  { path = "std::fs::read_dir", reason = "ARCH-02: use platform::Storage" },
+  { path = "std::fs::read_link", reason = "ARCH-02: use platform::Storage" },
+  { path = "std::fs::read_to_string", reason = "ARCH-02: use platform::Storage" },
+  { path = "std::fs::remove_dir", reason = "ARCH-02: use platform::Storage" },
+  { path = "std::fs::remove_dir_all", reason = "ARCH-02: use platform::Storage" },
+  { path = "std::fs::remove_file", reason = "ARCH-02: use platform::Storage" },
+  { path = "std::fs::rename", reason = "ARCH-02: use platform::Storage" },
+  { path = "std::fs::set_permissions", reason = "ARCH-02: use platform::Storage" },
+  { path = "std::fs::symlink_metadata", reason = "ARCH-02: use platform::Storage" },
+  { path = "std::fs::write", reason = "ARCH-02: use platform::Storage" },
+  { path = "std::thread::park", reason = "ARCH-02: use platform::TaskExecutor" },
+  { path = "std::thread::park_timeout", reason = "ARCH-02: use platform::TaskExecutor" },
+  { path = "std::thread::scope", reason = "ARCH-02: use platform::TaskExecutor" },
+  { path = "std::thread::sleep", reason = "ARCH-02: use platform::TaskExecutor" },
+  { path = "std::thread::spawn", reason = "ARCH-02: use platform::TaskExecutor" },
+  { path = "std::time::SystemTime::now", reason = "ARCH-02: use platform::Clock" },
+  { path = "std::time::SystemTime::elapsed", reason = "ARCH-02: calls SystemTime::now; use platform::Clock" },
+  { path = "std::io::stdin", reason = "ARCH-02: blocking I/O; go through the platform traits" },
+  { path = "std::io::stdout", reason = "ARCH-02: blocking I/O; go through the platform traits" },
+  { path = "std::io::stderr", reason = "ARCH-02: blocking I/O; go through the platform traits" },
+  { path = "std::process::exit", reason = "ARCH-02: core crates return errors to their host" },
+]
+disallowed-types = [
+  { path = "std::fs::DirBuilder", reason = "ARCH-02: use platform::Storage" },
+  { path = "std::fs::DirEntry", reason = "ARCH-02: use platform::Storage" },
+  { path = "std::fs::File", reason = "ARCH-02: use platform::Storage" },
+  { path = "std::fs::OpenOptions", reason = "ARCH-02: use platform::Storage" },
+  { path = "std::fs::ReadDir", reason = "ARCH-02: use platform::Storage" },
+  { path = "std::thread::Builder", reason = "ARCH-02: use platform::TaskExecutor" },
+  { path = "std::time::Instant", reason = "ARCH-02: use platform::Clock" },
+  { path = "std::net::TcpListener", reason = "ARCH-02: no sockets in core crates" },
+  { path = "std::net::TcpStream", reason = "ARCH-02: no sockets in core crates" },
+  { path = "std::net::UdpSocket", reason = "ARCH-02: no sockets in core crates" },
+  { path = "std::process::Command", reason = "ARCH-02: core crates do not spawn processes" },
+]

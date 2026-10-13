@@ -16,9 +16,9 @@ const COMMIT_SHA = /^[0-9a-f]{40}$/;
 const CARGO_DEP_SECTIONS = ["dependencies", "dev-dependencies", "build-dependencies"];
 const NPM_DEP_SECTIONS = ["dependencies", "devDependencies", "optionalDependencies", "overrides"];
 
-type Table = Record<string, unknown>;
+export type Table = Record<string, unknown>;
 
-const isTable = (value: unknown): value is Table =>
+export const isTable = (value: unknown): value is Table =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
 function checkCargoDep(file: string, name: string, spec: unknown): Issue[] {
@@ -42,11 +42,14 @@ function checkCargoDep(file: string, name: string, spec: unknown): Issue[] {
 const sectionsOf = (owner: Table): unknown[] => CARGO_DEP_SECTIONS.map((s) => owner[s]);
 const valuesOf = (value: unknown): unknown[] => (isTable(value) ? Object.values(value) : []);
 
+/** The dependency tables of a package: normal, dev and build, for every target. */
+export const packageDepTables = (manifest: Table): Table[] =>
+  [...sectionsOf(manifest), ...valuesOf(manifest.target).filter(isTable).flatMap(sectionsOf)].filter(isTable);
+
 function cargoDepTables(manifest: Table): Table[] {
   return [
-    ...sectionsOf(manifest),
+    ...packageDepTables(manifest),
     isTable(manifest.workspace) ? manifest.workspace.dependencies : undefined,
-    ...valuesOf(manifest.target).filter(isTable).flatMap(sectionsOf),
     // Overrides can swap any crate for a git fork or a range, so they follow the same rules.
     ...valuesOf(manifest.patch),
     manifest.replace,

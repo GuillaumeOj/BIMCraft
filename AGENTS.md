@@ -75,7 +75,8 @@ Users are architects and engineers, not developers. For every user-facing featur
 - `cargo clippy --workspace --all-targets --all-features -- -D warnings` with the workspace lints in the root `Cargo.toml` (pedantic, no `unwrap`/`expect`/`panic` in non-test code, `unsafe_code` denied).
 - `taplo fmt` for TOML files.
 - Errors: typed errors (`thiserror`) in libraries; no panics on bad input.
-- Core crates build for `wasm32-unknown-unknown` (`ARCH-01`) and never use `std::fs`, `std::thread`, `std::time::Instant`, sockets or blocking I/O (`ARCH-02`); go through `platform` traits.
+- Core crates build for `wasm32-unknown-unknown` (`ARCH-01`) and never use `std::fs`, `std::thread`, `std::time::Instant`, sockets or blocking I/O (`ARCH-02`); go through `platform` traits. `clippy.toml` rejects these APIs; core crates start with `#![forbid(clippy::disallowed_methods, clippy::disallowed_types)]`, and only crates outside `scripts/wasm-crates.txt` may opt out, at their crate root.
+- No crate depends on a crate in a higher layer (`ARCH-04`). Layers are declared in `scripts/crate-layers.txt`; add every new crate there.
 - Public items are documented (`missing_docs`).
 
 **TypeScript / UI**
@@ -114,6 +115,7 @@ Users are architects and engineers, not developers. For every user-facing featur
 | TOML format | `taplo fmt --check` |
 | Spelling | `typos` |
 | Pinned versions | `bun scripts/check-pinned-deps.ts` |
+| Crate layering and core-crate lint scope | `bun scripts/check-architecture.ts` |
 | UI lint/format/imports | `cd ui && bunx biome ci .` |
 | UI types | `cd ui && bunx tsc --noEmit` |
 | UI tests + coverage | `cd ui && bunx vitest run --coverage` |
