@@ -1,0 +1,36 @@
+# Rust
+/target/
+**/*.rs.bk
+
+# WebAssembly builds
+/pkg/
+*.wasm
+
+# Frontend
+node_modules/
+dist/
+.vite/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+
+# Editors and OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Tests and coverage
+coverage/
+lcov.info
+*.profraw
+*.profdata
+playwright-report/
+test-results/
+blob-report/
+
+# Local agent settings (shared settings live in .claude/settings.json)
+.claude/settings.local.json
