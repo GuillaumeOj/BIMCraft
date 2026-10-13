@@ -131,13 +131,18 @@ fn exponent() -> impl Strategy<Value = i32> {
     -60..=45
 }
 
+/// 2^`k`, exactly.
+fn pow2(k: i32) -> f64 {
+    libm::scalbn(1.0, k)
+}
+
 fn in_range(v: f64) -> bool {
     v == 0.0 || (MIN_COORDINATE..=MAX_COORDINATE).contains(&v.abs())
 }
 
 /// Scales every point by 2^`k`, rejecting the case if a coordinate leaves the supported range.
 fn scale2<const N: usize>(points: [Point2; N], k: i32) -> Result<[Point2; N], TestCaseError> {
-    let s = 2f64.powi(k);
+    let s = pow2(k);
     let scaled = points.map(|p| Point2::new(p.x * s, p.y * s));
     if scaled.iter().all(|p| in_range(p.x) && in_range(p.y)) {
         Ok(scaled)
@@ -147,7 +152,7 @@ fn scale2<const N: usize>(points: [Point2; N], k: i32) -> Result<[Point2; N], Te
 }
 
 fn scale3<const N: usize>(points: [Point3; N], k: i32) -> Result<[Point3; N], TestCaseError> {
-    let s = 2f64.powi(k);
+    let s = pow2(k);
     let scaled = points.map(|p| Point3::new(p.x * s, p.y * s, p.z * s));
     if scaled
         .iter()
@@ -230,13 +235,13 @@ const SPHERE: [[f64; 3]; 30] = [
 /// Rounding the scaled and translated circle points makes them nearly, not exactly, cocircular.
 fn on_circle(index: usize, scale: i32, offset: (f64, f64)) -> Point2 {
     let (x, y) = CIRCLE[index];
-    let s = 2f64.powi(scale);
+    let s = pow2(scale);
     Point2::new(x * s + offset.0, y * s + offset.1)
 }
 
 fn on_sphere(index: usize, scale: i32, offset: (f64, f64, f64)) -> Point3 {
     let [x, y, z] = SPHERE[index];
-    let s = 2f64.powi(scale);
+    let s = pow2(scale);
     Point3::new(x * s + offset.0, y * s + offset.1, z * s + offset.2)
 }
 
