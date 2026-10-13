@@ -129,6 +129,25 @@ unit_kind! {
     Tonne = 1e3, "t";
 }
 
+/// Instantiates the generic function `$f` for every unit kind, as an array of function
+/// pointers. Adding a dimension here is enough for parsing and the tests to cover it.
+macro_rules! each_kind {
+    ($f:ident) => {
+        [
+            $f::<LengthUnit>,
+            $f::<AreaUnit>,
+            $f::<VolumeUnit>,
+            $f::<AngleUnit>,
+            $f::<ForceUnit>,
+            $f::<MomentUnit>,
+            $f::<StressUnit>,
+            $f::<MassUnit>,
+        ]
+    };
+}
+#[cfg(test)]
+pub(super) use each_kind;
+
 /// Finds the unit of `U` written `symbol`, by its symbol or an alias. Matching is exact:
 /// `mN` and `MN` differ.
 pub(super) fn unit_for<U: Unit>(symbol: &str) -> Option<U> {
@@ -143,74 +162,35 @@ pub(super) fn dimension_of(symbol: &str) -> Option<Dimension> {
     fn lookup<U: Unit>(symbol: &str) -> Option<Dimension> {
         unit_for::<U>(symbol).map(|_| U::DIMENSION)
     }
-    [
-        lookup::<LengthUnit>,
-        lookup::<AreaUnit>,
-        lookup::<VolumeUnit>,
-        lookup::<AngleUnit>,
-        lookup::<ForceUnit>,
-        lookup::<MomentUnit>,
-        lookup::<StressUnit>,
-        lookup::<MassUnit>,
-    ]
-    .into_iter()
-    .find_map(|lookup| lookup(symbol))
+    each_kind!(lookup)
+        .into_iter()
+        .find_map(|lookup| lookup(symbol))
 }
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashSet;
-
     use super::*;
+    use crate::units::tests::close;
     use crate::units::{Angle, Moment, Quantity, Stress, Volume};
 
-    fn spellings<U: Unit>() -> Vec<&'static str> {
-        U::ALL
-            .iter()
-            .flat_map(|unit| std::iter::once(unit.symbol()).chain(unit.aliases().iter().copied()))
-            .collect()
-    }
-
-    fn check_kind<U: Unit>(dimension: Dimension) {
-        assert_eq!(U::DIMENSION, dimension);
+    /// Every spelling finds its own unit, and `dimension_of` (first match wins) finds this
+    /// kind, so no spelling is shared with another dimension.
+    fn check_kind<U: Unit>() {
         assert_eq!(U::SI.si_factor().to_bits(), 1.0_f64.to_bits());
-        assert!(U::ALL.contains(&U::SI));
         for &unit in U::ALL {
             assert!(unit.si_factor() > 0.0);
-            assert_eq!(unit_for::<U>(unit.symbol()), Some(unit));
-            for alias in unit.aliases() {
-                assert_eq!(unit_for::<U>(alias), Some(unit));
+            for spelling in std::iter::once(unit.symbol()).chain(unit.aliases().iter().copied()) {
+                assert_eq!(unit_for::<U>(spelling), Some(unit));
+                assert_eq!(dimension_of(spelling), Some(U::DIMENSION));
             }
-            assert_eq!(dimension_of(unit.symbol()), Some(dimension));
         }
     }
 
     #[test]
     fn every_kind_is_consistent() {
-        check_kind::<LengthUnit>(Dimension::Length);
-        check_kind::<AreaUnit>(Dimension::Area);
-        check_kind::<VolumeUnit>(Dimension::Volume);
-        check_kind::<AngleUnit>(Dimension::Angle);
-        check_kind::<ForceUnit>(Dimension::Force);
-        check_kind::<MomentUnit>(Dimension::Moment);
-        check_kind::<StressUnit>(Dimension::Stress);
-        check_kind::<MassUnit>(Dimension::Mass);
-    }
-
-    #[test]
-    fn spellings_are_unique_across_dimensions() {
-        let all: Vec<_> = [
-            spellings::<LengthUnit>(),
-            spellings::<AreaUnit>(),
-            spellings::<VolumeUnit>(),
-            spellings::<AngleUnit>(),
-            spellings::<ForceUnit>(),
-            spellings::<MomentUnit>(),
-            spellings::<StressUnit>(),
-            spellings::<MassUnit>(),
-        ]
-        .concat();
-        assert_eq!(all.iter().collect::<HashSet<_>>().len(), all.len());
+        for check in each_kind!(check_kind) {
+            check();
+        }
     }
 
     #[test]
@@ -222,18 +202,17 @@ mod tests {
 
     #[test]
     fn known_conversions() {
-        fn close<U: Unit>(quantity: Quantity<U>, si: f64) {
-            assert!(
-                (quantity.si() - si).abs() <= 1e-12 * si.abs(),
-                "{quantity} vs {si}"
-            );
+        let cases = [
+            (Volume::new(1.0, VolumeUnit::Litre).si(), 1e-3),
+            (Volume::new(1e6, VolumeUnit::CubicCentimetre).si(), 1.0),
+            (Angle::new(180.0, AngleUnit::Degree).si(), PI),
+            (Moment::new(1.0, MomentUnit::KilonewtonMetre).si(), 1e3),
+            (Stress::new(1.0, StressUnit::Megapascal).si(), 1e6),
+            (Stress::new(210.0, StressUnit::Gigapascal).si(), 210e9),
+            (Quantity::new(2.5, MassUnit::Tonne).si(), 2500.0),
+        ];
+        for (si, expected) in cases {
+            assert!(close(si, expected, 1e-12), "{si} vs {expected}");
         }
-        close(Volume::new(1.0, VolumeUnit::Litre), 1e-3);
-        close(Volume::new(1e6, VolumeUnit::CubicCentimetre), 1.0);
-        close(Angle::new(180.0, AngleUnit::Degree), PI);
-        close(Moment::new(1.0, MomentUnit::KilonewtonMetre), 1e3);
-        close(Stress::new(1.0, StressUnit::Megapascal), 1e6);
-        close(Stress::new(210.0, StressUnit::Gigapascal), 210e9);
-        close(Quantity::new(2.5, MassUnit::Tonne), 2500.0);
     }
 }

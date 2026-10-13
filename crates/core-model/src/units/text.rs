@@ -41,15 +41,8 @@ impl<U: Unit> fmt::Display for Formatted<U> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let decimals = self.format.decimals.min(MAX_DECIMALS);
         let value = round_half_away_from_zero(self.quantity.get(self.format.unit), decimals);
-        let number = format!("{value:.*}", usize::from(decimals));
-        // A small negative value rounds to "-0.00"; show it as zero.
-        let number = match number.strip_prefix('-') {
-            Some(magnitude) if magnitude.bytes().all(|byte| matches!(byte, b'0' | b'.')) => {
-                magnitude
-            }
-            _ => &number,
-        };
-        write_with_symbol(f, number, self.format.unit)
+        let decimals = usize::from(decimals);
+        write_with_symbol(f, format_args!("{value:.decimals$}"), self.format.unit)
     }
 }
 
@@ -59,7 +52,9 @@ fn round_half_away_from_zero(value: f64, decimals: u8) -> f64 {
     let scale = 10_f64.powi(i32::from(decimals));
     let scaled = value * scale;
     if scaled.is_finite() {
-        scaled.round() / scale
+        // A small negative value rounds to -0.0, which would print as "-0.00"; adding +0.0
+        // turns it into +0.0.
+        scaled.round() / scale + 0.0
     } else {
         value
     }
@@ -70,12 +65,17 @@ fn round_half_away_from_zero(value: f64, decimals: u8) -> f64 {
 /// brochure writes them.
 pub(super) fn write_with_symbol<U: Unit>(
     f: &mut fmt::Formatter<'_>,
-    number: &str,
+    number: impl fmt::Display,
     unit: U,
 ) -> fmt::Result {
     let symbol = unit.symbol();
     let separator = if symbol == "°" { "" } else { " " };
-    f.pad(&format!("{number}{separator}{symbol}"))
+    // Padding needs the full text first; schedules rarely pad, so skip the allocation otherwise.
+    if f.width().is_some() {
+        f.pad(&format!("{number}{separator}{symbol}"))
+    } else {
+        write!(f, "{number}{separator}{symbol}")
+    }
 }
 
 /// Why a text is not a quantity of the expected dimension.
@@ -174,6 +174,8 @@ mod tests {
     use proptest::prelude::*;
 
     use super::*;
+    use crate::units::kinds::each_kind;
+    use crate::units::tests::close;
     use crate::units::{
         Angle, AngleUnit, Area, AreaUnit, Force, ForceUnit, Length, LengthUnit, Mass, MassUnit,
         Moment, MomentUnit, Stress, StressUnit, Volume, VolumeUnit,
@@ -360,11 +362,6 @@ mod tests {
         }
     }
 
-    /// Equal up to a few rounding errors relative to the magnitude.
-    fn close(a: f64, b: f64, tolerance: f64) -> bool {
-        (a - b).abs() <= tolerance * a.abs().max(b.abs())
-    }
-
     /// Writes `si` in every unit of `U` at full precision and checks it parses back.
     fn full_precision_round_trip<U: Unit>(si: f64) -> Result<(), TestCaseError> {
         let quantity = Quantity::<U>::from_si(si);
@@ -383,24 +380,13 @@ mod tests {
     }
 
     proptest! {
-        // A fixed seed keeps runs reproducible; with no persistence, no regression files are
-        // written next to the sources.
-        #![proptest_config(ProptestConfig {
-            rng_seed: prop::test_runner::RngSeed::Fixed(0x00C0_FFEE),
-            failure_persistence: None,
-            ..ProptestConfig::default()
-        })]
+        #![proptest_config(crate::proptest_config())]
 
         #[test]
         fn every_unit_round_trips_at_full_precision(si in -1e9..1e9_f64) {
-            full_precision_round_trip::<LengthUnit>(si)?;
-            full_precision_round_trip::<AreaUnit>(si)?;
-            full_precision_round_trip::<VolumeUnit>(si)?;
-            full_precision_round_trip::<AngleUnit>(si)?;
-            full_precision_round_trip::<ForceUnit>(si)?;
-            full_precision_round_trip::<MomentUnit>(si)?;
-            full_precision_round_trip::<StressUnit>(si)?;
-            full_precision_round_trip::<MassUnit>(si)?;
+            for round_trip in each_kind!(full_precision_round_trip) {
+                round_trip(si)?;
+            }
         }
 
         #[test]

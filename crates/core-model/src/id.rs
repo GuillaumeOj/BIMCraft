@@ -321,13 +321,7 @@ mod tests {
     }
 
     proptest! {
-        // A fixed seed keeps runs reproducible; with no persistence, no regression files are
-        // written next to the sources.
-        #![proptest_config(ProptestConfig {
-            rng_seed: prop::test_runner::RngSeed::Fixed(0x00C0_FFEE),
-            failure_persistence: None,
-            ..ProptestConfig::default()
-        })]
+        #![proptest_config(crate::proptest_config())]
 
         #[test]
         fn decode_inverts_encode(raw in any::<u128>()) {

@@ -203,7 +203,7 @@ impl<U: Unit> fmt::Debug for Quantity<U> {
 /// units.
 impl<U: Unit> fmt::Display for Quantity<U> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        text::write_with_symbol(f, &self.si.to_string(), U::SI)
+        text::write_with_symbol(f, self.si, U::SI)
     }
 }
 
@@ -282,8 +282,8 @@ impl<U: Unit> Sum for Quantity<U> {
     }
 }
 
-/// Defines a product or quotient between two dimensions. SI is coherent, so the SI values
-/// combine directly.
+/// Defines one operator between two dimensions. SI is coherent, so the SI values combine
+/// directly.
 macro_rules! derived {
     ($lhs:ty, $trait:ident :: $method:ident, $rhs:ty => $out:ty, $op:tt) => {
         impl $trait<$rhs> for $lhs {
@@ -296,24 +296,31 @@ macro_rules! derived {
     };
 }
 
+/// Defines `a * b = c` in both orders and the two quotients `c / a = b` and `c / b = a`.
+macro_rules! product {
+    ($a:ident * $b:ident = $c:ident) => {
+        derived!($a, Mul::mul, $b => $c, *);
+        derived!($b, Mul::mul, $a => $c, *);
+        derived!($c, Div::div, $a => $b, /);
+        derived!($c, Div::div, $b => $a, /);
+    };
+}
+
+// A square has one order and one quotient, so it cannot go through `product!`.
 derived!(Length, Mul::mul, Length => Area, *);
-derived!(Length, Mul::mul, Area => Volume, *);
-derived!(Area, Mul::mul, Length => Volume, *);
 derived!(Area, Div::div, Length => Length, /);
-derived!(Volume, Div::div, Length => Area, /);
-derived!(Volume, Div::div, Area => Length, /);
-derived!(Force, Mul::mul, Length => Moment, *);
-derived!(Length, Mul::mul, Force => Moment, *);
-derived!(Moment, Div::div, Length => Force, /);
-derived!(Moment, Div::div, Force => Length, /);
-derived!(Force, Div::div, Area => Stress, /);
-derived!(Force, Div::div, Stress => Area, /);
-derived!(Stress, Mul::mul, Area => Force, *);
-derived!(Area, Mul::mul, Stress => Force, *);
+product!(Length * Area = Volume);
+product!(Force * Length = Moment);
+product!(Stress * Area = Force);
 
 #[cfg(test)]
-mod tests {
+pub(super) mod tests {
     use super::*;
+
+    /// Equal up to `tolerance` relative to the larger magnitude.
+    pub(in crate::units) fn close(a: f64, b: f64, tolerance: f64) -> bool {
+        (a - b).abs() <= tolerance * a.abs().max(b.abs())
+    }
 
     fn metres(value: f64) -> Length {
         Length::new(value, LengthUnit::Metre)

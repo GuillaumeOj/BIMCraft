@@ -12,3 +12,14 @@ pub mod units;
 #[cfg(any(test, feature = "test-support"))]
 pub use id::SeededIdSource;
 pub use id::{EntityId, GlobalIdError, IdSource};
+
+/// Property-test settings shared by the crate. A fixed seed keeps runs reproducible; with no
+/// persistence, no regression files are written next to the sources.
+#[cfg(test)]
+fn proptest_config() -> proptest::test_runner::Config {
+    proptest::test_runner::Config {
+        rng_seed: proptest::test_runner::RngSeed::Fixed(0x00C0_FFEE),
+        failure_persistence: None,
+        ..proptest::test_runner::Config::default()
+    }
+}
