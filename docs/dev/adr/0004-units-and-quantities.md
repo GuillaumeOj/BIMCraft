@@ -18,7 +18,7 @@ The core crates must build for `wasm32-unknown-unknown` (ARCH-01) and new depend
 - Parse failures are typed (`ParseQuantityError`), including `WrongDimension` when the symbol belongs to another dimension (`"5 kN"` read as a length). Input is bounded to 64 bytes, and error messages never repeat it (SEC-03).
 - `ProjectUnits` holds one `DisplayFormat` per dimension, with metric building defaults (millimetres, square and cubic metres, kilonewtons, megapascals).
 - The `Unit` trait is sealed: symbols stay unique across dimensions, which parsing relies on.
-- Only metric units exist for now. Imperial units (ANA-11, "Later") will be new variants of the same enums. Locale-specific number formatting (decimal comma on display, UI-04) belongs to the UI; parsing already accepts `.` or `,` as decimal separator.
+- Only metric units exist for now. Imperial units (ANA-11, "Later") will be new variants of the same enums. Locale-specific number formatting (UI-04) belongs to the UI: the core displays and parses only `.` as decimal separator, without thousands separators, and the UI converts to and from the user's settings. A comma is rejected rather than guessed, because `1,000` means one thousand in English and one in French.
 
 ## Consequences
 

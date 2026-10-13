@@ -123,7 +123,8 @@ impl<U: Unit> Quantity<U> {
 
     /// Reads a quantity typed by a user: a number, optionally followed by a unit symbol such as
     /// `mm` or `kN·m`. Without a symbol the number is in `default_unit`, normally the project
-    /// unit. Both `.` and `,` are accepted as decimal separator; thousands separators are not.
+    /// unit. The decimal separator is `.` and there are no thousands separators: the UI converts
+    /// text written in the user's locale before calling this (UI-04).
     ///
     /// # Errors
     ///
@@ -138,13 +139,13 @@ impl<U: Unit> Quantity<U> {
             return Err(ParseQuantityError::Empty);
         }
         // No unit symbol starts with a character a number can contain, so the first other
-        // character starts the unit.
+        // character starts the unit. A comma stays in the number so that "1,5" or "1,000" is
+        // rejected as a malformed number rather than read with the wrong magnitude.
         let (number, symbol) = text.split_at(
             text.find(|c: char| !matches!(c, '0'..='9' | '+' | '-' | '.' | ',' | 'e' | 'E'))
                 .unwrap_or(text.len()),
         );
         let value: f64 = number
-            .replace(',', ".")
             .parse()
             .map_err(|_| ParseQuantityError::InvalidNumber)?;
         let symbol = symbol.trim_start();
@@ -256,7 +257,7 @@ mod tests {
     fn parses_numbers_with_and_without_units() {
         assert_eq!(length("1250"), Ok(Length::from_si(1.25)));
         assert_eq!(length(" 2.5 m "), Ok(Length::from_si(2.5)));
-        assert_eq!(length("2,5m"), Ok(Length::from_si(2.5)));
+        assert_eq!(length("2.5m"), Ok(Length::from_si(2.5)));
         assert_eq!(length("-30 cm"), Ok(Length::from_si(-0.3)));
         assert_eq!(length("+1e3 mm"), Ok(Length::from_si(1.0)));
         assert_eq!(length(".5 m"), Ok(Length::from_si(0.5)));
@@ -299,7 +300,9 @@ mod tests {
         );
         assert_eq!(length(""), Err(ParseQuantityError::Empty));
         assert_eq!(length("   "), Err(ParseQuantityError::Empty));
-        for text in ["mm", "1.2.3 mm", "1,000.5", "--1", "e", "inf", "NaN"] {
+        for text in [
+            "mm", "1.2.3 mm", "2,5 m", "1,000", "1,000.5", "--1", "e", "inf", "NaN",
+        ] {
             assert_eq!(
                 length(text),
                 Err(ParseQuantityError::InvalidNumber),
