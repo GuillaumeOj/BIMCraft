@@ -1,0 +1,21 @@
+name: Feature request
+description: Propose a new capability or an improvement.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: need
+    attributes:
+      label: What do you need to do?
+      description: Describe the task from a user's point of view (architect, engineer, drafter, BIM manager).
+    validations:
+      required: true
+  - type: input
+    id: requirement
+    attributes:
+      label: Related requirement IDs
+      description: From docs/specifications.md, e.g. STR-07. Leave empty if none fits.
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: Workflows, national practices or standards involved (cite clause numbers, never paste copyrighted text).

@@ -1,0 +1,31 @@
+name: Bug report
+description: Something does not work as expected.
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: Describe what you did, what you expected and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open …
+        2. Click …
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: BIMCraft version and operating system
+    validations:
+      required: true
+  - type: textarea
+    id: files
+    attributes:
+      label: Files or screenshots
+      description: Never attach confidential project models. Strip client data first.

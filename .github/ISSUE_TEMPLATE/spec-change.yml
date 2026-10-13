@@ -1,0 +1,17 @@
+name: Specification change
+description: Discuss or propose a change to docs/specifications.md.
+labels: [spec]
+body:
+  - type: input
+    id: requirement
+    attributes:
+      label: Requirement ID or section
+      placeholder: e.g. CORE-03 or §7 Georeferencing
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed change and reason
+    validations:
+      required: true
