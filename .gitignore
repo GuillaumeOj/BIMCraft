@@ -34,3 +34,5 @@ blob-report/
 
 # Local agent settings (shared settings live in .claude/settings.json)
 .claude/settings.local.json
+# Agent worktrees, one checkout per branch
+.claude/worktrees/

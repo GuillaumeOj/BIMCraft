@@ -6,7 +6,7 @@ BIMCraft is an open-source BIM authoring tool: a Rust core (native + WebAssembly
 
 ## 1. Golden rules (never break)
 
-1. **Never push.** Do not run `git push`, create or merge pull requests, push tags or publish anything remote until the user explicitly says so **in the current conversation**. Committing locally is fine.
+1. **Never push.** Do not run `git push`, create or merge pull requests, push tags or publish anything remote (including creating or editing issues, comments, labels and project items) until the user explicitly says so **in the current conversation**. Committing locally is fine.
 2. **Review before push.** Before any push, the user must have run a code review and a simplification pass on the changes (Claude Code: `/code-review`, then `/simplify`; other agents: an equivalent review the user asks for). Only then may `scripts/mark-reviewed.sh` stamp `HEAD`. The `pre-push` hook rejects any push whose `HEAD` is not stamped. Never stamp on your own initiative.
 3. **Never bypass checks.** No `--no-verify`, no editing `core.hooksPath`, no disabling lints, lowering coverage thresholds or skipping tests to make a check pass. Fix the cause, or stop and ask the user.
 4. **Exact versions only.** Every dependency, tool and CI action is pinned to an exact version (section 4).
@@ -28,7 +28,7 @@ Every feature or fix is done only when all of these hold. Check them before sayi
 
 ## 3. Workflow
 
-1. Understand the task; find the relevant spec section and requirement IDs.
+1. Understand the task; find its issue ([docs/dev/project-management.md](docs/dev/project-management.md)), the relevant spec section and requirement IDs.
 2. Write or update tests first when practical, then implement.
 3. Keep changes small and focused: one concern per commit, one feature per PR.
 4. Run `scripts/check-all.sh`.

@@ -9,14 +9,19 @@ import {
   checkRepo,
   checkRustToolchain,
   checkWorkflow,
+  gitEnv,
   main,
 } from "./check-pinned-deps";
 
 const SHA = "3d3c42e5aac5ba805825da76410c181273ba90b1";
 
+// Run from a hook, an inherited GIT_DIR would point these commands at the caller's repository.
+const git = (root: string, ...args: string[]) =>
+  Bun.spawnSync(["git", ...args], { cwd: root, env: gitEnv() });
+
 function gitRepo(prefix: string): string {
   const root = mkdtempSync(join(tmpdir(), prefix));
-  Bun.spawnSync(["git", "init", "-q"], { cwd: root });
+  git(root, "init", "-q");
   return root;
 }
 
@@ -170,9 +175,25 @@ describe("checkRepo", () => {
   test("skips files deleted from the working tree", () => {
     const root = gitRepo("deleted-");
     writeFileSync(join(root, "Cargo.toml"), '[dependencies]\na = "1"\n');
-    Bun.spawnSync(["git", "add", "Cargo.toml"], { cwd: root });
+    git(root, "add", "Cargo.toml");
     rmSync(join(root, "Cargo.toml"));
     expect(checkRepo(root)).toEqual([]);
+  });
+
+  test("leaves the repository of a hook that runs these tests from a linked worktree alone", () => {
+    // Regression: pre-push in a worktree exports GIT_DIR, and `git init` in gitRepo flipped that
+    // repository to core.bare=true. Run another test in a child process with that environment.
+    const caller = gitRepo("caller-");
+    const identity = ["-c", "user.name=test", "-c", "user.email=test@example.com", "-c", "commit.gpgsign=false"];
+    git(caller, ...identity, "commit", "-q", "--allow-empty", "-m", "init");
+    git(caller, "worktree", "add", "-q", join(caller, "wt"));
+    const child = Bun.spawnSync([process.execPath, "test", import.meta.path, "-t", "skips files deleted"], {
+      cwd: import.meta.dir,
+      env: { ...gitEnv(), GIT_DIR: join(caller, ".git/worktrees/wt") },
+    });
+    // The child's exit code reflects the coverage threshold of a single test, so check that the test ran.
+    expect(child.stderr.toString()).toContain("1 pass");
+    expect(git(caller, "config", "core.bare").stdout.toString().trim()).toBe("false");
   });
 
   test("fails outside a git repository", () => {

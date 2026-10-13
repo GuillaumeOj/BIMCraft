@@ -126,10 +126,15 @@ export function checkFile(file: string, content: string): Issue[] {
   return checkerFor(file)?.(file, content) ?? [];
 }
 
+// Git exports GIT_DIR and friends to hooks; without them, `root` alone decides which repository git reads.
+export function gitEnv(): Record<string, string | undefined> {
+  return Object.fromEntries(Object.entries(process.env).filter(([name]) => !name.startsWith("GIT_")));
+}
+
 function listRepoFiles(root: string): string[] {
   const result = Bun.spawnSync(
     ["git", "ls-files", "--cached", "--others", "--exclude-standard"],
-    { cwd: root },
+    { cwd: root, env: gitEnv() },
   );
   if (result.exitCode !== 0) throw new Error(result.stderr.toString());
   return result.stdout.toString().split("\n").filter(Boolean);
