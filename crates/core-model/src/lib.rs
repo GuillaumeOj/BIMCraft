@@ -7,6 +7,7 @@
 #![forbid(clippy::disallowed_methods, clippy::disallowed_types)]
 
 mod id;
+pub mod units;
 
 #[cfg(any(test, feature = "test-support"))]
 pub use id::SeededIdSource;
