@@ -1,0 +1,12 @@
+[book]
+title = "BIMCraft User Guide"
+authors = ["BIMCraft contributors"]
+language = "en"
+src = "."
+
+[build]
+build-dir = "../../target/user-guide"
+create-missing = false
+
+[output.html]
+no-section-label = true
