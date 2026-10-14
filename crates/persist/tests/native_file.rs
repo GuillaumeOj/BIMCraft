@@ -4,7 +4,7 @@
 
 use std::path::PathBuf;
 
-use persist::{Connection, SCHEMA_VERSION, open_project, property, set_property};
+use persist::{Connection, open_project, property, set_property};
 
 /// A file in the system temporary directory, removed when dropped.
 struct TempFile(PathBuf);
@@ -31,7 +31,7 @@ fn a_project_file_survives_closing_and_reopening() {
     let file = TempFile::new("reopen");
 
     let mut conn = Connection::open(&file.0).unwrap();
-    assert_eq!(open_project(&mut conn).unwrap(), SCHEMA_VERSION);
+    open_project(&mut conn).unwrap();
     set_property(&conn, "name", "Tower").unwrap();
     conn.close().unwrap();
 
@@ -39,6 +39,6 @@ fn a_project_file_survives_closing_and_reopening() {
     assert!(header.starts_with(b"SQLite format 3\0"));
 
     let mut conn = Connection::open(&file.0).unwrap();
-    assert_eq!(open_project(&mut conn).unwrap(), SCHEMA_VERSION);
+    open_project(&mut conn).unwrap();
     assert_eq!(property(&conn, "name").unwrap().as_deref(), Some("Tower"));
 }

@@ -4,7 +4,7 @@
 //! desktop, the browser's OPFS through a `SQLite` VFS) and hands it in, so the crate stays free of
 //! file system access (ARCH-02) and builds for `wasm32-unknown-unknown` (ARCH-01). It owns what
 //! is inside the file: the schema version (PERS-01), migrations and transactions. The binding
-//! choice is recorded in `docs/dev/adr/0005-sqlite-binding.md`.
+//! choice is recorded in `docs/dev/adr/0006-sqlite-binding.md`.
 
 // ARCH-02: forbid, not deny, so nothing in this crate can opt out. See docs/dev/quality.md.
 #![forbid(clippy::disallowed_methods, clippy::disallowed_types)]
@@ -13,11 +13,11 @@ pub use rusqlite::Connection;
 use rusqlite::{OptionalExtension, Transaction};
 
 /// Schema version written by this build; [`open_project`] refuses files with a higher one.
-pub const SCHEMA_VERSION: u32 = 1;
+const SCHEMA_VERSION: u32 = 1;
 
 /// Marks a database as a `BIMCraft` project in the file header ("BIMC" in ASCII), so other
 /// `SQLite` files are refused instead of being modified.
-pub const APPLICATION_ID: i32 = 0x4249_4D43;
+const APPLICATION_ID: i32 = 0x4249_4D43;
 
 /// Why a project file could not be opened or written.
 ///
@@ -40,7 +40,7 @@ pub enum PersistError {
     Database(#[from] rusqlite::Error),
 }
 
-/// Prepares a database for use as a project file and returns its schema version.
+/// Prepares a database for use as a project file.
 ///
 /// An empty database becomes a new project. Everything runs in one transaction, so an interrupted
 /// call leaves the file as it was (PERS-02). Migrations from older schema versions (PERS-01) join
@@ -51,7 +51,7 @@ pub enum PersistError {
 /// [`PersistError::NotAProject`] for a database of another application,
 /// [`PersistError::NewerVersion`] for a file this build cannot read, and
 /// [`PersistError::Database`] when `SQLite` fails.
-pub fn open_project(conn: &mut Connection) -> Result<u32, PersistError> {
+pub fn open_project(conn: &mut Connection) -> Result<(), PersistError> {
     let tx = conn.transaction()?;
     match stored_version(&tx)? {
         0 => create_schema(&tx)?,
@@ -64,7 +64,7 @@ pub fn open_project(conn: &mut Connection) -> Result<u32, PersistError> {
         }
     }
     tx.commit()?;
-    Ok(SCHEMA_VERSION)
+    Ok(())
 }
 
 /// Writes one project property, replacing any previous value.
@@ -140,7 +140,7 @@ mod tests {
 
     fn new_project() -> Connection {
         let mut conn = Connection::open_in_memory().unwrap();
-        assert_eq!(open_project(&mut conn).unwrap(), SCHEMA_VERSION);
+        open_project(&mut conn).unwrap();
         conn
     }
 
@@ -160,7 +160,7 @@ mod tests {
     fn opening_a_current_project_again_keeps_its_content() {
         let mut conn = new_project();
         set_property(&conn, "name", "Tower").unwrap();
-        assert_eq!(open_project(&mut conn).unwrap(), SCHEMA_VERSION);
+        open_project(&mut conn).unwrap();
         assert_eq!(property(&conn, "name").unwrap().as_deref(), Some("Tower"));
     }
 
@@ -202,17 +202,7 @@ mod tests {
         let mut conn = Connection::open_in_memory().unwrap();
         conn.pragma_update(None, "application_id", APPLICATION_ID)
             .unwrap();
-        assert_eq!(open_project(&mut conn).unwrap(), SCHEMA_VERSION);
-    }
-
-    #[test]
-    fn a_negative_version_is_not_a_project() {
-        let mut conn = new_project();
-        conn.pragma_update(None, "user_version", -1).unwrap();
-        assert!(matches!(
-            open_project(&mut conn),
-            Err(PersistError::NotAProject)
-        ));
+        open_project(&mut conn).unwrap();
     }
 
     #[test]
@@ -224,6 +214,7 @@ mod tests {
             format!(
                 "PRAGMA application_id = {APPLICATION_ID}; CREATE TABLE invoices (id INTEGER);"
             ),
+            format!("PRAGMA application_id = {APPLICATION_ID}; PRAGMA user_version = -1;"),
         ];
         for setup in cases {
             let mut conn = Connection::open_in_memory().unwrap();
