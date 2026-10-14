@@ -14,6 +14,11 @@ impl Profile {
     /// [`ProfileError::TooManyEdges`] when the chords exceed [`MAX_PROFILE_EDGES`], or any error
     /// of [`Profile::new`] when the chords make loops meet.
     pub(crate) fn faceted(&self) -> Result<Self, ProfileError> {
+        let mut edges = self.outer.iter().chain(self.holes.iter().flatten());
+        if edges.all(|edge| matches!(edge, Edge::Line { .. })) {
+            // Nothing to replace, and the profile is already valid.
+            return Ok(self.clone());
+        }
         let mut budget = MAX_PROFILE_EDGES;
         let outer = facet_loop(&self.outer, &mut budget)?;
         let holes = self

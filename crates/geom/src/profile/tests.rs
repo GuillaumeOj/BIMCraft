@@ -3,7 +3,7 @@ use core::f64::consts::PI;
 use super::*;
 use crate::MODEL_EXTENT;
 
-pub(super) fn p(x: f64, y: f64) -> Point2 {
+pub(crate) fn p(x: f64, y: f64) -> Point2 {
     Point2::new(x, y)
 }
 
@@ -11,7 +11,7 @@ pub(super) fn line(start: Point2, end: Point2) -> Edge {
     Edge::Line { start, end }
 }
 
-pub(super) fn polygon(points: &[(f64, f64)]) -> Vec<Edge> {
+pub(crate) fn polygon(points: &[(f64, f64)]) -> Vec<Edge> {
     (0..points.len())
         .map(|i| {
             let (x0, y0) = points[i];
@@ -31,7 +31,7 @@ pub(super) fn bulged_square() -> Vec<Edge> {
     ]
 }
 
-fn rectangle(x0: f64, y0: f64, x1: f64, y1: f64) -> Vec<Edge> {
+pub(crate) fn rectangle(x0: f64, y0: f64, x1: f64, y1: f64) -> Vec<Edge> {
     polygon(&[(x0, y0), (x1, y0), (x1, y1), (x0, y1)])
 }
 
@@ -44,7 +44,7 @@ pub(super) fn ccw(start: Point2, end: Point2, centre: Point2) -> Edge {
     }
 }
 
-pub(super) fn circle(cx: f64, cy: f64, radius: f64) -> Vec<Edge> {
+pub(crate) fn circle(cx: f64, cy: f64, radius: f64) -> Vec<Edge> {
     let start = p(cx + radius, cy);
     vec![ccw(start, start, p(cx, cy))]
 }
@@ -53,7 +53,7 @@ fn profile(outer: Vec<Edge>, holes: Vec<Vec<Edge>>) -> Profile {
     Profile::new(outer, holes).expect("valid profile")
 }
 
-pub(super) fn assert_close(actual: f64, expected: f64) {
+pub(crate) fn assert_close(actual: f64, expected: f64) {
     assert!(
         (actual - expected).abs() <= 1e-12 * expected.abs().max(1.0),
         "{actual} != {expected}"

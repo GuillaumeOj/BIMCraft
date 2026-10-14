@@ -1,7 +1,7 @@
 //! Solids made by extruding a profile (GEO-02).
 
 use super::{BrepError, FaceInput, Solid};
-use crate::{Edge, Point3, Profile, ProfileError, Vector3};
+use crate::{Point3, Profile, ProfileError, Vector3};
 
 /// Why a profile cannot be extruded.
 ///
@@ -15,10 +15,10 @@ pub enum ExtrusionError {
     #[error("the extrusion direction does not point up out of the profile plane")]
     NotUpward,
     /// Replacing the profile's arcs by chords gives an invalid profile.
-    #[error("the profile's arcs cannot be replaced by chords: {0}")]
+    #[error("the profile's arcs cannot be replaced by chords")]
     Faceting(#[from] ProfileError),
     /// The extruded faces do not bound a valid solid: too thin, or outside the model extent.
-    #[error("the extruded solid is invalid: {0}")]
+    #[error("the extruded solid is invalid")]
     Solid(#[from] BrepError),
 }
 
@@ -48,28 +48,23 @@ impl Solid {
             return Err(ExtrusionError::NotUpward);
         }
         let profile = profile.faceted()?;
-        let loops: Vec<&[Edge]> = core::iter::once(profile.outer())
-            .chain(profile.holes())
-            .collect();
         // Every loop vertex once at the bottom, then again at the top, `top` indices later.
-        let bottom: Vec<Point3> = loops
-            .iter()
-            .flat_map(|edges| edges.iter())
-            .map(|edge| Point3::new(edge.start().x, edge.start().y, 0.0))
-            .collect();
-        let top = bottom.len();
-        let mut vertices = bottom.clone();
-        vertices.extend(
-            bottom
-                .iter()
-                .map(|p| Point3::new(p.x + direction.x, p.y + direction.y, direction.z)),
-        );
-        let mut rings = Vec::with_capacity(loops.len());
-        let mut first = 0;
-        for edges in &loops {
-            rings.push((first..first + edges.len()).collect::<Vec<_>>());
-            first += edges.len();
+        let mut vertices = Vec::new();
+        let mut rings = Vec::with_capacity(1 + profile.holes().len());
+        for edges in core::iter::once(profile.outer()).chain(profile.holes()) {
+            rings.push((vertices.len()..vertices.len() + edges.len()).collect::<Vec<_>>());
+            vertices.extend(
+                edges
+                    .iter()
+                    .map(|e| Point3::new(e.start().x, e.start().y, 0.0)),
+            );
         }
+        let top = vertices.len();
+        let raised: Vec<Point3> = vertices
+            .iter()
+            .map(|p| Point3::new(p.x + direction.x, p.y + direction.y, direction.z))
+            .collect();
+        vertices.extend(raised);
         Ok(Self::from_faces(vertices, &prism_faces(&rings, top))?)
     }
 }
@@ -109,52 +104,15 @@ mod tests {
     use core::f64::consts::PI;
 
     use super::*;
-    use crate::{ArcDirection, MODEL_EXTENT, Point2};
-
-    fn p(x: f64, y: f64) -> Point2 {
-        Point2::new(x, y)
-    }
+    use crate::profile::tests::{assert_close, circle, p, polygon, rectangle};
+    use crate::{ArcDirection, Edge, MODEL_EXTENT};
 
     fn up(z: f64) -> Vector3 {
         Vector3::new(0.0, 0.0, z)
     }
 
-    fn polygon(points: &[(f64, f64)]) -> Vec<Edge> {
-        (0..points.len())
-            .map(|i| {
-                let (x0, y0) = points[i];
-                let (x1, y1) = points[(i + 1) % points.len()];
-                Edge::Line {
-                    start: p(x0, y0),
-                    end: p(x1, y1),
-                }
-            })
-            .collect()
-    }
-
-    fn rectangle(x0: f64, y0: f64, x1: f64, y1: f64) -> Vec<Edge> {
-        polygon(&[(x0, y0), (x1, y0), (x1, y1), (x0, y1)])
-    }
-
-    fn circle(cx: f64, cy: f64, radius: f64) -> Vec<Edge> {
-        let start = p(cx + radius, cy);
-        vec![Edge::Arc {
-            start,
-            end: start,
-            centre: p(cx, cy),
-            direction: ArcDirection::CounterClockwise,
-        }]
-    }
-
     fn extrude(outer: Vec<Edge>, holes: Vec<Vec<Edge>>, direction: Vector3) -> Solid {
         Solid::extrude(&Profile::new(outer, holes).unwrap(), direction).unwrap()
-    }
-
-    fn assert_close(actual: f64, expected: f64) {
-        assert!(
-            (actual - expected).abs() <= 1e-12 * expected.abs().max(1.0),
-            "{actual} != {expected}"
-        );
     }
 
     /// Topology and volume against hand counts, and the rebuild from its faces.
@@ -205,8 +163,7 @@ mod tests {
             rectangle(1.5 + 1e-3, 1.5 + 1e-3, 2.5, 2.5),
         ];
         let solid = extrude(rectangle(0.0, 0.0, 3.0, 3.0), holes, up(0.5));
-        assert_close(solid.volume(), 0.5 * (9.0 - 1.0 - 0.999 * 0.999));
-        assert_prism(&solid, 14, 36, 2, solid.volume());
+        assert_prism(&solid, 14, 36, 2, 0.5 * (9.0 - 1.0 - 0.999 * 0.999));
     }
 
     #[test]
@@ -319,15 +276,23 @@ mod tests {
 
     #[test]
     fn errors_describe_their_cause() {
+        use std::error::Error as _;
+
         let error = ExtrusionError::Faceting(ProfileError::TooManyEdges);
         assert_eq!(
             error.to_string(),
-            "the profile's arcs cannot be replaced by chords: the profile has more than 4096 edges"
+            "the profile's arcs cannot be replaced by chords"
         );
-        assert!(
-            ExtrusionError::Solid(BrepError::Empty)
-                .to_string()
-                .ends_with("the solid has no faces")
+        let source = error.source().map(ToString::to_string);
+        assert_eq!(
+            source.as_deref(),
+            Some("the profile has more than 4096 edges")
+        );
+        let error = ExtrusionError::Solid(BrepError::Empty);
+        assert_eq!(error.to_string(), "the extruded solid is invalid");
+        assert_eq!(
+            error.source().map(ToString::to_string).as_deref(),
+            Some("the solid has no faces")
         );
     }
 }
