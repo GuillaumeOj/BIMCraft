@@ -5,6 +5,10 @@
 Closes #
 Requirements: <!-- e.g. STR-07, GEO-03 -->
 
+## UI design
+
+<!-- UI changes: link the Penpot board you implemented, and list any place the code differs from the design (docs/dev/ui-design.md). Otherwise delete this section. -->
+
 ## User documentation
 
 <!-- Link the docs/user/ page(s) added or updated, or write "N/A" with a reason and add the `no-user-docs` label. -->

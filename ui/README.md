@@ -2,6 +2,8 @@
 
 The web frontend (Bun, React, TypeScript), shared by the desktop (Tauri) and browser hosts. See spec §13.
 
+The interface is designed in Penpot; see [docs/dev/ui-design.md](../docs/dev/ui-design.md) before building a screen.
+
 No application code yet. The quality configuration is already in place:
 
 - `bunfig.toml` — exact versions, 14-day minimum release age.
