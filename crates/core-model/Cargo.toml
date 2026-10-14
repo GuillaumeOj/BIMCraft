@@ -7,11 +7,23 @@ rust-version.workspace = true
 license.workspace = true
 publish = false
 
+# Only the criterion harness benches; libtest would reject criterion's options.
+[lib]
+bench = false
+
 [dependencies]
+schema = { workspace = true }
 thiserror = { workspace = true }
 
 [dev-dependencies]
 proptest = { workspace = true }
+
+[target.'cfg(not(target_family = "wasm"))'.dev-dependencies]
+criterion = { workspace = true }
+
+[[bench]]
+name = "store"
+harness = false
 
 [features]
 # Exposes SeededIdSource for other crates' tests. Never enable it in a shipped build.

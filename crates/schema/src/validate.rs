@@ -144,6 +144,12 @@ pub enum ValidationErrorKind {
     /// A role allows no target.
     #[error("a role needs at least one target")]
     RoleWithoutTargets,
+    /// An entity or property set is listed under a key other than its own name.
+    #[error("listed under the name \"{key}\", not its own")]
+    KeyMismatch {
+        /// The key it is listed under.
+        key: String,
+    },
     /// The entity has no IFC mapping (CORE-10).
     #[error("every entity needs an [ifc] mapping (CORE-10)")]
     MissingIfcMapping,
@@ -268,11 +274,23 @@ fn validate_namespace(namespace: &Namespace, errors: &mut Errors) {
     }
     check_type_names(namespace, errors);
     check_ifc_uniqueness(namespace, errors);
-    for entity in namespace.entities.values() {
+    for (key, entity) in &namespace.entities {
+        check_key(key, &entity.name, Owner::Entity, errors);
         validate_entity(namespace, entity, errors);
     }
-    for property_set in namespace.property_sets.values() {
+    for (key, property_set) in &namespace.property_sets {
+        check_key(key, &property_set.name, Owner::PropertySet, errors);
         validate_property_set(namespace, property_set, errors);
+    }
+}
+
+/// References resolve through the map keys and everything else uses the names, so they must agree.
+fn check_key(key: &str, name: &str, owner: fn(String) -> Owner, errors: &mut Errors) {
+    if key != name {
+        let kind = ValidationErrorKind::KeyMismatch {
+            key: key.to_owned(),
+        };
+        errors.push(&owner(name.to_owned()), None, kind);
     }
 }
 

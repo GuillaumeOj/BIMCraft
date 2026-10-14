@@ -45,7 +45,7 @@ A plugin's source tree has the same layout, with its own namespace.
 
 1. **Parse** each TOML file into typed Rust structures with `serde`; unknown keys are errors.
 2. **Build the canonical model**: one sorted, normalised description of the namespace, with defaults and derived names filled in. Same input, same output.
-3. **Validate** the canonical model: unique names, existing references, known IFC entities and predefined types, unique IFC mapping keys, known quantities, size and nesting limits.
+3. **Validate** the canonical model: unique names, map keys equal to the names they index, existing references, known IFC entities and predefined types, unique IFC mapping keys, known quantities, size and nesting limits.
 4. **Emit**, at build time, for the core namespace: Rust types and serialization ([#16](https://github.com/GuillaumeOj/BIMCraft/issues/16)), JSON Schema ([#17](https://github.com/GuillaumeOj/BIMCraft/issues/17)), the IFC mapping table ([#18](https://github.com/GuillaumeOj/BIMCraft/issues/18)), reference documentation ([#19](https://github.com/GuillaumeOj/BIMCraft/issues/19)) and Python stubs ([#142](https://github.com/GuillaumeOj/BIMCraft/issues/142)).
 5. **Bundle**, for a plugin: the plugin SDK's build command, which wraps the same Rust code, writes the snapshots and migrations into one `schema.json` shipped with the plugin.
 

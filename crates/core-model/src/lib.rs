@@ -7,11 +7,13 @@
 #![forbid(clippy::disallowed_methods, clippy::disallowed_types)]
 
 mod id;
+mod store;
 pub mod units;
 
 #[cfg(any(test, feature = "test-support"))]
 pub use id::SeededIdSource;
 pub use id::{EntityId, GlobalIdError, IdSource};
+pub use store::{AttributeValue, RemovedEntity, Store, StoreError};
 
 /// Property-test settings shared by the crate. A fixed seed keeps runs reproducible; with no
 /// persistence, no regression files are written next to the sources.
