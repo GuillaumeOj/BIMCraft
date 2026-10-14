@@ -22,6 +22,7 @@
 mod brep;
 mod point;
 mod predicates;
+mod tolerance;
 
 pub use brep::{BrepError, FaceInput, Shell, Solid};
 pub use point::{Point2, Point3};
@@ -29,15 +30,4 @@ pub use predicates::{
     MAX_COORDINATE, MIN_COORDINATE, Orientation, PredicateError, incircle, insphere, orient2d,
     orient3d,
 };
-
-/// The kernel's single linear tolerance, 1 µm, in metres.
-///
-/// Fixed, never user- or project-settable, so results are the same everywhere (ENG-04).
-/// Rationale: `docs/dev/adr/0001-geometry-tolerance-policy.md`.
-pub const LINEAR_TOLERANCE: f64 = 1e-6;
-
-/// The largest coordinate magnitude a solid accepts, 10 km, in metres.
-///
-/// Modelling happens in a local engineering frame near the origin. Rationale:
-/// `docs/dev/adr/0001-geometry-tolerance-policy.md`.
-pub const MODEL_EXTENT: f64 = 1e4;
+pub use tolerance::{LINEAR_TOLERANCE, MODEL_EXTENT};
