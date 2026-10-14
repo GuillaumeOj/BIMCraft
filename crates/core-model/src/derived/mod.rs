@@ -39,7 +39,7 @@
 
 mod error;
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 pub use error::DerivedError;
 
@@ -110,28 +110,36 @@ impl<K: Ord + Clone, V> DependencyGraph<K, V> {
         deps: impl IntoIterator<Item = K>,
     ) -> Result<(), DerivedError<K>> {
         let deps: BTreeSet<K> = deps.into_iter().collect();
-        if let Some(current) = self.nodes.get_mut(&node).filter(|n| n.deps == deps) {
-            current.declared = true;
-            return Ok(());
-        }
-        if let Some(path) = self.cycle_through(&node, &deps) {
+        let old_deps = self.nodes.get(&node).map(|n| &n.deps);
+        let added: BTreeSet<K> = deps
+            .iter()
+            .filter(|dep| !old_deps.is_some_and(|old| old.contains(dep)))
+            .cloned()
+            .collect();
+        let dropped: Vec<K> = old_deps
+            .into_iter()
+            .flatten()
+            .filter(|dep| !deps.contains(dep))
+            .cloned()
+            .collect();
+        if let Some(path) = self.cycle_through(&node, &added) {
             return Err(DerivedError::Cycle { path });
         }
-        // Link the new dependencies before unlinking the old ones, so a dependency kept across the
-        // change is never pruned and keeps its cached value.
-        for dep in &deps {
+        let current = self.nodes.entry(node.clone()).or_default();
+        current.declared = true;
+        if added.is_empty() && dropped.is_empty() {
+            return Ok(());
+        }
+        current.deps = deps;
+        for dep in added {
             self.nodes
-                .entry(dep.clone())
+                .entry(dep)
                 .or_default()
                 .dependents
                 .insert(node.clone());
         }
-        let current = self.nodes.entry(node.clone()).or_default();
-        current.declared = true;
-        let old_deps = std::mem::replace(&mut current.deps, deps);
-        let dropped: Vec<K> = old_deps.difference(&current.deps).cloned().collect();
         self.unlink(&node, dropped);
-        self.mark_stale(node);
+        self.mark_stale(node, |_| {});
         Ok(())
     }
 
@@ -149,9 +157,7 @@ impl<K: Ord + Clone, V> DependencyGraph<K, V> {
         };
         current.declared = false;
         let deps = std::mem::take(&mut current.deps);
-        if current.dependents.is_empty() {
-            self.nodes.remove(node);
-        }
+        self.release(node);
         self.unlink(node, deps);
         stale
     }
@@ -161,7 +167,9 @@ impl<K: Ord + Clone, V> DependencyGraph<K, V> {
     pub fn invalidate(&mut self, changed: impl IntoIterator<Item = K>) -> BTreeSet<K> {
         let mut stale = BTreeSet::new();
         for key in changed {
-            stale.append(&mut self.mark_stale(key));
+            self.mark_stale(key, |stale_key| {
+                stale.insert(stale_key);
+            });
         }
         stale
     }
@@ -201,23 +209,20 @@ impl<K: Ord + Clone, V> DependencyGraph<K, V> {
             let Some(current) = self.nodes.get(&key).filter(|n| n.value.is_none()) else {
                 continue;
             };
-            let dep_values: Option<Vec<(&K, &V)>> = current
-                .deps
-                .iter()
-                .map(|dep| Some((dep, self.nodes.get(dep)?.value.as_ref()?)))
-                .collect();
-            if let Some(dep_values) = dep_values {
+            let mut dep_values: Vec<(&K, &V)> = Vec::with_capacity(current.deps.len());
+            let mut stale_deps: Vec<K> = Vec::new();
+            for dep in &current.deps {
+                match self.nodes.get(dep).and_then(|n| n.value.as_ref()) {
+                    Some(value) => dep_values.push((dep, value)),
+                    None => stale_deps.push(dep.clone()),
+                }
+            }
+            if stale_deps.is_empty() {
                 let value = compute(&key, &dep_values);
                 if let Some(current) = self.nodes.get_mut(&key) {
                     current.value = Some(value);
                 }
             } else {
-                let stale_deps: Vec<K> = current
-                    .deps
-                    .iter()
-                    .filter(|dep| !self.is_clean(dep))
-                    .cloned()
-                    .collect();
                 stack.push(key);
                 stack.extend(stale_deps);
             }
@@ -228,26 +233,33 @@ impl<K: Ord + Clone, V> DependencyGraph<K, V> {
             .ok_or(DerivedError::UnknownNode)
     }
 
-    /// Removes `node` from the dependents of `deps`, pruning those left undeclared and unused.
-    ///
-    /// An undeclared node has no dependencies of its own, so pruning never cascades.
+    /// Removes `node` from the dependents of `deps` and releases them.
     fn unlink(&mut self, node: &K, deps: impl IntoIterator<Item = K>) {
         for dep in deps {
-            let unused = self.nodes.get_mut(&dep).is_some_and(|dep_node| {
+            if let Some(dep_node) = self.nodes.get_mut(&dep) {
                 dep_node.dependents.remove(node);
-                dep_node.dependents.is_empty() && !dep_node.declared
-            });
-            if unused {
-                self.nodes.remove(&dep);
             }
+            self.release(&dep);
         }
     }
 
-    /// Marks `start` and its transitive dependents stale; returns those that were up to date.
+    /// Drops `node` if it is undeclared and nothing depends on it. An undeclared node has no
+    /// dependencies of its own, so this never cascades.
+    fn release(&mut self, node: &K) {
+        if self
+            .nodes
+            .get(node)
+            .is_some_and(|n| !n.declared && n.dependents.is_empty())
+        {
+            self.nodes.remove(node);
+        }
+    }
+
+    /// Marks `start` and its transitive dependents stale, passing each one that was up to date to
+    /// `on_stale`.
     ///
     /// A stale node's dependents are always stale already, so the walk stops at stale nodes.
-    fn mark_stale(&mut self, start: K) -> BTreeSet<K> {
-        let mut stale = BTreeSet::new();
+    fn mark_stale(&mut self, start: K, mut on_stale: impl FnMut(K)) {
         let mut pending = vec![start];
         while let Some(key) = pending.pop() {
             let Some(current) = self.nodes.get_mut(&key) else {
@@ -255,31 +267,28 @@ impl<K: Ord + Clone, V> DependencyGraph<K, V> {
             };
             if current.value.take().is_some() {
                 pending.extend(current.dependents.iter().cloned());
-                stale.insert(key);
+                on_stale(key);
             }
         }
-        stale
     }
 
-    /// The cycle that making `node` depend on `deps` would close, if any: `node`, one of `deps`,
+    /// The cycle that making `node` depend on `added` would close, if any: `node`, one of `added`,
     /// …, `node`, each key depending on the next.
-    fn cycle_through(&self, node: &K, deps: &BTreeSet<K>) -> Option<Vec<K>> {
-        if deps.contains(node) {
-            return Some(vec![node.clone(), node.clone()]);
-        }
-        // Only a node with dependents can be reached by following dependencies.
-        if self.nodes.get(node).is_none_or(|n| n.dependents.is_empty()) {
+    ///
+    /// Only new edges can close a cycle, and one closes exactly when a new dependency already
+    /// depends on `node`; so search upward from `node` through dependents, breadth first.
+    fn cycle_through(&self, node: &K, added: &BTreeSet<K>) -> Option<Vec<K>> {
+        if added.is_empty() {
             return None;
         }
-        // Breadth-first search from `deps` along dependencies, recording who reached whom.
-        let mut reached_from: BTreeMap<K, Option<K>> =
-            deps.iter().map(|dep| (dep.clone(), None)).collect();
-        let mut queue: std::collections::VecDeque<K> = deps.iter().cloned().collect();
+        // Each reached key maps to the key it was reached from, which it depends on.
+        let mut reached_from: BTreeMap<K, Option<K>> = BTreeMap::from([(node.clone(), None)]);
+        let mut queue = VecDeque::from([node.clone()]);
         while let Some(key) = queue.pop_front() {
-            for next in self.dependencies(&key) {
-                if next == node {
-                    return Some(Self::cycle_path(node, key, &reached_from));
-                }
+            if added.contains(&key) {
+                return Some(Self::cycle_path(node, key, &reached_from));
+            }
+            for next in self.nodes.get(&key).into_iter().flat_map(|n| &n.dependents) {
                 if !reached_from.contains_key(next) {
                     reached_from.insert(next.clone(), Some(key.clone()));
                     queue.push_back(next.clone());
@@ -289,16 +298,14 @@ impl<K: Ord + Clone, V> DependencyGraph<K, V> {
         None
     }
 
-    /// Rebuilds `node → … → last → node` from the search's back links.
-    fn cycle_path(node: &K, last: K, reached_from: &BTreeMap<K, Option<K>>) -> Vec<K> {
+    /// Rebuilds `node → hit → … → node` from the search's back links.
+    fn cycle_path(node: &K, hit: K, reached_from: &BTreeMap<K, Option<K>>) -> Vec<K> {
         let mut path = vec![node.clone()];
-        let mut current = Some(last);
+        let mut current = Some(hit);
         while let Some(key) = current {
             current = reached_from.get(&key).cloned().flatten();
             path.push(key);
         }
-        path[1..].reverse();
-        path.push(node.clone());
         path
     }
 }

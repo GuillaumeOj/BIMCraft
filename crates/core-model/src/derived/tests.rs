@@ -46,8 +46,28 @@ fn diamond() -> DependencyGraph<u32, i64> {
     graph
 }
 
+/// The diamond with `inputs`, after computing `nodes`, with the computation log cleared.
+fn warm(inputs: &[(u32, i64)], nodes: &[u32]) -> (DependencyGraph<u32, i64>, Model) {
+    let mut graph = diamond();
+    let mut model = Model::new();
+    model.inputs.extend(inputs.iter().copied());
+    for node in nodes {
+        model.get(&mut graph, *node);
+    }
+    model.take_computed();
+    (graph, model)
+}
+
 fn set(keys: impl IntoIterator<Item = u32>) -> BTreeSet<u32> {
     keys.into_iter().collect()
+}
+
+fn deps_of(graph: &DependencyGraph<u32, i64>, node: u32) -> Vec<u32> {
+    graph.dependencies(&node).copied().collect()
+}
+
+fn is_known(graph: &mut DependencyGraph<u32, i64>, node: u32) -> bool {
+    graph.get(&node, |_, _| 0) != Err(DerivedError::UnknownNode)
 }
 
 #[test]
@@ -75,11 +95,7 @@ fn computes_dependencies_before_dependents() {
 
 #[test]
 fn invalidating_an_input_recomputes_only_its_dependents() {
-    let mut graph = diamond();
-    let mut model = Model::new();
-    model.get(&mut graph, 3);
-    model.get(&mut graph, 5);
-    model.take_computed();
+    let (mut graph, mut model) = warm(&[], &[3, 5]);
 
     model.inputs.insert(0, 7);
     assert_eq!(graph.invalidate([0]), set([0, 1, 2, 3]));
@@ -96,10 +112,7 @@ fn invalidating_an_input_recomputes_only_its_dependents() {
 
 #[test]
 fn invalidating_a_middle_node_leaves_its_siblings_alone() {
-    let mut graph = diamond();
-    let mut model = Model::new();
-    model.get(&mut graph, 3);
-    model.take_computed();
+    let (mut graph, mut model) = warm(&[], &[3]);
 
     model.inputs.insert(1, 5);
     assert_eq!(graph.invalidate([1]), set([1, 3]));
@@ -109,11 +122,8 @@ fn invalidating_a_middle_node_leaves_its_siblings_alone() {
 
 #[test]
 fn recomputes_only_what_the_requested_node_needs() {
-    let mut graph = diamond();
-    let mut model = Model::new();
-    model.get(&mut graph, 3);
+    let (mut graph, mut model) = warm(&[], &[3]);
     graph.invalidate([0]);
-    model.take_computed();
     model.get(&mut graph, 1);
     assert_eq!(model.take_computed(), [0, 1]);
     assert!(!graph.is_clean(&2) && !graph.is_clean(&3));
@@ -121,9 +131,7 @@ fn recomputes_only_what_the_requested_node_needs() {
 
 #[test]
 fn invalidation_stops_at_stale_nodes_and_ignores_unknown_keys() {
-    let mut graph = diamond();
-    let mut model = Model::new();
-    model.get(&mut graph, 3);
+    let (mut graph, _) = warm(&[], &[3]);
     assert_eq!(graph.invalidate([1]), set([1, 3]));
     assert_eq!(graph.invalidate([1, 3, 99]), set([]));
     assert_eq!(graph.invalidate([0]), set([0, 2]));
@@ -131,10 +139,7 @@ fn invalidation_stops_at_stale_nodes_and_ignores_unknown_keys() {
 
 #[test]
 fn redeclaring_the_same_dependencies_keeps_the_cache() {
-    let mut graph = diamond();
-    let mut model = Model::new();
-    model.get(&mut graph, 3);
-    model.take_computed();
+    let (mut graph, mut model) = warm(&[], &[3]);
     assert_eq!(graph.set_dependencies(3, [2, 1, 2]), Ok(()));
     assert!(graph.is_clean(&3));
     model.get(&mut graph, 3);
@@ -143,14 +148,10 @@ fn redeclaring_the_same_dependencies_keeps_the_cache() {
 
 #[test]
 fn redeclaring_dependencies_replaces_the_old_edges() {
-    let mut graph = diamond();
-    let mut model = Model::new();
-    model.inputs.extend([(0, 1), (4, 100)]);
-    model.get(&mut graph, 3);
-    model.take_computed();
+    let (mut graph, mut model) = warm(&[(0, 1), (4, 100)], &[3]);
 
     assert_eq!(graph.set_dependencies(1, [4]), Ok(()));
-    assert_eq!(graph.dependencies(&1).copied().collect::<Vec<_>>(), [4]);
+    assert_eq!(deps_of(&graph, 1), [4]);
     assert_eq!(model.get(&mut graph, 3), 101);
     assert_eq!(model.take_computed(), [1, 3, 4]);
 
@@ -160,14 +161,10 @@ fn redeclaring_dependencies_replaces_the_old_edges() {
 
 #[test]
 fn removing_a_used_node_keeps_it_as_an_input_of_its_dependents() {
-    let mut graph = diamond();
-    let mut model = Model::new();
-    model.inputs.extend([(0, 1), (1, 40)]);
-    model.get(&mut graph, 3);
-    model.take_computed();
+    let (mut graph, mut model) = warm(&[(0, 1), (1, 40)], &[3]);
 
     assert_eq!(graph.remove(&1), set([3]));
-    assert_eq!(graph.dependencies(&3).copied().collect::<Vec<_>>(), [1, 2]);
+    assert_eq!(deps_of(&graph, 3), [1, 2]);
     assert_eq!(graph.dependencies(&1).count(), 0);
     assert_eq!(
         graph.invalidate([0]),
@@ -178,7 +175,7 @@ fn removing_a_used_node_keeps_it_as_an_input_of_its_dependents() {
     assert_eq!(model.take_computed(), [0, 1, 2, 3]);
 
     graph.set_dependencies(3, [2]).unwrap();
-    assert_eq!(graph.get(&1, |_, _| 0), Err(DerivedError::UnknownNode));
+    assert!(!is_known(&mut graph, 1));
     assert!(graph.remove(&99).is_empty());
 }
 
@@ -186,8 +183,8 @@ fn removing_a_used_node_keeps_it_as_an_input_of_its_dependents() {
 fn removing_an_unused_node_prunes_its_undeclared_inputs() {
     let mut graph = diamond();
     assert!(graph.remove(&5).is_empty());
-    assert_eq!(graph.get(&5, |_, _| 0), Err(DerivedError::UnknownNode));
-    assert_eq!(graph.get(&4, |_, _| 0), Err(DerivedError::UnknownNode));
+    assert!(!is_known(&mut graph, 5));
+    assert!(!is_known(&mut graph, 4));
     assert!(graph.remove(&3).is_empty());
     assert_eq!(graph.get(&1, |_, _| 7), Ok(&7), "declared nodes stay");
 }
@@ -200,7 +197,7 @@ fn redeclaring_prunes_inputs_nothing_uses_any_more() {
     graph.set_dependencies(3, []).unwrap();
     graph.set_dependencies(3, []).unwrap();
     graph.set_dependencies(10, [4]).unwrap();
-    assert_eq!(graph.get(&1, |_, _| 0), Err(DerivedError::UnknownNode));
+    assert!(!is_known(&mut graph, 1));
     assert_eq!(
         graph.get(&2, |_, _| 2),
         Ok(&2),
@@ -215,10 +212,7 @@ fn redeclaring_prunes_inputs_nothing_uses_any_more() {
 
 #[test]
 fn redeclaring_keeps_the_cached_value_of_a_kept_input() {
-    let mut graph = diamond();
-    let mut model = Model::new();
-    model.get(&mut graph, 1);
-    model.take_computed();
+    let (mut graph, mut model) = warm(&[], &[1]);
     graph.set_dependencies(1, [0, 4]).unwrap();
     assert!(graph.is_clean(&0));
     model.get(&mut graph, 1);
@@ -240,7 +234,7 @@ fn rejects_a_self_dependency() {
         graph.set_dependencies(0, [1, 0]),
         Err(DerivedError::Cycle { path: vec![0, 0] })
     );
-    assert_eq!(graph.get(&0, |_, _| 0), Err(DerivedError::UnknownNode));
+    assert!(!is_known(&mut graph, 0));
 }
 
 #[test]
@@ -308,7 +302,7 @@ fn handles_deep_chains_without_recursion() {
         usize::try_from(DEPTH).unwrap() + 1
     );
     assert!(
-        matches!(graph.set_dependencies(0, [DEPTH]), Err(DerivedError::Cycle { path }) if path.len() == 100_002)
+        matches!(graph.set_dependencies(0, [DEPTH]), Err(DerivedError::Cycle { path }) if path.len() == usize::try_from(DEPTH).unwrap() + 2)
     );
 }
 
@@ -316,14 +310,11 @@ fn handles_deep_chains_without_recursion() {
 fn dag() -> impl Strategy<Value = Vec<Vec<u32>>> {
     (1..24_u32).prop_flat_map(|size| {
         (0..size)
-            .map(|node| proptest::collection::vec(0..node.max(1), 0..4))
-            .collect::<Vec<_>>()
-            .prop_map(|deps| {
-                deps.into_iter()
-                    .enumerate()
-                    .map(|(node, deps)| deps.into_iter().filter(|d| (*d as usize) < node).collect())
-                    .collect()
+            .map(|node| {
+                proptest::collection::vec(0..node.max(1), 0..4)
+                    .prop_map(move |deps| deps.into_iter().filter(|dep| *dep < node).collect())
             })
+            .collect::<Vec<_>>()
     })
 }
 
