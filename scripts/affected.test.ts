@@ -48,7 +48,7 @@ describe("scopeOf", () => {
     expect(scope("crates/geom/src/lib.rs")).toBe("SECTIONS='repo rust coverage wasm'\nCRATES='geom'");
   });
 
-  test.each(["Cargo.lock", "clippy.toml", ".rustfmt.toml", ".cargo/config.toml", "scripts/critical-crates.txt"])(
+  test.each(["Cargo.lock", "clippy.toml", ".rustfmt.toml", ".cargo/config.toml", "scripts/critical-crates.txt", "scripts/sbom.sh"])(
     "%s checks every crate",
     (file) => {
       expect(scope(file, "crates/geom/src/lib.rs")).toBe("SECTIONS='repo rust coverage wasm fuzz'\nCRATES=''");

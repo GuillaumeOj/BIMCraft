@@ -86,7 +86,7 @@ check_fuzz() {
   has_fuzz || { step "Fuzzing: no fuzz targets yet, skipped"; return; }
   step "Fuzzing: parsers survive hostile input (ENG-02)"
   require cargo-fuzz; require cargo-deny; require cargo-audit
-  # From the root, so .cargo/audit.toml applies: cargo-audit reads its config from the current directory only.
+  # From the root, where .cargo/audit.toml lives.
   cargo audit --deny warnings --file fuzz/Cargo.lock
   (
     # Inside fuzz/, rustup picks the nightly pinned in fuzz/rust-toolchain.toml.

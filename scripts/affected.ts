@@ -28,6 +28,7 @@ const RUST_WIDE = new Set([
   "rustfmt.toml",
   ".rustfmt.toml",
   "scripts/critical-crates.txt",
+  "scripts/sbom.sh",
   "scripts/wasm-crates.txt",
 ]);
 

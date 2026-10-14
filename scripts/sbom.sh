@@ -15,7 +15,5 @@ cd "$root"
 # --target all: the SBOM lists the dependencies of every platform, not only the runner's.
 # fuzz/ is a separate workspace and never shipped, so it is left out.
 cargo cyclonedx --all-features --format json --spec-version 1.5 --target all --quiet
-for bom in crates/*/*.cdx.json; do
-  mv "$bom" "$out/"
-done
+mv crates/*/*.cdx.json "$out/"
 echo "SBOM written to $out"
