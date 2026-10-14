@@ -1,0 +1,18 @@
+ISO-10303-21;
+HEADER;
+/* Written for this test; covers the syntax wall.ifc does not use. */
+FILE_DESCRIPTION((''),'2;1');
+FILE_NAME('syntax.ifc','2026-10-14T12:00:00',(''),(''),'','BIMCraft','');
+FILE_SCHEMA(('IFC4X3_ADD2'));
+ENDSEC;
+DATA;
+#1=(IFCNAMEDUNIT(*,.LENGTHUNIT.)IFCSIUNIT(.MILLI.,.METRE.));
+#2=IFCPIXELTEXTURE($,$,$,$,(),2,1,2,("0FF","3E"));
+#3=!PRIVATE_ENTITY('It''s a long
+ string wrapped on two lines',-12,+3.5E+2,(#1,(#2,$)));
+ENDSEC;
+DATA;
+/* A second data section, allowed by the second edition of Part 21. */
+#10 = IFCCARTESIANPOINT ( ( -1.5 , 2. , 0.25 ) ) ;
+ENDSEC;
+END-ISO-10303-21;
