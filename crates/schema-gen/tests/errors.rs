@@ -337,11 +337,15 @@ fn options() -> RustOptions {
 fn emitting_validates_first() {
     let mut namespace = parse_with(&[]).unwrap();
     namespace.version = 0;
-    let errors = emit_rust(&namespace, &options()).unwrap_err();
-    assert!(matches!(
-        &errors[0].kind,
-        ErrorKind::Validation(error) if error.kind == ValidationErrorKind::ZeroVersion
-    ));
+    for errors in [
+        emit_rust(&namespace, &options()).unwrap_err(),
+        emit_json_schema(&namespace, &json_options()).unwrap_err(),
+    ] {
+        assert!(matches!(
+            &errors[0].kind,
+            ErrorKind::Validation(error) if error.kind == ValidationErrorKind::ZeroVersion
+        ));
+    }
 }
 
 fn json_options() -> JsonSchemaOptions {
@@ -349,17 +353,6 @@ fn json_options() -> JsonSchemaOptions {
         id: "urn:test".into(),
         object_id: serde_json::json!({ "type": "integer" }),
     }
-}
-
-#[test]
-fn json_schema_emitting_validates_first() {
-    let mut namespace = parse_with(&[]).unwrap();
-    namespace.version = 0;
-    let errors = emit_json_schema(&namespace, &json_options()).unwrap_err();
-    assert!(matches!(
-        &errors[0].kind,
-        ErrorKind::Validation(error) if error.kind == ValidationErrorKind::ZeroVersion
-    ));
 }
 
 #[test]

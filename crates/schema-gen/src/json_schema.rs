@@ -14,6 +14,7 @@ pub const DRAFT: &str = "https://json-schema.org/draft/2020-12/schema";
 
 /// The definition object identifiers refer to; no schema record may take its name.
 const OBJECT_ID: &str = "ObjectId";
+const OBJECT_ID_REF: &str = "#/$defs/ObjectId";
 
 /// Choices the emitted schema depends on.
 #[derive(Clone, Debug, PartialEq)]
@@ -33,24 +34,18 @@ pub struct JsonSchemaOptions {
 ///
 /// # Errors
 ///
-/// Returns validation errors, and names that would make two definitions or two properties
-/// collide.
+/// Returns validation errors, and record names that would make two definitions collide.
 pub fn emit_json_schema(
     namespace: &Namespace,
     options: &JsonSchemaOptions,
 ) -> Result<String, Vec<Error>> {
-    schema::validate(namespace).map_err(|errors| {
-        errors
-            .into_iter()
-            .map(|error| Error::new(ErrorKind::Validation(Box::new(error))))
-            .collect::<Vec<_>>()
-    })?;
-    let structs = layout::plan(namespace, |name| format!("`{name}`"));
+    let structs = layout::plan(namespace, |name| format!("`{name}`"))?;
     check_names(&structs)?;
     let mut defs = Map::new();
     defs.insert(OBJECT_ID.to_owned(), options.object_id.clone());
-    for item in &structs {
-        defs.insert(item.name.clone(), definition(item));
+    for item in structs {
+        let definition = definition(&item);
+        defs.insert(item.name, definition);
     }
     let document = json!({
         "$schema": DRAFT,
@@ -74,9 +69,13 @@ fn definition(item: &layout::Struct) -> Json {
     let mut required = Vec::new();
     for field in &item.fields {
         let mut property = value_schema(&field.ty);
-        insert(&mut property, "description", json!(field.doc.join("\n")));
+        if matches!(field.kind, FieldKind::Optional) {
+            // The Rust field is an `Option`, which serde also reads `null` into.
+            property = json!({ "anyOf": [property, { "type": "null" }] });
+        }
+        property["description"] = json!(field.doc.join("\n"));
         if let FieldKind::Default(value) = &field.kind {
-            insert(&mut property, "default", literal(value));
+            property["default"] = literal(value);
         }
         if matches!(field.kind, FieldKind::Required) {
             required.push(json!(field.name));
@@ -90,18 +89,12 @@ fn definition(item: &layout::Struct) -> Json {
         "additionalProperties": false,
     });
     if !required.is_empty() {
-        insert(&mut out, "required", Json::Array(required));
+        out["required"] = Json::Array(required);
     }
-    if item.deprecated.is_some() {
-        insert(&mut out, "deprecated", json!(true));
+    if item.deprecated {
+        out["deprecated"] = json!(true);
     }
     out
-}
-
-fn insert(schema: &mut Json, key: &str, value: Json) {
-    if let Json::Object(map) = schema {
-        map.insert(key.to_owned(), value);
-    }
 }
 
 fn value_schema(ty: &FieldType) -> Json {
@@ -115,7 +108,11 @@ fn value_schema(ty: &FieldType) -> Json {
 fn value_type_schema(value: &ValueType) -> Json {
     match value {
         ValueType::Bool => json!({ "type": "boolean" }),
-        ValueType::Integer => json!({ "type": "integer" }),
+        // The bounds of the `i64` the Rust types read; serde_json also rejects `2.0`, which
+        // JSON Schema counts as an integer, but no keyword can express that.
+        ValueType::Integer => {
+            json!({ "type": "integer", "minimum": i64::MIN, "maximum": i64::MAX })
+        }
         ValueType::Real | ValueType::Quantity(_) => json!({ "type": "number" }),
         ValueType::Text => json!({ "type": "string" }),
         ValueType::Ref(_) => object_id(),
@@ -126,7 +123,7 @@ fn value_type_schema(value: &ValueType) -> Json {
 }
 
 fn object_id() -> Json {
-    json!({ "$ref": format!("#/$defs/{OBJECT_ID}") })
+    json!({ "$ref": OBJECT_ID_REF })
 }
 
 /// The JSON of a validated default value.
@@ -141,34 +138,22 @@ fn literal(value: &Value) -> Json {
     }
 }
 
-/// Definition names must be distinct and leave [`OBJECT_ID`] free; property names distinct.
+/// Definition names must be distinct and leave [`OBJECT_ID`] free. Validation already keeps
+/// field names distinct, and entities apart from types, but not property sets from either.
 fn check_names(structs: &[layout::Struct]) -> Result<(), Vec<Error>> {
-    let mut errors = Vec::new();
     let mut names = BTreeSet::from([OBJECT_ID]);
-    for item in structs {
-        if !names.insert(item.name.as_str()) {
-            errors.push(format!(
-                "two JSON Schema definitions are named `{}`",
-                item.name
-            ));
-        }
-        let mut field_names = BTreeSet::new();
-        for field in &item.fields {
-            if !field_names.insert(field.name.as_str()) {
-                errors.push(format!(
-                    "`{}` appears twice in the JSON Schema of `{}`",
-                    field.name, item.name
-                ));
-            }
-        }
-    }
+    let errors: Vec<Error> = structs
+        .iter()
+        .filter(|item| !names.insert(item.name.as_str()))
+        .map(|item| {
+            let message = format!("two JSON Schema definitions are named `{}`", item.name);
+            Error::new(ErrorKind::JsonSchema(message))
+        })
+        .collect();
     if errors.is_empty() {
         Ok(())
     } else {
-        Err(errors
-            .into_iter()
-            .map(|message| Error::new(ErrorKind::JsonSchema(message)))
-            .collect())
+        Err(errors)
     }
 }
 
@@ -181,7 +166,7 @@ mod tests {
             name: name.into(),
             property_set: false,
             doc: Vec::new(),
-            deprecated: None,
+            deprecated: false,
             fields: fields
                 .iter()
                 .map(|name| layout::Field {
@@ -222,7 +207,7 @@ mod tests {
     fn rejects_colliding_names() {
         let structs = [
             record(OBJECT_ID, &[]),
-            record("Wall", &["a", "b", "a"]),
+            record("Wall", &["a"]),
             record("Wall", &[]),
         ];
         let messages: Vec<String> = check_names(&structs)
@@ -234,7 +219,6 @@ mod tests {
             messages,
             [
                 "two JSON Schema definitions are named `ObjectId`",
-                "`a` appears twice in the JSON Schema of `Wall`",
                 "two JSON Schema definitions are named `Wall`",
             ]
         );

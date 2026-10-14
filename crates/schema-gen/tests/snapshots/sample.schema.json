@@ -90,12 +90,26 @@
       "description": "The `Pset_WallCommon` property set.\n\nApplies to `Wall`.",
       "properties": {
         "FireRating": {
-          "description": "Fire resistance class as written in the project's regulation.",
-          "type": "string"
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Fire resistance class as written in the project's regulation."
         },
         "IsExternal": {
-          "description": "True when the wall separates the inside from the outside.",
-          "type": "boolean"
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "True when the wall separates the inside from the outside."
         },
         "LoadBearing": {
           "default": false,
@@ -103,8 +117,15 @@
           "type": "boolean"
         },
         "UValue": {
-          "description": "The `UValue` value.\n\nIn W/(m²·K).",
-          "type": "number"
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The `UValue` value.\n\nIn W/(m²·K)."
         }
       },
       "type": "object"
@@ -128,6 +149,8 @@
         "index": {
           "default": 1000000,
           "description": "The `index` value.",
+          "maximum": 9223372036854775807,
+          "minimum": -9223372036854775808,
           "type": "integer"
         },
         "name": {
@@ -169,12 +192,26 @@
           "type": "number"
         },
         "height": {
-          "description": "Overrides the type's value for this object when set.\n\nThe `height` value.\n\nIn m.",
-          "type": "number"
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Overrides the type's value for this object when set.\n\nThe `height` value.\n\nIn m."
         },
         "mark": {
-          "description": "Short label shown on drawings.",
-          "type": "string"
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Short label shown on drawings."
         }
       },
       "type": "object"

@@ -37,10 +37,7 @@ schema/
     migrations/0002.toml             # from version 1 to version 2
     snapshots/0001.json              # canonical model of each released version,
     snapshots/0002.json              #   generated and committed
-    api.schema.json                  # JSON Schema of the API (API-02), generated and committed
 ```
-
-`cargo test -p schema-gen` fails when a committed `api.schema.json` is out of date; `UPDATE_SNAPSHOTS=1 cargo test -p schema-gen` regenerates it.
 
 A plugin's source tree has the same layout, with its own namespace.
 

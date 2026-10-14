@@ -7,6 +7,8 @@ use schema::{
     ValueType,
 };
 
+use crate::{Error, ErrorKind};
+
 /// A record of serialized data: an object, its type or a property set.
 pub struct Struct {
     /// The schema name: `Wall`, `WallType`, `Pset_WallCommon`.
@@ -15,8 +17,8 @@ pub struct Struct {
     pub property_set: bool,
     /// Description, one entry per line.
     pub doc: Vec<String>,
-    /// The schema version from which the record is discouraged.
-    pub deprecated: Option<u32>,
+    /// Whether the record is discouraged; its doc says from which schema version.
+    pub deprecated: bool,
     /// Fields, in declaration order.
     pub fields: Vec<Field>,
 }
@@ -55,8 +57,18 @@ pub enum FieldKind {
 
 /// The records of a namespace: each entity followed by its type, then the property sets.
 ///
-/// `name_ref` writes a reference to another record in a description, in the target's markup.
-pub fn plan(namespace: &Namespace, name_ref: fn(&str) -> String) -> Vec<Struct> {
+/// The namespace is validated first, so emitters only see valid input. `name_ref` writes a
+/// reference to another record in a description, in the target's markup.
+pub fn plan(
+    namespace: &Namespace,
+    name_ref: fn(&str) -> String,
+) -> Result<Vec<Struct>, Vec<Error>> {
+    schema::validate(namespace).map_err(|errors| {
+        errors
+            .into_iter()
+            .map(|error| Error::new(ErrorKind::Validation(Box::new(error))))
+            .collect::<Vec<_>>()
+    })?;
     let mut structs = Vec::new();
     for entity in namespace.entities.values() {
         structs.push(instance_struct(entity));
@@ -67,7 +79,7 @@ pub fn plan(namespace: &Namespace, name_ref: fn(&str) -> String) -> Vec<Struct> 
     for property_set in namespace.property_sets.values() {
         structs.push(property_set_struct(property_set, name_ref));
     }
-    structs
+    Ok(structs)
 }
 
 fn instance_struct(entity: &Entity) -> Struct {
@@ -88,7 +100,7 @@ fn instance_struct(entity: &Entity) -> Struct {
         name: entity.name.clone(),
         property_set: false,
         doc,
-        deprecated: entity.deprecated,
+        deprecated: entity.deprecated.is_some(),
         fields,
     }
 }
@@ -111,7 +123,7 @@ fn type_struct(entity: &Entity, name_ref: fn(&str) -> String) -> Option<Struct> 
         name: type_def.name.clone(),
         property_set: false,
         doc,
-        deprecated: entity.deprecated,
+        deprecated: entity.deprecated.is_some(),
         fields,
     })
 }
@@ -125,7 +137,7 @@ fn property_set_struct(property_set: &PropertySet, name_ref: fn(&str) -> String)
     Struct {
         name: property_set.name.clone(),
         property_set: true,
-        deprecated: None,
+        deprecated: false,
         doc: vec![
             format!("The `{}` property set.", property_set.name),
             String::new(),

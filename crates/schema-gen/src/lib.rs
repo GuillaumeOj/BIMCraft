@@ -62,13 +62,7 @@ pub fn generate_json_schema(
     dir: &Path,
     options: &JsonSchemaOptions,
 ) -> Result<Generated, Vec<Error>> {
-    let sources = load_dir(dir).map_err(|error| vec![error])?;
-    let namespace = parse_sources(&sources)?;
-    let code = emit_json_schema(&namespace, options)?;
-    Ok(Generated {
-        code,
-        inputs: vec![dir.to_owned()],
-    })
+    generate(dir, options, emit_json_schema)
 }
 
 /// Reads the namespace in `dir` and generates its Rust types.
@@ -78,9 +72,17 @@ pub fn generate_json_schema(
 /// Returns every [`Error`] found: unreadable files, invalid TOML, definitions that do not
 /// follow the format, and validation failures.
 pub fn generate_rust(dir: &Path, options: &RustOptions) -> Result<Generated, Vec<Error>> {
+    generate(dir, options, emit_rust)
+}
+
+fn generate<O>(
+    dir: &Path,
+    options: &O,
+    emit: fn(&schema::Namespace, &O) -> Result<String, Vec<Error>>,
+) -> Result<Generated, Vec<Error>> {
     let sources = load_dir(dir).map_err(|error| vec![error])?;
     let namespace = parse_sources(&sources)?;
-    let code = emit_rust(&namespace, options)?;
+    let code = emit(&namespace, options)?;
     Ok(Generated {
         code,
         inputs: vec![dir.to_owned()],
