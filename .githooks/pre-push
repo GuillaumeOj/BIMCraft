@@ -1,5 +1,6 @@
 #!/bin/sh
-# Refuses to push unless HEAD was stamped as reviewed (AGENTS.md §1).
+# Refuses to push unless HEAD was stamped as reviewed (AGENTS.md §1), then runs only the checks
+# the branch's changes can break (scripts/affected.ts). BIMCRAFT_FULL_CHECKS=1 runs them all.
 set -eu
 
 root=$(git rev-parse --show-toplevel)
@@ -20,4 +21,11 @@ MSG
   exit 1
 fi
 
-"$root/scripts/check-all.sh"
+# Git passes the remote name as $1; the branch is compared with that remote's main. If the scope
+# cannot be computed, everything runs.
+if [ "${BIMCRAFT_FULL_CHECKS:-0}" != 1 ] && scope=$(bun "$root/scripts/affected.ts" "$root" "$1/main"); then
+  eval "$scope"
+  echo "pre-push: running $SECTIONS${CRATES:+ on $CRATES} (BIMCRAFT_FULL_CHECKS=1 runs everything)"
+  CHECK_CRATES="$CRATES" exec "$root/scripts/check-all.sh" $SECTIONS
+fi
+exec "$root/scripts/check-all.sh"

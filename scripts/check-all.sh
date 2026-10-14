@@ -2,6 +2,8 @@
 # Runs the project checks (AGENTS.md §9). CI calls the same sections, so local and remote never drift.
 # Usage: scripts/check-all.sh [section...]   sections: repo rust coverage wasm fuzz ui e2e docs (default: all)
 # A section is skipped only when the code it checks does not exist yet.
+# CHECK_CRATES="a b" limits the Rust sections to those crates (set by .githooks/pre-push from
+# scripts/affected.ts); unset, they cover the whole workspace, as in CI.
 set -eu
 
 root=$(git rev-parse --show-toplevel)
@@ -16,6 +18,8 @@ require() {
 has_rust() { ls crates/*/Cargo.toml >/dev/null 2>&1; }
 has_ui() { [ -f ui/package.json ]; }
 has_fuzz() { [ -f fuzz/Cargo.toml ]; }
+in_scope() { [ -z "${CHECK_CRATES:-}" ] || case " $CHECK_CRATES " in *" $1 "*) true ;; *) false ;; esac; }
+packages() { if [ -n "${CHECK_CRATES:-}" ]; then printf -- '--package %s ' $CHECK_CRATES; else echo --workspace; fi; }
 existing_crates() { while read -r crate; do [ -f "crates/$crate/Cargo.toml" ] && echo "$crate"; done < "$1"; }
 
 check_repo() {
@@ -35,17 +39,20 @@ check_rust() {
   step "Rust: format, lint, tests, dependency audit"
   require cargo-deny
   cargo fmt --all --check
-  cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
-  cargo test --workspace --all-features --locked
+  cargo clippy $(packages) --all-targets --all-features --locked -- -D warnings
+  cargo test $(packages) --all-features --locked
   cargo deny --locked check
 }
 
 check_coverage() {
   has_rust || { step "Rust coverage: no crates yet, skipped"; return; }
-  step "Rust coverage: 90 % workspace, 98 % critical crates"
+  step "Rust coverage: 90 % workspace (full runs only), 98 % critical crates in scope"
   require cargo-llvm-cov
-  cargo llvm-cov --workspace --all-features --locked --fail-under-lines 90 --lcov --output-path lcov.info
+  # The 90 % gate is a workspace total, so a run scoped by CHECK_CRATES cannot check it.
+  [ -n "${CHECK_CRATES:-}" ] ||
+    cargo llvm-cov --workspace --all-features --locked --fail-under-lines 90 --lcov --output-path lcov.info
   for crate in $(existing_crates scripts/critical-crates.txt); do
+    in_scope "$crate" || continue
     cargo llvm-cov --package "$crate" --all-features --locked --fail-under-lines 98
   done
 }
@@ -54,6 +61,7 @@ check_wasm() {
   has_rust || { step "wasm32: no crates yet, skipped"; return; }
   step "wasm32: core crates build for the browser (ARCH-01)"
   for crate in $(existing_crates scripts/wasm-crates.txt); do
+    in_scope "$crate" || continue
     cargo build --package "$crate" --target wasm32-unknown-unknown --all-features --locked
   done
 }

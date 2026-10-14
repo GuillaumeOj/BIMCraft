@@ -21,6 +21,21 @@ Coding agents produce plausible code fast; the cost of a bad change on `main` is
 - The `pre-push` hook refuses any `HEAD` not stamped by `scripts/mark-reviewed.sh`. The stamp is the commit SHA, stored in `.git/bimcraft-review-stamp` (never committed), so any new commit invalidates it.
 - The stamp is written only after the user has run a code review (correctness) and a simplification pass (reuse, clarity). In Claude Code these are `/code-review` and `/simplify`; the `ship` skill walks through the steps.
 
+## Pre-push checks follow the changes
+
+Running every check before each push grows with the workspace: every crate is linted and tested, each critical crate is measured for coverage again, the parsers are fuzzed. So after the review stamp, the `pre-push` hook asks `scripts/affected.ts` which checks the branch can break, comparing it with the remote's `main` since they diverged:
+
+| Changed | Checks run |
+| --- | --- |
+| a crate in `crates/` | Rust lint, tests, critical-crate coverage and wasm build for that crate and every crate depending on it; fuzzing if the fuzz targets link one of them |
+| `Cargo.toml`, `Cargo.lock`, `rust-toolchain.toml`, `clippy.toml`, `deny.toml`, `rustfmt.toml`, `.cargo/`, the critical or wasm crate lists | every Rust check on every crate |
+| `fuzz/` | fuzzing |
+| `ui/` | UI and end-to-end tests |
+| `docs/user/` | user guide build |
+| `scripts/check-all.sh`, or a path matching no rule | everything |
+
+The repository checks (spelling, TOML, secrets, pinned versions, layering, tooling tests) always run: they take seconds and cover every file. A scoped run skips the workspace-wide 90 % coverage gate, which only a full run can measure. If the scope cannot be computed (no remote `main`, unreadable manifest), the hook runs everything; `BIMCRAFT_FULL_CHECKS=1 git push` forces it. CI always runs every check, so a missed dependency costs a red CI run, never a bad merge.
+
 ## Exact versions
 
 Ranges let a build change without a commit, which breaks reproducibility and opens the door to supply-chain attacks (a compromised patch release is pulled automatically). Exact versions plus committed lockfiles mean every change of dependency is a reviewed diff. The 14-day minimum release age gives the ecosystem time to detect malicious releases. Actions are pinned by commit SHA because tags can be moved. Dependabot keeps pins current.

@@ -121,7 +121,7 @@ export function loadCrates(root: string): { crates: Crate[]; issues: Issue[] } {
   return { crates, issues };
 }
 
-function workspaceDependencies(root: string): Table {
+export function workspaceDependencies(root: string): Table {
   const manifest = Bun.TOML.parse(readFileSync(join(root, "Cargo.toml"), "utf8")) as Table;
   return isTable(manifest.workspace) && isTable(manifest.workspace.dependencies)
     ? manifest.workspace.dependencies
