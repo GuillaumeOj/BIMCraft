@@ -16,9 +16,12 @@ robust = { workspace = true }
 thiserror = { workspace = true }
 
 [dev-dependencies]
-criterion = { workspace = true }
 libm = { workspace = true }
 num-rational = { workspace = true }
+
+# Native only: neither builds for wasm32-wasip1, where tests/golden.rs runs (ENG-04).
+[target.'cfg(not(target_family = "wasm"))'.dev-dependencies]
+criterion = { workspace = true }
 proptest = { workspace = true }
 
 [[bench]]

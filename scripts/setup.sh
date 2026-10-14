@@ -33,6 +33,7 @@ check typos   "cargo install --locked typos-cli@$TYPOS_VERSION"
 check gitleaks "https://github.com/gitleaks/gitleaks/releases/tag/v$GITLEAKS_VERSION"
 check actionlint "https://github.com/rhysd/actionlint/releases/tag/v$ACTIONLINT_VERSION"
 check mdbook  "cargo install --locked mdbook@$MDBOOK_VERSION"
+check wasmtime "cargo install --locked wasmtime-cli@$WASMTIME_VERSION"
 
 bun_version=$(bun --version 2>/dev/null || true)
 if [ -n "$bun_version" ] && [ "$bun_version" != "$BUN_VERSION" ]; then

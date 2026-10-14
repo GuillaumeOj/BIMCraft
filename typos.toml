@@ -1,5 +1,10 @@
 [files]
-extend-exclude = ["*.lock", "target/", "ui/node_modules/"]
+extend-exclude = [
+  "*.lock",
+  "target/",
+  "ui/node_modules/",
+  "crates/geom/tests/golden.txt",
+]
 
 [default.extend-words]
 # Domain abbreviations used in the specification.
