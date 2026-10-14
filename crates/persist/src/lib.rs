@@ -12,7 +12,7 @@
 pub use rusqlite::Connection;
 use rusqlite::{OptionalExtension, Transaction};
 
-/// Schema version written by this build. Files carrying an older version are migrated on open.
+/// Schema version written by this build; [`open_project`] refuses files with a higher one.
 pub const SCHEMA_VERSION: u32 = 1;
 
 /// Marks a database as a `BIMCraft` project in the file header ("BIMC" in ASCII), so other
@@ -99,20 +99,29 @@ pub fn property(conn: &Connection, key: &str) -> Result<Option<String>, PersistE
 }
 
 /// Reads the schema version, refusing databases that are not ours.
+///
+/// Version 0 means "no project yet": accepted only for an empty database, so a foreign file that
+/// happens to carry our `application_id` is never written to.
 fn stored_version(tx: &Transaction<'_>) -> Result<u32, PersistError> {
-    let application_id: i32 = tx.pragma_query_value(None, "application_id", |row| row.get(0))?;
-    let user_version: i32 = tx.pragma_query_value(None, "user_version", |row| row.get(0))?;
-    if application_id == APPLICATION_ID {
-        return u32::try_from(user_version).map_err(|_| PersistError::NotAProject);
+    let (application_id, user_version): (i32, i32) = tx.query_row(
+        "SELECT application_id, user_version FROM pragma_application_id, pragma_user_version",
+        [],
+        |row| Ok((row.get(0)?, row.get(1)?)),
+    )?;
+    match (application_id, user_version) {
+        (APPLICATION_ID, version @ 1..) => Ok(version.unsigned_abs()),
+        (0 | APPLICATION_ID, 0) if is_empty(tx)? => Ok(0),
+        _ => Err(PersistError::NotAProject),
     }
-    let has_tables: bool =
-        tx.query_row("SELECT EXISTS (SELECT 1 FROM sqlite_schema)", [], |row| {
-            row.get(0)
-        })?;
-    if application_id != 0 || user_version != 0 || has_tables {
-        return Err(PersistError::NotAProject);
-    }
-    Ok(0)
+}
+
+fn is_empty(tx: &Transaction<'_>) -> Result<bool, PersistError> {
+    let empty = tx.query_row(
+        "SELECT NOT EXISTS (SELECT 1 FROM sqlite_schema)",
+        [],
+        |row| row.get(0),
+    )?;
+    Ok(empty)
 }
 
 /// Creates the current schema in an empty database.
@@ -181,6 +190,19 @@ mod tests {
                 SCHEMA_VERSION + 1
             )
         );
+        let version: u32 = conn
+            .pragma_query_value(None, "user_version", |r| r.get(0))
+            .unwrap();
+        assert_eq!(version, SCHEMA_VERSION + 1);
+        assert_eq!(property(&conn, "name").unwrap(), None);
+    }
+
+    #[test]
+    fn an_empty_database_with_our_marker_becomes_a_project() {
+        let mut conn = Connection::open_in_memory().unwrap();
+        conn.pragma_update(None, "application_id", APPLICATION_ID)
+            .unwrap();
+        assert_eq!(open_project(&mut conn).unwrap(), SCHEMA_VERSION);
     }
 
     #[test]
@@ -195,14 +217,17 @@ mod tests {
 
     #[test]
     fn databases_of_other_applications_are_refused_and_left_alone() {
-        let cases: [&str; 3] = [
-            "PRAGMA application_id = 7;",
-            "PRAGMA user_version = 3;",
-            "CREATE TABLE invoices (id INTEGER);",
+        let cases = [
+            "PRAGMA application_id = 7;".to_owned(),
+            "PRAGMA user_version = 3;".to_owned(),
+            "CREATE TABLE invoices (id INTEGER);".to_owned(),
+            format!(
+                "PRAGMA application_id = {APPLICATION_ID}; CREATE TABLE invoices (id INTEGER);"
+            ),
         ];
         for setup in cases {
             let mut conn = Connection::open_in_memory().unwrap();
-            conn.execute_batch(setup).unwrap();
+            conn.execute_batch(&setup).unwrap();
             let err = open_project(&mut conn).unwrap_err();
             assert!(matches!(err, PersistError::NotAProject), "{setup}");
             assert_eq!(err.to_string(), "the file is not a BIMCraft project");

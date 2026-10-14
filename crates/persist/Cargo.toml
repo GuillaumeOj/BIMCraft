@@ -1,7 +1,7 @@
 [package]
 name = "persist"
 version = "0.0.0"
-description = "Project files as SQLite databases: schema version, migrations, atomic saves."
+description = "Project files as SQLite databases: schema version and transactional setup."
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true

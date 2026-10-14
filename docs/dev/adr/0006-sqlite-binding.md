@@ -36,7 +36,7 @@ BIMCraft code needs no `unsafe`: `rusqlite` wraps the C interface in a safe API,
 
 ## Consequences
 
-- The wasm32 build compiles C, so it needs a clang with the WebAssembly backend. `scripts/wasm-cc.sh` finds one (`clang`, then Homebrew LLVM) and `scripts/check-all.sh` uses it; `scripts/setup.sh` reports when none is installed. Desktop builds need the usual platform C compiler.
+- The wasm32 build compiles C, so it needs LLVM: a clang with the WebAssembly backend and its `llvm-ar`. Without `llvm-ar` the build falls back to the system `ar`, which silently drops wasm objects (Apple) or writes no symbol index (GNU): the build passes, but the archive cannot be linked. `scripts/wasm-toolchain.sh` finds both (`clang`, then Homebrew LLVM) and `scripts/check-all.sh` uses them; `scripts/setup.sh` reports when they are missing. Desktop builds need the usual platform C compiler.
 - The two targets bundle slightly different SQLite releases (3.53.2 on desktop, 3.53.0 in the browser for the pinned versions). The file format is stable across SQLite 3 releases, but upgrades of `rusqlite` and `sqlite-wasm-rs` are reviewed together.
 - The browser build of SQLite is single-threaded. In the browser, the core runs project storage inside a dedicated Web Worker; that worker design belongs to the browser host.
 - A malformed or hostile project file is handled by SQLite's own checks; `persist` refuses databases that do not carry BIMCraft's `application_id`, and refuses files from newer versions instead of modifying them.
