@@ -101,13 +101,11 @@ jobs:
         with:
           tool: cargo-deny@${{ env.CARGO_DENY_VERSION }}
       - run: scripts/check-all.sh rust
-      # The wasm32 job builds on Linux only; contributors build wasm32 on every OS, so the C
-      # toolchain lookup stays tested on all three.
       - name: Find the wasm32 C toolchain
         run: scripts/wasm-toolchain.sh
 
-  # Linux is enough to build: the wasm32 output does not depend on the host, and the rust job
-  # checks the host-dependent C toolchain lookup on every OS.
+  # Linux is enough to build: the wasm32 output does not depend on the host. Contributors build
+  # it on every OS, so the rust job still checks the host-dependent C toolchain lookup.
   wasm:
     name: wasm32
     needs: detect
@@ -153,7 +151,6 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      # fuzz/rust-toolchain.toml pins a dated nightly.
       - uses: ./.github/actions/setup-rust
         with:
           directory: fuzz
