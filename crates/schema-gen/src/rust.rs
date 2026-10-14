@@ -7,11 +7,9 @@
 use std::collections::BTreeSet;
 use std::fmt::Write as _;
 
-use schema::{
-    Attribute, Cardinality, Entity, Namespace, Placement, Presence, PropertySet, Role, Value,
-    ValueType,
-};
+use schema::{Cardinality, Namespace, Value, ValueType};
 
+use crate::layout::{self, FieldType};
 use crate::{Error, ErrorKind};
 
 /// Choices the emitted code depends on.
@@ -95,172 +93,61 @@ enum FieldKind {
 }
 
 fn plan(namespace: &Namespace, options: &RustOptions) -> Vec<Struct> {
-    let mut structs = Vec::new();
-    for entity in namespace.entities.values() {
-        structs.push(instance_struct(entity, options));
-        if let Some(type_struct) = type_struct(entity, options) {
-            structs.push(type_struct);
-        }
-    }
-    for property_set in namespace.property_sets.values() {
-        structs.push(property_set_struct(property_set, options));
-    }
-    structs
+    layout::plan(namespace, |name| format!("[`{name}`]"))
+        .into_iter()
+        .map(|item| rust_struct(item, options))
+        .collect()
 }
 
-fn instance_struct(entity: &Entity, options: &RustOptions) -> Struct {
-    let mut doc = doc_lines(entity.doc.as_deref(), || format!("A `{}`.", entity.name));
-    if let Some(version) = entity.deprecated {
-        doc.extend([String::new(), deprecation(version)]);
-    }
-    let mut fields = Vec::new();
-    for attribute in &entity.attributes {
-        match attribute.placement {
-            Placement::Instance => fields.push(attribute_field(attribute, options)),
-            Placement::TypeOverridable => fields.push(override_field(attribute, options)),
-            Placement::Type => {}
-        }
-    }
-    fields.extend(entity.roles.iter().map(|role| role_field(role, options)));
+fn rust_struct(item: layout::Struct, options: &RustOptions) -> Struct {
+    let property_set = item.property_set;
     Struct {
-        name: entity.name.clone(),
-        doc,
-        fields,
-    }
-}
-
-fn type_struct(entity: &Entity, options: &RustOptions) -> Option<Struct> {
-    let type_def = entity.type_def.as_ref()?;
-    let mut doc = doc_lines(type_def.doc.as_deref(), || {
-        format!("The type of [`{}`] objects.", entity.name)
-    });
-    if let Some(version) = entity.deprecated {
-        doc.extend([String::new(), deprecation(version)]);
-    }
-    let fields = entity
-        .attributes
-        .iter()
-        .filter(|attribute| attribute.placement != Placement::Instance)
-        .map(|attribute| attribute_field(attribute, options))
-        .collect();
-    Some(Struct {
-        name: type_def.name.clone(),
-        doc,
-        fields,
-    })
-}
-
-fn property_set_struct(property_set: &PropertySet, options: &RustOptions) -> Struct {
-    let applies_to: Vec<String> = property_set
-        .applies_to
-        .iter()
-        .map(|name| format!("[`{name}`]"))
-        .collect();
-    Struct {
-        name: pascal_case(&property_set.name),
-        doc: vec![
-            format!("The `{}` property set.", property_set.name),
-            String::new(),
-            format!("Applies to {}.", applies_to.join(", ")),
-        ],
-        fields: property_set
-            .properties
-            .iter()
-            .map(|property| Field {
-                name: snake_case(&property.name),
-                ..attribute_field(property, options)
+        name: if property_set {
+            pascal_case(&item.name)
+        } else {
+            item.name
+        },
+        doc: rustdoc_lines(item.doc),
+        fields: item
+            .fields
+            .into_iter()
+            .map(|field| Field {
+                name: if property_set {
+                    snake_case(&field.name)
+                } else {
+                    field.name.clone()
+                },
+                doc: rustdoc_lines(field.doc),
+                ty: field_type(&field.ty, options),
+                kind: match field.kind {
+                    layout::FieldKind::Required => FieldKind::Required,
+                    layout::FieldKind::Default(value) => FieldKind::Default(literal(&value)),
+                    layout::FieldKind::Optional => FieldKind::Optional,
+                    layout::FieldKind::OptionalList => FieldKind::OptionalList,
+                },
+                schema_name: field.name,
             })
             .collect(),
     }
 }
 
-fn attribute_field(attribute: &Attribute, options: &RustOptions) -> Field {
-    let kind = match &attribute.presence {
-        Presence::Required => FieldKind::Required,
-        Presence::Default(value) => FieldKind::Default(literal(value)),
-        Presence::Optional if matches!(attribute.value, ValueType::List(_)) => {
-            FieldKind::OptionalList
-        }
-        Presence::Optional => FieldKind::Optional,
-    };
-    Field {
-        schema_name: attribute.name.clone(),
-        name: attribute.name.clone(),
-        doc: attribute_doc(attribute),
-        ty: rust_type(&attribute.value, options),
-        kind,
+fn field_type(ty: &FieldType, options: &RustOptions) -> String {
+    match ty {
+        FieldType::Value(value) => rust_type(value, options),
+        FieldType::Role(Cardinality::One) => options.id_type.clone(),
+        FieldType::Role(Cardinality::Many) => format!("Vec<{}>", options.id_type),
     }
 }
 
-/// The instance-side field of a `type_overridable` attribute: absent means "use the type's".
-fn override_field(attribute: &Attribute, options: &RustOptions) -> Field {
-    let mut doc = vec!["Overrides the type's value for this object when set.".to_owned()];
-    doc.push(String::new());
-    doc.extend(attribute_doc(attribute));
-    Field {
-        schema_name: attribute.name.clone(),
-        name: attribute.name.clone(),
-        doc,
-        ty: rust_type(&attribute.value, options),
-        kind: FieldKind::Optional,
-    }
-}
-
-fn role_field(role: &Role, options: &RustOptions) -> Field {
-    let (ty, doc) = match role.cardinality {
-        Cardinality::One => (
-            options.id_type.clone(),
-            format!("The object playing the `{}` role.", role.name),
-        ),
-        Cardinality::Many => (
-            format!("Vec<{}>", options.id_type),
-            format!("The objects playing the `{}` role.", role.name),
-        ),
-    };
-    Field {
-        schema_name: role.name.clone(),
-        name: role.name.clone(),
-        doc: vec![doc],
-        ty,
-        kind: FieldKind::Required,
-    }
-}
-
-fn attribute_doc(attribute: &Attribute) -> Vec<String> {
-    let mut doc = doc_lines(attribute.doc.as_deref(), || {
-        format!("The `{}` value.", attribute.name)
-    });
-    if let Some(kind) = quantity_of(&attribute.value) {
-        doc.extend([String::new(), format!("In {}.", kind.si_unit())]);
-    }
-    doc
-}
-
-fn quantity_of(value: &ValueType) -> Option<schema::QuantityKind> {
-    match value {
-        ValueType::Quantity(kind) => Some(*kind),
-        ValueType::List(inner) => quantity_of(inner),
-        _ => None,
-    }
-}
-
-fn deprecation(version: u32) -> String {
-    format!("Deprecated since schema version {version}.")
-}
-
-/// Schema docs become rustdoc, where code blocks are compiled as doctests. Lines lose their
-/// indentation, so no indented code block can form, and every fence opens as `text`: rustdoc
-/// compiles untagged fences and many tags (`no_run`, `ignore`…) as Rust.
-fn doc_lines(doc: Option<&str>, fallback: impl FnOnce() -> String) -> Vec<String> {
-    let Some(doc) = doc.map(str::trim).filter(|doc| !doc.is_empty()) else {
-        return vec![fallback()];
-    };
+/// Schema docs become rustdoc, where code blocks are compiled as doctests. The layout already
+/// trimmed the lines, so no indented code block can form; every fence opens as `text`, because
+/// rustdoc compiles untagged fences and many tags (`no_run`, `ignore`…) as Rust.
+fn rustdoc_lines(doc: Vec<String>) -> Vec<String> {
     let mut in_fence = false;
-    doc.lines()
+    doc.into_iter()
         .map(|line| {
-            let line = line.trim();
             if !line.starts_with("```") {
-                return line.to_owned();
+                return line;
             }
             in_fence = !in_fence;
             if in_fence { "```text" } else { "```" }.to_owned()
@@ -533,7 +420,7 @@ mod tests {
     fn keeps_schema_docs_out_of_doctests() {
         let doc = "Example:\n\n```\nlet x = 1;\n```\n\n    indented();\n\n```toml\na = 1\n```";
         assert_eq!(
-            doc_lines(Some(doc), String::new),
+            rustdoc_lines(doc.lines().map(|line| line.trim().to_owned()).collect()),
             [
                 "Example:",
                 "",
@@ -548,7 +435,6 @@ mod tests {
                 "```",
             ]
         );
-        assert_eq!(doc_lines(Some("  "), || "fallback".into()), ["fallback"]);
     }
 
     #[test]

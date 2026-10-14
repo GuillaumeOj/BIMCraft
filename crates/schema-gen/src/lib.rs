@@ -26,6 +26,7 @@
 
 mod definition;
 mod error;
+mod layout;
 mod load;
 mod parse;
 mod rust;
