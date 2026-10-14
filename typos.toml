@@ -4,9 +4,12 @@ extend-exclude = [
   "target/",
   "ui/node_modules/",
   "crates/geom/tests/golden.txt",
+  # Vendored unchanged from buildingSMART.
+  "crates/interop-ifc/schema/*.exp",
 ]
 
 [default.extend-words]
 # Domain abbreviations used in the specification.
 LOD = "LOD" # level of detail
 THM = "THM" # thermal requirement family
+ND = "ND" # NoDerivatives, in the CC BY-ND licence name
