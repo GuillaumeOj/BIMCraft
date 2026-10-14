@@ -26,7 +26,7 @@ updates:
       interval: weekly
     cooldown:
       default-days: 14
-    versioning-strategy: increase
+    versioning-strategy: auto
     groups:
       fuzz-minor-patch:
         update-types: [minor, patch]
