@@ -21,7 +21,8 @@ An arc is stored as its start, end, centre and turning direction (counterclockwi
 A profile is an outer loop and any number of holes. It is valid when:
 
 - every coordinate is finite and inside the model extent of ADR 0001;
-- every loop is closed **exactly**: each edge ends at the bit-identical point where the next one starts;
+- every loop is closed **exactly**: each edge ends where the next one starts, with equal coordinates and no tolerance;
+- a full circle is a loop on its own: in a longer loop it would pinch the loop at its start;
 - no line has zero length;
 - no two edges meet, except consecutive edges at their common point:
   - **two lines**: decided exactly with orient2d, as ADR 0001 requires. Consecutive lines are rejected only when the second goes back along the first;

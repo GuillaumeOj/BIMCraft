@@ -31,24 +31,23 @@ pub(crate) fn check_loop(id: LoopId, edges: &[Edge]) -> Result<(), ProfileError>
         if e.end() != edges[(edge + 1) % edges.len()].start() {
             return Err(ProfileError::Open { loop_id: id, edge });
         }
-        check_edge(e).map_err(|kind| kind(id, edge))?;
+        check_edge(e, id, edge)?;
     }
     Ok(())
 }
 
-type EdgeError = fn(LoopId, usize) -> ProfileError;
-
-fn check_edge(edge: &Edge) -> Result<(), EdgeError> {
-    match edge.curve() {
-        Curve::Segment(a, b) if a == b => {
-            Err(|loop_id, edge| ProfileError::ZeroLengthLine { loop_id, edge })
-        }
+fn check_edge(e: &Edge, loop_id: LoopId, edge: usize) -> Result<(), ProfileError> {
+    match e.curve() {
+        Curve::Segment(a, b) if a == b => Err(ProfileError::ZeroLengthLine { loop_id, edge }),
         Curve::Segment(..) => Ok(()),
         Curve::Arc(arc) => {
+            // Distinct ends at the same angle sweep nothing counterclockwise and a full turn
+            // clockwise; either way the arc is not what its ends describe.
+            let same_angle = !arc.is_full_circle() && (arc.sweep == 0.0 || arc.sweep.abs() >= TAU);
             if (distance(arc.end, arc.centre) - arc.radius).abs() > LINEAR_TOLERANCE {
-                Err(|loop_id, edge| ProfileError::ArcRadiusMismatch { loop_id, edge })
-            } else if arc.radius < LINEAR_TOLERANCE || arc.sweep == 0.0 {
-                Err(|loop_id, edge| ProfileError::DegenerateArc { loop_id, edge })
+                Err(ProfileError::ArcRadiusMismatch { loop_id, edge })
+            } else if arc.radius < LINEAR_TOLERANCE || same_angle {
+                Err(ProfileError::DegenerateArc { loop_id, edge })
             } else {
                 Ok(())
             }
@@ -57,24 +56,37 @@ fn check_edge(edge: &Edge) -> Result<(), EdgeError> {
 }
 
 /// Checks that no two edges of the same loop meet, except consecutive edges at their common end.
-pub(crate) fn check_simple(id: LoopId, edges: &[Edge]) -> Result<(), ProfileError> {
-    let curves: Vec<Curve> = edges.iter().map(Edge::curve).collect();
+pub(crate) fn check_simple(
+    id: LoopId,
+    edges: &[Edge],
+    curves: &[Curve],
+) -> Result<(), ProfileError> {
     let n = curves.len();
+    let intersecting = |i: usize, j: usize| ProfileError::SelfIntersecting {
+        loop_id: id,
+        first: i.min(j),
+        second: i.max(j),
+    };
+    if n > 1 {
+        // A full circle returns to its start, where the next edge also starts: the loop pinches.
+        if let Some(i) = curves
+            .iter()
+            .position(|c| matches!(c, Curve::Arc(arc) if arc.is_full_circle()))
+        {
+            return Err(intersecting(i, (i + 1) % n));
+        }
+    }
     for i in 0..n {
         for j in i + 1..n {
-            let mut shared = Vec::with_capacity(2);
-            if j == i + 1 {
-                shared.push(edges[i].end());
-            }
-            if i == 0 && j == n - 1 {
-                shared.push(edges[0].start());
-            }
-            if curves_meet(&curves[i], &curves[j], &shared) {
-                return Err(ProfileError::SelfIntersecting {
-                    loop_id: id,
-                    first: i,
-                    second: j,
-                });
+            let ends = [edges[i].end(), edges[0].start()];
+            let shared: &[Point2] = match (j == i + 1, i == 0 && j == n - 1) {
+                (true, true) => &ends,
+                (true, false) => &ends[..1],
+                (false, true) => &ends[1..],
+                (false, false) => &[],
+            };
+            if curves_meet(&curves[i], &curves[j], shared) {
+                return Err(intersecting(i, j));
             }
         }
     }
@@ -83,15 +95,13 @@ pub(crate) fn check_simple(id: LoopId, edges: &[Edge]) -> Result<(), ProfileErro
 
 /// Checks that two different loops neither meet nor come closer than the tolerance (with arcs).
 pub(crate) fn check_apart(
-    (first, a): (LoopId, &[Edge]),
-    (second, b): (LoopId, &[Edge]),
+    (first, a): (LoopId, &[Curve]),
+    (second, b): (LoopId, &[Curve]),
 ) -> Result<(), ProfileError> {
-    let b: Vec<Curve> = b.iter().map(Edge::curve).collect();
-    for ea in a {
-        let ca = ea.curve();
-        if b.iter().any(|cb| curves_meet(&ca, cb, &[])) {
-            return Err(ProfileError::LoopsIntersect { first, second });
-        }
+    if a.iter()
+        .any(|ca| b.iter().any(|cb| curves_meet(ca, cb, &[])))
+    {
+        return Err(ProfileError::LoopsIntersect { first, second });
     }
     Ok(())
 }
@@ -220,11 +230,17 @@ fn clearance(a: &Curve, b: &Curve, shared: &[Point2]) -> f64 {
 }
 
 fn candidates(a: &Curve, b: &Curve) -> Vec<Point2> {
-    let mut points = Vec::with_capacity(12);
+    let mut points = Vec::with_capacity(14);
     for curve in [a, b] {
         match curve {
             Curve::Segment(start, end) => points.extend([*start, *end]),
-            Curve::Arc(arc) => points.extend([arc.start, arc.end]),
+            // The middle catches arcs retracing an arc of the same circle, which have no
+            // crossings or common normals to offer.
+            Curve::Arc(arc) => points.extend([
+                arc.start,
+                arc.end,
+                arc.point_at_angle(arc.start_angle + arc.sweep / 2.0),
+            ]),
         }
     }
     match (a, b) {
@@ -321,28 +337,10 @@ impl Arc {
 mod tests {
     use super::*;
     use crate::ArcDirection;
+    use crate::profile::tests::{circle, polygon};
 
     fn p(x: f64, y: f64) -> Point2 {
         Point2::new(x, y)
-    }
-
-    fn polygon(points: &[Point2]) -> Vec<Edge> {
-        (0..points.len())
-            .map(|i| Edge::Line {
-                start: points[i],
-                end: points[(i + 1) % points.len()],
-            })
-            .collect()
-    }
-
-    fn circle(centre: Point2, radius: f64) -> Vec<Edge> {
-        let start = p(centre.x + radius, centre.y);
-        vec![Edge::Arc {
-            start,
-            end: start,
-            centre,
-            direction: ArcDirection::CounterClockwise,
-        }]
     }
 
     #[test]
@@ -369,7 +367,7 @@ mod tests {
 
     #[test]
     fn encloses_points_of_polygons() {
-        let square = polygon(&[p(0.0, 0.0), p(2.0, 0.0), p(2.0, 2.0), p(0.0, 2.0)]);
+        let square = polygon(&[(0.0, 0.0), (2.0, 0.0), (2.0, 2.0), (0.0, 2.0)]);
         assert!(encloses(&square, p(1.0, 1.0)));
         assert!(!encloses(&square, p(3.0, 1.0)));
         assert!(!encloses(&square, p(3.0, 0.0)));
@@ -379,8 +377,8 @@ mod tests {
 
     #[test]
     fn encloses_points_of_circles_and_circular_segments() {
-        assert!(encloses(&circle(p(0.0, 0.0), 1.0), p(0.5, 0.5)));
-        assert!(!encloses(&circle(p(0.0, 0.0), 1.0), p(1.0, 1.0)));
+        assert!(encloses(&circle(0.0, 0.0, 1.0), p(0.5, 0.5)));
+        assert!(!encloses(&circle(0.0, 0.0, 1.0), p(1.0, 1.0)));
         // A half disc above the x axis, as an arc and its diameter.
         let half = vec![
             Edge::Arc {

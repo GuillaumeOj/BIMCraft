@@ -7,7 +7,7 @@ fn p(x: f64, y: f64) -> Point2 {
     Point2::new(x, y)
 }
 
-fn polygon(points: &[(f64, f64)]) -> Vec<Edge> {
+pub(super) fn polygon(points: &[(f64, f64)]) -> Vec<Edge> {
     (0..points.len())
         .map(|i| {
             let (x0, y0) = points[i];
@@ -33,7 +33,7 @@ fn ccw(start: Point2, end: Point2, centre: Point2) -> Edge {
     }
 }
 
-fn circle(cx: f64, cy: f64, radius: f64) -> Vec<Edge> {
+pub(super) fn circle(cx: f64, cy: f64, radius: f64) -> Vec<Edge> {
     let start = p(cx + radius, cy);
     vec![ccw(start, start, p(cx, cy))]
 }
@@ -326,7 +326,17 @@ fn rejects_degenerate_edges() {
         ccw(p(1.0, 0.0), p(1.000_000_5, 0.0), p(0.0, 0.0)),
         line_back(p(1.000_000_5, 0.0), p(1.0, 0.0)),
     ];
-    assert_eq!(Profile::new(flat, vec![]), Err(degenerate));
+    assert_eq!(Profile::new(flat.clone(), vec![]), Err(degenerate));
+    let clockwise_flat = vec![
+        Edge::Arc {
+            start: p(1.0, 0.0),
+            end: p(1.000_000_5, 0.0),
+            centre: p(0.0, 0.0),
+            direction: ArcDirection::Clockwise,
+        },
+        flat[1],
+    ];
+    assert_eq!(Profile::new(clockwise_flat, vec![]), Err(degenerate));
 }
 
 #[test]
@@ -358,8 +368,38 @@ fn rejects_self_intersecting_loops() {
         Profile::new(pinched, vec![]),
         Err(ProfileError::SelfIntersecting {
             loop_id: LoopId::Outer,
-            first: 1,
-            second: 3
+            first: 0,
+            second: 1
+        })
+    );
+    // A figure eight of two full circles touching at their common start.
+    let mut eight = circle(0.0, 0.0, 1.0);
+    eight.push(ccw(s, s, p(2.0, 0.0)));
+    assert_eq!(
+        Profile::new(eight, vec![]),
+        Err(ProfileError::SelfIntersecting {
+            loop_id: LoopId::Outer,
+            first: 0,
+            second: 1
+        })
+    );
+    // Half a circle, then back along the same half: no area at all.
+    let (west, o) = (p(-1.0, 0.0), p(0.0, 0.0));
+    let retraced = vec![
+        ccw(s, west, o),
+        Edge::Arc {
+            start: west,
+            end: s,
+            centre: o,
+            direction: ArcDirection::Clockwise,
+        },
+    ];
+    assert_eq!(
+        Profile::new(retraced, vec![]),
+        Err(ProfileError::SelfIntersecting {
+            loop_id: LoopId::Outer,
+            first: 0,
+            second: 1
         })
     );
 }

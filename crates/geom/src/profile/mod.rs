@@ -6,6 +6,7 @@ mod validate;
 
 use core::fmt;
 
+use edge::Curve;
 pub use edge::{ArcDirection, Edge};
 use mass::{Moments, loop_moments};
 
@@ -163,12 +164,16 @@ impl Profile {
         for &(id, edges) in &loops {
             validate::check_loop(id, edges)?;
         }
-        for &(id, edges) in &loops {
-            validate::check_simple(id, edges)?;
+        let curves: Vec<Vec<Curve>> = loops
+            .iter()
+            .map(|(_, edges)| edges.iter().map(Edge::curve).collect())
+            .collect();
+        for (&(id, edges), curves) in loops.iter().zip(&curves) {
+            validate::check_simple(id, edges, curves)?;
         }
-        for (i, &first) in loops.iter().enumerate() {
-            for &second in &loops[i + 1..] {
-                validate::check_apart(first, second)?;
+        for (i, (&(first, _), a)) in loops.iter().zip(&curves).enumerate() {
+            for (&(second, _), b) in loops.iter().zip(&curves).skip(i + 1) {
+                validate::check_apart((first, a), (second, b))?;
             }
         }
         check_nesting(&outer, &holes)?;
@@ -253,4 +258,4 @@ fn check_nesting(outer: &[Edge], holes: &[Vec<Edge>]) -> Result<(), ProfileError
 }
 
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;
