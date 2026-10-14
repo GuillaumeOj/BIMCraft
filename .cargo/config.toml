@@ -1,0 +1,3 @@
+# wasm32-wasip1 test binaries run under wasmtime, locally and in CI (ENG-04 golden test).
+[target.wasm32-wasip1]
+runner = "wasmtime"

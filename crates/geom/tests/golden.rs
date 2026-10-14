@@ -3,7 +3,7 @@
 //! differently fails with the first value that diverges.
 //!
 //! After a deliberate change (a `libm` upgrade, a new case), regenerate the file natively with
-//! `BIMCRAFT_BLESS=1 cargo test -p geom-golden` and review the diff.
+//! `BIMCRAFT_BLESS=1 cargo test -p geom --test golden` and review the diff.
 
 // Blessing writes the golden file; tests may opt out of the ARCH-02 lints (docs/dev/quality.md).
 #![allow(clippy::disallowed_methods, clippy::disallowed_types)]
@@ -13,17 +13,31 @@ use std::fmt::Write as _;
 
 use geom::{Orientation, Point2, Point3, incircle, insphere, orient2d, orient3d};
 
-const GOLDEN: &str = include_str!("../golden.txt");
-const GOLDEN_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/golden.txt");
+const GOLDEN: &str = include_str!("golden.txt");
+const GOLDEN_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/golden.txt");
 
 /// Random cases per function, on top of the edge cases.
 const SAMPLES: usize = 32;
 
+/// Half the side of the cube random points are drawn from, in metres.
+const EXTENT: f64 = 1e3;
+
 /// `SplitMix64`: tiny, seeded and identical on every target, unlike a library generator whose
-/// algorithm may change between versions.
+/// algorithm may change between versions. `core-model`'s `SeededIdSource` uses the same one, but
+/// only for IDs and behind its `test-support` feature.
 struct Rng(u64);
 
 impl Rng {
+    /// A stream of its own per case, seeded from the case name, so adding or reordering cases
+    /// leaves the inputs, and the golden lines, of every other case unchanged.
+    fn for_case(name: &str) -> Self {
+        // FNV-1a: a fixed hash, unlike std's `DefaultHasher`, whose algorithm is unspecified.
+        let hash = name.bytes().fold(0xCBF2_9CE4_8422_2325_u64, |hash, byte| {
+            (hash ^ u64::from(byte)).wrapping_mul(0x0000_0100_0000_01B3)
+        });
+        Self(hash)
+    }
+
     fn next_u64(&mut self) -> u64 {
         self.0 = self.0.wrapping_add(0x9E37_79B9_7F4A_7C15);
         let mut z = self.0;
@@ -38,19 +52,16 @@ impl Rng {
         lo + (hi - lo) * unit
     }
 
-    fn point2(&mut self, half_extent: f64) -> Point2 {
-        Point2::new(
-            self.uniform(-half_extent, half_extent),
-            self.uniform(-half_extent, half_extent),
-        )
+    fn coordinate(&mut self) -> f64 {
+        self.uniform(-EXTENT, EXTENT)
     }
 
-    fn point3(&mut self, half_extent: f64) -> Point3 {
-        Point3::new(
-            self.uniform(-half_extent, half_extent),
-            self.uniform(-half_extent, half_extent),
-            self.uniform(-half_extent, half_extent),
-        )
+    fn point2(&mut self) -> Point2 {
+        Point2::new(self.coordinate(), self.coordinate())
+    }
+
+    fn point3(&mut self) -> Point3 {
+        Point3::new(self.coordinate(), self.coordinate(), self.coordinate())
     }
 }
 
@@ -79,11 +90,12 @@ struct Output(String);
 
 impl Output {
     fn value(&mut self, case: &str, index: usize, v: f64) {
-        if v.is_nan() {
-            let _ = writeln!(self.0, "{case}[{index}] nan");
+        let token = if v.is_nan() {
+            "nan".to_owned()
         } else {
-            let _ = writeln!(self.0, "{case}[{index}] {:016x}", v.to_bits());
-        }
+            format!("{:016x}", v.to_bits())
+        };
+        let _ = writeln!(self.0, "{case}[{index}] {token}");
     }
 
     fn sign(&mut self, case: &str, index: usize, sign: Result<Orientation, geom::PredicateError>) {
@@ -122,8 +134,9 @@ const BINARY: [Binary; 3] = [
     ("hypot", libm::hypot, -1e3, 1e3),
 ];
 
-fn unary(out: &mut Output, rng: &mut Rng) {
+fn unary(out: &mut Output) {
     for (name, f, lo, hi) in UNARY {
+        let mut rng = Rng::for_case(name);
         let inputs = EDGES
             .into_iter()
             .chain((0..SAMPLES).map(|_| rng.uniform(lo, hi)));
@@ -133,41 +146,42 @@ fn unary(out: &mut Output, rng: &mut Rng) {
     }
 }
 
-fn binary(out: &mut Output, rng: &mut Rng) {
+fn binary(out: &mut Output) {
     for (name, f, lo, hi) in BINARY {
+        let mut rng = Rng::for_case(name);
         let edges = EDGES.into_iter().zip(EDGES.into_iter().rev());
         let random = (0..SAMPLES).map(|_| (rng.uniform(lo, hi), rng.uniform(lo, hi)));
         for (i, (x, y)) in edges.chain(random).enumerate() {
             out.value(name, i, f(x, y));
         }
     }
+    let mut rng = Rng::for_case("mul_add");
     for i in 0..SAMPLES {
-        let (a, b, c) = (
-            rng.uniform(-1e3, 1e3),
-            rng.uniform(-1e3, 1e3),
-            rng.uniform(-1e3, 1e3),
-        );
+        let (a, b, c) = (rng.coordinate(), rng.coordinate(), rng.coordinate());
         out.value("mul_add", i, a.mul_add(b, c));
     }
 }
 
 /// Compositions the kernel will use: rotations, distances and unit vectors.
-fn compositions(out: &mut Output, rng: &mut Rng) {
+fn compositions(out: &mut Output) {
+    let mut rng = Rng::for_case("rotate");
     for i in 0..SAMPLES {
-        let point = rng.point2(1e3);
+        let point = rng.point2();
         let angle = rng.uniform(-2.0 * PI, 2.0 * PI);
         let (sin, cos) = (libm::sin(angle), libm::cos(angle));
         out.value("rotate.x", i, point.x * cos - point.y * sin);
         out.value("rotate.y", i, point.x * sin + point.y * cos);
+    }
 
-        let other = rng.point2(1e3);
-        out.value(
-            "distance",
-            i,
-            libm::hypot(other.x - point.x, other.y - point.y),
-        );
+    let mut rng = Rng::for_case("distance");
+    for i in 0..SAMPLES {
+        let (from, to) = (rng.point2(), rng.point2());
+        out.value("distance", i, libm::hypot(to.x - from.x, to.y - from.y));
+    }
 
-        let vector = rng.point3(1e3);
+    let mut rng = Rng::for_case("unit");
+    for i in 0..SAMPLES {
+        let vector = rng.point3();
         let length = (vector.x * vector.x + vector.y * vector.y + vector.z * vector.z).sqrt();
         out.value("unit.x", i, vector.x / length);
         out.value("unit.y", i, vector.y / length);
@@ -175,48 +189,53 @@ fn compositions(out: &mut Output, rng: &mut Rng) {
     }
 }
 
-/// Nearly degenerate input, so the predicates take their exact stage; their points are built
-/// with `libm`, so the signs also depend on it being identical everywhere.
-fn predicates(out: &mut Output, rng: &mut Rng) {
+/// Nearly degenerate input, so the predicates take their exact stage. The orientation points
+/// use only `+ - *`; the circle and sphere points are built with `libm`, so those signs also
+/// depend on it being identical everywhere.
+fn predicates(out: &mut Output) {
+    let mut rng = Rng::for_case("orient2d");
     for i in 0..SAMPLES {
-        let line = [rng.point2(1e3), rng.point2(1e3)];
+        let line = [rng.point2(), rng.point2()];
         let t = rng.uniform(-2.0, 2.0);
         let on_line = Point2::new(
             line[0].x + t * (line[1].x - line[0].x),
             line[0].y + t * (line[1].y - line[0].y),
         );
         out.sign("orient2d", i, orient2d(line[0], line[1], on_line));
+    }
 
-        let plane = [rng.point3(1e3), rng.point3(1e3), rng.point3(1e3)];
+    let mut rng = Rng::for_case("orient3d");
+    for i in 0..SAMPLES {
+        let [p0, p1, p2] = [rng.point3(), rng.point3(), rng.point3()];
         let (u, v) = (rng.uniform(-2.0, 2.0), rng.uniform(-2.0, 2.0));
-        let along = |axis: fn(Point3) -> f64| {
-            let origin = axis(plane[0]);
-            origin + u * (axis(plane[1]) - origin) + v * (axis(plane[2]) - origin)
+        let lerp = |origin: f64, first: f64, second: f64| {
+            origin + u * (first - origin) + v * (second - origin)
         };
-        let on_plane = Point3::new(along(|p| p.x), along(|p| p.y), along(|p| p.z));
-        out.sign(
-            "orient3d",
-            i,
-            orient3d(plane[0], plane[1], plane[2], on_plane),
+        let on_plane = Point3::new(
+            lerp(p0.x, p1.x, p2.x),
+            lerp(p0.y, p1.y, p2.y),
+            lerp(p0.z, p1.z, p2.z),
         );
+        out.sign("orient3d", i, orient3d(p0, p1, p2, on_plane));
+    }
 
-        let centre = rng.point2(1e3);
-        let radius = rng.uniform(1e-3, 1e3);
-        let circle: [Point2; 4] = std::array::from_fn(|_| {
+    let mut rng = Rng::for_case("incircle");
+    for i in 0..SAMPLES {
+        let (centre, radius) = (rng.point2(), rng.uniform(1e-3, EXTENT));
+        let [p0, p1, p2, p3]: [Point2; 4] = std::array::from_fn(|_| {
             let angle = rng.uniform(0.0, 2.0 * PI);
             Point2::new(
                 centre.x + radius * libm::cos(angle),
                 centre.y + radius * libm::sin(angle),
             )
         });
-        out.sign(
-            "incircle",
-            i,
-            incircle(circle[0], circle[1], circle[2], circle[3]),
-        );
+        out.sign("incircle", i, incircle(p0, p1, p2, p3));
+    }
 
-        let centre = rng.point3(1e3);
-        let sphere: [Point3; 5] = std::array::from_fn(|_| {
+    let mut rng = Rng::for_case("insphere");
+    for i in 0..SAMPLES {
+        let (centre, radius) = (rng.point3(), rng.uniform(1e-3, EXTENT));
+        let [p0, p1, p2, p3, p4]: [Point3; 5] = std::array::from_fn(|_| {
             let theta = rng.uniform(0.0, 2.0 * PI);
             let phi = libm::acos(rng.uniform(-1.0, 1.0));
             Point3::new(
@@ -225,18 +244,16 @@ fn predicates(out: &mut Output, rng: &mut Rng) {
                 centre.z + radius * libm::cos(phi),
             )
         });
-        let [first, second, third, fourth, fifth] = sphere;
-        out.sign("insphere", i, insphere(first, second, third, fourth, fifth));
+        out.sign("insphere", i, insphere(p0, p1, p2, p3, p4));
     }
 }
 
 fn compute() -> String {
     let mut out = Output::default();
-    let mut rng = Rng(0x0BAD_5EED_2026_0010);
-    unary(&mut out, &mut rng);
-    binary(&mut out, &mut rng);
-    compositions(&mut out, &mut rng);
-    predicates(&mut out, &mut rng);
+    unary(&mut out);
+    binary(&mut out);
+    compositions(&mut out);
+    predicates(&mut out);
     out.0
 }
 
@@ -250,30 +267,23 @@ fn decode(token: &str) -> String {
 
 /// The first line where `actual` departs from `expected`, as a readable message.
 fn first_divergence(expected: &str, actual: &str) -> Option<String> {
-    let (mut expected, mut actual) = (expected.lines(), actual.lines());
-    for line in 1.. {
-        match (expected.next(), actual.next()) {
-            (None, None) => return None,
-            (Some(e), Some(a)) if e == a => {}
-            (e, a) => {
-                let side = |l: Option<&str>| {
-                    l.map_or_else(
-                        || "<missing>".to_owned(),
-                        |l| {
-                            let (case, token) = l.split_once(' ').unwrap_or((l, ""));
-                            format!("{case} {}", decode(token))
-                        },
-                    )
-                };
-                return Some(format!(
-                    "line {line}: expected {}, got {}",
-                    side(e),
-                    side(a)
-                ));
-            }
+    let (expected, actual): (Vec<_>, Vec<_>) =
+        (expected.lines().collect(), actual.lines().collect());
+    let index =
+        (0..expected.len().max(actual.len())).find(|&i| expected.get(i) != actual.get(i))?;
+    let side = |line: Option<&&str>| match line {
+        None => "<missing>".to_owned(),
+        Some(line) => {
+            let (case, token) = line.split_once(' ').unwrap_or((line, ""));
+            format!("{case} {}", decode(token))
         }
-    }
-    None
+    };
+    Some(format!(
+        "line {}: expected {}, got {}",
+        index + 1,
+        side(expected.get(index)),
+        side(actual.get(index))
+    ))
 }
 
 #[test]

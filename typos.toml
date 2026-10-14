@@ -3,7 +3,7 @@ extend-exclude = [
   "*.lock",
   "target/",
   "ui/node_modules/",
-  "crates/geom-golden/golden.txt",
+  "crates/geom/tests/golden.txt",
 ]
 
 [default.extend-words]
