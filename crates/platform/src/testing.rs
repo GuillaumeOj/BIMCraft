@@ -4,11 +4,12 @@
 //! their `[dev-dependencies]`, so their tests need no files, threads, wall clock or solver
 //! process. Everything here is single-threaded and runs only when the test drives it.
 
-use std::cell::{Cell, RefCell};
+use std::cell::Cell;
 use std::collections::BTreeMap;
 use std::fmt;
 use std::mem;
 use std::pin::pin;
+use std::sync::{Mutex, MutexGuard, PoisonError};
 use std::task::{Context, Poll, Waker};
 
 use crate::{
@@ -24,6 +25,12 @@ pub fn now_or_never<F: Future>(future: F) -> Option<F::Output> {
         Poll::Ready(output) => Some(output),
         Poll::Pending => None,
     }
+}
+
+/// Locks `mutex`, carrying on if a panicking test poisoned it: the doubles hold no invariant a
+/// panic can break.
+fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
+    mutex.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
 /// A [`Clock`] that only moves when the test moves it.
@@ -65,7 +72,7 @@ impl Clock for ManualClock {
 /// `.await` fails the test; once polled, it completes immediately.
 #[derive(Debug, Default)]
 pub struct MemoryStorage {
-    values: RefCell<BTreeMap<String, Vec<u8>>>,
+    values: Mutex<BTreeMap<String, Vec<u8>>>,
 }
 
 impl MemoryStorage {
@@ -78,14 +85,14 @@ impl MemoryStorage {
     /// Returns the keys that hold a value, in ascending order.
     #[must_use]
     pub fn keys(&self) -> Vec<String> {
-        self.values.borrow().keys().cloned().collect()
+        lock(&self.values).keys().cloned().collect()
     }
 }
 
 impl Storage for MemoryStorage {
     fn read<'a>(&'a self, key: &'a str) -> BoxFuture<'a, Result<Vec<u8>, StorageError>> {
         Box::pin(async move {
-            let value = self.values.borrow().get(key).cloned();
+            let value = lock(&self.values).get(key).cloned();
             value.ok_or(StorageError::NotFound)
         })
     }
@@ -96,16 +103,14 @@ impl Storage for MemoryStorage {
         bytes: &'a [u8],
     ) -> BoxFuture<'a, Result<(), StorageError>> {
         Box::pin(async move {
-            self.values
-                .borrow_mut()
-                .insert(key.to_owned(), bytes.to_vec());
+            lock(&self.values).insert(key.to_owned(), bytes.to_vec());
             Ok(())
         })
     }
 
     fn remove<'a>(&'a self, key: &'a str) -> BoxFuture<'a, Result<(), StorageError>> {
         Box::pin(async move {
-            let removed = self.values.borrow_mut().remove(key);
+            let removed = lock(&self.values).remove(key);
             removed.map(drop).ok_or(StorageError::NotFound)
         })
     }
@@ -118,7 +123,7 @@ impl Storage for MemoryStorage {
 /// [`run_until_stalled`](Self::run_until_stalled), so the order of events is fully deterministic.
 #[derive(Default)]
 pub struct InlineExecutor {
-    waiting: RefCell<Vec<BoxFuture<'static, ()>>>,
+    waiting: Mutex<Vec<BoxFuture<'static, ()>>>,
 }
 
 impl InlineExecutor {
@@ -131,19 +136,19 @@ impl InlineExecutor {
     /// Returns how many spawned tasks have not finished yet.
     #[must_use]
     pub fn pending(&self) -> usize {
-        self.waiting.borrow().len()
+        lock(&self.waiting).len()
     }
 
     /// Polls waiting tasks again and again until a whole pass finishes none of them.
     pub fn run_until_stalled(&self) {
         loop {
-            // Taken out of the cell so tasks can call `spawn` while they are polled.
-            let mut tasks = mem::take(&mut *self.waiting.borrow_mut());
+            // Taken out of the mutex so tasks can call `spawn` while they are polled.
+            let mut tasks = mem::take(&mut *lock(&self.waiting));
             let polled = tasks.len();
             tasks.retain_mut(|task| now_or_never(task.as_mut()).is_none());
             let finished = tasks.len() < polled;
             // Older tasks stay ahead of the ones spawned during this pass.
-            self.waiting.borrow_mut().splice(0..0, tasks);
+            lock(&self.waiting).splice(0..0, tasks);
             // Stopping on "nothing finished" rather than "nothing spawned" also ends the loop
             // when a waiting task spawns another waiting task every time it is polled.
             if !finished {
@@ -164,13 +169,13 @@ impl fmt::Debug for InlineExecutor {
 impl TaskExecutor for InlineExecutor {
     fn spawn(&self, mut task: BoxFuture<'static, ()>) {
         if now_or_never(task.as_mut()).is_none() {
-            self.waiting.borrow_mut().push(task);
+            lock(&self.waiting).push(task);
         }
     }
 }
 
 /// A solver registered on a [`FakeComputeBackend`].
-type Solver = Box<dyn Fn(Vec<u8>) -> Result<Vec<u8>, ComputeError>>;
+type Solver = Box<dyn Fn(Vec<u8>) -> Result<Vec<u8>, ComputeError> + Send + Sync>;
 
 /// A [`ComputeBackend`] whose solvers are closures registered by the test.
 #[derive(Default)]
@@ -190,7 +195,7 @@ impl FakeComputeBackend {
     pub fn with_solver(
         mut self,
         name: impl Into<String>,
-        solver: impl Fn(Vec<u8>) -> Result<Vec<u8>, ComputeError> + 'static,
+        solver: impl Fn(Vec<u8>) -> Result<Vec<u8>, ComputeError> + Send + Sync + 'static,
     ) -> Self {
         self.solvers.insert(name.into(), Box::new(solver));
         self
@@ -225,7 +230,8 @@ impl ComputeBackend for FakeComputeBackend {
 #[cfg(test)]
 mod tests {
     use std::future::{pending, poll_fn, ready};
-    use std::rc::Rc;
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicBool, Ordering};
 
     use super::*;
 
@@ -303,10 +309,10 @@ mod tests {
     }
 
     /// A future that waits until `gate` is opened.
-    fn wait_for(gate: &Rc<Cell<bool>>) -> impl Future<Output = ()> + 'static {
-        let gate = Rc::clone(gate);
+    fn wait_for(gate: &Arc<AtomicBool>) -> impl Future<Output = ()> + 'static {
+        let gate = Arc::clone(gate);
         poll_fn(move |_| {
-            if gate.get() {
+            if gate.load(Ordering::SeqCst) {
                 Poll::Ready(())
             } else {
                 Poll::Pending
@@ -317,75 +323,75 @@ mod tests {
     #[test]
     fn inline_executor_runs_ready_tasks_during_spawn() {
         let executor = InlineExecutor::new();
-        let ran = Rc::new(Cell::new(false));
-        let flag = Rc::clone(&ran);
-        executor.spawn(Box::pin(async move { flag.set(true) }));
-        assert!(ran.get());
+        let ran = Arc::new(AtomicBool::new(false));
+        let flag = Arc::clone(&ran);
+        executor.spawn(Box::pin(async move { flag.store(true, Ordering::SeqCst) }));
+        assert!(ran.load(Ordering::SeqCst));
         assert_eq!(executor.pending(), 0);
     }
 
     #[test]
     fn inline_executor_resumes_waiting_tasks_only_when_run() {
         let executor = InlineExecutor::new();
-        let gate = Rc::new(Cell::new(false));
-        let done = Rc::new(Cell::new(false));
-        let (wait, flag) = (wait_for(&gate), Rc::clone(&done));
+        let gate = Arc::new(AtomicBool::new(false));
+        let done = Arc::new(AtomicBool::new(false));
+        let (wait, flag) = (wait_for(&gate), Arc::clone(&done));
         executor.spawn(Box::pin(async move {
             wait.await;
-            flag.set(true);
+            flag.store(true, Ordering::SeqCst);
         }));
         assert_eq!(executor.pending(), 1);
 
         executor.run_until_stalled();
         assert_eq!(executor.pending(), 1);
-        assert!(!done.get());
+        assert!(!done.load(Ordering::SeqCst));
 
-        gate.set(true);
-        assert!(!done.get());
+        gate.store(true, Ordering::SeqCst);
+        assert!(!done.load(Ordering::SeqCst));
         executor.run_until_stalled();
-        assert!(done.get());
+        assert!(done.load(Ordering::SeqCst));
         assert_eq!(executor.pending(), 0);
     }
 
     #[test]
     fn inline_executor_runs_tasks_spawned_by_tasks() {
-        let executor = Rc::new(InlineExecutor::new());
-        let gate = Rc::new(Cell::new(false));
-        let done = Rc::new(Cell::new(false));
+        let executor = Arc::new(InlineExecutor::new());
+        let gate = Arc::new(AtomicBool::new(false));
+        let done = Arc::new(AtomicBool::new(false));
         let (wait, inner_wait) = (wait_for(&gate), wait_for(&gate));
-        let (spawner, flag) = (Rc::clone(&executor), Rc::clone(&done));
+        let (spawner, flag) = (Arc::clone(&executor), Arc::clone(&done));
         executor.spawn(Box::pin(async move {
             wait.await;
             spawner.spawn(Box::pin(async move {
                 inner_wait.await;
-                flag.set(true);
+                flag.store(true, Ordering::SeqCst);
             }));
         }));
 
-        gate.set(true);
+        gate.store(true, Ordering::SeqCst);
         executor.run_until_stalled();
-        assert!(done.get());
+        assert!(done.load(Ordering::SeqCst));
         assert_eq!(executor.pending(), 0);
     }
 
     #[test]
     fn inline_executor_keeps_tasks_spawned_while_waiting() {
-        let executor = Rc::new(InlineExecutor::new());
-        let gate = Rc::new(Cell::new(false));
-        let (wait, spawner) = (wait_for(&gate), Rc::clone(&executor));
+        let executor = Arc::new(InlineExecutor::new());
+        let gate = Arc::new(AtomicBool::new(false));
+        let (wait, spawner) = (wait_for(&gate), Arc::clone(&executor));
         executor.spawn(Box::pin(async move {
             wait.await;
             spawner.spawn(Box::pin(pending()));
         }));
-        gate.set(true);
+        gate.store(true, Ordering::SeqCst);
         executor.run_until_stalled();
         assert_eq!(executor.pending(), 1);
     }
 
     #[test]
     fn inline_executor_stops_when_a_task_keeps_spawning_waiting_tasks() {
-        let executor = Rc::new(InlineExecutor::new());
-        let spawner = Rc::clone(&executor);
+        let executor = Arc::new(InlineExecutor::new());
+        let spawner = Arc::clone(&executor);
         executor.spawn(Box::pin(poll_fn(move |_| {
             spawner.spawn(Box::pin(pending()));
             Poll::<()>::Pending
