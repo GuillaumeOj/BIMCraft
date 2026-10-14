@@ -1,0 +1,9 @@
+# The core schema namespace (ADR 0002). Entity, relationship and property set definitions go in
+# entities/, relationships/ and property-sets/. api.schema.json is generated from them (API-02):
+# `cargo test -p schema-gen` fails when it is out of date, and
+# `UPDATE_SNAPSHOTS=1 cargo test -p schema-gen` regenerates it.
+format = 1
+
+[namespace]
+name = "core"
+version = 1

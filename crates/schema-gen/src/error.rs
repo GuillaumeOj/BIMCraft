@@ -31,6 +31,9 @@ pub enum ErrorKind {
     /// The namespace is valid but cannot be turned into Rust.
     #[error("{0}")]
     Rust(String),
+    /// The namespace is valid but cannot be turned into a JSON Schema.
+    #[error("{0}")]
+    JsonSchema(String),
 }
 
 impl Error {

@@ -18,6 +18,9 @@
 //! # }
 //! ```
 //!
+//! [`generate_json_schema`] gives the JSON Schema of the same data (API-02); the core one is
+//! published as `schema/core/api.schema.json`.
+//!
 //! Generation is deterministic: the same definitions always give byte-identical code.
 
 // Build-time only (not in scripts/wasm-crates.txt): reading definition files from disk is this
@@ -26,6 +29,8 @@
 
 mod definition;
 mod error;
+mod json_schema;
+mod layout;
 mod load;
 mod parse;
 mod rust;
@@ -33,6 +38,7 @@ mod rust;
 use std::path::{Path, PathBuf};
 
 pub use error::{Error, ErrorKind};
+pub use json_schema::{DRAFT, JsonSchemaOptions, emit_json_schema};
 pub use load::load_dir;
 pub use parse::{FORMAT, MAX_FILE_SIZE, Source, parse_sources};
 pub use rust::{RustOptions, emit_rust};
@@ -47,6 +53,18 @@ pub struct Generated {
     pub inputs: Vec<PathBuf>,
 }
 
+/// Reads the namespace in `dir` and generates its JSON Schema (API-02).
+///
+/// # Errors
+///
+/// Returns every [`Error`] found, as [`generate_rust`] does.
+pub fn generate_json_schema(
+    dir: &Path,
+    options: &JsonSchemaOptions,
+) -> Result<Generated, Vec<Error>> {
+    generate(dir, options, emit_json_schema)
+}
+
 /// Reads the namespace in `dir` and generates its Rust types.
 ///
 /// # Errors
@@ -54,9 +72,17 @@ pub struct Generated {
 /// Returns every [`Error`] found: unreadable files, invalid TOML, definitions that do not
 /// follow the format, and validation failures.
 pub fn generate_rust(dir: &Path, options: &RustOptions) -> Result<Generated, Vec<Error>> {
+    generate(dir, options, emit_rust)
+}
+
+fn generate<O>(
+    dir: &Path,
+    options: &O,
+    emit: fn(&schema::Namespace, &O) -> Result<String, Vec<Error>>,
+) -> Result<Generated, Vec<Error>> {
     let sources = load_dir(dir).map_err(|error| vec![error])?;
     let namespace = parse_sources(&sources)?;
-    let code = emit_rust(&namespace, options)?;
+    let code = emit(&namespace, options)?;
     Ok(Generated {
         code,
         inputs: vec![dir.to_owned()],

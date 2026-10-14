@@ -10,12 +10,13 @@ publish = false
 [dependencies]
 schema = { path = "../schema" }
 serde = { workspace = true }
+serde_json = { workspace = true }
 thiserror = { workspace = true }
 toml = { workspace = true }
 
 [dev-dependencies]
+jsonschema = { workspace = true }
 proptest = { workspace = true }
-serde_json = { workspace = true }
 
 [lints]
 workspace = true

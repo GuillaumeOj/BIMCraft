@@ -4,19 +4,14 @@
 #![allow(clippy::disallowed_methods, clippy::disallowed_types)]
 
 use std::io::Write as _;
-use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
 use proptest::prelude::*;
 use schema_gen::{RustOptions, generate_rust, load_dir, parse_sources};
 
-fn crate_dir() -> &'static Path {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-}
+mod common;
 
-fn sample_dir() -> PathBuf {
-    crate_dir().join("tests/fixtures/sample")
-}
+use common::{assert_committed, crate_dir, sample_dir};
 
 fn options() -> RustOptions {
     RustOptions {
@@ -31,17 +26,8 @@ fn generate_sample() -> Result<String, Vec<schema_gen::Error>> {
 /// The emitted code is reviewed through this file; `UPDATE_SNAPSHOTS=1` rewrites it.
 #[test]
 fn matches_the_snapshot() {
-    let snapshot = crate_dir().join("tests/snapshots/sample.rs");
     let code = generate_sample().unwrap();
-    if std::env::var_os("UPDATE_SNAPSHOTS").is_some() {
-        std::fs::write(&snapshot, &code).unwrap();
-    }
-    let expected = std::fs::read_to_string(&snapshot).unwrap();
-    assert!(
-        code == expected,
-        "generated code differs from {}; rerun with UPDATE_SNAPSHOTS=1 and review the diff",
-        snapshot.display()
-    );
+    assert_committed(&crate_dir().join("tests/snapshots/sample.rs"), &code).unwrap();
 }
 
 #[test]
