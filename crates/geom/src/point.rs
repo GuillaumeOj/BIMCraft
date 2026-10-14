@@ -35,3 +35,22 @@ impl Point3 {
         Self { x, y, z }
     }
 }
+
+/// A displacement in space, in metres.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Vector3 {
+    /// First component.
+    pub x: f64,
+    /// Second component.
+    pub y: f64,
+    /// Third component.
+    pub z: f64,
+}
+
+impl Vector3 {
+    /// Creates a vector from its components.
+    #[must_use]
+    pub const fn new(x: f64, y: f64, z: f64) -> Self {
+        Self { x, y, z }
+    }
+}

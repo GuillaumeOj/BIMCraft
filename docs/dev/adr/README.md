@@ -26,5 +26,6 @@ Copy [`_template.md`](_template.md) and follow its comments.
 | [0005](0005-profile-validation-with-arcs.md) | Profile validation with arcs | Accepted |
 | [0006](0006-sqlite-binding.md) | SQLite binding | Accepted |
 | [0007](0007-attribute-tables.md) | Attribute tables | Accepted |
+| [0008](0008-arc-faceting.md) | Arc faceting for planar solids | Accepted |
 
 One decision predates this folder and stays in the specification: the web UI over an all-Rust UI ([specification §13](../../specifications.md#13-ui-and-rendering), "Decision record").

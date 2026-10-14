@@ -269,7 +269,7 @@ pub(crate) fn distance(a: Point2, b: Point2) -> f64 {
     length(sub(a, b))
 }
 
-fn point_on_circle(centre: Point2, radius: f64, angle: f64) -> Point2 {
+pub(crate) fn point_on_circle(centre: Point2, radius: f64, angle: f64) -> Point2 {
     Point2::new(
         libm::cos(angle).mul_add(radius, centre.x),
         libm::sin(angle).mul_add(radius, centre.y),

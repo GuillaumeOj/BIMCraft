@@ -1,6 +1,7 @@
 //! Closed 2D profiles of lines and circular arcs, with holes (GEO-01).
 
 mod edge;
+mod facet;
 mod mass;
 mod validate;
 

@@ -7,10 +7,10 @@
 
 use core::f64::consts::{PI, TAU};
 
-use crate::predicates::check;
 use crate::profile::edge::{Arc, Curve, Edge, cross, distance, dot, length, sub};
 use crate::profile::{LoopId, ProfileError};
-use crate::{LINEAR_TOLERANCE, MODEL_EXTENT, Orientation, Point2, orient2d};
+use crate::tolerance::is_model_coordinate;
+use crate::{LINEAR_TOLERANCE, Orientation, Point2, orient2d};
 
 /// Checks one loop on its own (coordinates, closure and degenerate edges) and returns the
 /// geometry of its edges for the checks between edges.
@@ -23,7 +23,7 @@ pub(crate) fn check_loop(id: LoopId, edges: &[Edge]) -> Result<Vec<Curve>, Profi
             if !value.is_finite() {
                 return Err(ProfileError::NonFinite { loop_id: id, edge });
             }
-            if value.abs() > MODEL_EXTENT || check(value).is_err() {
+            if !is_model_coordinate(value) {
                 return Err(ProfileError::OutOfRange { loop_id: id, edge });
             }
         }
