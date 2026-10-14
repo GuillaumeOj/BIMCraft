@@ -2,11 +2,11 @@
 //!
 //! The [`step`] module reads ISO 10303-21 (STEP Part 21) files, the text encoding of IFC, as a
 //! stream of instances with bounded memory, so a hostile file cannot exhaust memory or crash the
-//! importer.
+//! importer, and writes them back deterministically.
 //!
 //! This crate builds for native targets and `wasm32-unknown-unknown` (ARCH-01) and never touches
 //! the platform directly (ARCH-02): it reads from any [`std::io::BufRead`], such as the bytes a
-//! `platform::Storage` returns.
+//! `platform::Storage` returns, and writes to any [`std::io::Write`].
 
 // ARCH-02: forbid, not deny, so nothing in this crate can opt out. See docs/dev/quality.md.
 #![forbid(clippy::disallowed_methods, clippy::disallowed_types)]

@@ -2,6 +2,66 @@ use std::io::{BufRead, ErrorKind};
 
 use super::error::{Position, StepError, StepErrorKind};
 
+/// Keywords that frame the sections of a file.
+pub(super) const MAGIC: &str = "ISO-10303-21";
+pub(super) const END_MAGIC: &str = "END-ISO-10303-21";
+pub(super) const HEADER: &str = "HEADER";
+pub(super) const DATA: &str = "DATA";
+pub(super) const ENDSEC: &str = "ENDSEC";
+
+/// Whether `byte` can start a keyword: a letter, `_`, or `!` for a user-defined keyword.
+pub(super) fn is_keyword_start(byte: u8) -> bool {
+    byte.is_ascii_alphabetic() || matches!(byte, b'_' | b'!')
+}
+
+/// Whether `byte` can follow the first byte of a keyword. Section keywords such as
+/// `ISO-10303-21` contain hyphens, entity names never do.
+pub(super) fn is_keyword_byte(byte: u8) -> bool {
+    byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-')
+}
+
+/// Whether `byte` can follow the `!` of a user-defined keyword: its name starts with a letter.
+pub(super) fn is_user_keyword_start(byte: u8) -> bool {
+    byte.is_ascii_alphabetic()
+}
+
+/// Whether `name` reads back as one keyword: the whole-name form of the rules above.
+pub(super) fn is_keyword(name: &str) -> bool {
+    let mut bytes = name.bytes();
+    match bytes.next() {
+        Some(b'!') => bytes.next().is_some_and(is_user_keyword_start) && bytes.all(is_keyword_byte),
+        Some(first) => is_keyword_start(first) && bytes.all(is_keyword_byte),
+        None => false,
+    }
+}
+
+/// Whether `byte` can appear in an enumeration value, between its dots.
+pub(super) fn is_enumeration_byte(byte: u8) -> bool {
+    byte.is_ascii_alphanumeric() || byte == b'_'
+}
+
+/// Whether `name` is an enumeration value, without its dots: not empty, and only made of
+/// [enumeration bytes](is_enumeration_byte).
+pub(super) fn is_enumeration(name: &str) -> bool {
+    !name.is_empty() && name.bytes().all(is_enumeration_byte)
+}
+
+/// Whether `byte` is a digit of a binary literal: uppercase hexadecimal.
+pub(super) fn is_binary_digit(byte: u8) -> bool {
+    matches!(byte, b'0'..=b'9' | b'A'..=b'F')
+}
+
+/// Whether `digits` is a binary literal without its quotes. The first digit counts the unused bits
+/// of the last byte, so it is between 0 and 3.
+pub(super) fn is_binary(digits: &str) -> bool {
+    matches!(digits.as_bytes().first(), Some(b'0'..=b'3')) && digits.bytes().all(is_binary_digit)
+}
+
+/// Whether `byte` can appear in a string as written: printable ASCII only.
+pub(super) fn is_string_byte(byte: u8) -> bool {
+    matches!(byte, b' '..=b'~')
+}
+
 /// A lexical token of a Part 21 file.
 #[derive(Clone, Debug, PartialEq)]
 pub(super) enum Token {
@@ -113,7 +173,7 @@ impl<R: BufRead> Lexer<R> {
             b'.' => return self.enumeration(start),
             b'#' => return self.instance_name(start),
             b'+' | b'-' | b'0'..=b'9' => return self.number(start),
-            b'A'..=b'Z' | b'a'..=b'z' | b'_' | b'!' => return self.keyword(byte, start),
+            byte if is_keyword_start(byte) => return self.keyword(byte, start),
             _ => return Err(self.error(StepErrorKind::UnexpectedByte(byte))),
         };
         self.bump(byte);
@@ -161,7 +221,7 @@ impl<R: BufRead> Lexer<R> {
                 b'\'' => self.bump(b'\''),
                 // Part 21 ignores line breaks inside strings, so long strings can be wrapped.
                 b'\r' | b'\n' => continue,
-                b' '..=b'~' => {}
+                byte if is_string_byte(byte) => {}
                 _ => {
                     return Err(StepError::new(
                         StepErrorKind::UnexpectedByte(byte),
@@ -181,12 +241,11 @@ impl<R: BufRead> Lexer<R> {
             self.bump(byte);
             match byte {
                 b'"' => break,
-                b'0'..=b'9' | b'A'..=b'F' => self.push(&mut digits, byte, start)?,
+                byte if is_binary_digit(byte) => self.push(&mut digits, byte, start)?,
                 _ => return Err(StepError::new(StepErrorKind::InvalidBinary, start)),
             }
         }
-        // The first digit counts the unused bits of the last byte, so it is between 0 and 3.
-        if matches!(digits.as_bytes().first(), Some(b'0'..=b'3')) {
+        if is_binary(&digits) {
             Ok(Token::Binary(digits))
         } else {
             Err(StepError::new(StepErrorKind::InvalidBinary, start))
@@ -202,7 +261,7 @@ impl<R: BufRead> Lexer<R> {
                     self.bump(b'.');
                     return Ok(Token::Enumeration(name));
                 }
-                byte @ (b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'_') => {
+                byte if is_enumeration_byte(byte) => {
                     self.take(&mut name, byte, start)?;
                 }
                 byte => return Err(self.error(StepErrorKind::UnexpectedByte(byte))),
@@ -257,13 +316,11 @@ impl<R: BufRead> Lexer<R> {
         let mut name = String::new();
         self.take(&mut name, first, start)?;
         // A user-defined keyword is `!` followed by a name, which starts with a letter.
-        if first == b'!' && !self.take_if(&mut name, start, |byte| byte.is_ascii_alphabetic())? {
+        if first == b'!' && !self.take_if(&mut name, start, is_user_keyword_start)? {
             let next = self.peek()?;
             return Err(self.unexpected(next, "a name after `!`"));
         }
-        // Section keywords such as `ISO-10303-21` contain hyphens, entity names never do.
-        let is_name_byte = |byte: u8| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-');
-        while self.take_if(&mut name, start, is_name_byte)? {}
+        while self.take_if(&mut name, start, is_keyword_byte)? {}
         Ok(Token::Keyword(name))
     }
 

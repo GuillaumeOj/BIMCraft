@@ -2,25 +2,7 @@
 
 use interop_ifc::step::{InstanceBody, Limits, Parameter, StepReader};
 
-const FILE: &str = r"ISO-10303-21;
-HEADER;
-/* Written for this test; not taken from a real project. */
-FILE_DESCRIPTION(('ViewDefinition [ReferenceView]'),'2;1');
-FILE_NAME('wall.ifc','2026-10-13T12:00:00',('Author'),('Office'),'','BIMCraft','');
-FILE_SCHEMA(('IFC4X3_ADD2'));
-ENDSEC;
-DATA;
-#1=IFCPROJECT('0YvctVUKr0kugbFTf53O9L',$,'Project',$,$,$,$,(#4),#2);
-#2=IFCUNITASSIGNMENT((#3));
-#3=IFCSIUNIT(*,.LENGTHUNIT.,$,.METRE.);
-#4=IFCGEOMETRICREPRESENTATIONCONTEXT($,'Model',3,1.E-05,#5,$);
-#5=IFCAXIS2PLACEMENT3D(#6,$,$);
-#6=IFCCARTESIANPOINT((0.,0.,0.));
-#7=IFCWALL('2O2Fr$t4X7Zf8NOew3FLOH',$,'Wall \X2\00E9\X0\',$,$,$,$,$,.STANDARD.);
-#8=IFCPROPERTYSINGLEVALUE('Width',$,IFCLENGTHMEASURE(0.2),$);
-ENDSEC;
-END-ISO-10303-21;
-";
+const FILE: &str = include_str!("fixtures/wall.ifc");
 
 #[test]
 fn reads_a_small_ifc_file() {
