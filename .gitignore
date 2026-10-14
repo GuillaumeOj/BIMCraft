@@ -23,6 +23,9 @@ __pycache__/
 .DS_Store
 Thumbs.db
 
+# SBOM files written next to each crate by cargo-cyclonedx (scripts/sbom.sh moves them out)
+*.cdx.json
+
 # Tests and coverage
 coverage/
 lcov.info

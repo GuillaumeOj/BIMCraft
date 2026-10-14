@@ -1,0 +1,6 @@
+# cargo-audit configuration (SEC-05). scripts/check-all.sh runs every audit from the repository
+# root, so this file serves fuzz/ too and a personal ~/.cargo/audit.toml never applies.
+# Keep `ignore` in sync with `[advisories] ignore` in deny.toml, with the reason for each entry.
+
+[advisories]
+ignore = []

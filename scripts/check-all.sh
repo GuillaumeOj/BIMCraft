@@ -36,13 +36,17 @@ check_repo() {
 
 check_rust() {
   has_rust || { step "Rust: no crates yet, skipped"; return; }
-  step "Rust: format, lint, tests, dependency audit"
-  require cargo-deny; require cargo-audit
+  step "Rust: format, lint, tests, dependency audit, SBOM"
+  require cargo-deny; require cargo-audit; require cargo-cyclonedx
   cargo fmt --all --check
   cargo clippy $(packages) --all-targets --all-features --locked -- -D warnings
   cargo test $(packages) --all-features --locked
   cargo deny --locked check
   cargo audit --deny warnings
+  # The release workflow is the only other caller, so a broken SBOM would otherwise surface at release time.
+  sbom=$(mktemp -d)
+  scripts/sbom.sh "$sbom" >/dev/null
+  rm -rf "$sbom"
 }
 
 check_coverage() {
@@ -82,6 +86,8 @@ check_fuzz() {
   has_fuzz || { step "Fuzzing: no fuzz targets yet, skipped"; return; }
   step "Fuzzing: parsers survive hostile input (ENG-02)"
   require cargo-fuzz; require cargo-deny; require cargo-audit
+  # From the root, so .cargo/audit.toml applies: cargo-audit reads its config from the current directory only.
+  cargo audit --deny warnings --file fuzz/Cargo.lock
   (
     # Inside fuzz/, rustup picks the nightly pinned in fuzz/rust-toolchain.toml.
     cd fuzz
@@ -89,7 +95,6 @@ check_fuzz() {
     # --no-deps: the crates under test are linted on stable by the rust section.
     cargo clippy --all-targets --locked --no-deps -- -D warnings
     cargo deny --locked check
-    cargo audit --deny warnings
     for target in $(cargo fuzz list --fuzz-dir .); do
       corpus=$(mktemp -d)
       cargo fuzz run --fuzz-dir . "$target" "$corpus" "seeds/$target" -- \
