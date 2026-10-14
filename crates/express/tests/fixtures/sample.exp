@@ -1,0 +1,141 @@
+(* A small schema written for the tests of the express crate. It uses every construct the
+   generator handles, with short names so the generated code fits in 100 columns. *)
+SCHEMA SAMPLE 'sample 1';
+
+CONSTANT
+  Zero : REAL := 0.0;
+END_CONSTANT;
+
+TYPE Label = STRING(255);
+END_TYPE;
+
+TYPE Text = Label;
+END_TYPE;
+
+TYPE Id = STRING(22) FIXED;
+END_TYPE;
+
+TYPE Count = INTEGER;
+ WHERE
+  Positive : SELF > 0;
+END_TYPE;
+
+TYPE Ratio = REAL;
+ WHERE
+  InRange : {0.0 <= SELF <= 1.0};
+END_TYPE;
+
+TYPE Amount = NUMBER;
+END_TYPE;
+
+TYPE Flag = BOOLEAN;
+END_TYPE;
+
+TYPE Known = LOGICAL;
+END_TYPE;
+
+TYPE Blob = BINARY;
+END_TYPE;
+
+TYPE Pair = ARRAY [1:2] OF REAL;
+END_TYPE;
+
+TYPE Slots = ARRAY [0:1] OF OPTIONAL Count;
+END_TYPE;
+
+TYPE Kind = ENUMERATION OF
+  (SOLID,
+   T_BEAM,
+   NOTDEFINED);
+END_TYPE;
+
+TYPE MoreKind = ENUMERATION BASED_ON Kind WITH
+  (HOLLOW);
+END_TYPE;
+
+TYPE Measure = SELECT
+  (Ratio,
+   Count);
+END_TYPE;
+
+TYPE Value = SELECT
+  (Measure,
+   Label,
+   Kind);
+END_TYPE;
+
+TYPE Place = SELECT
+  (Slab,
+   Wall);
+END_TYPE;
+
+TYPE Target = SELECT
+  (Wall,
+   Value);
+END_TYPE;
+
+ENTITY Root
+ ABSTRACT SUPERTYPE OF (ONEOF
+  (Item, Group));
+  Tag : Id;
+  Name : OPTIONAL Label;
+ UNIQUE
+  UR1 : Tag;
+END_ENTITY;
+
+ENTITY Item
+ ABSTRACT SUPERTYPE OF (Wall ANDOR Slab)
+ SUBTYPE OF (Root);
+  Size : OPTIONAL Ratio;
+END_ENTITY;
+
+ENTITY Wall
+ SUBTYPE OF (Item);
+  Kind : Kind;
+  Points : LIST [2:?] OF LIST [3:3] OF REAL;
+  Holes : OPTIONAL SET [1:?] OF Wall;
+  Mark : Target;
+  Done : Known;
+ INVERSE
+  Groups : SET [0:?] OF Group FOR Members;
+ WHERE
+  HasPoints : SIZEOF(Points) >= 2;
+END_ENTITY;
+
+ENTITY Slab
+ SUBTYPE OF (Item);
+  SELF\Item.Size RENAMED Depth : Ratio;
+  Data : OPTIONAL Blob;
+  Extra : OPTIONAL Amount;
+  Seen : Flag;
+  Spare : Slots;
+  Host : OPTIONAL Place;
+END_ENTITY;
+
+ENTITY Group
+ SUBTYPE OF (Root);
+  Members : SET [1:?] OF Item;
+ DERIVE
+  SELF\Root.Name : Label := 'group';
+  Total : INTEGER := SIZEOF(Members);
+END_ENTITY;
+
+ENTITY Note;
+END_ENTITY;
+
+FUNCTION Twice
+  (X : REAL) : REAL;
+  LOCAL
+    Result : REAL := 0.0;
+  END_LOCAL;
+  Result := X * 2.0;
+  RETURN (Result);
+END_FUNCTION;
+
+RULE OneGroup FOR
+  (Group);
+ WHERE
+  Single : SIZEOF(Group) <= 1;
+END_RULE;
+
+END_SCHEMA;

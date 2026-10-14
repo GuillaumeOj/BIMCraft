@@ -283,6 +283,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "express"
+version = "0.0.0"
+dependencies = [
+ "proptest",
+ "rust-names",
+ "thiserror",
+]
+
+[[package]]
 name = "fallible-iterator"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

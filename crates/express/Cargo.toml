@@ -1,0 +1,18 @@
+[package]
+name = "express"
+version = "0.0.0"
+description = "Build-time EXPRESS (ISO 10303-11) tooling: parses a schema and generates Rust from it."
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+rust-names = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+proptest = { workspace = true }
+
+[lints]
+workspace = true
