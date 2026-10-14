@@ -159,20 +159,70 @@ fn redeclaring_dependencies_replaces_the_old_edges() {
 }
 
 #[test]
-fn removing_a_node_drops_its_edges_and_stales_its_dependents() {
+fn removing_a_used_node_keeps_it_as_an_input_of_its_dependents() {
     let mut graph = diamond();
     let mut model = Model::new();
-    model.inputs.insert(0, 1);
+    model.inputs.extend([(0, 1), (1, 40)]);
     model.get(&mut graph, 3);
     model.take_computed();
 
     assert_eq!(graph.remove(&1), set([3]));
-    assert_eq!(graph.dependencies(&3).copied().collect::<Vec<_>>(), [2]);
+    assert_eq!(graph.dependencies(&3).copied().collect::<Vec<_>>(), [1, 2]);
+    assert_eq!(graph.dependencies(&1).count(), 0);
+    assert_eq!(
+        graph.invalidate([0]),
+        set([0, 2]),
+        "1 no longer depends on 0"
+    );
+    assert_eq!(model.get(&mut graph, 3), 41);
+    assert_eq!(model.take_computed(), [0, 1, 2, 3]);
+
+    graph.set_dependencies(3, [2]).unwrap();
     assert_eq!(graph.get(&1, |_, _| 0), Err(DerivedError::UnknownNode));
-    assert_eq!(model.get(&mut graph, 3), 1);
-    assert_eq!(model.take_computed(), [3]);
-    assert_eq!(graph.invalidate([0]), set([0, 2, 3]));
     assert!(graph.remove(&99).is_empty());
+}
+
+#[test]
+fn removing_an_unused_node_prunes_its_undeclared_inputs() {
+    let mut graph = diamond();
+    assert!(graph.remove(&5).is_empty());
+    assert_eq!(graph.get(&5, |_, _| 0), Err(DerivedError::UnknownNode));
+    assert_eq!(graph.get(&4, |_, _| 0), Err(DerivedError::UnknownNode));
+    assert!(graph.remove(&3).is_empty());
+    assert_eq!(graph.get(&1, |_, _| 7), Ok(&7), "declared nodes stay");
+}
+
+#[test]
+fn redeclaring_prunes_inputs_nothing_uses_any_more() {
+    let mut graph: DependencyGraph<u32, i64> = DependencyGraph::new();
+    graph.set_dependencies(10, [1, 2, 3]).unwrap();
+    graph.set_dependencies(2, []).unwrap();
+    graph.set_dependencies(3, []).unwrap();
+    graph.set_dependencies(3, []).unwrap();
+    graph.set_dependencies(10, [4]).unwrap();
+    assert_eq!(graph.get(&1, |_, _| 0), Err(DerivedError::UnknownNode));
+    assert_eq!(
+        graph.get(&2, |_, _| 2),
+        Ok(&2),
+        "declared with set_dependencies"
+    );
+    assert_eq!(
+        graph.get(&3, |_, _| 3),
+        Ok(&3),
+        "declared while already present"
+    );
+}
+
+#[test]
+fn redeclaring_keeps_the_cached_value_of_a_kept_input() {
+    let mut graph = diamond();
+    let mut model = Model::new();
+    model.get(&mut graph, 1);
+    model.take_computed();
+    graph.set_dependencies(1, [0, 4]).unwrap();
+    assert!(graph.is_clean(&0));
+    model.get(&mut graph, 1);
+    assert_eq!(model.take_computed(), [1, 4]);
 }
 
 #[test]

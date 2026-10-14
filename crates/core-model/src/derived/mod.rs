@@ -11,7 +11,8 @@
 //!
 //! Keys are chosen by the caller, for example `(EntityId, attribute)` for model inputs and
 //! `(EntityId, representation)` for geometry. A key that only appears as a dependency is an input:
-//! it is computed like any other node, with no dependency values.
+//! it is computed like any other node, with no dependency values, and it leaves the graph once
+//! nothing depends on it any more. Declare it with no dependencies to keep it.
 //!
 //! ```
 //! use core_model::derived::DependencyGraph;
@@ -61,6 +62,9 @@ struct Node<K, V> {
     dependents: BTreeSet<K>,
     /// The cached value; `None` while stale.
     value: Option<V>,
+    /// Whether the caller declared this node, rather than it only being named as a dependency.
+    /// Undeclared nodes leave the graph once nothing depends on them.
+    declared: bool,
 }
 
 impl<K, V> Default for Node<K, V> {
@@ -69,6 +73,7 @@ impl<K, V> Default for Node<K, V> {
             deps: BTreeSet::new(),
             dependents: BTreeSet::new(),
             value: None,
+            declared: false,
         }
     }
 }
@@ -92,6 +97,8 @@ impl<K: Ord + Clone, V> DependencyGraph<K, V> {
     ///
     /// Unknown keys are added as nodes. If the dependencies differ from the previous ones, `node`
     /// and everything that depends on it become stale; redeclaring the same ones changes nothing.
+    /// Former dependencies that were never declared and that nothing depends on any more leave the
+    /// graph.
     ///
     /// # Errors
     ///
@@ -103,18 +110,15 @@ impl<K: Ord + Clone, V> DependencyGraph<K, V> {
         deps: impl IntoIterator<Item = K>,
     ) -> Result<(), DerivedError<K>> {
         let deps: BTreeSet<K> = deps.into_iter().collect();
-        if self.nodes.get(&node).is_some_and(|n| n.deps == deps) {
+        if let Some(current) = self.nodes.get_mut(&node).filter(|n| n.deps == deps) {
+            current.declared = true;
             return Ok(());
         }
         if let Some(path) = self.cycle_through(&node, &deps) {
             return Err(DerivedError::Cycle { path });
         }
-        let old_deps = std::mem::take(&mut self.nodes.entry(node.clone()).or_default().deps);
-        for dep in &old_deps {
-            if let Some(dep_node) = self.nodes.get_mut(dep) {
-                dep_node.dependents.remove(&node);
-            }
-        }
+        // Link the new dependencies before unlinking the old ones, so a dependency kept across the
+        // change is never pruned and keeps its cached value.
         for dep in &deps {
             self.nodes
                 .entry(dep.clone())
@@ -122,9 +126,11 @@ impl<K: Ord + Clone, V> DependencyGraph<K, V> {
                 .dependents
                 .insert(node.clone());
         }
-        if let Some(entry) = self.nodes.get_mut(&node) {
-            entry.deps = deps;
-        }
+        let current = self.nodes.entry(node.clone()).or_default();
+        current.declared = true;
+        let old_deps = std::mem::replace(&mut current.deps, deps);
+        let dropped: Vec<K> = old_deps.difference(&current.deps).cloned().collect();
+        self.unlink(&node, dropped);
         self.mark_stale(node);
         Ok(())
     }
@@ -132,23 +138,21 @@ impl<K: Ord + Clone, V> DependencyGraph<K, V> {
     /// Removes `node`, for example when its object is deleted, and returns the other nodes it made
     /// stale.
     ///
-    /// Its dependents become stale and lose it as a dependency; redeclare them if they still need
-    /// one. Removing an unknown key does nothing.
+    /// Its own dependencies are dropped. If other nodes still depend on it, it stays as an input
+    /// they keep listing, so their `compute` still sees the key and can tell it is gone; it leaves
+    /// the graph once they are redeclared without it. Removing an unknown key does nothing.
     pub fn remove(&mut self, node: &K) -> BTreeSet<K> {
         let mut stale = self.invalidate([node.clone()]);
         stale.remove(node);
-        if let Some(removed) = self.nodes.remove(node) {
-            for dep in &removed.deps {
-                if let Some(dep_node) = self.nodes.get_mut(dep) {
-                    dep_node.dependents.remove(node);
-                }
-            }
-            for dependent in &removed.dependents {
-                if let Some(dependent_node) = self.nodes.get_mut(dependent) {
-                    dependent_node.deps.remove(node);
-                }
-            }
+        let Some(current) = self.nodes.get_mut(node) else {
+            return stale;
+        };
+        current.declared = false;
+        let deps = std::mem::take(&mut current.deps);
+        if current.dependents.is_empty() {
+            self.nodes.remove(node);
         }
+        self.unlink(node, deps);
         stale
     }
 
@@ -189,22 +193,21 @@ impl<K: Ord + Clone, V> DependencyGraph<K, V> {
         if !self.nodes.contains_key(node) {
             return Err(DerivedError::UnknownNode);
         }
-        // Post-order walk over stale nodes: a node is computed when popped the second time, after
-        // its dependencies. The graph is acyclic, so this terminates.
-        let mut stack = vec![(node.clone(), false)];
-        while let Some((key, deps_ready)) = stack.pop() {
+        // Depth-first walk over stale nodes: a node is computed once every dependency has a value,
+        // otherwise it waits on the stack under its stale dependencies. The graph is acyclic, so
+        // this terminates.
+        let mut stack = vec![node.clone()];
+        while let Some(key) = stack.pop() {
             let Some(current) = self.nodes.get(&key).filter(|n| n.value.is_none()) else {
                 continue;
             };
-            if deps_ready {
-                let value = {
-                    let deps: Vec<(&K, &V)> = current
-                        .deps
-                        .iter()
-                        .filter_map(|dep| Some((dep, self.nodes.get(dep)?.value.as_ref()?)))
-                        .collect();
-                    compute(&key, &deps)
-                };
+            let dep_values: Option<Vec<(&K, &V)>> = current
+                .deps
+                .iter()
+                .map(|dep| Some((dep, self.nodes.get(dep)?.value.as_ref()?)))
+                .collect();
+            if let Some(dep_values) = dep_values {
+                let value = compute(&key, &dep_values);
                 if let Some(current) = self.nodes.get_mut(&key) {
                     current.value = Some(value);
                 }
@@ -215,14 +218,29 @@ impl<K: Ord + Clone, V> DependencyGraph<K, V> {
                     .filter(|dep| !self.is_clean(dep))
                     .cloned()
                     .collect();
-                stack.push((key, true));
-                stack.extend(stale_deps.into_iter().map(|dep| (dep, false)));
+                stack.push(key);
+                stack.extend(stale_deps);
             }
         }
         self.nodes
             .get(node)
             .and_then(|n| n.value.as_ref())
             .ok_or(DerivedError::UnknownNode)
+    }
+
+    /// Removes `node` from the dependents of `deps`, pruning those left undeclared and unused.
+    ///
+    /// An undeclared node has no dependencies of its own, so pruning never cascades.
+    fn unlink(&mut self, node: &K, deps: impl IntoIterator<Item = K>) {
+        for dep in deps {
+            let unused = self.nodes.get_mut(&dep).is_some_and(|dep_node| {
+                dep_node.dependents.remove(node);
+                dep_node.dependents.is_empty() && !dep_node.declared
+            });
+            if unused {
+                self.nodes.remove(&dep);
+            }
+        }
     }
 
     /// Marks `start` and its transitive dependents stale; returns those that were up to date.
