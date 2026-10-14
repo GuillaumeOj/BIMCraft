@@ -32,8 +32,10 @@
 //! Text crosses the boundary in project units: [`Quantity::display`] formats with a
 //! [`DisplayFormat`] (the [`ProjectUnits`] hold one per dimension) and [`Quantity::parse`] reads
 //! user input, failing with a typed [`ParseQuantityError`] when the unit belongs to another
-//! dimension.
+//! dimension. Angles can also be shown and typed in degrees, minutes and seconds
+//! (`12°30′15.5″`); see [`AngleFormat`].
 
+mod dms;
 mod kinds;
 mod project;
 mod text;
@@ -44,6 +46,7 @@ use std::iter::Sum;
 use std::marker::PhantomData;
 use std::ops::{Add, AddAssign, Div, Mul, Neg, Sub, SubAssign};
 
+pub use dms::{AngleFormat, FormattedAngle};
 pub use kinds::{
     AngleUnit, AreaUnit, ForceUnit, LengthUnit, MassUnit, MomentUnit, StressUnit, VolumeUnit,
 };
@@ -127,6 +130,14 @@ pub trait Unit: sealed::Sealed + Copy + Eq + fmt::Debug + 'static {
 
     /// Other spellings accepted when parsing, such as `kNm` or `m2`.
     fn aliases(self) -> &'static [&'static str];
+
+    /// Reads a form written in several parts that only this dimension has, such as degrees,
+    /// minutes and seconds for angles, and returns its SI value. `None` means `text` is not in
+    /// such a form and is read as a number and a unit symbol.
+    #[must_use]
+    fn parse_compound(_text: &str) -> Option<Result<f64, ParseQuantityError>> {
+        None
+    }
 }
 
 /// A value of the dimension measured by `U`, stored in its SI unit.

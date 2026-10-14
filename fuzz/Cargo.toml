@@ -13,8 +13,16 @@ publish = false
 cargo-fuzz = true
 
 [dependencies]
+core-model = { path = "../crates/core-model" }
 libfuzzer-sys = "=0.4.13"
 schema-gen = { path = "../crates/schema-gen" }
+
+[[bin]]
+name = "parse_quantity"
+path = "fuzz_targets/parse_quantity.rs"
+test = false
+doc = false
+bench = false
 
 [[bin]]
 name = "schema_definition"
