@@ -11,11 +11,24 @@ if [ -n "${CC_wasm32_unknown_unknown:-}" ] && [ -n "${AR_wasm32_unknown_unknown:
   exit 0
 fi
 
-# Prints "clang llvm-ar" when $1 compiles for wasm32 and has llvm-ar among its own tools.
+# Prints the exports when $1 compiles for wasm32 and has llvm-ar among its own tools; otherwise
+# says why on stderr, so a CI failure names the reason.
 probe() {
-  echo 'int x;' | "$1" --target=wasm32-unknown-unknown -x c -c -o /dev/null - >/dev/null 2>&1 || return 1
-  ar=$("$1" -print-prog-name=llvm-ar 2>/dev/null) || return 1
-  case "$ar" in */*) [ -x "$ar" ] || [ -x "$ar.exe" ] || return 1 ;; *) return 1 ;; esac
+  # Assembly goes to stdout: no output path for clang to interpret (Windows has no /dev/null).
+  if ! echo 'int x;' | "$1" --target=wasm32-unknown-unknown -x c -S -o - - >/dev/null 2>&1; then
+    echo "wasm-toolchain: $1: missing, or no WebAssembly backend" >&2
+    return 1
+  fi
+  # A bare name means clang did not find llvm-ar; Windows answers with a backslash path.
+  ar=$("$1" -print-prog-name=llvm-ar 2>/dev/null) || ar=
+  case "$ar" in
+    */* | *\\*) [ -x "$ar" ] || [ -x "$ar.exe" ] || ar= ;;
+    *) ar= ;;
+  esac
+  if [ -z "$ar" ]; then
+    echo "wasm-toolchain: $1: no llvm-ar among its tools" >&2
+    return 1
+  fi
   printf "CC_wasm32_unknown_unknown='%s'; export CC_wasm32_unknown_unknown\n" "$1"
   printf "AR_wasm32_unknown_unknown='%s'; export AR_wasm32_unknown_unknown\n" "$ar"
 }
