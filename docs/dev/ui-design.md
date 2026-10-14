@@ -7,10 +7,10 @@ The BIMCraft interface is designed in [Penpot](https://penpot.app), an open-sour
 ## Reading the design
 
 - **In a browser:** open the link above. Viewing needs no account; editing needs an invitation to the Penpot team.
-- **From a coding agent:** connect the [Penpot MCP server](https://github.com/penpot/penpot-mcp) in your agent, then open the file in the Penpot editor and start the MCP plugin there. Plugins run only in the editor, so this needs edit access to the file; the view-only link is not enough. Start with its `high_level_overview` tool, then inspect or export the shapes you need. The repository commits no MCP configuration; each contributor connects their own.
+- **From a coding agent:** connect the [Penpot MCP server](https://github.com/penpot/penpot-mcp) in your agent, then open the file in the Penpot editor and start the MCP plugin there (plugins run only in the editor, so this needs edit access). Start with its `high_level_overview` tool, then inspect or export the shapes you need. The repository commits no MCP configuration; each contributor connects their own.
 
 ## Rules
 
 - Read the relevant board in the design before building or changing a screen or component, and implement from it.
-- When the code has to differ from the design — accessibility (`UI-06`), longer French strings (`UI-04`), command-palette or shortcut reachability (`UI-03`) — say so in the pull request so the design is updated. Do not let code and design drift silently.
-- Text shown in the design is a placeholder for layout: externalise every string (`UI-04`), never hardcode it from the mockup.
+- When the code has to differ from the design — accessibility (`UI-06`), longer French strings (`UI-04`), command-palette or shortcut reachability (`UI-03`) — note the difference in the pull request so the design can be updated.
+- Text in the design is a layout placeholder; strings still go through the translation files (`UI-04`).
