@@ -10,6 +10,12 @@ pub const MODEL_EXTENT: f64 = 1e4;
 /// project-settable, so results are the same everywhere (ENG-04).
 pub const LINEAR_TOLERANCE: f64 = 1e-6;
 
+/// Whether a finite coordinate is one the kernel accepts: within [`MODEL_EXTENT`], and zero or
+/// large enough for the exact predicates (tiny non-zero values would break them later).
+pub(crate) fn is_model_coordinate(value: f64) -> bool {
+    value.abs() <= MODEL_EXTENT && crate::predicates::check(value).is_ok()
+}
+
 /// The largest distance, 1 mm, in metres, between a profile arc and the chords that replace it
 /// when a solid is built with planar faces only. Fixed like [`LINEAR_TOLERANCE`]; the rationale is
 /// in `docs/dev/adr/0008-arc-faceting.md`.

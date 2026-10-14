@@ -1,7 +1,9 @@
 //! Solids made by extruding a profile (GEO-02).
 
+use core::ops::Range;
+
 use super::{BrepError, FaceInput, Solid};
-use crate::{Point3, Profile, ProfileError, Vector3};
+use crate::{Edge, Point3, Profile, ProfileError, Vector3};
 
 /// Why a profile cannot be extruded.
 ///
@@ -49,22 +51,20 @@ impl Solid {
         }
         let profile = profile.faceted()?;
         // Every loop vertex once at the bottom, then again at the top, `top` indices later.
-        let mut vertices = Vec::new();
-        let mut rings = Vec::with_capacity(1 + profile.holes().len());
-        for edges in core::iter::once(profile.outer()).chain(profile.holes()) {
-            rings.push((vertices.len()..vertices.len() + edges.len()).collect::<Vec<_>>());
-            vertices.extend(
-                edges
-                    .iter()
-                    .map(|e| Point3::new(e.start().x, e.start().y, 0.0)),
-            );
-        }
-        let top = vertices.len();
-        let raised: Vec<Point3> = vertices
-            .iter()
-            .map(|p| Point3::new(p.x + direction.x, p.y + direction.y, direction.z))
+        let loops: Vec<&[Edge]> = core::iter::once(profile.outer())
+            .chain(profile.holes())
             .collect();
-        vertices.extend(raised);
+        let starts = || loops.iter().flat_map(|edges| edges.iter().map(Edge::start));
+        let mut vertices: Vec<Point3> = starts().map(|p| Point3::new(p.x, p.y, 0.0)).collect();
+        let top = vertices.len();
+        vertices.extend(
+            starts().map(|p| Point3::new(p.x + direction.x, p.y + direction.y, direction.z)),
+        );
+        let mut rings: Vec<Range<usize>> = Vec::with_capacity(loops.len());
+        for edges in &loops {
+            let first = rings.last().map_or(0, |ring| ring.end);
+            rings.push(first..first + edges.len());
+        }
         Ok(Self::from_faces(vertices, &prism_faces(&rings, top))?)
     }
 }
@@ -72,9 +72,9 @@ impl Solid {
 /// The faces of a prism over `rings` (the outer ring counterclockwise from above, then the holes
 /// clockwise), whose top copy of vertex `v` is `v + top`. Each face is counterclockwise seen
 /// from outside, its holes clockwise.
-fn prism_faces(rings: &[Vec<usize>], top: usize) -> Vec<FaceInput> {
-    let reversed = |ring: &Vec<usize>| ring.iter().rev().copied().collect();
-    let raised = |ring: &Vec<usize>| ring.iter().map(|v| v + top).collect();
+fn prism_faces(rings: &[Range<usize>], top: usize) -> Vec<FaceInput> {
+    let reversed = |ring: &Range<usize>| ring.clone().rev().collect();
+    let raised = |ring: &Range<usize>| ring.clone().map(|v| v + top).collect();
     let mut faces = vec![
         FaceInput {
             outer: reversed(&rings[0]),
@@ -88,8 +88,8 @@ fn prism_faces(rings: &[Vec<usize>], top: usize) -> Vec<FaceInput> {
     // Along each edge a → b, material lies on the left, so a, b, b', a' turns counterclockwise
     // seen from the right, outside: ((b − a) × d) · right(b − a) = d.z |b − a|² > 0.
     for ring in rings {
-        for (i, &a) in ring.iter().enumerate() {
-            let b = ring[(i + 1) % ring.len()];
+        for a in ring.clone() {
+            let b = if a + 1 == ring.end { ring.start } else { a + 1 };
             faces.push(FaceInput {
                 outer: vec![a, b, b + top, a + top],
                 holes: Vec::new(),
@@ -105,7 +105,7 @@ mod tests {
 
     use super::*;
     use crate::profile::tests::{assert_close, circle, p, polygon, rectangle};
-    use crate::{ArcDirection, Edge, MODEL_EXTENT};
+    use crate::{ArcDirection, MODEL_EXTENT};
 
     fn up(z: f64) -> Vector3 {
         Vector3::new(0.0, 0.0, z)

@@ -6,8 +6,8 @@
 //! within the tolerance of its plane.
 
 use super::{BrepError, Shell, Solid};
-use crate::predicates::check;
-use crate::{LINEAR_TOLERANCE, MODEL_EXTENT, Point3};
+use crate::tolerance::is_model_coordinate;
+use crate::{LINEAR_TOLERANCE, Point3};
 
 const TOLERANCE_SQUARED: f64 = LINEAR_TOLERANCE * LINEAR_TOLERANCE;
 
@@ -73,8 +73,7 @@ impl Solid {
                 if !c.is_finite() {
                     return Err(BrepError::NonFinite { vertex });
                 }
-                // Tiny non-zero values pass the extent but break the exact predicates later.
-                if c.abs() > MODEL_EXTENT || check(c).is_err() {
+                if !is_model_coordinate(c) {
                     return Err(BrepError::OutsideModelExtent { vertex });
                 }
             }

@@ -1,23 +1,26 @@
 //! Arcs replaced by chords, for operations that build planar faces only. Rationale:
 //! `docs/dev/adr/0008-arc-faceting.md`.
 
+use std::borrow::Cow;
+
 use crate::ARC_CHORD_TOLERANCE;
 use crate::profile::edge::{Arc, Curve, Edge, point_on_circle};
 use crate::profile::{MAX_PROFILE_EDGES, Profile, ProfileError};
 
 impl Profile {
     /// The same profile with every arc replaced by chords at most [`ARC_CHORD_TOLERANCE`] away
-    /// from it, validated again as a straight-edged profile.
+    /// from it, validated again as a straight-edged profile; the profile itself when it has no
+    /// arcs.
     ///
     /// # Errors
     ///
     /// [`ProfileError::TooManyEdges`] when the chords exceed [`MAX_PROFILE_EDGES`], or any error
     /// of [`Profile::new`] when the chords make loops meet.
-    pub(crate) fn faceted(&self) -> Result<Self, ProfileError> {
+    pub(crate) fn faceted(&self) -> Result<Cow<'_, Self>, ProfileError> {
         let mut edges = self.outer.iter().chain(self.holes.iter().flatten());
         if edges.all(|edge| matches!(edge, Edge::Line { .. })) {
             // Nothing to replace, and the profile is already valid.
-            return Ok(self.clone());
+            return Ok(Cow::Borrowed(self));
         }
         let mut budget = MAX_PROFILE_EDGES;
         let outer = facet_loop(&self.outer, &mut budget)?;
@@ -26,7 +29,7 @@ impl Profile {
             .iter()
             .map(|hole| facet_loop(hole, &mut budget))
             .collect::<Result<_, _>>()?;
-        Self::new(outer, holes)
+        Self::new(outer, holes).map(Cow::Owned)
     }
 }
 
@@ -42,25 +45,25 @@ fn facet_loop(edges: &[Edge], budget: &mut usize) -> Result<Vec<Edge>, ProfileEr
         let count = chord_count(&arc, *budget).ok_or(ProfileError::TooManyEdges)?;
         *budget -= count;
         let mut start = arc.start;
-        for i in 1..=count {
-            // The last chord ends exactly at the arc's end, so the loop stays exactly closed.
-            let end = if i == count {
-                arc.end
-            } else {
-                #[expect(
-                    clippy::cast_precision_loss,
-                    reason = "counts are at most MAX_PROFILE_EDGES"
-                )]
-                let fraction = i as f64 / count as f64;
-                point_on_circle(
-                    arc.centre,
-                    arc.radius,
-                    arc.sweep.mul_add(fraction, arc.start_angle),
-                )
-            };
+        for i in 1..count {
+            #[expect(
+                clippy::cast_precision_loss,
+                reason = "counts are at most MAX_PROFILE_EDGES"
+            )]
+            let fraction = i as f64 / count as f64;
+            let end = point_on_circle(
+                arc.centre,
+                arc.radius,
+                arc.sweep.mul_add(fraction, arc.start_angle),
+            );
             faceted.push(Edge::Line { start, end });
             start = end;
         }
+        // The last chord ends exactly at the arc's end, so the loop stays exactly closed.
+        faceted.push(Edge::Line {
+            start,
+            end: arc.end,
+        });
     }
     Ok(faceted)
 }
@@ -195,11 +198,9 @@ mod tests {
             vec![],
         )
         .unwrap();
-        assert_eq!(square.faceted().unwrap(), square);
-        let bulged = Profile::new(bulged_square(), vec![])
-            .unwrap()
-            .faceted()
-            .unwrap();
+        assert!(matches!(square.faceted(), Ok(Cow::Borrowed(same)) if *same == square));
+        let bulged = Profile::new(bulged_square(), vec![]).unwrap();
+        let bulged = bulged.faceted().unwrap();
         // Three lines and a half circle of radius 1 m: ⌈π / 0.08946⌉ = 36 chords.
         assert_eq!(bulged.outer().len(), 3 + 36);
         assert_eq!(bulged.outer()[0], line(p(0.0, 0.0), p(2.0, 0.0)));
