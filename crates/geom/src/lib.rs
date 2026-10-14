@@ -12,6 +12,11 @@
 //! model extent of the tolerance policy (`docs/dev/adr/0001-geometry-tolerance-policy.md`) is far
 //! narrower and is enforced where coordinates enter the kernel.
 //!
+//! A [`Profile`] is a closed 2D region bounded by lines and circular arcs, with holes (GEO-01).
+//! [`Profile::new`] validates its loops and rejects open, self-intersecting or badly nested ones
+//! with a [`ProfileError`]; a valid profile gives its area and centroid. Coordinates are metres
+//! within [`MODEL_EXTENT`], and arcs are kept [`LINEAR_TOLERANCE`] away from other edges.
+//!
 //! A [`Solid`] is a boundary representation bounded by planar faces. It can only be built
 //! valid: [`Solid::from_faces`] checks topology, the Euler–Poincaré formula, planarity,
 //! orientation, [`MODEL_EXTENT`] and [`LINEAR_TOLERANCE`], and returns a [`BrepError`] otherwise.
@@ -22,6 +27,8 @@
 mod brep;
 mod point;
 mod predicates;
+mod profile;
+mod tolerance;
 
 pub use brep::{BrepError, FaceInput, Shell, Solid};
 pub use point::{Point2, Point3};
@@ -29,15 +36,5 @@ pub use predicates::{
     MAX_COORDINATE, MIN_COORDINATE, Orientation, PredicateError, incircle, insphere, orient2d,
     orient3d,
 };
-
-/// The kernel's single linear tolerance, 1 µm, in metres.
-///
-/// Fixed, never user- or project-settable, so results are the same everywhere (ENG-04).
-/// Rationale: `docs/dev/adr/0001-geometry-tolerance-policy.md`.
-pub const LINEAR_TOLERANCE: f64 = 1e-6;
-
-/// The largest coordinate magnitude a solid accepts, 10 km, in metres.
-///
-/// Modelling happens in a local engineering frame near the origin. Rationale:
-/// `docs/dev/adr/0001-geometry-tolerance-policy.md`.
-pub const MODEL_EXTENT: f64 = 1e4;
+pub use profile::{ArcDirection, Edge, LoopId, MAX_PROFILE_EDGES, Profile, ProfileError};
+pub use tolerance::{LINEAR_TOLERANCE, MODEL_EXTENT};
