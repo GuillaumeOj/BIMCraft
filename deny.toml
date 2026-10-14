@@ -11,6 +11,10 @@ ignore = []
 [licenses]
 version = 2
 confidence-threshold = 0.9
+# The allow list is a policy for future dependencies, not an inventory of current ones. This file
+# also serves fuzz/, so an exception for a fuzz-only crate never matches in the main workspace.
+unused-allowed-license = "allow"
+unused-license-exception = "allow"
 allow = [
   "Apache-2.0",
   "Apache-2.0 WITH LLVM-exception",
