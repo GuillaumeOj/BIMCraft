@@ -22,6 +22,8 @@
 mod error;
 mod lexer;
 mod limits;
+#[cfg(test)]
+mod properties;
 mod reader;
 #[cfg(test)]
 mod test_support;

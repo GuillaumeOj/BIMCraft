@@ -4,13 +4,12 @@
 
 use std::collections::BTreeMap;
 
-use interop_ifc::step::{
+use super::{
     Instance, InstanceBody, Limits, Parameter, Record, StepError, StepErrorKind, StepReader,
 };
 use proptest::collection::{btree_map, vec};
 use proptest::prelude::*;
 use proptest::sample::Index;
-use proptest::test_runner::{Config, RngSeed};
 
 /// Deepest nesting of generated values, counting an instance's own parameter list as level 1.
 const MAX_DEPTH: u32 = 4;
@@ -227,18 +226,8 @@ fn read(text: &str, limits: Limits) -> Result<(Vec<Record>, Vec<Instance>), Step
     Ok((header, reader.collect::<Result<_, _>>()?))
 }
 
-/// A fixed seed keeps runs reproducible; with no persistence, no regression files are written
-/// next to the sources. The same settings as the crate's unit tests.
-fn config() -> Config {
-    Config {
-        rng_seed: RngSeed::Fixed(0x00C0_FFEE),
-        failure_persistence: None,
-        ..Config::default()
-    }
-}
-
 proptest! {
-    #![proptest_config(config())]
+    #![proptest_config(crate::proptest_config())]
 
     #[test]
     fn reads_back_what_was_written(file in file(), separators in separators()) {
