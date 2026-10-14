@@ -52,7 +52,7 @@ Parsers read hostile input (AGENTS.md §8), so each one has a property test in i
 
 ## Benchmarks
 
-Hot paths of the geometry kernel, starting with the exact predicates, keep [criterion](https://docs.rs/criterion) benchmarks in their crate's `benches/` (run them with `cargo bench -p geom`). CI compiles them through `clippy --all-targets` but does not run them: timings on shared runners are too noisy to gate on. Run them before and after a change to a hot path and quote the numbers in the pull request.
+Hot paths keep [criterion](https://docs.rs/criterion) benchmarks in their crate's `benches/`: the exact predicates of the geometry kernel (`cargo bench -p geom`) and the attribute tables of the model (`cargo bench -p core-model`). CI compiles them through `clippy --all-targets` but does not run them: timings on shared runners are too noisy to gate on. Run them before and after a change to a hot path and quote the numbers in the pull request. Reference numbers, and the memory measured per object (NFR-08), live in [performance-baselines.md](performance-baselines.md).
 
 ## Linters, formatters and import sorting
 

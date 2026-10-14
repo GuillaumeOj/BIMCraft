@@ -822,6 +822,30 @@ fn every_error_kind_has_a_message() {
 }
 
 #[test]
+fn keys_must_match_names() {
+    let mut namespace = sample();
+    let storey = namespace.entities.remove("Storey").unwrap();
+    namespace.entities.insert("Level".into(), storey);
+    let property_set = namespace.property_sets.remove("Pset_WallCommon").unwrap();
+    namespace
+        .property_sets
+        .insert("Pset_Other".into(), property_set);
+    let errors = errors_of(&namespace);
+    let key_errors: Vec<_> = errors
+        .iter()
+        .filter(|error| matches!(error.kind, ValidationErrorKind::KeyMismatch { .. }))
+        .map(ToString::to_string)
+        .collect();
+    assert_eq!(
+        key_errors,
+        [
+            "entity Storey: listed under the name \"Level\", not its own",
+            "property set Pset_WallCommon: listed under the name \"Pset_Other\", not its own",
+        ]
+    );
+}
+
+#[test]
 fn entity_kind_names() {
     let names: Vec<_> = EntityKind::ALL.iter().map(|kind| kind.name()).collect();
     assert_eq!(names, ["element", "spatial", "relationship"]);
