@@ -46,6 +46,16 @@ impl Token {
     }
 }
 
+/// The error for `found` where the grammar expects `expected`.
+pub(super) fn unexpected_token(
+    expected: &'static str,
+    found: &Token,
+    position: Position,
+) -> StepError {
+    let found = found.describe();
+    StepError::new(StepErrorKind::UnexpectedToken { expected, found }, position)
+}
+
 /// A token with where it starts.
 #[derive(Debug)]
 pub(super) struct Spanned {
@@ -193,8 +203,7 @@ impl<R: BufRead> Lexer<R> {
                     return Ok(Token::Enumeration(name));
                 }
                 byte @ (b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'_') => {
-                    self.bump(byte);
-                    self.push(&mut name, byte, start)?;
+                    self.take(&mut name, byte, start)?;
                 }
                 byte => return Err(self.error(StepErrorKind::UnexpectedByte(byte))),
             }
@@ -203,37 +212,39 @@ impl<R: BufRead> Lexer<R> {
 
     fn instance_name(&mut self, start: Position) -> Result<Token, StepError> {
         self.bump(b'#');
-        let mut digits = String::new();
-        self.require_digits(&mut digits, start, "digits after `#`")?;
-        digits
-            .parse()
-            .map(Token::InstanceName)
-            .map_err(|_| StepError::new(StepErrorKind::NumberOutOfRange, start))
+        // Instance names are the most frequent token: accumulate the value, no buffer.
+        let mut id = Some(0_u64);
+        let mut count = 0;
+        while let Some(byte @ b'0'..=b'9') = self.peek()? {
+            self.check_len(count, start)?;
+            self.bump(byte);
+            count += 1;
+            id = id
+                .and_then(|id| id.checked_mul(10))
+                .and_then(|id| id.checked_add(u64::from(byte - b'0')));
+        }
+        if count == 0 {
+            let next = self.peek()?;
+            return Err(self.unexpected(next, "digits after `#`"));
+        }
+        id.map(Token::InstanceName)
+            .ok_or_else(|| StepError::new(StepErrorKind::NumberOutOfRange, start))
     }
 
     fn number(&mut self, start: Position) -> Result<Token, StepError> {
+        let is_sign = |byte| matches!(byte, b'+' | b'-');
         let mut text = String::new();
-        if let Some(sign @ (b'+' | b'-')) = self.peek()? {
-            self.bump(sign);
-            self.push(&mut text, sign, start)?;
-        }
+        self.take_if(&mut text, start, is_sign)?;
         self.require_digits(&mut text, start, "digits")?;
-        if self.peek()? != Some(b'.') {
+        if !self.take_if(&mut text, start, |byte| byte == b'.')? {
             return text
                 .parse()
                 .map(Token::Integer)
                 .map_err(|_| StepError::new(StepErrorKind::NumberOutOfRange, start));
         }
-        self.bump(b'.');
-        self.push(&mut text, b'.', start)?;
         self.digits(&mut text, start)?;
-        if let Some(exponent @ (b'E' | b'e')) = self.peek()? {
-            self.bump(exponent);
-            self.push(&mut text, exponent, start)?;
-            if let Some(sign @ (b'+' | b'-')) = self.peek()? {
-                self.bump(sign);
-                self.push(&mut text, sign, start)?;
-            }
+        if self.take_if(&mut text, start, |byte| matches!(byte, b'E' | b'e'))? {
+            self.take_if(&mut text, start, is_sign)?;
             self.require_digits(&mut text, start, "exponent digits")?;
         }
         match text.parse::<f64>() {
@@ -243,26 +254,16 @@ impl<R: BufRead> Lexer<R> {
     }
 
     fn keyword(&mut self, first: u8, start: Position) -> Result<Token, StepError> {
-        self.bump(first);
         let mut name = String::new();
-        self.push(&mut name, first, start)?;
+        self.take(&mut name, first, start)?;
         // A user-defined keyword is `!` followed by a name, which starts with a letter.
-        if first == b'!' {
-            match self.peek()? {
-                Some(byte @ (b'A'..=b'Z' | b'a'..=b'z')) => {
-                    self.bump(byte);
-                    self.push(&mut name, byte, start)?;
-                }
-                next => return Err(self.unexpected(next, "a name after `!`")),
-            }
+        if first == b'!' && !self.take_if(&mut name, start, |byte| byte.is_ascii_alphabetic())? {
+            let next = self.peek()?;
+            return Err(self.unexpected(next, "a name after `!`"));
         }
         // Section keywords such as `ISO-10303-21` contain hyphens, entity names never do.
-        while let Some(byte @ (b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'_' | b'-')) =
-            self.peek()?
-        {
-            self.bump(byte);
-            self.push(&mut name, byte, start)?;
-        }
+        let is_name_byte = |byte: u8| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-');
+        while self.take_if(&mut name, start, is_name_byte)? {}
         Ok(Token::Keyword(name))
     }
 
@@ -283,22 +284,45 @@ impl<R: BufRead> Lexer<R> {
     /// Appends the decimal digits that follow and returns how many there were.
     fn digits(&mut self, text: &mut String, start: Position) -> Result<usize, StepError> {
         let mut count = 0;
-        while let Some(byte @ b'0'..=b'9') = self.peek()? {
-            self.bump(byte);
-            self.push(text, byte, start)?;
+        while self.take_if(text, start, |byte| byte.is_ascii_digit())? {
             count += 1;
         }
         Ok(count)
     }
 
+    /// Consumes and appends the next byte if `accept` matches it, and says whether it did.
+    fn take_if(
+        &mut self,
+        text: &mut String,
+        start: Position,
+        accept: impl Fn(u8) -> bool,
+    ) -> Result<bool, StepError> {
+        match self.peek()? {
+            Some(byte) if accept(byte) => self.take(text, byte, start).map(|()| true),
+            _ => Ok(false),
+        }
+    }
+
+    /// Consumes `byte`, which [`peek`](Self::peek) just returned, and appends it to a token.
+    fn take(&mut self, text: &mut String, byte: u8, start: Position) -> Result<(), StepError> {
+        self.bump(byte);
+        self.push(text, byte, start)
+    }
+
     /// Appends an ASCII byte to a token, failing once the token would exceed its limit.
     fn push(&self, text: &mut String, byte: u8, start: Position) -> Result<(), StepError> {
-        if text.len() >= self.max_token_len {
-            let limit = self.max_token_len;
-            return Err(StepError::new(StepErrorKind::TokenTooLong { limit }, start));
-        }
+        self.check_len(text.len(), start)?;
         text.push(char::from(byte));
         Ok(())
+    }
+
+    /// Fails if a token of `len` bytes cannot grow by one more byte.
+    fn check_len(&self, len: usize, start: Position) -> Result<(), StepError> {
+        if len < self.max_token_len {
+            return Ok(());
+        }
+        let limit = self.max_token_len;
+        Err(StepError::new(StepErrorKind::TokenTooLong { limit }, start))
     }
 
     /// The error for the `next` byte, or the end of the input, when it is not `expected`.
@@ -310,10 +334,7 @@ impl<R: BufRead> Lexer<R> {
     }
 
     fn end_of_input(&self, expected: &'static str) -> StepError {
-        self.error(StepErrorKind::UnexpectedToken {
-            expected,
-            found: Token::End.describe(),
-        })
+        unexpected_token(expected, &Token::End, self.position)
     }
 
     fn error(&self, kind: StepErrorKind) -> StepError {

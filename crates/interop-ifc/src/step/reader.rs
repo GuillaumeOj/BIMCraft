@@ -4,7 +4,7 @@ use std::iter::FusedIterator;
 use std::mem;
 
 use super::error::{Position, StepError, StepErrorKind};
-use super::lexer::{Lexer, Spanned, Token};
+use super::lexer::{Lexer, Spanned, Token, unexpected_token};
 use super::limits::Limits;
 use super::value::{Instance, InstanceBody, Parameter, Record};
 
@@ -38,8 +38,12 @@ pub struct StepReader<R> {
     header: Vec<Record>,
     /// Names of the instances read so far, to reject duplicates. Bounded by `max_instances`.
     ids: BTreeSet<u64>,
-    /// Byte offset where the current instance or header entry starts.
+    /// Byte offset where the current statement (instance, header entry, section marker) starts.
     statement_start: u64,
+    /// Whether the next token starts a statement: statements end with `;`.
+    at_statement_start: bool,
+    /// [`Limits::max_instance_len`] as an offset difference.
+    max_instance_len: u64,
     finished: bool,
 }
 
@@ -57,12 +61,14 @@ impl<R: BufRead> StepReader<R> {
             header: Vec::new(),
             ids: BTreeSet::new(),
             statement_start: 0,
+            at_statement_start: true,
+            max_instance_len: u64::try_from(limits.max_instance_len).unwrap_or(u64::MAX),
             finished: false,
         };
         this.keyword_statement(MAGIC)?;
         this.keyword_statement(HEADER)?;
         loop {
-            let spanned = this.start_statement()?;
+            let spanned = this.token()?;
             match spanned.token {
                 Token::Keyword(name) if name == ENDSEC => break,
                 Token::Keyword(name) => {
@@ -72,7 +78,7 @@ impl<R: BufRead> StepReader<R> {
                     this.header.push(record);
                 }
                 token => {
-                    return Err(unexpected(
+                    return Err(unexpected_token(
                         "a header entry or ENDSEC",
                         &token,
                         spanned.position,
@@ -94,35 +100,17 @@ impl<R: BufRead> StepReader<R> {
 
     fn next_instance(&mut self) -> Result<Option<Instance>, StepError> {
         loop {
-            let spanned = self.start_statement()?;
+            let spanned = self.token()?;
             match spanned.token {
                 Token::InstanceName(id) => return self.instance(id, spanned.position).map(Some),
-                Token::Keyword(name) if name == ENDSEC => {}
-                token => {
-                    return Err(unexpected(
-                        "an instance or ENDSEC",
-                        &token,
-                        spanned.position,
-                    ));
-                }
-            }
-            self.expect(&Token::Semicolon)?;
-            let spanned = self.start_statement()?;
-            match spanned.token {
-                Token::Keyword(name) if name == DATA => self.expect(&Token::Semicolon)?,
-                Token::Keyword(name) if name == END_MAGIC => {
-                    self.expect(&Token::Semicolon)?;
-                    // Trailing content is a new statement, not part of the end marker.
-                    let spanned = self.start_statement()?;
-                    if spanned.token != Token::End {
-                        let expected = Token::End.describe();
-                        return Err(unexpected(expected, &spanned.token, spanned.position));
+                Token::Keyword(name) if name == ENDSEC => {
+                    if self.end_of_section()? {
+                        return Ok(None);
                     }
-                    return Ok(None);
                 }
                 token => {
-                    return Err(unexpected(
-                        "DATA or END-ISO-10303-21",
+                    return Err(unexpected_token(
+                        "an instance or ENDSEC",
                         &token,
                         spanned.position,
                     ));
@@ -131,22 +119,41 @@ impl<R: BufRead> StepReader<R> {
         }
     }
 
+    /// Reads what follows `ENDSEC` in the data part: `true` at the end of the file, `false` when
+    /// another data section starts.
+    fn end_of_section(&mut self) -> Result<bool, StepError> {
+        self.expect(&Token::Semicolon)?;
+        let spanned = self.token()?;
+        match spanned.token {
+            Token::Keyword(name) if name == DATA => self.expect(&Token::Semicolon).map(|()| false),
+            Token::Keyword(name) if name == END_MAGIC => {
+                self.expect(&Token::Semicolon)?;
+                self.expect(&Token::End).map(|()| true)
+            }
+            token => Err(unexpected_token(
+                "DATA or END-ISO-10303-21",
+                &token,
+                spanned.position,
+            )),
+        }
+    }
+
     /// Reads an instance after its name.
     fn instance(&mut self, id: u64, position: Position) -> Result<Instance, StepError> {
-        if self.ids.contains(&id) {
+        self.check_instance_count(position)?;
+        if !self.ids.insert(id) {
             return Err(StepError::new(
                 StepErrorKind::DuplicateInstance(id),
                 position,
             ));
         }
-        self.check_instance_count(position)?;
         self.expect(&Token::Equals)?;
         let spanned = self.token()?;
         let body = match spanned.token {
             Token::Keyword(name) => InstanceBody::Simple(self.record(name)?),
             Token::OpenParen => InstanceBody::Complex(self.complex_records()?),
             token => {
-                return Err(unexpected(
+                return Err(unexpected_token(
                     "an entity name or `(`",
                     &token,
                     spanned.position,
@@ -154,7 +161,6 @@ impl<R: BufRead> StepReader<R> {
             }
         };
         self.expect(&Token::Semicolon)?;
-        self.ids.insert(id);
         Ok(Instance { id, body })
     }
 
@@ -178,7 +184,7 @@ impl<R: BufRead> StepReader<R> {
             match spanned.token {
                 Token::Keyword(name) => records.push(self.record(name)?),
                 Token::CloseParen if !records.is_empty() => return Ok(records),
-                token => return Err(unexpected("an entity name", &token, spanned.position)),
+                token => return Err(unexpected_token("an entity name", &token, spanned.position)),
             }
         }
     }
@@ -208,14 +214,12 @@ impl<R: BufRead> StepReader<R> {
                     continue;
                 }
                 Token::OpenParen if expecting_value => {
-                    self.check_depth(depth, position)?;
-                    depth += 1;
+                    self.enter(&mut depth, position)?;
                     outer.push(mem::take(&mut current));
                     continue;
                 }
                 Token::Keyword(type_name) if expecting_value => {
-                    self.check_depth(depth, position)?;
-                    depth += 1;
+                    self.enter(&mut depth, position)?;
                     self.expect(&Token::OpenParen)?;
                     current.typed.push(type_name);
                     continue;
@@ -228,8 +232,8 @@ impl<R: BufRead> StepReader<R> {
                     Parameter::List(mem::replace(&mut current, parent).items)
                 }
                 token if expecting_value => simple_parameter(token)
-                    .map_err(|token| unexpected("a parameter", &token, position))?,
-                token => return Err(unexpected("`,` or `)`", &token, position)),
+                    .map_err(|token| unexpected_token("a parameter", &token, position))?,
+                token => return Err(unexpected_token("`,` or `)`", &token, position)),
             };
             while let Some(type_name) = current.typed.pop() {
                 self.expect(&Token::CloseParen)?;
@@ -244,35 +248,34 @@ impl<R: BufRead> StepReader<R> {
         }
     }
 
-    fn check_depth(&self, depth: usize, position: Position) -> Result<(), StepError> {
+    /// Goes one nesting level deeper, failing past the limit.
+    fn enter(&self, depth: &mut usize, position: Position) -> Result<(), StepError> {
         let limit = self.limits.max_nesting_depth;
-        if depth < limit {
-            return Ok(());
+        if *depth >= limit {
+            return Err(StepError::new(StepErrorKind::TooDeep { limit }, position));
         }
-        Err(StepError::new(StepErrorKind::TooDeep { limit }, position))
+        *depth += 1;
+        Ok(())
     }
 
     /// Reads a section keyword followed by `;`.
     fn keyword_statement(&mut self, keyword: &'static str) -> Result<(), StepError> {
-        let spanned = self.start_statement()?;
+        let spanned = self.token()?;
         match spanned.token {
             Token::Keyword(name) if name == keyword => self.expect(&Token::Semicolon),
-            token => Err(unexpected(keyword, &token, spanned.position)),
+            token => Err(unexpected_token(keyword, &token, spanned.position)),
         }
     }
 
-    /// Reads the first token of a statement, where the instance length starts counting.
-    fn start_statement(&mut self) -> Result<Spanned, StepError> {
-        let spanned = self.lexer.next_token()?;
-        self.statement_start = spanned.offset;
-        Ok(spanned)
-    }
-
-    /// Reads a token inside a statement, failing once the statement exceeds its limit.
+    /// Reads a token, failing once its statement exceeds the instance length limit.
     fn token(&mut self) -> Result<Spanned, StepError> {
         let spanned = self.lexer.next_token()?;
-        let limit = self.limits.max_instance_len;
-        if spanned.offset - self.statement_start > u64::try_from(limit).unwrap_or(u64::MAX) {
+        if self.at_statement_start {
+            self.statement_start = spanned.offset;
+        }
+        self.at_statement_start = spanned.token == Token::Semicolon;
+        if spanned.offset - self.statement_start > self.max_instance_len {
+            let limit = self.limits.max_instance_len;
             let kind = StepErrorKind::InstanceTooLong { limit };
             return Err(StepError::new(kind, spanned.position));
         }
@@ -284,7 +287,7 @@ impl<R: BufRead> StepReader<R> {
         if spanned.token == *expected {
             Ok(())
         } else {
-            Err(unexpected(
+            Err(unexpected_token(
                 expected.describe(),
                 &spanned.token,
                 spanned.position,
@@ -336,12 +339,6 @@ fn simple_parameter(token: Token) -> Result<Parameter, Token> {
         token => return Err(token),
     })
 }
-
-fn unexpected(expected: &'static str, found: &Token, position: Position) -> StepError {
-    let found = found.describe();
-    StepError::new(StepErrorKind::UnexpectedToken { expected, found }, position)
-}
-
 #[cfg(test)]
 mod tests {
     use proptest::prelude::*;
@@ -541,7 +538,7 @@ mod tests {
                 unexpected_kind("an entity name or `(`", "an integer"),
                 4,
             ),
-            ("#1=X()", unexpected_kind("`;`", "a keyword"), 1),
+            ("#1=X() ENDSEC;", unexpected_kind("`;`", "a keyword"), 8),
             ("#1=();", unexpected_kind("an entity name", "`)`"), 5),
             (
                 "#1=(A()1);",
@@ -555,9 +552,7 @@ mod tests {
             ),
         ];
         for (data, kind, column) in cases {
-            let error = read(&file(data)).expect_err(data);
-            assert_eq!(error.kind, kind, "{data}");
-            assert_eq!(error.position.column, column, "{data}");
+            assert_eq!(data_error(data), (kind, column), "{data}");
         }
     }
 
