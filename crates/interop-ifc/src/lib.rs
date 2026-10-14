@@ -11,6 +11,7 @@
 // ARCH-02: forbid, not deny, so nothing in this crate can opt out. See docs/dev/quality.md.
 #![forbid(clippy::disallowed_methods, clippy::disallowed_types)]
 
+pub mod ifc;
 pub mod step;
 
 /// Property-test settings shared by the crate. A fixed seed keeps runs reproducible; with no

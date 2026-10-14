@@ -27,5 +27,6 @@ Copy [`_template.md`](_template.md) and follow its comments.
 | [0006](0006-sqlite-binding.md) | SQLite binding | Accepted |
 | [0007](0007-attribute-tables.md) | Attribute tables | Accepted |
 | [0008](0008-arc-faceting.md) | Arc faceting for planar solids | Accepted |
+| [0009](0009-ifc-entity-classes-from-express.md) | IFC entity classes from the EXPRESS schema | Accepted |
 
 One decision predates this folder and stays in the specification: the web UI over an all-Rust UI ([specification §13](../../specifications.md#13-ui-and-rendering), "Decision record").

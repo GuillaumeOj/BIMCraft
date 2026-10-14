@@ -4,3 +4,5 @@
 *.ifc text eol=lf
 Cargo.lock linguist-generated=true -diff
 bun.lock linguist-generated=true -diff
+# Vendored unchanged under CC BY-ND 4.0: keep its bytes exactly as published.
+crates/interop-ifc/schema/*.exp -text

@@ -15,6 +15,7 @@ license = "MIT"
 # Member crates use `name = { workspace = true }`.
 [workspace.dependencies]
 criterion = { version = "=0.8.2", default-features = false }
+express = { path = "crates/express" }
 # Without the default features, which fetch remote and file `$ref`s over HTTP and TLS.
 jsonschema = { version = "=0.58.3", default-features = false }
 libm = "=0.2.16"
@@ -31,6 +32,7 @@ rusqlite = { version = "=0.40.2", default-features = false, features = [
   "ffi-sqlite-wasm-rs",
 ] }
 schema = { path = "crates/schema" }
+rust-names = { path = "crates/rust-names" }
 serde = { version = "=1.0.229", features = ["derive"] }
 serde_json = "=1.0.151"
 tempfile = "=3.27.0"

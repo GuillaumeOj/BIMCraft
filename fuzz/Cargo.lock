@@ -13,6 +13,7 @@ name = "bimcraft-fuzz"
 version = "0.0.0"
 dependencies = [
  "core-model",
+ "express",
  "interop-ifc",
  "libfuzzer-sys",
  "schema-gen",
@@ -51,6 +52,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "877a4ace8713b0bcf2a4e7eec82529c029f1d0619886d18145fea96c3ffe5c0f"
 
 [[package]]
+name = "express"
+version = "0.0.0"
+dependencies = [
+ "rust-names",
+ "thiserror",
+]
+
+[[package]]
 name = "find-msvc-tools"
 version = "0.1.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -87,6 +96,7 @@ dependencies = [
 name = "interop-ifc"
 version = "0.0.0"
 dependencies = [
+ "express",
  "thiserror",
 ]
 
@@ -153,6 +163,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f8dcc9c7d52a811697d2151c701e0d08956f92b0e24136cf4cf27b57a6a0d9bf"
 
 [[package]]
+name = "rust-names"
+version = "0.0.0"
+
+[[package]]
 name = "schema"
 version = "0.0.0"
 dependencies = [
@@ -163,6 +177,7 @@ dependencies = [
 name = "schema-gen"
 version = "0.0.0"
 dependencies = [
+ "rust-names",
  "schema",
  "serde",
  "serde_json",

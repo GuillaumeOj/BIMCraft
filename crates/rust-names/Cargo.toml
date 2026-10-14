@@ -1,0 +1,11 @@
+[package]
+name = "rust-names"
+version = "0.0.0"
+description = "Build-time naming rules shared by the code generators: schema names to Rust identifiers."
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[lints]
+workspace = true

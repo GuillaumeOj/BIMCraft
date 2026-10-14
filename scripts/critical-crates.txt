@@ -1,5 +1,7 @@
 schema
 schema-gen
+rust-names
+express
 core-model
 core-txn
 persist

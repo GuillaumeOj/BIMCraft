@@ -16,3 +16,9 @@ trim_trailing_whitespace = false
 
 [Makefile]
 indent_style = tab
+
+# Vendored unchanged from buildingSMART; its whitespace is theirs.
+[crates/interop-ifc/schema/*.exp]
+indent_style = unset
+indent_size = unset
+trim_trailing_whitespace = unset
