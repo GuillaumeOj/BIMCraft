@@ -250,7 +250,7 @@ fn push_items<'a>(pending: &mut Vec<Step<'a>>, items: &'a [Parameter]) {
 ///
 /// Rust's `Debug` form is the shortest round-trip one, but it may omit the decimal point and uses
 /// a lowercase exponent (`1e-7`); Part 21 requires the point and writes `1.E-7`.
-fn push_real(text: &mut String, value: f64) -> Result<(), WriteError> {
+pub(super) fn push_real(text: &mut String, value: f64) -> Result<(), WriteError> {
     if !value.is_finite() {
         return Err(WriteError::NonFiniteReal);
     }
@@ -335,7 +335,7 @@ mod tests {
     use proptest::prelude::*;
 
     use super::*;
-    use crate::step::test_support::{END_PART, record, text, typed};
+    use crate::step::test_support::{END_PART, header, instances, record, text, typed};
     use crate::step::{Limits, StepReader};
 
     const START: &str = "ISO-10303-21;\nHEADER;\nENDSEC;\nDATA;\n";
@@ -682,63 +682,11 @@ mod tests {
         }
     }
 
-    /// Names the reader reads back as one keyword.
-    fn keyword() -> impl Strategy<Value = String> {
-        "!?[A-Za-z][A-Za-z0-9_-]{0,8}"
-    }
-
-    /// Any parameter the writer accepts, nested a few levels deep.
-    fn parameter() -> impl Strategy<Value = Parameter> {
-        let leaf = prop_oneof![
-            Just(Parameter::Null),
-            Just(Parameter::Derived),
-            any::<i64>().prop_map(Parameter::Integer),
-            any::<f64>()
-                .prop_filter("finite", |value| value.is_finite())
-                .prop_map(Parameter::Real),
-            "[ -~]{0,12}".prop_map(Parameter::String),
-            "[A-Za-z0-9_]{1,8}".prop_map(Parameter::Enumeration),
-            "[0-3][0-9A-F]{0,8}".prop_map(Parameter::Binary),
-            any::<u64>().prop_map(Parameter::Reference),
-        ];
-        leaf.prop_recursive(4, 32, 6, |inner| {
-            prop_oneof![
-                proptest::collection::vec(inner.clone(), 0..6).prop_map(Parameter::List),
-                (keyword(), inner).prop_map(|(type_name, value)| Parameter::Typed {
-                    type_name,
-                    value: Box::new(value),
-                }),
-            ]
-        })
-    }
-
-    fn records() -> impl Strategy<Value = Vec<Record>> {
-        let record = (keyword(), proptest::collection::vec(parameter(), 0..4))
-            .prop_map(|(name, parameters)| Record { name, parameters });
-        proptest::collection::vec(record, 1..4)
-    }
-
-    /// Instances with distinct names, simple or complex.
-    fn instances() -> impl Strategy<Value = Vec<Instance>> {
-        let body = prop_oneof![
-            records().prop_map(|mut records| InstanceBody::Simple(records.remove(0))),
-            records().prop_map(InstanceBody::Complex),
-        ];
-        proptest::collection::btree_map(any::<u64>(), body, 0..6).prop_map(|bodies| {
-            bodies
-                .into_iter()
-                .map(|(id, body)| Instance { id, body })
-                .collect()
-        })
-    }
-
     proptest! {
         #![proptest_config(crate::proptest_config())]
 
         #[test]
-        fn reads_back_what_it_writes(header in records(), instances in instances()) {
-            // The reader takes an entry named ENDSEC for the end of the header.
-            prop_assume!(header.iter().all(|entry| entry.name != ENDSEC));
+        fn reads_back_what_it_writes(header in header(), instances in instances(0..6)) {
             let output = write(&header, &instances).unwrap();
             let (read_header, read_instances) = read(&output);
             prop_assert_eq!(&read_header, &header);

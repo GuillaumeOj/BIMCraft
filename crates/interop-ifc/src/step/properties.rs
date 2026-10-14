@@ -4,15 +4,18 @@
 
 use std::ops::Range;
 
-use super::{
-    Instance, InstanceBody, Limits, Parameter, Record, StepError, StepErrorKind, StepReader,
-};
-use proptest::collection::{btree_map, vec};
+use proptest::collection::vec;
 use proptest::prelude::*;
 use proptest::sample::Index;
 
+use super::test_support::{MAX_VALUE_DEPTH, header, instances};
+use super::writer::push_real;
+use super::{
+    Instance, InstanceBody, Limits, Parameter, Record, StepError, StepErrorKind, StepReader,
+};
+
 /// Deepest nesting of generated values, counting an instance's own parameter list as level 1.
-const MAX_DEPTH: u32 = 4;
+const MAX_DEPTH: usize = MAX_VALUE_DEPTH as usize + 1;
 
 /// Ends a data section and starts the next one.
 const NEW_SECTION: [&str; 4] = ["ENDSEC", ";", "DATA", ";"];
@@ -112,7 +115,11 @@ fn print_parameter(parameter: &Parameter, tokens: &mut Vec<String>) {
         Parameter::Null => "$".into(),
         Parameter::Derived => "*".into(),
         Parameter::Integer(value) => value.to_string(),
-        Parameter::Real(value) => real(*value),
+        Parameter::Real(value) => {
+            let mut text = String::new();
+            push_real(&mut text, *value).unwrap();
+            text
+        }
         Parameter::String(text) => string(text),
         Parameter::Enumeration(name) => format!(".{name}."),
         Parameter::Binary(digits) => format!("\"{digits}\""),
@@ -138,73 +145,12 @@ fn string(text: &str) -> String {
     format!("'{}\r\n{}'", escape(start), escape(end))
 }
 
-/// A real in Part 21 form, which needs a `.` in the mantissa: `1e-5` becomes `1.E-5`. Rust prints
-/// the shortest text that reads back to the same value.
-fn real(value: f64) -> String {
-    let text = format!("{value:?}").replace('e', "E");
-    if text.contains('.') {
-        text
-    } else {
-        text.replacen('E', ".E", 1)
-    }
-}
-
-/// An entity or type name, user-defined (`!NAME`) or standard.
-fn keyword() -> impl Strategy<Value = String> {
-    "(![A-Za-z]|[A-Za-z_])[A-Za-z0-9_]{0,8}"
-}
-
-fn parameter() -> impl Strategy<Value = Parameter> {
-    let finite = prop::num::f64::POSITIVE
-        | prop::num::f64::NEGATIVE
-        | prop::num::f64::NORMAL
-        | prop::num::f64::SUBNORMAL
-        | prop::num::f64::ZERO;
-    let leaf = prop_oneof![
-        Just(Parameter::Null),
-        Just(Parameter::Derived),
-        any::<i64>().prop_map(Parameter::Integer),
-        finite.prop_map(Parameter::Real),
-        "[ -~]{0,12}".prop_map(Parameter::String),
-        "[A-Za-z0-9_]{1,8}".prop_map(Parameter::Enumeration),
-        "[0-3][0-9A-F]{0,8}".prop_map(Parameter::Binary),
-        any::<u64>().prop_map(Parameter::Reference),
-    ];
-    // Records add the first level, so values nest at most MAX_DEPTH - 1 levels.
-    leaf.prop_recursive(MAX_DEPTH - 1, 32, 4, |inner| {
-        prop_oneof![
-            vec(inner.clone(), 0..4).prop_map(Parameter::List),
-            (keyword(), inner).prop_map(|(type_name, value)| Parameter::Typed {
-                type_name,
-                value: Box::new(value),
-            }),
-        ]
-    })
-}
-
-fn record(name: impl Strategy<Value = String>) -> impl Strategy<Value = Record> {
-    (name, vec(parameter(), 0..4)).prop_map(|(name, parameters)| Record { name, parameters })
-}
-
-fn body() -> impl Strategy<Value = InstanceBody> {
-    prop_oneof![
-        record(keyword()).prop_map(InstanceBody::Simple),
-        vec(record(keyword()), 1..4).prop_map(InstanceBody::Complex),
-    ]
-}
-
-/// A file with a number of instances in `instance_count`.
+/// A file with a number of instances in `instance_count`, each preceded by a new data section
+/// or not.
 fn file(instance_count: Range<usize>) -> impl Strategy<Value = File> {
-    let header_name = keyword().prop_filter("ENDSEC closes the header", |name| name != "ENDSEC");
-    let instances = btree_map(any::<u64>(), (body(), any::<bool>()), instance_count)
-        .prop_map(|map| {
-            map.into_iter()
-                .map(|(id, (body, new_section))| (Instance { id, body }, new_section))
-                .collect::<Vec<_>>()
-        })
-        .prop_shuffle();
-    (vec(record(header_name), 0..4), instances)
-        .prop_map(|(header, instances)| File { header, instances })
+    let instances = (instances(instance_count), vec(any::<bool>(), 8))
+        .prop_map(|(instances, new_sections)| instances.into_iter().zip(new_sections).collect());
+    (header(), instances).prop_map(|(header, instances)| File { header, instances })
 }
 
 fn separators() -> impl Strategy<Value = Vec<&'static str>> {
@@ -225,13 +171,6 @@ fn read(text: &str, limits: Limits) -> Result<(Vec<Record>, Vec<Instance>), Step
     Ok((header, reader.collect::<Result<_, _>>()?))
 }
 
-#[test]
-fn prints_reals_with_a_dot_in_the_mantissa() {
-    assert_eq!(real(0.25), "0.25");
-    assert_eq!(real(-1.5e300), "-1.5E300");
-    assert_eq!(real(1e-7), "1.E-7");
-}
-
 proptest! {
     #![proptest_config(crate::proptest_config())]
 
@@ -244,7 +183,7 @@ proptest! {
     }
 
     #[test]
-    fn rejects_exactly_the_files_nested_too_deep(file in file(0..8), limit in 1..=MAX_DEPTH as usize) {
+    fn rejects_exactly_the_files_nested_too_deep(file in file(0..8), limit in 1..=MAX_DEPTH) {
         let limits = Limits { max_nesting_depth: limit, ..Limits::default() };
         let result = read(&file.print(&[" "]), limits);
         if file.depth() <= limit {
@@ -287,11 +226,13 @@ proptest! {
     fn rejects_a_reused_instance_name(
         mut file in file(1..8),
         which in any::<Index>(),
-        body in body(),
+        mut extra in instances(1..2),
     ) {
         let id = which.get(&file.instances).0.id;
         let count = file.instances.len();
-        file.instances.push((Instance { id, body }, false));
+        let mut duplicate = extra.remove(0);
+        duplicate.id = id;
+        file.instances.push((duplicate, false));
         let text = file.print(&[" "]);
         let mut reader = StepReader::new(text.as_bytes(), Limits::default()).unwrap();
         let yielded: Vec<_> = reader.by_ref().take(count).collect::<Result<_, _>>().unwrap();
