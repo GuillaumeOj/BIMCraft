@@ -3,8 +3,12 @@ use core::f64::consts::PI;
 use super::*;
 use crate::MODEL_EXTENT;
 
-fn p(x: f64, y: f64) -> Point2 {
+pub(super) fn p(x: f64, y: f64) -> Point2 {
     Point2::new(x, y)
+}
+
+pub(super) fn line(start: Point2, end: Point2) -> Edge {
+    Edge::Line { start, end }
 }
 
 pub(super) fn polygon(points: &[(f64, f64)]) -> Vec<Edge> {
@@ -12,19 +16,26 @@ pub(super) fn polygon(points: &[(f64, f64)]) -> Vec<Edge> {
         .map(|i| {
             let (x0, y0) = points[i];
             let (x1, y1) = points[(i + 1) % points.len()];
-            Edge::Line {
-                start: p(x0, y0),
-                end: p(x1, y1),
-            }
+            line(p(x0, y0), p(x1, y1))
         })
         .collect()
+}
+
+/// A 2 m square whose top side bulges out as a half circle.
+pub(super) fn bulged_square() -> Vec<Edge> {
+    vec![
+        line(p(0.0, 0.0), p(2.0, 0.0)),
+        line(p(2.0, 0.0), p(2.0, 2.0)),
+        ccw(p(2.0, 2.0), p(0.0, 2.0), p(1.0, 2.0)),
+        line(p(0.0, 2.0), p(0.0, 0.0)),
+    ]
 }
 
 fn rectangle(x0: f64, y0: f64, x1: f64, y1: f64) -> Vec<Edge> {
     polygon(&[(x0, y0), (x1, y0), (x1, y1), (x0, y1)])
 }
 
-fn ccw(start: Point2, end: Point2, centre: Point2) -> Edge {
+pub(super) fn ccw(start: Point2, end: Point2, centre: Point2) -> Edge {
     Edge::Arc {
         start,
         end,
@@ -42,7 +53,7 @@ fn profile(outer: Vec<Edge>, holes: Vec<Vec<Edge>>) -> Profile {
     Profile::new(outer, holes).expect("valid profile")
 }
 
-fn assert_close(actual: f64, expected: f64) {
+pub(super) fn assert_close(actual: f64, expected: f64) {
     assert!(
         (actual - expected).abs() <= 1e-12 * expected.abs().max(1.0),
         "{actual} != {expected}"
@@ -84,21 +95,7 @@ fn circle_as_one_arc_or_two_half_arcs() {
 
 #[test]
 fn square_topped_with_a_half_disc() {
-    let edges = vec![
-        Edge::Line {
-            start: p(0.0, 0.0),
-            end: p(2.0, 0.0),
-        },
-        Edge::Line {
-            start: p(2.0, 0.0),
-            end: p(2.0, 2.0),
-        },
-        ccw(p(2.0, 2.0), p(0.0, 2.0), p(1.0, 2.0)),
-        Edge::Line {
-            start: p(0.0, 2.0),
-            end: p(0.0, 0.0),
-        },
-    ];
+    let edges = bulged_square();
     let half = PI / 2.0;
     let area = 4.0 + half;
     let cy = (4.0 * 1.0 + half * (2.0 + 4.0 / (3.0 * PI))) / area;
@@ -111,10 +108,7 @@ fn rounded_rectangle_loses_its_corners() {
     let corner = |cx: f64, cy: f64, from: (f64, f64), to: (f64, f64)| {
         ccw(p(from.0, from.1), p(to.0, to.1), p(cx, cy))
     };
-    let line = |x0: f64, y0: f64, x1: f64, y1: f64| Edge::Line {
-        start: p(x0, y0),
-        end: p(x1, y1),
-    };
+    let line = |x0: f64, y0: f64, x1: f64, y1: f64| line(p(x0, y0), p(x1, y1));
     let edges = vec![
         line(r, 0.0, a - r, 0.0),
         corner(a - r, r, (a - r, 0.0), (a, r)),
@@ -145,15 +139,9 @@ fn square_with_an_off_centre_round_hole() {
 fn three_quarter_disc_uses_a_major_arc() {
     let o = p(0.0, 0.0);
     let edges = vec![
-        Edge::Line {
-            start: o,
-            end: p(1.0, 0.0),
-        },
+        line(o, p(1.0, 0.0)),
         ccw(p(1.0, 0.0), p(0.0, -1.0), o),
-        Edge::Line {
-            start: p(0.0, -1.0),
-            end: o,
-        },
+        line(p(0.0, -1.0), o),
     ];
     // Sector of half-angle α = 3π/4: centroid at 2 r sin α / (3 α) along the bisector (135°).
     let c = 4.0 / (9.0 * PI);
@@ -165,14 +153,7 @@ fn thin_sector_uses_the_small_angle_series() {
     let o = p(0.0, 0.0);
     let theta = 0.05_f64;
     let tip = p(libm::cos(theta), libm::sin(theta));
-    let edges = vec![
-        Edge::Line {
-            start: o,
-            end: p(1.0, 0.0),
-        },
-        ccw(p(1.0, 0.0), tip, o),
-        Edge::Line { start: tip, end: o },
-    ];
+    let edges = vec![line(o, p(1.0, 0.0)), ccw(p(1.0, 0.0), tip, o), line(tip, o)];
     let d = 2.0 * libm::sin(theta / 2.0) / (3.0 * theta / 2.0);
     let cx = d * libm::cos(theta / 2.0);
     let cy = d * libm::sin(theta / 2.0);
@@ -197,15 +178,9 @@ fn loops_are_reoriented_whatever_the_input_direction() {
 fn line_tangent_to_an_arc_is_valid() {
     // A stadium: two half circles joined by tangent lines.
     let edges = vec![
-        Edge::Line {
-            start: p(0.0, -1.0),
-            end: p(2.0, -1.0),
-        },
+        line(p(0.0, -1.0), p(2.0, -1.0)),
         ccw(p(2.0, -1.0), p(2.0, 1.0), p(2.0, 0.0)),
-        Edge::Line {
-            start: p(2.0, 1.0),
-            end: p(0.0, 1.0),
-        },
+        line(p(2.0, 1.0), p(0.0, 1.0)),
         ccw(p(0.0, 1.0), p(0.0, -1.0), p(0.0, 0.0)),
     ];
     assert_mass(&profile(edges, vec![]), 4.0 + PI, 1.0, 0.0);
@@ -213,13 +188,7 @@ fn line_tangent_to_an_arc_is_valid() {
 
 #[test]
 fn rejects_too_many_edges_before_anything_else() {
-    let edges = vec![
-        Edge::Line {
-            start: p(0.0, 0.0),
-            end: p(f64::NAN, 0.0),
-        };
-        MAX_PROFILE_EDGES + 1
-    ];
+    let edges = vec![line(p(0.0, 0.0), p(f64::NAN, 0.0)); MAX_PROFILE_EDGES + 1];
     assert_eq!(Profile::new(edges, vec![]), Err(ProfileError::TooManyEdges));
 }
 
@@ -261,10 +230,7 @@ fn rejects_coordinates_that_are_not_finite_or_out_of_range() {
 #[test]
 fn rejects_open_loops() {
     let mut edges = rectangle(0.0, 0.0, 1.0, 1.0);
-    edges[1] = Edge::Line {
-        start: p(1.0, 0.0),
-        end: p(1.0, 0.999),
-    };
+    edges[1] = line(p(1.0, 0.0), p(1.0, 0.999));
     assert_eq!(
         Profile::new(edges, vec![]),
         Err(ProfileError::Open {
@@ -285,26 +251,16 @@ fn rejects_open_loops() {
 #[test]
 fn rejects_degenerate_edges() {
     let mut edges = rectangle(0.0, 0.0, 1.0, 1.0);
-    edges.insert(
-        1,
-        Edge::Line {
-            start: p(1.0, 0.0),
-            end: p(1.0, 0.0),
-        },
-    );
+    edges.insert(1, line(p(1.0, 0.0), p(1.0, 0.0)));
     let zero_line = ProfileError::ZeroLengthLine {
         loop_id: LoopId::Outer,
         edge: 1,
     };
     assert_eq!(Profile::new(edges, vec![]), Err(zero_line));
 
-    let line_back = |from: Point2, to: Point2| Edge::Line {
-        start: from,
-        end: to,
-    };
     let lopsided = vec![
         ccw(p(1.0, 0.0), p(-1.1, 0.0), p(0.0, 0.0)),
-        line_back(p(-1.1, 0.0), p(1.0, 0.0)),
+        line(p(-1.1, 0.0), p(1.0, 0.0)),
     ];
     let mismatch = ProfileError::ArcRadiusMismatch {
         loop_id: LoopId::Outer,
@@ -318,13 +274,13 @@ fn rejects_degenerate_edges() {
     };
     let tiny = vec![
         ccw(p(1e-7, 0.0), p(-1e-7, 0.0), p(0.0, 0.0)),
-        line_back(p(-1e-7, 0.0), p(1e-7, 0.0)),
+        line(p(-1e-7, 0.0), p(1e-7, 0.0)),
     ];
     assert_eq!(Profile::new(tiny, vec![]), Err(degenerate));
     // Distinct ends on the same ray from the centre: no angle to sweep.
     let flat = vec![
         ccw(p(1.0, 0.0), p(1.000_000_5, 0.0), p(0.0, 0.0)),
-        line_back(p(1.000_000_5, 0.0), p(1.0, 0.0)),
+        line(p(1.000_000_5, 0.0), p(1.0, 0.0)),
     ];
     assert_eq!(Profile::new(flat.clone(), vec![]), Err(degenerate));
     let clockwise_flat = vec![
@@ -460,17 +416,16 @@ fn rejects_holes_that_cross_lie_outside_or_nest() {
 
 #[test]
 fn errors_name_the_loop_and_edges_but_no_coordinates() {
-    let message = |e: ProfileError| e.to_string();
     assert_eq!(
-        message(ProfileError::TooManyEdges),
+        ToString::to_string(&ProfileError::TooManyEdges),
         "the profile has more than 4096 edges"
     );
     assert_eq!(
-        message(ProfileError::EmptyLoop(LoopId::Hole(2))),
+        ToString::to_string(&ProfileError::EmptyLoop(LoopId::Hole(2))),
         "hole 2 has no edges"
     );
     assert_eq!(
-        message(ProfileError::Open {
+        ToString::to_string(&ProfileError::Open {
             loop_id: LoopId::Outer,
             edge: 3
         }),
@@ -499,10 +454,10 @@ fn errors_name_the_loop_and_edges_but_no_coordinates() {
         },
     ];
     for error in edge_errors {
-        assert!(message(error).starts_with("edge 0 of the outer loop "));
+        assert!(ToString::to_string(&error).starts_with("edge 0 of the outer loop "));
     }
     assert_eq!(
-        message(ProfileError::SelfIntersecting {
+        ToString::to_string(&ProfileError::SelfIntersecting {
             loop_id: LoopId::Hole(0),
             first: 1,
             second: 4
@@ -510,18 +465,18 @@ fn errors_name_the_loop_and_edges_but_no_coordinates() {
         "edges 1 and 4 of hole 0 intersect"
     );
     assert_eq!(
-        message(ProfileError::LoopsIntersect {
+        ToString::to_string(&ProfileError::LoopsIntersect {
             first: LoopId::Outer,
             second: LoopId::Hole(1)
         }),
         "the outer loop and hole 1 intersect"
     );
     assert_eq!(
-        message(ProfileError::HoleOutsideOuter(0)),
+        ToString::to_string(&ProfileError::HoleOutsideOuter(0)),
         "hole 0 is outside the outer loop"
     );
     assert_eq!(
-        message(ProfileError::NestedHoles { outer: 0, inner: 1 }),
+        ToString::to_string(&ProfileError::NestedHoles { outer: 0, inner: 1 }),
         "hole 1 is inside hole 0"
     );
 }

@@ -12,8 +12,9 @@ use crate::profile::edge::{Arc, Curve, Edge, cross, distance, dot, length, sub};
 use crate::profile::{LoopId, ProfileError};
 use crate::{LINEAR_TOLERANCE, MODEL_EXTENT, Orientation, Point2, orient2d};
 
-/// Checks one loop on its own: coordinates, closure and degenerate edges.
-pub(crate) fn check_loop(id: LoopId, edges: &[Edge]) -> Result<(), ProfileError> {
+/// Checks one loop on its own (coordinates, closure and degenerate edges) and returns the
+/// geometry of its edges for the checks between edges.
+pub(crate) fn check_loop(id: LoopId, edges: &[Edge]) -> Result<Vec<Curve>, ProfileError> {
     if edges.is_empty() {
         return Err(ProfileError::EmptyLoop(id));
     }
@@ -27,17 +28,22 @@ pub(crate) fn check_loop(id: LoopId, edges: &[Edge]) -> Result<(), ProfileError>
             }
         }
     }
-    for (edge, e) in edges.iter().enumerate() {
-        if e.end() != edges[(edge + 1) % edges.len()].start() {
-            return Err(ProfileError::Open { loop_id: id, edge });
-        }
-        check_edge(e, id, edge)?;
-    }
-    Ok(())
+    edges
+        .iter()
+        .enumerate()
+        .map(|(edge, e)| {
+            if e.end() != edges[(edge + 1) % edges.len()].start() {
+                return Err(ProfileError::Open { loop_id: id, edge });
+            }
+            let curve = e.curve();
+            check_curve(&curve, id, edge)?;
+            Ok(curve)
+        })
+        .collect()
 }
 
-fn check_edge(e: &Edge, loop_id: LoopId, edge: usize) -> Result<(), ProfileError> {
-    match e.curve() {
+fn check_curve(curve: &Curve, loop_id: LoopId, edge: usize) -> Result<(), ProfileError> {
+    match curve {
         Curve::Segment(a, b) if a == b => Err(ProfileError::ZeroLengthLine { loop_id, edge }),
         Curve::Segment(..) => Ok(()),
         Curve::Arc(arc) => {
@@ -56,11 +62,7 @@ fn check_edge(e: &Edge, loop_id: LoopId, edge: usize) -> Result<(), ProfileError
 }
 
 /// Checks that no two edges of the same loop meet, except consecutive edges at their common end.
-pub(crate) fn check_simple(
-    id: LoopId,
-    edges: &[Edge],
-    curves: &[Curve],
-) -> Result<(), ProfileError> {
+pub(crate) fn check_simple(id: LoopId, curves: &[Curve]) -> Result<(), ProfileError> {
     let n = curves.len();
     let intersecting = |i: usize, j: usize| ProfileError::SelfIntersecting {
         loop_id: id,
@@ -78,7 +80,7 @@ pub(crate) fn check_simple(
     }
     for i in 0..n {
         for j in i + 1..n {
-            let ends = [edges[i].end(), edges[0].start()];
+            let ends = [curves[i].end(), curves[0].start()];
             let shared: &[Point2] = match (j == i + 1, i == 0 && j == n - 1) {
                 (true, true) => &ends,
                 (true, false) => &ends[..1],
@@ -93,29 +95,22 @@ pub(crate) fn check_simple(
     Ok(())
 }
 
-/// Checks that two different loops neither meet nor come closer than the tolerance (with arcs).
-pub(crate) fn check_apart(
-    (first, a): (LoopId, &[Curve]),
-    (second, b): (LoopId, &[Curve]),
-) -> Result<(), ProfileError> {
-    if a.iter()
+/// Whether two different loops meet, or come closer than the tolerance where arcs are involved.
+pub(crate) fn loops_meet(a: &[Curve], b: &[Curve]) -> bool {
+    a.iter()
         .any(|ca| b.iter().any(|cb| curves_meet(ca, cb, &[])))
-    {
-        return Err(ProfileError::LoopsIntersect { first, second });
-    }
-    Ok(())
 }
 
 /// Whether the region enclosed by a closed, non-self-intersecting loop contains `p`.
 ///
 /// `p` must not lie on the loop. The angles `p` sees each edge under add up to ±2π inside and to
 /// 0 outside; only their sum's distance from 0 matters, so rounding cannot change the answer.
-pub(crate) fn encloses(edges: &[Edge], p: Point2) -> bool {
-    let total: f64 = edges
+pub(crate) fn encloses(curves: &[Curve], p: Point2) -> bool {
+    let total: f64 = curves
         .iter()
-        .map(|edge| match edge.curve() {
+        .map(|curve| match *curve {
             Curve::Segment(a, b) => chord_angle(a, b, p, orient(a, b, p)),
-            Curve::Arc(arc) => arc_angle(&arc, p, true),
+            Curve::Arc(ref arc) => arc_angle(arc, p, true),
         })
         .sum();
     total.abs() > PI
@@ -173,6 +168,9 @@ fn arc_angle(arc: &Arc, p: Point2, may_split: bool) -> f64 {
 /// Whether two edges meet or, when an arc is involved, come closer than the tolerance. Points
 /// within the tolerance of a `shared` end of consecutive edges are not counted.
 fn curves_meet(a: &Curve, b: &Curve, shared: &[Point2]) -> bool {
+    if boxes_apart(a.bounds(), b.bounds()) {
+        return false;
+    }
     match (a, b, shared) {
         (Curve::Segment(a0, a1), Curve::Segment(b0, b1), []) => segments_touch(*a0, *a1, *b0, *b1),
         (Curve::Segment(a0, a1), Curve::Segment(b0, b1), [v, ..]) => {
@@ -182,6 +180,17 @@ fn curves_meet(a: &Curve, b: &Curve, shared: &[Point2]) -> bool {
         }
         _ => clearance(a, b, shared) < LINEAR_TOLERANCE,
     }
+}
+
+/// Whether the boxes are more than the tolerance apart, so their curves can neither meet nor
+/// come close; this skips the full test for most pairs.
+fn boxes_apart(a: [f64; 4], b: [f64; 4]) -> bool {
+    let [a_min_x, a_min_y, a_max_x, a_max_y] = a;
+    let [b_min_x, b_min_y, b_max_x, b_max_y] = b;
+    a_min_x > b_max_x + LINEAR_TOLERANCE
+        || b_min_x > a_max_x + LINEAR_TOLERANCE
+        || a_min_y > b_max_y + LINEAR_TOLERANCE
+        || b_min_y > a_max_y + LINEAR_TOLERANCE
 }
 
 /// Exact test of whether the closed segments `a0 a1` and `b0 b1` share a point.
@@ -223,45 +232,44 @@ fn ordered(p: Point2, q: Point2) -> (Point2, Point2) {
 /// and points along common normals). Points near a `shared` end are skipped.
 fn clearance(a: &Curve, b: &Curve, shared: &[Point2]) -> f64 {
     candidates(a, b)
-        .into_iter()
         .filter(|q| shared.iter().all(|v| distance(*q, *v) > LINEAR_TOLERANCE))
         .map(|q| a.distance_to(q) + b.distance_to(q))
         .fold(f64::INFINITY, f64::min)
 }
 
-fn candidates(a: &Curve, b: &Curve) -> Vec<Point2> {
-    let mut points = Vec::with_capacity(14);
-    for curve in [a, b] {
-        match curve {
-            Curve::Segment(start, end) => points.extend([*start, *end]),
-            // The middle catches arcs retracing an arc of the same circle, which have no
-            // crossings or common normals to offer.
-            Curve::Arc(arc) => points.extend([
-                arc.start,
-                arc.end,
-                arc.point_at_angle(arc.start_angle + arc.sweep / 2.0),
-            ]),
-        }
-    }
+fn candidates(a: &Curve, b: &Curve) -> impl Iterator<Item = Point2> {
+    // An arc's middle catches arcs retracing an arc of the same circle, which have no crossings
+    // or common normals to offer.
+    let middles = [a, b].map(|curve| match curve {
+        Curve::Arc(arc) => Some(arc.middle),
+        Curve::Segment(..) => None,
+    });
+    let mut special = [None; 6];
     match (a, b) {
         (Curve::Segment(s0, s1), Curve::Arc(arc)) | (Curve::Arc(arc), Curve::Segment(s0, s1)) => {
             let direction = sub(*s1, *s0);
-            let normal = Point2::new(-direction.y, direction.x);
-            points.extend(arc.antipodes(unit(normal)));
-            points.extend(line_circle(*s0, *s1, arc));
+            let [n0, n1] = arc.antipodes(unit(Point2::new(-direction.y, direction.x)));
+            let [c0, c1] = line_circle(*s0, *s1, arc);
+            special[..4].copy_from_slice(&[Some(n0), Some(n1), c0, c1]);
         }
-        (Curve::Arc(p), Curve::Arc(q)) => {
-            let axis = sub(q.centre, p.centre);
-            if axis != Point2::new(0.0, 0.0) {
-                points.extend(p.antipodes(unit(axis)));
-                points.extend(q.antipodes(unit(axis)));
-                points.extend(circle_circle(p, q));
+        (Curve::Arc(first), Curve::Arc(second)) => {
+            let axis = sub(second.centre, first.centre);
+            let gap = length(axis);
+            if gap > 0.0 {
+                let toward = Point2::new(axis.x / gap, axis.y / gap);
+                let [f0, f1] = first.antipodes(toward);
+                let [s0, s1] = second.antipodes(toward);
+                let [c0, c1] = circle_circle(first, second, gap, toward);
+                special = [Some(f0), Some(f1), Some(s0), Some(s1), c0, c1];
             }
         }
         // Two segments are decided exactly by `curves_meet`.
         (Curve::Segment(..), Curve::Segment(..)) => {}
     }
-    points
+    [a.start(), a.end(), b.start(), b.end()]
+        .into_iter()
+        .chain(middles.into_iter().flatten())
+        .chain(special.into_iter().flatten())
 }
 
 fn unit(v: Point2) -> Point2 {
@@ -270,7 +278,7 @@ fn unit(v: Point2) -> Point2 {
 }
 
 /// Points where the segment `s0 s1` crosses the circle of `arc`.
-fn line_circle(s0: Point2, s1: Point2, arc: &Arc) -> Vec<Point2> {
+fn line_circle(s0: Point2, s1: Point2, arc: &Arc) -> [Option<Point2>; 2] {
     // |s0 + t·along − centre|² = r², a quadratic in t with half linear coefficient `half_b`.
     let along = sub(s1, s0);
     let from_centre = sub(s0, arc.centre);
@@ -281,66 +289,50 @@ fn line_circle(s0: Point2, s1: Point2, arc: &Arc) -> Vec<Point2> {
         .mul_add(-arc.radius, dot(from_centre, from_centre));
     let discriminant = half_b.mul_add(half_b, -(quadratic * constant));
     if discriminant < 0.0 {
-        return Vec::new();
+        return [None; 2];
     }
     let root = discriminant.sqrt();
-    [(-half_b - root) / quadratic, (-half_b + root) / quadratic]
-        .into_iter()
-        .filter(|t| (0.0..=1.0).contains(t))
-        .map(|t| Point2::new(t.mul_add(along.x, s0.x), t.mul_add(along.y, s0.y)))
-        .collect()
+    [(-half_b - root) / quadratic, (-half_b + root) / quadratic].map(|t| {
+        (0.0..=1.0)
+            .contains(&t)
+            .then(|| Point2::new(t.mul_add(along.x, s0.x), t.mul_add(along.y, s0.y)))
+    })
 }
 
-/// Points where the circles of two arcs with distinct centres cross.
-fn circle_circle(p: &Arc, q: &Arc) -> Vec<Point2> {
-    let axis = sub(q.centre, p.centre);
-    let d = length(axis);
+/// Points where the circles of two arcs cross; their centres are `d > 0` apart along `u`.
+fn circle_circle(p: &Arc, q: &Arc, d: f64, u: Point2) -> [Option<Point2>; 2] {
     if d > p.radius + q.radius || d < (p.radius - q.radius).abs() {
-        return Vec::new();
+        return [None; 2];
     }
     let along = (p.radius * p.radius - q.radius * q.radius + d * d) / (2.0 * d);
     let across = p.radius.mul_add(p.radius, -(along * along)).max(0.0).sqrt();
-    let u = unit(axis);
     let foot = Point2::new(
         along.mul_add(u.x, p.centre.x),
         along.mul_add(u.y, p.centre.y),
     );
-    vec![
-        Point2::new(across.mul_add(-u.y, foot.x), across.mul_add(u.x, foot.y)),
-        Point2::new(across.mul_add(u.y, foot.x), across.mul_add(-u.x, foot.y)),
+    [
+        Some(Point2::new(
+            across.mul_add(-u.y, foot.x),
+            across.mul_add(u.x, foot.y),
+        )),
+        Some(Point2::new(
+            across.mul_add(u.y, foot.x),
+            across.mul_add(-u.x, foot.y),
+        )),
     ]
-}
-
-impl Arc {
-    /// The two halves of the arc.
-    fn split(&self) -> (Self, Self) {
-        let half = self.sweep / 2.0;
-        let middle_angle = self.start_angle + half;
-        let middle = self.point_at_angle(middle_angle);
-        (
-            Self {
-                end: middle,
-                sweep: half,
-                ..*self
-            },
-            Self {
-                start: middle,
-                start_angle: middle_angle,
-                sweep: half,
-                ..*self
-            },
-        )
-    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ArcDirection;
-    use crate::profile::tests::{circle, polygon};
+    use crate::profile::tests::{bulged_square, ccw, circle, line, p, polygon};
 
-    fn p(x: f64, y: f64) -> Point2 {
-        Point2::new(x, y)
+    fn curves(edges: &[Edge]) -> Vec<Curve> {
+        edges.iter().map(Edge::curve).collect()
+    }
+
+    fn reversed(edges: &[Edge]) -> Vec<Edge> {
+        edges.iter().rev().map(Edge::reversed).collect()
     }
 
     #[test]
@@ -366,77 +358,52 @@ mod tests {
     }
 
     #[test]
+    fn distant_boxes_are_apart_and_touching_ones_are_not() {
+        let unit = [0.0, 0.0, 1.0, 1.0];
+        assert!(boxes_apart(unit, [1.0 + 2e-6, 0.0, 2.0, 1.0]));
+        assert!(boxes_apart([0.0, 1.0 + 2e-6, 1.0, 2.0], unit));
+        assert!(!boxes_apart(unit, [1.0 + 5e-7, 0.0, 2.0, 1.0]));
+        assert!(!boxes_apart(unit, [0.5, 0.5, 2.0, 2.0]));
+    }
+
+    #[test]
     fn encloses_points_of_polygons() {
         let square = polygon(&[(0.0, 0.0), (2.0, 0.0), (2.0, 2.0), (0.0, 2.0)]);
-        assert!(encloses(&square, p(1.0, 1.0)));
-        assert!(!encloses(&square, p(3.0, 1.0)));
-        assert!(!encloses(&square, p(3.0, 0.0)));
-        let reversed: Vec<Edge> = square.iter().rev().map(Edge::reversed).collect();
-        assert!(encloses(&reversed, p(1.0, 1.0)));
+        assert!(encloses(&curves(&square), p(1.0, 1.0)));
+        assert!(!encloses(&curves(&square), p(3.0, 1.0)));
+        assert!(!encloses(&curves(&square), p(3.0, 0.0)));
+        assert!(encloses(&curves(&reversed(&square)), p(1.0, 1.0)));
     }
 
     #[test]
     fn encloses_points_of_circles_and_circular_segments() {
-        assert!(encloses(&circle(0.0, 0.0, 1.0), p(0.5, 0.5)));
-        assert!(!encloses(&circle(0.0, 0.0, 1.0), p(1.0, 1.0)));
+        assert!(encloses(&curves(&circle(0.0, 0.0, 1.0)), p(0.5, 0.5)));
+        assert!(!encloses(&curves(&circle(0.0, 0.0, 1.0)), p(1.0, 1.0)));
         // A half disc above the x axis, as an arc and its diameter.
-        let half = vec![
-            Edge::Arc {
-                start: p(1.0, 0.0),
-                end: p(-1.0, 0.0),
-                centre: p(0.0, 0.0),
-                direction: ArcDirection::CounterClockwise,
-            },
-            Edge::Line {
-                start: p(-1.0, 0.0),
-                end: p(1.0, 0.0),
-            },
+        let half = [
+            ccw(p(1.0, 0.0), p(-1.0, 0.0), p(0.0, 0.0)),
+            line(p(-1.0, 0.0), p(1.0, 0.0)),
         ];
-        assert!(encloses(&half, p(0.0, 0.5)));
-        assert!(!encloses(&half, p(0.0, -0.5)));
-        assert!(!encloses(&half, p(0.0, 1.5)));
-        assert!(!encloses(&half, p(2.0, 0.0)));
-        let clockwise: Vec<Edge> = half.iter().rev().map(Edge::reversed).collect();
+        let counterclockwise = curves(&half);
+        assert!(encloses(&counterclockwise, p(0.0, 0.5)));
+        assert!(!encloses(&counterclockwise, p(0.0, -0.5)));
+        assert!(!encloses(&counterclockwise, p(0.0, 1.5)));
+        assert!(!encloses(&counterclockwise, p(2.0, 0.0)));
+        let clockwise = curves(&reversed(&half));
         assert!(encloses(&clockwise, p(0.0, 0.5)));
         assert!(!encloses(&clockwise, p(0.0, -0.5)));
     }
 
     #[test]
     fn encloses_points_on_the_line_of_an_arc_chord() {
-        // A square whose top side bulges outwards; the test points lie on the chord's line.
-        let bulged = vec![
-            Edge::Line {
-                start: p(0.0, 0.0),
-                end: p(2.0, 0.0),
-            },
-            Edge::Line {
-                start: p(2.0, 0.0),
-                end: p(2.0, 2.0),
-            },
-            Edge::Arc {
-                start: p(2.0, 2.0),
-                end: p(0.0, 2.0),
-                centre: p(1.0, 2.0),
-                direction: ArcDirection::CounterClockwise,
-            },
-            Edge::Line {
-                start: p(0.0, 2.0),
-                end: p(0.0, 0.0),
-            },
-        ];
+        let bulged = curves(&bulged_square());
         assert!(encloses(&bulged, p(1.0, 2.0)));
         assert!(!encloses(&bulged, p(3.0, 2.0)));
     }
 
     #[test]
     fn arcs_meet_lines_they_cross_or_approach() {
-        let quarter = Edge::Arc {
-            start: p(1.0, 0.0),
-            end: p(0.0, 1.0),
-            centre: p(0.0, 0.0),
-            direction: ArcDirection::CounterClockwise,
-        }
-        .curve();
+        let quarter = ccw(p(1.0, 0.0), p(0.0, 1.0), p(0.0, 0.0)).curve();
         let crossing = Curve::Segment(p(0.0, 0.0), p(2.0, 2.0));
         assert!(curves_meet(&quarter, &crossing, &[]));
         assert!(curves_meet(&crossing, &quarter, &[]));
@@ -450,15 +417,7 @@ mod tests {
 
     #[test]
     fn arcs_meet_arcs_they_cross_approach_or_overlap() {
-        let arc = |centre: Point2, start: Point2, end: Point2| {
-            Edge::Arc {
-                start,
-                end,
-                centre,
-                direction: ArcDirection::CounterClockwise,
-            }
-            .curve()
-        };
+        let arc = |centre, start, end| ccw(start, end, centre).curve();
         let a = arc(p(0.0, 0.0), p(1.0, 0.0), p(-1.0, 0.0));
         let crossing = arc(p(1.0, 0.0), p(2.0, 0.0), p(0.0, 0.0));
         assert!(curves_meet(&a, &crossing, &[]));
@@ -477,24 +436,15 @@ mod tests {
     #[test]
     fn consecutive_edges_may_only_meet_at_their_common_end() {
         let v = p(1.0, 0.0);
-        let line = Curve::Segment(p(1.0, -1.0), v);
-        let tangent = Edge::Arc {
-            start: v,
-            end: p(0.0, 1.0),
-            centre: p(0.0, 0.0),
-            direction: ArcDirection::CounterClockwise,
-        }
-        .curve();
-        assert!(!curves_meet(&line, &tangent, &[v]));
+        let tangent = ccw(v, p(0.0, 1.0), p(0.0, 0.0)).curve();
+        assert!(!curves_meet(
+            &Curve::Segment(p(1.0, -1.0), v),
+            &tangent,
+            &[v]
+        ));
         // A line ending on the circle and crossing it a second time inside the arc's span.
         let chord = Curve::Segment(p(0.0, 1.0), v);
-        let long = Edge::Arc {
-            start: v,
-            end: p(0.0, -1.0),
-            centre: p(0.0, 0.0),
-            direction: ArcDirection::CounterClockwise,
-        }
-        .curve();
+        let long = ccw(v, p(0.0, -1.0), p(0.0, 0.0)).curve();
         assert!(curves_meet(&chord, &long, &[v]));
         assert!(!curves_meet(&chord, &long, &[v, p(0.0, 1.0)]));
     }

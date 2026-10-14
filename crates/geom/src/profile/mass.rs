@@ -83,23 +83,7 @@ mod tests {
     use core::f64::consts::PI;
 
     use super::*;
-    use crate::ArcDirection;
-
-    fn close(actual: f64, expected: f64) {
-        assert!(
-            (actual - expected).abs() <= 1e-12 * expected.abs().max(1.0),
-            "{actual} != {expected}"
-        );
-    }
-
-    fn arc(start: Point2, end: Point2, centre: Point2) -> Edge {
-        Edge::Arc {
-            start,
-            end,
-            centre,
-            direction: ArcDirection::CounterClockwise,
-        }
-    }
+    use crate::profile::tests::{assert_close as close, ccw as arc, line, p, polygon};
 
     #[test]
     fn series_matches_the_direct_formula_where_both_are_accurate() {
@@ -112,19 +96,8 @@ mod tests {
 
     #[test]
     fn a_square_has_its_area_and_first_moments() {
-        let p = [
-            Point2::new(0.0, 0.0),
-            Point2::new(2.0, 0.0),
-            Point2::new(2.0, 2.0),
-            Point2::new(0.0, 2.0),
-        ];
-        let edges: Vec<Edge> = (0..4)
-            .map(|i| Edge::Line {
-                start: p[i],
-                end: p[(i + 1) % 4],
-            })
-            .collect();
-        let m = loop_moments(&edges, Point2::new(0.0, 0.0));
+        let edges = polygon(&[(0.0, 0.0), (2.0, 0.0), (2.0, 2.0), (0.0, 2.0)]);
+        let m = loop_moments(&edges, p(0.0, 0.0));
         assert_eq!(
             m,
             Moments {
@@ -134,15 +107,15 @@ mod tests {
             }
         );
         let reversed: Vec<Edge> = edges.iter().rev().map(Edge::reversed).collect();
-        let area = loop_moments(&reversed, Point2::new(0.0, 0.0)).area;
+        let area = loop_moments(&reversed, p(0.0, 0.0)).area;
         assert_eq!(area.to_bits(), (-4.0_f64).to_bits());
     }
 
     #[test]
     fn a_full_circle_is_pi_r_squared_at_its_centre() {
-        let centre = Point2::new(3.0, -1.0);
-        let start = Point2::new(5.0, -1.0);
-        let m = loop_moments(&[arc(start, start, centre)], Point2::new(0.0, 0.0));
+        let centre = p(3.0, -1.0);
+        let start = p(5.0, -1.0);
+        let m = loop_moments(&[arc(start, start, centre)], p(0.0, 0.0));
         close(m.area, 4.0 * PI);
         close(m.x / m.area, 3.0);
         close(m.y / m.area, -1.0);
@@ -150,15 +123,9 @@ mod tests {
 
     #[test]
     fn a_half_disc_has_its_centroid_at_four_r_over_three_pi() {
-        let left = Point2::new(-1.0, 0.0);
-        let right = Point2::new(1.0, 0.0);
-        let edges = [
-            arc(right, left, Point2::new(0.0, 0.0)),
-            Edge::Line {
-                start: left,
-                end: right,
-            },
-        ];
+        let left = p(-1.0, 0.0);
+        let right = p(1.0, 0.0);
+        let edges = [arc(right, left, p(0.0, 0.0)), line(left, right)];
         let m = loop_moments(&edges, right);
         close(m.area, PI / 2.0);
         close(m.x / m.area, -1.0);

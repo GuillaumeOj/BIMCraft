@@ -122,10 +122,35 @@ pub(crate) enum Curve {
 }
 
 impl Curve {
+    pub(crate) fn start(&self) -> Point2 {
+        match self {
+            Self::Segment(start, _) | Self::Arc(Arc { start, .. }) => *start,
+        }
+    }
+
+    pub(crate) fn end(&self) -> Point2 {
+        match self {
+            Self::Segment(_, end) | Self::Arc(Arc { end, .. }) => *end,
+        }
+    }
+
     pub(crate) fn distance_to(&self, p: Point2) -> f64 {
         match self {
             Self::Segment(a, b) => distance_to_segment(p, *a, *b),
             Self::Arc(arc) => arc.distance_to(p),
+        }
+    }
+
+    /// A box containing the curve, `[min_x, min_y, max_x, max_y]`; a whole circle for an arc.
+    pub(crate) fn bounds(&self) -> [f64; 4] {
+        match self {
+            Self::Segment(a, b) => [a.x.min(b.x), a.y.min(b.y), a.x.max(b.x), a.y.max(b.y)],
+            Self::Arc(arc) => [
+                arc.centre.x - arc.radius,
+                arc.centre.y - arc.radius,
+                arc.centre.x + arc.radius,
+                arc.centre.y + arc.radius,
+            ],
         }
     }
 }
@@ -139,43 +164,59 @@ pub(crate) struct Arc {
     pub(crate) start_angle: f64,
     /// Signed swept angle: positive counterclockwise, ±2π for a full circle.
     pub(crate) sweep: f64,
+    /// The point halfway along the arc.
+    pub(crate) middle: Point2,
 }
 
 impl Arc {
     fn new(start: Point2, end: Point2, centre: Point2, direction: ArcDirection) -> Self {
         let start_angle = angle_of(sub(start, centre));
-        let turn = if start == end {
-            TAU
-        } else {
-            let ccw = (angle_of(sub(end, centre)) - start_angle).rem_euclid(TAU);
-            match direction {
-                ArcDirection::CounterClockwise => ccw,
-                ArcDirection::Clockwise => TAU - ccw,
-            }
+        let ccw = (angle_of(sub(end, centre)) - start_angle).rem_euclid(TAU);
+        let sweep = match (start == end, direction) {
+            (true, ArcDirection::CounterClockwise) => TAU,
+            (true, ArcDirection::Clockwise) => -TAU,
+            (false, ArcDirection::CounterClockwise) => ccw,
+            (false, ArcDirection::Clockwise) => ccw - TAU,
         };
-        let sweep = match direction {
-            ArcDirection::CounterClockwise => turn,
-            ArcDirection::Clockwise => -turn,
-        };
+        Self::from_parts(start, end, centre, start_angle, sweep)
+    }
+
+    fn from_parts(
+        start: Point2,
+        end: Point2,
+        centre: Point2,
+        start_angle: f64,
+        sweep: f64,
+    ) -> Self {
+        let radius = length(sub(start, centre));
         Self {
             start,
             end,
             centre,
-            radius: length(sub(start, centre)),
+            radius,
             start_angle,
             sweep,
+            middle: point_on_circle(centre, radius, start_angle + sweep / 2.0),
         }
+    }
+
+    /// The two halves of the arc.
+    pub(crate) fn split(&self) -> (Self, Self) {
+        let half = self.sweep / 2.0;
+        (
+            Self::from_parts(self.start, self.middle, self.centre, self.start_angle, half),
+            Self::from_parts(
+                self.middle,
+                self.end,
+                self.centre,
+                self.start_angle + half,
+                half,
+            ),
+        )
     }
 
     pub(crate) fn is_full_circle(&self) -> bool {
         self.start == self.end
-    }
-
-    pub(crate) fn point_at_angle(&self, angle: f64) -> Point2 {
-        Point2::new(
-            libm::cos(angle).mul_add(self.radius, self.centre.x),
-            libm::sin(angle).mul_add(self.radius, self.centre.y),
-        )
     }
 
     /// Whether the ray from the centre at `angle` passes through the arc.
@@ -226,6 +267,13 @@ pub(crate) fn length(v: Point2) -> f64 {
 
 pub(crate) fn distance(a: Point2, b: Point2) -> f64 {
     length(sub(a, b))
+}
+
+fn point_on_circle(centre: Point2, radius: f64, angle: f64) -> Point2 {
+    Point2::new(
+        libm::cos(angle).mul_add(radius, centre.x),
+        libm::sin(angle).mul_add(radius, centre.y),
+    )
 }
 
 pub(crate) fn angle_of(v: Point2) -> f64 {
@@ -338,11 +386,33 @@ mod tests {
     }
 
     #[test]
-    fn points_and_antipodes_lie_on_the_circle() {
+    fn middle_halves_and_antipodes_lie_on_the_circle() {
         let half = arc(X, Point2::new(-1.0, 0.0), ArcDirection::CounterClockwise);
-        let top = half.point_at_angle(FRAC_PI_2);
+        let top = half.middle;
         assert!(top.x.abs() < 1e-15 && (top.y - 1.0).abs() < 1e-15);
         assert_eq!(half.antipodes(Y), [Y, Point2::new(0.0, -1.0)]);
         assert!((half.sweep - PI).abs() < 1e-15);
+        let (first, second) = half.split();
+        assert_eq!((first.start, first.end, second.start), (X, top, top));
+        assert!(
+            (first.sweep - FRAC_PI_2).abs() < 1e-15
+                && (second.start_angle - FRAC_PI_2).abs() < 1e-15
+        );
+    }
+
+    #[test]
+    fn bounds_hold_segments_and_whole_circles() {
+        let bits = |b: [f64; 4]| b.map(f64::to_bits);
+        assert_eq!(
+            bits(Curve::Segment(X, Y).bounds()),
+            bits([0.0, 0.0, 1.0, 1.0])
+        );
+        let quarter = Curve::Arc(arc(X, Y, ArcDirection::CounterClockwise));
+        assert_eq!(bits(quarter.bounds()), bits([-1.0, -1.0, 1.0, 1.0]));
+        assert_eq!((quarter.start(), quarter.end()), (X, Y));
+        assert_eq!(
+            (Curve::Segment(X, Y).start(), Curve::Segment(X, Y).end()),
+            (X, Y)
+        );
     }
 }

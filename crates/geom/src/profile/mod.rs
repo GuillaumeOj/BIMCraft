@@ -153,31 +153,43 @@ impl Profile {
         if edge_count > MAX_PROFILE_EDGES {
             return Err(ProfileError::TooManyEdges);
         }
-        let loops: Vec<(LoopId, &[Edge])> = core::iter::once((LoopId::Outer, outer.as_slice()))
-            .chain(
-                holes
-                    .iter()
-                    .enumerate()
-                    .map(|(i, hole)| (LoopId::Hole(i), hole.as_slice())),
-            )
-            .collect();
-        for &(id, edges) in &loops {
-            validate::check_loop(id, edges)?;
+        let inputs = core::iter::once((LoopId::Outer, outer.as_slice())).chain(
+            holes
+                .iter()
+                .enumerate()
+                .map(|(i, hole)| (LoopId::Hole(i), hole.as_slice())),
+        );
+        let mut loops: Vec<(LoopId, Vec<Curve>)> = Vec::with_capacity(holes.len() + 1);
+        for (id, edges) in inputs {
+            loops.push((id, validate::check_loop(id, edges)?));
         }
-        let curves: Vec<Vec<Curve>> = loops
-            .iter()
-            .map(|(_, edges)| edges.iter().map(Edge::curve).collect())
-            .collect();
-        for (&(id, edges), curves) in loops.iter().zip(&curves) {
-            validate::check_simple(id, edges, curves)?;
+        for (id, curves) in &loops {
+            validate::check_simple(*id, curves)?;
         }
-        for (i, (&(first, _), a)) in loops.iter().zip(&curves).enumerate() {
-            for (&(second, _), b) in loops.iter().zip(&curves).skip(i + 1) {
-                validate::check_apart((first, a), (second, b))?;
+        for (i, (first, a)) in loops.iter().enumerate() {
+            for (second, b) in &loops[i + 1..] {
+                if validate::loops_meet(a, b) {
+                    return Err(ProfileError::LoopsIntersect {
+                        first: *first,
+                        second: *second,
+                    });
+                }
             }
         }
-        check_nesting(&outer, &holes)?;
-        Ok(Self::oriented(outer, holes))
+        check_nesting(&loops[0].1, &loops[1..])?;
+        // Coordinates are taken from the first vertex, which keeps them small.
+        let origin = outer[0].start();
+        let (outer, outer_moments) = oriented(outer, true, origin);
+        let (holes, hole_moments): (Vec<_>, Vec<_>) = holes
+            .into_iter()
+            .map(|hole| oriented(hole, false, origin))
+            .unzip();
+        Ok(Self {
+            outer,
+            holes,
+            origin,
+            moments: hole_moments.into_iter().fold(outer_moments, Moments::add),
+        })
     }
 
     /// The outer loop, counterclockwise.
@@ -205,32 +217,18 @@ impl Profile {
             self.origin.y + self.moments.y / self.moments.area,
         )
     }
+}
 
-    /// Reverses loops so the outer one turns counterclockwise and holes clockwise, and sums the
-    /// moments. Coordinates are taken from the first vertex, which keeps them small.
-    fn oriented(outer: Vec<Edge>, holes: Vec<Vec<Edge>>) -> Self {
-        let origin = outer[0].start();
-        let mut moments = Moments::default();
-        let mut orient = |edges: Vec<Edge>, counterclockwise: bool| {
-            let m = loop_moments(&edges, origin);
-            if (m.area > 0.0) == counterclockwise {
-                moments = moments.add(m);
-                edges
-            } else {
-                // Recomputed rather than negated, so the result depends only on the stored loop.
-                let edges = reversed(&edges);
-                moments = moments.add(loop_moments(&edges, origin));
-                edges
-            }
-        };
-        let outer = orient(outer, true);
-        let holes = holes.into_iter().map(|hole| orient(hole, false)).collect();
-        Self {
-            outer,
-            holes,
-            origin,
-            moments,
-        }
+/// The loop turning the requested way, reversed if needed, with its moments.
+fn oriented(edges: Vec<Edge>, counterclockwise: bool, origin: Point2) -> (Vec<Edge>, Moments) {
+    let moments = loop_moments(&edges, origin);
+    if (moments.area > 0.0) == counterclockwise {
+        (edges, moments)
+    } else {
+        // Recomputed rather than negated, so the result depends only on the stored loop.
+        let edges = reversed(&edges);
+        let moments = loop_moments(&edges, origin);
+        (edges, moments)
     }
 }
 
@@ -240,17 +238,15 @@ fn reversed(edges: &[Edge]) -> Vec<Edge> {
 
 /// Every hole inside the outer loop and outside the other holes. Loops are already known not to
 /// meet, so testing one vertex of each hole decides it.
-fn check_nesting(outer: &[Edge], holes: &[Vec<Edge>]) -> Result<(), ProfileError> {
-    for (inner, hole) in holes.iter().enumerate() {
+fn check_nesting(outer: &[Curve], holes: &[(LoopId, Vec<Curve>)]) -> Result<(), ProfileError> {
+    for (inner, (_, hole)) in holes.iter().enumerate() {
         let vertex = hole[0].start();
         if !validate::encloses(outer, vertex) {
             return Err(ProfileError::HoleOutsideOuter(inner));
         }
-        if let Some(outer) = holes
-            .iter()
-            .enumerate()
-            .position(|(j, other)| j != inner && validate::encloses(other, vertex))
-        {
+        let enclosing =
+            (0..holes.len()).find(|&j| j != inner && validate::encloses(&holes[j].1, vertex));
+        if let Some(outer) = enclosing {
             return Err(ProfileError::NestedHoles { outer, inner });
         }
     }
