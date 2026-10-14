@@ -109,3 +109,43 @@ fn reads_complex_instances_binaries_and_several_data_sections() {
     ];
     assert_eq!(instances, expected);
 }
+
+#[test]
+fn decodes_every_instance_into_an_entity_class() {
+    use interop_ifc::ifc::{Entity, IfcLabel, IfcLengthMeasure, IfcValue, IfcWallTypeEnum};
+
+    let reader = StepReader::new(WALL.as_bytes(), Limits::default()).unwrap();
+    let entities = reader
+        .map(|instance| Entity::from_instance(&instance.unwrap().body))
+        .collect::<Result<Vec<_>, _>>()
+        .unwrap();
+    let names: Vec<&str> = entities.iter().map(Entity::step_name).collect();
+    assert_eq!(
+        names,
+        [
+            "IFCPROJECT",
+            "IFCUNITASSIGNMENT",
+            "IFCSIUNIT",
+            "IFCGEOMETRICREPRESENTATIONCONTEXT",
+            "IFCAXIS2PLACEMENT3D",
+            "IFCCARTESIANPOINT",
+            "IFCWALL",
+            "IFCPROPERTYSINGLEVALUE",
+        ]
+    );
+
+    let Entity::IfcWall(wall) = &entities[6] else {
+        panic!("the seventh instance is a wall");
+    };
+    assert_eq!(wall.global_id.0, "2O2Fr$t4X7Zf8NOew3FLOH");
+    assert_eq!(wall.name, Some(IfcLabel(r"Wall \X2\00E9\X0\".to_owned())));
+    assert_eq!(wall.predefined_type, Some(IfcWallTypeEnum::Standard));
+
+    let Entity::IfcPropertySingleValue(width) = &entities[7] else {
+        panic!("the eighth instance is a property");
+    };
+    assert_eq!(
+        width.nominal_value,
+        Some(IfcValue::IfcLengthMeasure(IfcLengthMeasure(0.2)))
+    );
+}

@@ -10,6 +10,9 @@ publish = false
 [dependencies]
 thiserror = { workspace = true }
 
+[build-dependencies]
+express = { workspace = true }
+
 [dev-dependencies]
 proptest = { workspace = true }
 

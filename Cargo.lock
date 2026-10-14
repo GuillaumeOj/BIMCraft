@@ -457,6 +457,7 @@ dependencies = [
 name = "interop-ifc"
 version = "0.0.0"
 dependencies = [
+ "express",
  "proptest",
  "thiserror",
 ]
