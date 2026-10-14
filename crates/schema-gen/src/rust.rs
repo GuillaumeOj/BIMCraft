@@ -7,6 +7,7 @@
 use std::collections::BTreeSet;
 use std::fmt::Write as _;
 
+use rust_names::{NOT_RAW, identifier, pascal_case, snake_case};
 use schema::{Cardinality, Namespace, Value, ValueType};
 
 use crate::layout::{self, FieldType};
@@ -27,9 +28,6 @@ const ALLOWED_LINTS: &str = "#[allow(
     clippy::struct_field_names,
     reason = \"docs and names come from the schema definitions, not from Rust authors\"
 )]";
-
-/// Rust keywords that cannot be used even as raw identifiers.
-const NOT_RAW: [&str; 4] = ["crate", "self", "super", "Self"];
 
 /// Names the emitted code uses unqualified; a struct with one of them would shadow it.
 const USED_TYPES: [&str; 4] = ["Option", "String", "Vec", "Self"];
@@ -216,40 +214,6 @@ fn group(digits: &str, from_right: bool) -> String {
     out
 }
 
-/// `Pset_WallCommon` becomes `PsetWallCommon`.
-fn pascal_case(name: &str) -> String {
-    name.split('_')
-        .flat_map(|word| {
-            let mut chars = word.chars();
-            chars
-                .next()
-                .map(|first| first.to_ascii_uppercase())
-                .into_iter()
-                .chain(chars)
-        })
-        .collect()
-}
-
-/// `IsExternal` becomes `is_external`, `UValue` becomes `u_value`, `HTTPProxy` `http_proxy`.
-fn snake_case(name: &str) -> String {
-    let chars: Vec<char> = name.chars().collect();
-    let mut out = String::new();
-    for (index, &c) in chars.iter().enumerate() {
-        if c.is_ascii_uppercase() && index > 0 {
-            let previous = chars[index - 1];
-            let next_is_lower = chars.get(index + 1).is_some_and(char::is_ascii_lowercase);
-            if previous.is_ascii_lowercase()
-                || previous.is_ascii_digit()
-                || (previous.is_ascii_uppercase() && next_is_lower)
-            {
-                out.push('_');
-            }
-        }
-        out.push(c.to_ascii_lowercase());
-    }
-    out
-}
-
 /// Struct names must be distinct, and field names distinct and usable as identifiers.
 fn check_names(structs: &[Struct]) -> Result<(), Vec<Error>> {
     let mut errors = Vec::new();
@@ -283,26 +247,6 @@ fn check_names(structs: &[Struct]) -> Result<(), Vec<Error>> {
             .map(|message| Error::new(ErrorKind::Rust(message)))
             .collect())
     }
-}
-
-fn identifier(name: &str) -> String {
-    if is_keyword(name) {
-        format!("r#{name}")
-    } else {
-        name.to_owned()
-    }
-}
-
-/// Strict and reserved keywords of the 2024 edition, which need `r#` as identifiers.
-fn is_keyword(name: &str) -> bool {
-    const KEYWORDS: [&str; 48] = [
-        "abstract", "as", "async", "await", "become", "box", "break", "const", "continue", "do",
-        "dyn", "else", "enum", "extern", "false", "final", "fn", "for", "gen", "if", "impl", "in",
-        "let", "loop", "macro", "match", "mod", "move", "mut", "override", "priv", "pub", "ref",
-        "return", "static", "struct", "trait", "true", "try", "type", "typeof", "unsafe",
-        "unsized", "use", "virtual", "where", "while", "yield",
-    ];
-    KEYWORDS.contains(&name)
 }
 
 fn write_doc(out: &mut String, indent: &str, doc: &[String]) {
@@ -401,17 +345,6 @@ mod tests {
     }
 
     #[test]
-    fn converts_names() {
-        assert_eq!(pascal_case("Pset_WallCommon"), "PsetWallCommon");
-        assert_eq!(pascal_case("Qto_wallBase"), "QtoWallBase");
-        assert_eq!(snake_case("IsExternal"), "is_external");
-        assert_eq!(snake_case("UValue"), "u_value");
-        assert_eq!(snake_case("HTTPProxy"), "http_proxy");
-        assert_eq!(snake_case("Level2Height"), "level2_height");
-        assert_eq!(snake_case("ABC"), "abc");
-    }
-
-    #[test]
     fn keeps_schema_docs_out_of_doctests() {
         let doc = "Example:\n\n```\nlet x = 1;\n```\n\n    indented();\n\n```toml\na = 1\n```";
         assert_eq!(
@@ -430,14 +363,6 @@ mod tests {
                 "```",
             ]
         );
-    }
-
-    #[test]
-    fn escapes_keywords() {
-        assert_eq!(identifier("type"), "r#type");
-        assert_eq!(identifier("gen"), "r#gen");
-        assert_eq!(identifier("union"), "union");
-        assert_eq!(identifier("height"), "height");
     }
 
     #[test]

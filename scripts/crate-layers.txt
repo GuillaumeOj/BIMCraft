@@ -2,7 +2,7 @@
 # A crate may depend on crates in its own layer or below, never above.
 # Every crate in crates/ must be listed exactly once; solver crates join the last layer.
 # Checked by scripts/check-architecture.ts; rationale in docs/dev/quality.md.
-platform schema schema-gen
+platform schema schema-gen rust-names
 core-model core-txn geom persist
 georef analysis docgen interop-ifc interop-dxf interop-bcf
 disc-arch disc-struct disc-mep disc-thermal

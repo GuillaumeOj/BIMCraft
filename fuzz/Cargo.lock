@@ -153,6 +153,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f8dcc9c7d52a811697d2151c701e0d08956f92b0e24136cf4cf27b57a6a0d9bf"
 
 [[package]]
+name = "rust-names"
+version = "0.0.0"
+
+[[package]]
 name = "schema"
 version = "0.0.0"
 dependencies = [
@@ -163,6 +167,7 @@ dependencies = [
 name = "schema-gen"
 version = "0.0.0"
 dependencies = [
+ "rust-names",
  "schema",
  "serde",
  "serde_json",

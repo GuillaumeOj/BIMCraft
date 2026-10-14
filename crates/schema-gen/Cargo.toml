@@ -8,6 +8,7 @@ license.workspace = true
 publish = false
 
 [dependencies]
+rust-names = { workspace = true }
 schema = { path = "../schema" }
 serde = { workspace = true }
 serde_json = { workspace = true }
