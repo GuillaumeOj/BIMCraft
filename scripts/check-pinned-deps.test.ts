@@ -162,6 +162,7 @@ describe("checkFile", () => {
     expect(checkFile("ui/package.json", '{"dependencies":{"a":"^1.0.0"}}')).toHaveLength(1);
     expect(checkFile("rust-toolchain.toml", "")).toHaveLength(1);
     expect(checkFile(".github/workflows/ci.yaml", "- uses: a/b@v1")).toHaveLength(1);
+    expect(checkFile(".github/actions/setup/action.yml", "- uses: a/b@v1")).toHaveLength(1);
     expect(checkFile(".github/dependabot.yml", "- uses: a/b@v1")).toEqual([]);
     expect(checkFile("README.md", "anything")).toEqual([]);
   });

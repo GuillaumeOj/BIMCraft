@@ -128,6 +128,7 @@ function checkerFor(file: string): Checker | undefined {
   if (name === "package.json") return checkPackageJson;
   if (name === "rust-toolchain.toml") return checkRustToolchain;
   if (/^\.github\/workflows\/[^/]+\.ya?ml$/.test(file)) return checkWorkflow;
+  if (/^\.github\/actions\/.+\/action\.ya?ml$/.test(file)) return checkWorkflow;
   return undefined;
 }
 

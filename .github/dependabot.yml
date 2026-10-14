@@ -48,8 +48,9 @@ updates:
       prefix: build
       include: scope
 
+  # The local composite actions pin actions too.
   - package-ecosystem: github-actions
-    directory: /
+    directories: ["/", "/.github/actions/*"]
     schedule:
       interval: weekly
     cooldown:
