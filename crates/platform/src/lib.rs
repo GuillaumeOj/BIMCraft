@@ -30,7 +30,14 @@ pub use storage::{Storage, StorageError};
 
 /// A boxed future, so traits can return futures and still be used as trait objects.
 ///
-/// It is not `Send`, because browser futures are not.
+/// On native targets it is `Send`, so the desktop host can run it on a thread pool.
+#[cfg(not(target_arch = "wasm32"))]
+pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
+
+/// A boxed future, so traits can return futures and still be used as trait objects.
+///
+/// On `wasm32` it is not `Send`, because browser futures are not.
+#[cfg(target_arch = "wasm32")]
 pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + 'a>>;
 
 #[cfg(test)]

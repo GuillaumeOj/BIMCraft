@@ -1,0 +1,26 @@
+[package]
+name = "host-desktop"
+version = "0.0.0"
+description = "Desktop host: platform traits backed by files, threads, the system clock and processes."
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+platform = { workspace = true }
+rayon = { workspace = true }
+tempfile = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+platform = { workspace = true, features = ["testing"] }
+
+# Test fixture: a stand-in solver that the compute tests start as a child process.
+[[bin]]
+name = "test-solver"
+test = false
+doc = false
+
+[lints]
+workspace = true

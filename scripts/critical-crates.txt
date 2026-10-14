@@ -9,3 +9,4 @@ api
 interop-ifc
 interop-dxf
 interop-bcf
+host-desktop
