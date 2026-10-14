@@ -6,9 +6,6 @@
 //! must not depend on where the underlying reader splits the bytes.
 
 #![no_main]
-// A native test tool, not a core crate: libFuzzer's harness writes crash files, which the ARCH-02
-// lints of clippy.toml would flag inside `fuzz_target!`.
-#![allow(clippy::disallowed_methods, clippy::disallowed_types)]
 
 use std::io::{BufRead, BufReader};
 
@@ -28,18 +25,12 @@ type Outcome = Result<(Vec<Record>, Vec<Instance>), StepError>;
 fn read(input: impl BufRead, limits: Limits) -> Outcome {
     let mut reader = StepReader::new(input, limits).inspect_err(check_position)?;
     let header = reader.header().to_vec();
-    let mut instances = Vec::new();
-    while let Some(next) = reader.next() {
-        match next {
-            Ok(instance) => instances.push(instance),
-            Err(error) => {
-                check_position(&error);
-                assert!(reader.next().is_none(), "the reader goes on after an error");
-                return Err(error);
-            }
-        }
+    let instances = reader.by_ref().collect::<Result<_, _>>();
+    if let Err(error) = &instances {
+        check_position(error);
+        assert!(reader.next().is_none(), "the reader goes on after an error");
     }
-    Ok((header, instances))
+    Ok((header, instances?))
 }
 
 fn check_position(error: &StepError) {

@@ -2,9 +2,6 @@
 //! into Rust, or rejected with errors; nothing panics, overflows the stack or runs away.
 
 #![no_main]
-// A native test tool, not a core crate: libFuzzer's harness writes crash files, which the ARCH-02
-// lints of clippy.toml would flag inside `fuzz_target!`.
-#![allow(clippy::disallowed_methods, clippy::disallowed_types)]
 
 use libfuzzer_sys::fuzz_target;
 use schema_gen::{RustOptions, Source, emit_rust, parse_sources};
