@@ -10,11 +10,11 @@ publish = false
 [dependencies]
 platform = { workspace = true }
 rayon = { workspace = true }
+tempfile = { workspace = true }
 thiserror = { workspace = true }
 
 [dev-dependencies]
 platform = { workspace = true, features = ["testing"] }
-tempfile = { workspace = true }
 
 # Test fixture: a stand-in solver that the compute tests start as a child process.
 [[bin]]

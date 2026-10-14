@@ -37,12 +37,6 @@ impl RayonExecutor {
             .build()?;
         Ok(Self { pool })
     }
-
-    /// Returns how many worker threads the pool runs.
-    #[must_use]
-    pub fn threads(&self) -> usize {
-        self.pool.current_num_threads()
-    }
 }
 
 impl TaskExecutor for RayonExecutor {
@@ -85,7 +79,6 @@ mod tests {
     #[test]
     fn runs_every_spawned_task_on_a_worker_thread() {
         let executor = RayonExecutor::new(2).unwrap();
-        assert_eq!(executor.threads(), 2);
         let (sender, receiver) = mpsc::channel();
         for task in 0..10 {
             let sender = sender.clone();
@@ -95,13 +88,14 @@ mod tests {
             }));
         }
         drop(sender);
-        let mut done: Vec<_> = receiver.iter().collect();
-        done.sort();
-        assert_eq!(done.len(), 10);
-        for (expected, (task, worker)) in done.into_iter().enumerate() {
-            assert_eq!(task, expected);
-            assert!(worker.unwrap().starts_with("bimcraft-worker-"));
-        }
+        let (mut tasks, workers): (Vec<_>, Vec<_>) = receiver.iter().unzip();
+        tasks.sort_unstable();
+        assert_eq!(tasks, (0..10).collect::<Vec<_>>());
+        assert!(workers.iter().all(|worker| {
+            worker
+                .as_deref()
+                .is_some_and(|name| name.starts_with("bimcraft-worker-"))
+        }));
     }
 
     #[test]
@@ -116,7 +110,9 @@ mod tests {
     #[test]
     fn zero_threads_means_one_per_cpu() {
         let executor = RayonExecutor::new(0).unwrap();
-        assert!(executor.threads() >= 1);
+        let (sender, receiver) = mpsc::channel();
+        executor.spawn(Box::pin(async move { sender.send(()).unwrap() }));
+        receiver.recv().unwrap();
     }
 
     #[test]

@@ -1,11 +1,9 @@
-use std::ffi::OsString;
-use std::fs::{self, File};
+use std::fs;
 use std::io::{self, ErrorKind, Write};
 use std::path::{Path, PathBuf};
-use std::process;
-use std::sync::atomic::{AtomicU64, Ordering};
 
 use platform::{BoxFuture, Storage, StorageError};
+use tempfile::Builder;
 
 /// Suffix of the file a value is written to before it replaces the previous one. Keys cannot
 /// end with it, so a temporary file never overwrites a stored value.
@@ -13,9 +11,6 @@ const TEMP_SUFFIX: &str = ".bimcraft-tmp";
 
 /// Characters Windows does not allow in file names; `/` already separates names in keys.
 const FORBIDDEN: [char; 8] = ['<', '>', ':', '"', '\\', '|', '?', '*'];
-
-/// Numbers the temporary files of this process, so concurrent writes never share one.
-static NEXT_TEMP: AtomicU64 = AtomicU64::new(0);
 
 /// A [`Storage`] that keeps each value in a file under a root directory.
 ///
@@ -31,12 +26,6 @@ impl FileStorage {
     /// Creates a storage that keeps its files under `root`, which is created on the first write.
     pub fn new(root: impl Into<PathBuf>) -> Self {
         Self { root: root.into() }
-    }
-
-    /// Returns the directory the files are kept in.
-    #[must_use]
-    pub fn root(&self) -> &Path {
-        &self.root
     }
 
     /// Returns the file that holds the value of `key`.
@@ -91,45 +80,32 @@ fn is_plain_name(name: &str) -> bool {
 
 /// Whether Windows reserves `stem` for a device, in any case and with any extension.
 fn is_windows_device(stem: &str) -> bool {
-    let stem = stem.to_ascii_uppercase();
-    let port = stem
-        .strip_prefix("COM")
-        .or_else(|| stem.strip_prefix("LPT"));
-    matches!(
-        stem.as_str(),
-        "CON" | "PRN" | "AUX" | "NUL" | "CONIN$" | "CONOUT$"
-    ) || port.is_some_and(|digit| {
+    let is_port = stem.split_at_checked(3).is_some_and(|(prefix, digit)| {
         let mut chars = digit.chars();
-        chars
-            .next()
-            .is_some_and(|c| c.is_ascii_digit() || "¹²³".contains(c))
+        (prefix.eq_ignore_ascii_case("COM") || prefix.eq_ignore_ascii_case("LPT"))
+            && chars
+                .next()
+                .is_some_and(|c| c.is_ascii_digit() || "¹²³".contains(c))
             && chars.next().is_none()
-    })
+    });
+    is_port
+        || ["CON", "PRN", "AUX", "NUL", "CONIN$", "CONOUT$"]
+            .iter()
+            .any(|device| stem.eq_ignore_ascii_case(device))
 }
 
 /// Writes `bytes` to `path` through a temporary file, so a crash or a full disk leaves either the
 /// old value or the new one, never a mix.
 fn write_atomically(path: &Path, bytes: &[u8]) -> io::Result<()> {
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)?;
-    }
-    let mut temp = OsString::from(path);
-    let number = NEXT_TEMP.fetch_add(1, Ordering::Relaxed);
-    temp.push(format!(".{}-{number}{TEMP_SUFFIX}", process::id()));
-    let temp = PathBuf::from(temp);
-    let written = write_and_sync(&temp, bytes).and_then(|()| fs::rename(&temp, path));
-    if written.is_err() {
-        // Best effort: the write already failed, and that is the error worth reporting.
-        let _ = fs::remove_file(&temp);
-    }
-    written
-}
-
-/// Writes `bytes` to a new file at `path` and waits until they reach the disk.
-fn write_and_sync(path: &Path, bytes: &[u8]) -> io::Result<()> {
-    let mut file = File::create(path)?;
-    file.write_all(bytes)?;
-    file.sync_all()
+    // The root always holds the key, so the path has a parent.
+    let folder = path.parent().unwrap_or(path);
+    fs::create_dir_all(folder)?;
+    // A uniquely named temporary file, deleted on drop if anything below fails.
+    let mut temp = Builder::new().suffix(TEMP_SUFFIX).tempfile_in(folder)?;
+    temp.write_all(bytes)?;
+    temp.as_file().sync_all()?;
+    temp.persist(path)?;
+    Ok(())
 }
 
 /// Maps a failed read or remove to a [`StorageError`]. A folder in the key that is a file means
@@ -162,7 +138,6 @@ mod tests {
     #[test]
     fn keys_map_to_files_under_the_root() {
         let storage = FileStorage::new("root");
-        assert_eq!(storage.root(), Path::new("root"));
         assert_eq!(
             storage.path("projects/tower/model.bim"),
             Ok(Path::new("root")

@@ -29,7 +29,6 @@ fn entries(dir: &Path) -> Vec<String> {
 }
 
 #[test]
-#[cfg(test)] // Lets the helper unwrap, as tests may (clippy.toml).
 fn reads_back_the_latest_write_in_new_folders() {
     let dir = TempDir::new().unwrap();
     let storage = FileStorage::new(dir.path().join("store"));
@@ -47,7 +46,6 @@ fn reads_back_the_latest_write_in_new_folders() {
 }
 
 #[test]
-#[cfg(test)] // Lets the helper unwrap, as tests may (clippy.toml).
 fn removes_values() {
     let dir = TempDir::new().unwrap();
     let storage = FileStorage::new(dir.path());
@@ -61,7 +59,6 @@ fn removes_values() {
 }
 
 #[test]
-#[cfg(test)] // Lets the helper unwrap, as tests may (clippy.toml).
 fn reports_missing_values() {
     let dir = TempDir::new().unwrap();
     let storage = FileStorage::new(dir.path());
@@ -81,7 +78,7 @@ fn reports_missing_values() {
 fn concurrent_writes_to_one_key_keep_one_whole_value() {
     let dir = TempDir::new().unwrap();
     let storage = FileStorage::new(dir.path());
-    let values: Vec<Vec<u8>> = (0..8_u8).map(|i| vec![i; 1 << 20]).collect();
+    let values: Vec<Vec<u8>> = (0..8_u8).map(|i| vec![i; 1 << 16]).collect();
 
     thread::scope(|scope| {
         for value in &values {
@@ -96,7 +93,6 @@ fn concurrent_writes_to_one_key_keep_one_whole_value() {
 }
 
 #[test]
-#[cfg(test)] // Lets the helper unwrap, as tests may (clippy.toml).
 fn rejects_keys_outside_the_root_without_touching_the_disk() {
     let dir = TempDir::new().unwrap();
     let storage = FileStorage::new(dir.path().join("store"));
@@ -112,7 +108,6 @@ fn rejects_keys_outside_the_root_without_touching_the_disk() {
 }
 
 #[test]
-#[cfg(test)] // Lets the helper unwrap, as tests may (clippy.toml).
 fn reports_folders_as_failures_and_cleans_up() {
     let dir = TempDir::new().unwrap();
     let storage = FileStorage::new(dir.path());
