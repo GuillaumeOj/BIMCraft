@@ -15,6 +15,8 @@ license = "MIT"
 # Member crates use `name = { workspace = true }`.
 [workspace.dependencies]
 criterion = { version = "=0.8.2", default-features = false }
+# Without the default features, which fetch remote and file `$ref`s over HTTP and TLS.
+jsonschema = { version = "=0.58.3", default-features = false }
 libm = "=0.2.16"
 num-rational = { version = "=0.4.2", default-features = false, features = [
   "num-bigint-std",

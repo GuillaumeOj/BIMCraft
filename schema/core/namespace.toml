@@ -1,0 +1,7 @@
+# The core schema namespace (ADR 0002). Entity, relationship and property set definitions go in
+# entities/, relationships/ and property-sets/; api.schema.json is generated from them.
+format = 1
+
+[namespace]
+name = "core"
+version = 1

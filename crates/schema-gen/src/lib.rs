@@ -18,6 +18,9 @@
 //! # }
 //! ```
 //!
+//! [`generate_json_schema`] gives the JSON Schema of the same data (API-02); the core one is
+//! published as `schema/core/api.schema.json`.
+//!
 //! Generation is deterministic: the same definitions always give byte-identical code.
 
 // Build-time only (not in scripts/wasm-crates.txt): reading definition files from disk is this
@@ -26,6 +29,7 @@
 
 mod definition;
 mod error;
+mod json_schema;
 mod layout;
 mod load;
 mod parse;
@@ -34,6 +38,7 @@ mod rust;
 use std::path::{Path, PathBuf};
 
 pub use error::{Error, ErrorKind};
+pub use json_schema::{DRAFT, JsonSchemaOptions, emit_json_schema};
 pub use load::load_dir;
 pub use parse::{FORMAT, MAX_FILE_SIZE, Source, parse_sources};
 pub use rust::{RustOptions, emit_rust};
@@ -46,6 +51,24 @@ pub struct Generated {
     /// What to pass to `cargo::rerun-if-changed`: the namespace directory, which Cargo scans
     /// recursively, so editing, adding or removing any definition reruns the build script.
     pub inputs: Vec<PathBuf>,
+}
+
+/// Reads the namespace in `dir` and generates its JSON Schema (API-02).
+///
+/// # Errors
+///
+/// Returns every [`Error`] found, as [`generate_rust`] does.
+pub fn generate_json_schema(
+    dir: &Path,
+    options: &JsonSchemaOptions,
+) -> Result<Generated, Vec<Error>> {
+    let sources = load_dir(dir).map_err(|error| vec![error])?;
+    let namespace = parse_sources(&sources)?;
+    let code = emit_json_schema(&namespace, options)?;
+    Ok(Generated {
+        code,
+        inputs: vec![dir.to_owned()],
+    })
 }
 
 /// Reads the namespace in `dir` and generates its Rust types.

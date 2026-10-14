@@ -7,8 +7,8 @@ use std::path::PathBuf;
 
 use schema::{EntityKind, Namespace, ValidationErrorKind};
 use schema_gen::{
-    Error, ErrorKind, MAX_FILE_SIZE, RustOptions, Source, emit_rust, generate_rust, load_dir,
-    parse_sources,
+    Error, ErrorKind, JsonSchemaOptions, MAX_FILE_SIZE, RustOptions, Source, emit_json_schema,
+    emit_rust, generate_rust, load_dir, parse_sources,
 };
 
 const NAMESPACE: &str = "format = 1\n[namespace]\nname = \"core\"\nversion = 1\n";
@@ -342,6 +342,37 @@ fn emitting_validates_first() {
         &errors[0].kind,
         ErrorKind::Validation(error) if error.kind == ValidationErrorKind::ZeroVersion
     ));
+}
+
+fn json_options() -> JsonSchemaOptions {
+    JsonSchemaOptions {
+        id: "urn:test".into(),
+        object_id: serde_json::json!({ "type": "integer" }),
+    }
+}
+
+#[test]
+fn json_schema_emitting_validates_first() {
+    let mut namespace = parse_with(&[]).unwrap();
+    namespace.version = 0;
+    let errors = emit_json_schema(&namespace, &json_options()).unwrap_err();
+    assert!(matches!(
+        &errors[0].kind,
+        ErrorKind::Validation(error) if error.kind == ValidationErrorKind::ZeroVersion
+    ));
+}
+
+#[test]
+fn json_schema_keeps_the_object_id_definition_free() {
+    let entity = STOREY
+        .replace("\"Storey\"", "\"ObjectId\"")
+        .replace("IfcBuildingStorey", "IfcSpace");
+    let namespace = parse_with(&[("entities/object_id.toml", &entity)]).unwrap();
+    let errors = emit_json_schema(&namespace, &json_options()).unwrap_err();
+    assert_eq!(
+        errors[0].to_string(),
+        "two JSON Schema definitions are named `ObjectId`"
+    );
 }
 
 #[test]

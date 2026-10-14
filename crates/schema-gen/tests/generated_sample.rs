@@ -1,8 +1,8 @@
 //! Compiles the generated sample under the workspace lints, as a crate's `include!` would, and
-//! checks how its types serialize.
+//! checks how its types serialize and that their JSON matches the generated JSON Schema.
 
 use serde::{Deserialize, Serialize};
-use serde_json::json;
+use serde_json::{Value, json};
 
 /// Stands in for the model's identifier, which `RustOptions::id_type` names.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -17,11 +17,35 @@ use generated::{
     WallType,
 };
 
+/// Whether `instance` is valid for the definition `name` of the sample's JSON Schema.
+fn matches_schema(name: &str, instance: &Value) -> Result<bool, String> {
+    let mut schema: Value = serde_json::from_str(include_str!("snapshots/sample.schema.json"))
+        .map_err(|error| error.to_string())?;
+    schema["$ref"] = json!(format!("#/$defs/{name}"));
+    let validator = jsonschema::validator_for(&schema).map_err(|error| error.to_string())?;
+    Ok(validator.is_valid(instance))
+}
+
+/// Round-trips `value` through JSON, checking the JSON against the definition of its type.
 fn round_trip<T>(value: &T) -> Result<(), serde_json::Error>
 where
     T: Serialize + for<'de> Deserialize<'de> + PartialEq + std::fmt::Debug,
 {
     let json = serde_json::to_value(value)?;
+    let name = std::any::type_name::<T>()
+        .rsplit("::")
+        .next()
+        .unwrap_or_default();
+    let name = if name == "PsetWallCommon" {
+        "Pset_WallCommon"
+    } else {
+        name
+    };
+    assert_eq!(
+        matches_schema(name, &json),
+        Ok(true),
+        "{json} against `{name}`"
+    );
     assert_eq!(&serde_json::from_value::<T>(json)?, value);
     Ok(())
 }
@@ -74,6 +98,27 @@ fn required_values_and_unknown_keys_are_errors() {
     assert!(serde_json::from_value::<Opening>(json!({})).is_err());
     assert!(serde_json::from_value::<Wall>(json!({ "thickness": 0.2 })).is_err());
     assert!(serde_json::from_value::<Recess>(json!({ "depth": 0.1 })).is_err());
+}
+
+/// What the Rust types refuse to read, the JSON Schema rejects too.
+#[test]
+fn the_json_schema_rejects_what_the_types_reject() {
+    let rejected = [
+        ("WallType", json!({})),
+        ("Opening", json!({})),
+        ("Wall", json!({ "thickness": 0.2 })),
+        ("Recess", json!({ "depth": 0.1 })),
+        ("Wall", json!({ "base_offset": "low" })),
+        ("Containment", json!({ "structure": 1, "elements": [-2] })),
+    ];
+    for (name, instance) in rejected {
+        assert_eq!(
+            matches_schema(name, &instance),
+            Ok(false),
+            "{name}: {instance}"
+        );
+    }
+    assert_eq!(matches_schema("Wall", &json!({})), Ok(true));
 }
 
 #[test]

@@ -15,6 +15,8 @@ pub struct Struct {
     pub property_set: bool,
     /// Description, one entry per line.
     pub doc: Vec<String>,
+    /// The schema version from which the record is discouraged.
+    pub deprecated: Option<u32>,
     /// Fields, in declaration order.
     pub fields: Vec<Field>,
 }
@@ -86,6 +88,7 @@ fn instance_struct(entity: &Entity) -> Struct {
         name: entity.name.clone(),
         property_set: false,
         doc,
+        deprecated: entity.deprecated,
         fields,
     }
 }
@@ -108,6 +111,7 @@ fn type_struct(entity: &Entity, name_ref: fn(&str) -> String) -> Option<Struct> 
         name: type_def.name.clone(),
         property_set: false,
         doc,
+        deprecated: entity.deprecated,
         fields,
     })
 }
@@ -121,6 +125,7 @@ fn property_set_struct(property_set: &PropertySet, name_ref: fn(&str) -> String)
     Struct {
         name: property_set.name.clone(),
         property_set: true,
+        deprecated: None,
         doc: vec![
             format!("The `{}` property set.", property_set.name),
             String::new(),
