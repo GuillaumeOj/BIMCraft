@@ -1,6 +1,7 @@
 use std::fs;
 use std::io::{self, ErrorKind, Write};
 use std::path::{Path, PathBuf};
+use std::sync::{Mutex, PoisonError};
 
 use platform::{BoxFuture, Storage, StorageError};
 use tempfile::Builder;
@@ -11,6 +12,10 @@ const TEMP_SUFFIX: &str = ".bimcraft-tmp";
 
 /// Characters Windows does not allow in file names; `/` already separates names in keys.
 const FORBIDDEN: [char; 8] = ['<', '>', ':', '"', '\\', '|', '?', '*'];
+
+/// Held while a temporary file replaces a stored value. Windows refuses, with "permission
+/// denied", to replace a file that another replace is targeting at the same moment.
+static REPLACING: Mutex<()> = Mutex::new(());
 
 /// A [`Storage`] that keeps each value in a file under a root directory.
 ///
@@ -104,6 +109,7 @@ fn write_atomically(path: &Path, bytes: &[u8]) -> io::Result<()> {
     let mut temp = Builder::new().suffix(TEMP_SUFFIX).tempfile_in(folder)?;
     temp.write_all(bytes)?;
     temp.as_file().sync_all()?;
+    let _replacing = REPLACING.lock().unwrap_or_else(PoisonError::into_inner);
     temp.persist(path)?;
     Ok(())
 }
