@@ -4,9 +4,6 @@
 //! rest is the text; the seeds follow that format.
 
 #![no_main]
-// A native test tool, not a core crate: libFuzzer's harness writes crash files, which the ARCH-02
-// lints of clippy.toml would flag inside `fuzz_target!`.
-#![allow(clippy::disallowed_methods, clippy::disallowed_types)]
 
 use core_model::units::{
     AngleUnit, AreaUnit, ForceUnit, LengthUnit, MassUnit, MomentUnit, Quantity, StressUnit, Unit,

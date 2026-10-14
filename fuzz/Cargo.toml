@@ -14,8 +14,15 @@ cargo-fuzz = true
 
 [dependencies]
 core-model = { path = "../crates/core-model" }
+interop-ifc = { path = "../crates/interop-ifc" }
 libfuzzer-sys = "=0.4.13"
 schema-gen = { path = "../crates/schema-gen" }
+
+# A native test tool, not a core crate: libFuzzer's harness writes crash files, which the ARCH-02
+# lints of clippy.toml would flag inside `fuzz_target!`.
+[lints.clippy]
+disallowed_methods = "allow"
+disallowed_types = "allow"
 
 [[bin]]
 name = "parse_quantity"
@@ -27,6 +34,13 @@ bench = false
 [[bin]]
 name = "schema_definition"
 path = "fuzz_targets/schema_definition.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "step_reader"
+path = "fuzz_targets/step_reader.rs"
 test = false
 doc = false
 bench = false

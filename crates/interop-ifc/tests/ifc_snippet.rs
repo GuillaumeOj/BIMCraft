@@ -1,12 +1,14 @@
-//! Reads a small hand-written IFC 4.3 file end to end.
+//! Reads small hand-written IFC 4.3 files end to end. The files in `fixtures/` also seed the
+//! `step_reader` fuzz target.
 
-use interop_ifc::step::{InstanceBody, Limits, Parameter, StepReader};
+use interop_ifc::step::{Instance, InstanceBody, Limits, Parameter, Record, StepReader};
 
-const FILE: &str = include_str!("fixtures/wall.ifc");
+const WALL: &str = include_str!("fixtures/wall.ifc");
+const SYNTAX: &str = include_str!("fixtures/syntax.ifc");
 
 #[test]
 fn reads_a_small_ifc_file() {
-    let reader = StepReader::new(FILE.as_bytes(), Limits::default()).unwrap();
+    let reader = StepReader::new(WALL.as_bytes(), Limits::default()).unwrap();
     let schemas: Vec<&str> = reader.header().iter().map(|r| r.name.as_str()).collect();
     assert_eq!(schemas, ["FILE_DESCRIPTION", "FILE_NAME", "FILE_SCHEMA"]);
 
@@ -37,4 +39,73 @@ fn reads_a_small_ifc_file() {
             value: Box::new(Parameter::Real(0.2)),
         }
     );
+}
+
+fn record(name: &str, parameters: Vec<Parameter>) -> Record {
+    Record {
+        name: name.to_owned(),
+        parameters,
+    }
+}
+
+fn enumeration(value: &str) -> Parameter {
+    Parameter::Enumeration(value.to_owned())
+}
+
+#[test]
+fn reads_complex_instances_binaries_and_several_data_sections() {
+    use Parameter::{Binary, Derived, Integer, List, Null, Real, Reference};
+
+    let reader = StepReader::new(SYNTAX.as_bytes(), Limits::default()).unwrap();
+    assert_eq!(reader.header().len(), 3);
+    let instances = reader.collect::<Result<Vec<_>, _>>().unwrap();
+    let expected = [
+        Instance {
+            id: 1,
+            body: InstanceBody::Complex(vec![
+                record("IFCNAMEDUNIT", vec![Derived, enumeration("LENGTHUNIT")]),
+                record(
+                    "IFCSIUNIT",
+                    vec![enumeration("MILLI"), enumeration("METRE")],
+                ),
+            ]),
+        },
+        Instance {
+            id: 2,
+            body: InstanceBody::Simple(record(
+                "IFCPIXELTEXTURE",
+                vec![
+                    Null,
+                    Null,
+                    Null,
+                    Null,
+                    List(vec![]),
+                    Integer(2),
+                    Integer(1),
+                    Integer(2),
+                    List(vec![Binary("0FF".to_owned()), Binary("3E".to_owned())]),
+                ],
+            )),
+        },
+        Instance {
+            id: 3,
+            body: InstanceBody::Simple(record(
+                "!PRIVATE_ENTITY",
+                vec![
+                    Parameter::String("It's a long string wrapped on two lines".to_owned()),
+                    Integer(-12),
+                    Real(350.0),
+                    List(vec![Reference(1), List(vec![Reference(2), Null])]),
+                ],
+            )),
+        },
+        Instance {
+            id: 10,
+            body: InstanceBody::Simple(record(
+                "IFCCARTESIANPOINT",
+                vec![List(vec![Real(-1.5), Real(2.0), Real(0.25)])],
+            )),
+        },
+    ];
+    assert_eq!(instances, expected);
 }

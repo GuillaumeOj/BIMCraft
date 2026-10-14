@@ -13,6 +13,7 @@ name = "bimcraft-fuzz"
 version = "0.0.0"
 dependencies = [
  "core-model",
+ "interop-ifc",
  "libfuzzer-sys",
  "schema-gen",
 ]
@@ -80,6 +81,13 @@ checksum = "cc4e190f5d26ca7051642629da2c52fc03bde85a03197c99408dcd291734c855"
 dependencies = [
  "equivalent",
  "hashbrown",
+]
+
+[[package]]
+name = "interop-ifc"
+version = "0.0.0"
+dependencies = [
+ "thiserror",
 ]
 
 [[package]]
