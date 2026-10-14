@@ -13,6 +13,7 @@ name = "bimcraft-fuzz"
 version = "0.0.0"
 dependencies = [
  "core-model",
+ "express",
  "interop-ifc",
  "libfuzzer-sys",
  "schema-gen",
