@@ -68,7 +68,7 @@ pub enum PredicateError {
     OutOfRange,
 }
 
-fn check(value: f64) -> Result<f64, PredicateError> {
+pub(crate) fn check(value: f64) -> Result<f64, PredicateError> {
     if !value.is_finite() {
         return Err(PredicateError::NonFinite);
     }

@@ -12,11 +12,11 @@ publish = false
 bench = false
 
 [dependencies]
+libm = { workspace = true }
 robust = { workspace = true }
 thiserror = { workspace = true }
 
 [dev-dependencies]
-libm = { workspace = true }
 num-rational = { workspace = true }
 
 # Native only: neither builds for wasm32-wasip1, where tests/golden.rs runs (ENG-04).
