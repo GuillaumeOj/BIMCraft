@@ -90,7 +90,8 @@ impl<K: Ord + Clone, V> DependencyGraph<K, V> {
 
     /// Declares that `node` is computed from `deps`, replacing its previous dependencies.
     ///
-    /// Unknown keys are added as nodes. `node` and everything that depends on it become stale.
+    /// Unknown keys are added as nodes. If the dependencies differ from the previous ones, `node`
+    /// and everything that depends on it become stale; redeclaring the same ones changes nothing.
     ///
     /// # Errors
     ///
@@ -102,22 +103,27 @@ impl<K: Ord + Clone, V> DependencyGraph<K, V> {
         deps: impl IntoIterator<Item = K>,
     ) -> Result<(), DerivedError<K>> {
         let deps: BTreeSet<K> = deps.into_iter().collect();
+        if self.nodes.get(&node).is_some_and(|n| n.deps == deps) {
+            return Ok(());
+        }
         if let Some(path) = self.cycle_through(&node, &deps) {
             return Err(DerivedError::Cycle { path });
         }
-        let entry = self.nodes.entry(node.clone()).or_default();
-        let old_deps = std::mem::replace(&mut entry.deps, deps.clone());
+        let old_deps = std::mem::take(&mut self.nodes.entry(node.clone()).or_default().deps);
         for dep in &old_deps {
             if let Some(dep_node) = self.nodes.get_mut(dep) {
                 dep_node.dependents.remove(&node);
             }
         }
-        for dep in deps {
+        for dep in &deps {
             self.nodes
-                .entry(dep)
+                .entry(dep.clone())
                 .or_default()
                 .dependents
                 .insert(node.clone());
+        }
+        if let Some(entry) = self.nodes.get_mut(&node) {
+            entry.deps = deps;
         }
         self.mark_stale(node);
         Ok(())

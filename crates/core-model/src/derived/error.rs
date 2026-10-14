@@ -7,7 +7,7 @@
 #[derive(Clone, Debug, PartialEq, Eq, Hash, thiserror::Error)]
 pub enum DerivedError<K> {
     /// The new dependencies would make a node depend on itself, directly or through others.
-    #[error("the dependencies form a cycle through {} nodes", .path.len().saturating_sub(1))]
+    #[error("the dependencies form a cycle of length {}", .path.len().saturating_sub(1))]
     Cycle {
         /// The cycle, first and last key equal; each key depends on the next one.
         path: Vec<K>,

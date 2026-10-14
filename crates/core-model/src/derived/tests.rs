@@ -130,6 +130,18 @@ fn invalidation_stops_at_stale_nodes_and_ignores_unknown_keys() {
 }
 
 #[test]
+fn redeclaring_the_same_dependencies_keeps_the_cache() {
+    let mut graph = diamond();
+    let mut model = Model::new();
+    model.get(&mut graph, 3);
+    model.take_computed();
+    assert_eq!(graph.set_dependencies(3, [2, 1, 2]), Ok(()));
+    assert!(graph.is_clean(&3));
+    model.get(&mut graph, 3);
+    assert!(model.take_computed().is_empty());
+}
+
+#[test]
 fn redeclaring_dependencies_replaces_the_old_edges() {
     let mut graph = diamond();
     let mut model = Model::new();
@@ -222,7 +234,7 @@ fn cycle_message_gives_the_length_only() {
     };
     assert_eq!(
         error.to_string(),
-        "the dependencies form a cycle through 2 nodes"
+        "the dependencies form a cycle of length 2"
     );
     let unknown: DerivedError<u32> = DerivedError::UnknownNode;
     assert_eq!(
