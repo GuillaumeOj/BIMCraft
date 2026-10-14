@@ -2,7 +2,7 @@
 //! and comments, read back to what was generated, and the limits, truncation and duplicate checks
 //! hold for any of them. The `step_reader` fuzz target covers arbitrary bytes.
 
-use std::collections::BTreeMap;
+use std::ops::Range;
 
 use super::{
     Instance, InstanceBody, Limits, Parameter, Record, StepError, StepErrorKind, StepReader,
@@ -13,6 +13,9 @@ use proptest::sample::Index;
 
 /// Deepest nesting of generated values, counting an instance's own parameter list as level 1.
 const MAX_DEPTH: u32 = 4;
+
+/// Ends a data section and starts the next one.
+const NEW_SECTION: [&str; 4] = ["ENDSEC", ";", "DATA", ";"];
 
 /// A generated Part 21 file.
 #[derive(Clone, Debug)]
@@ -48,10 +51,10 @@ impl File {
             print_record(record, &mut tokens);
             tokens.push(";".into());
         }
-        tokens.extend(["ENDSEC", ";", "DATA", ";"].map(String::from));
+        tokens.extend(NEW_SECTION.map(String::from));
         for (instance, new_section) in &self.instances {
             if *new_section {
-                tokens.extend(["ENDSEC", ";", "DATA", ";"].map(String::from));
+                tokens.extend(NEW_SECTION.map(String::from));
             }
             tokens.extend([format!("#{}", instance.id), "=".into()]);
             match &instance.body {
@@ -138,15 +141,12 @@ fn string(text: &str) -> String {
 /// A real in Part 21 form, which needs a `.` in the mantissa: `1e-5` becomes `1.E-5`. Rust prints
 /// the shortest text that reads back to the same value.
 fn real(value: f64) -> String {
-    let text = format!("{value:?}");
-    let (mantissa, exponent) = text.split_once('e').unwrap_or((&text, ""));
-    let dot = if mantissa.contains('.') { "" } else { "." };
-    let exponent = if exponent.is_empty() {
-        String::new()
+    let text = format!("{value:?}").replace('e', "E");
+    if text.contains('.') {
+        text
     } else {
-        format!("E{exponent}")
-    };
-    format!("{mantissa}{dot}{exponent}")
+        text.replacen('E', ".E", 1)
+    }
 }
 
 /// An entity or type name, user-defined (`!NAME`) or standard.
@@ -193,17 +193,16 @@ fn body() -> impl Strategy<Value = InstanceBody> {
     ]
 }
 
-fn file() -> impl Strategy<Value = File> {
+/// A file with a number of instances in `instance_count`.
+fn file(instance_count: Range<usize>) -> impl Strategy<Value = File> {
     let header_name = keyword().prop_filter("ENDSEC closes the header", |name| name != "ENDSEC");
-    let instances = btree_map(any::<u64>(), (body(), any::<bool>()), 0..8)
-        .prop_map(|map: BTreeMap<_, _>| map.into_iter().collect::<Vec<_>>())
-        .prop_shuffle()
-        .prop_map(|instances| {
-            instances
-                .into_iter()
+    let instances = btree_map(any::<u64>(), (body(), any::<bool>()), instance_count)
+        .prop_map(|map| {
+            map.into_iter()
                 .map(|(id, (body, new_section))| (Instance { id, body }, new_section))
-                .collect()
-        });
+                .collect::<Vec<_>>()
+        })
+        .prop_shuffle();
     (vec(record(header_name), 0..4), instances)
         .prop_map(|(header, instances)| File { header, instances })
 }
@@ -226,19 +225,26 @@ fn read(text: &str, limits: Limits) -> Result<(Vec<Record>, Vec<Instance>), Step
     Ok((header, reader.collect::<Result<_, _>>()?))
 }
 
+#[test]
+fn prints_reals_with_a_dot_in_the_mantissa() {
+    assert_eq!(real(0.25), "0.25");
+    assert_eq!(real(-1.5e300), "-1.5E300");
+    assert_eq!(real(1e-7), "1.E-7");
+}
+
 proptest! {
     #![proptest_config(crate::proptest_config())]
 
     #[test]
-    fn reads_back_what_was_written(file in file(), separators in separators()) {
+    fn reads_back_what_was_written(file in file(0..8), separators in separators()) {
         let text = file.print(&separators);
         let (header, instances) = read(&text, Limits::default()).unwrap();
-        prop_assert_eq!(header, file.header.clone());
+        prop_assert_eq!(&header, &file.header);
         prop_assert_eq!(instances, file.instances());
     }
 
     #[test]
-    fn rejects_exactly_the_files_nested_too_deep(file in file(), limit in 1..=MAX_DEPTH as usize) {
+    fn rejects_exactly_the_files_nested_too_deep(file in file(0..8), limit in 1..=MAX_DEPTH as usize) {
         let limits = Limits { max_nesting_depth: limit, ..Limits::default() };
         let result = read(&file.print(&[" "]), limits);
         if file.depth() <= limit {
@@ -250,7 +256,7 @@ proptest! {
 
     #[test]
     fn rejects_every_truncated_file(
-        file in file(),
+        file in file(0..8),
         separators in separators(),
         cut in any::<Index>(),
     ) {
@@ -279,7 +285,7 @@ proptest! {
 
     #[test]
     fn rejects_a_reused_instance_name(
-        mut file in file().prop_filter("has instances", |f| !f.instances.is_empty()),
+        mut file in file(1..8),
         which in any::<Index>(),
         body in body(),
     ) {

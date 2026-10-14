@@ -740,13 +740,5 @@ mod tests {
                 let _ = reader.count();
             }
         }
-
-        #[test]
-        fn reads_back_integer_lists(values in proptest::collection::vec(any::<i64>(), 0..32)) {
-            let list: Vec<String> = values.iter().map(ToString::to_string).collect();
-            let data = format!("#1=X(({}));", list.join(","));
-            let expected: Vec<Parameter> = values.into_iter().map(Parameter::Integer).collect();
-            prop_assert_eq!(bodies(&data), [x(vec![Parameter::List(expected)])]);
-        }
     }
 }
