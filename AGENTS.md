@@ -85,6 +85,7 @@ Users are architects and engineers, not developers. For every user-facing featur
 - Biome for formatting, linting **and import sorting** (`ui/biome.json`). No ESLint or Prettier.
 - `tsc --noEmit` in strict mode (`ui/tsconfig.base.json`); no `any`, no non-null assertions, no `@ts-ignore`.
 - The UI talks to the core only through the command API (`UI-01`); all strings are externalised (`UI-04`); UI components are accessible (labels, keyboard, contrast — `UI-06`).
+- UI work follows the Penpot design ([docs/dev/ui-design.md](docs/dev/ui-design.md)): consult it (through the Penpot MCP server when connected) before building or changing a screen or component.
 
 **Everywhere**
 
@@ -140,3 +141,4 @@ Users are architects and engineers, not developers. For every user-facing featur
 | `.githooks/` | Git hooks shared by everyone (enable with `scripts/setup.sh`) |
 | `.github/` | CI workflows, templates, Dependabot |
 | `.claude/` | Claude Code settings, hooks and skills |
+| Penpot (external) | UI design, the source of truth for screens and components ([docs/dev/ui-design.md](docs/dev/ui-design.md)) |
