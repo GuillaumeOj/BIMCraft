@@ -58,7 +58,8 @@ pub enum BrepError {
         /// Index of the vertex.
         vertex: usize,
     },
-    /// A coordinate is outside [`MODEL_EXTENT`](crate::MODEL_EXTENT).
+    /// A coordinate is outside [`MODEL_EXTENT`](crate::MODEL_EXTENT), or so close to zero
+    /// (below [`MIN_COORDINATE`](crate::MIN_COORDINATE)) that exact predicates cannot handle it.
     #[error("vertex {vertex} is outside the model extent")]
     OutsideModelExtent {
         /// Index of the vertex.

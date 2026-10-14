@@ -250,6 +250,13 @@ mod tests {
     #[test]
     fn invalid_results_report_the_solid_error() {
         let profile = Profile::new(rectangle(0.0, 0.0, 1.0, 1.0), vec![]).unwrap();
+        // A subnormal shift moves the top corners at x = 0 out of the predicates' range.
+        assert_eq!(
+            Solid::extrude(&profile, Vector3::new(1e-310, 0.0, 1.0)),
+            Err(ExtrusionError::Solid(BrepError::OutsideModelExtent {
+                vertex: 4
+            }))
+        );
         assert_eq!(
             Solid::extrude(&profile, up(2.0 * MODEL_EXTENT)),
             Err(ExtrusionError::Solid(BrepError::OutsideModelExtent {

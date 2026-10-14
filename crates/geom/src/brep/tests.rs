@@ -238,6 +238,12 @@ fn rejects_bad_coordinates() {
     let vertices = box_vertices([near_edge, 0.0, 0.0], [near_edge + 1.0, 1.0, 1.0]);
     let err = Solid::from_faces(vertices, &box_faces(0));
     assert_eq!(err, Err(BrepError::OutsideModelExtent { vertex: 1 }));
+
+    // A subnormal coordinate is inside the extent but out of the exact predicates' range.
+    let mut vertices = box_vertices([0.0; 3], [1.0; 3]);
+    vertices[2].x = 1e-310;
+    let err = Solid::from_faces(vertices, &box_faces(0));
+    assert_eq!(err, Err(BrepError::OutsideModelExtent { vertex: 2 }));
 }
 
 #[test]
