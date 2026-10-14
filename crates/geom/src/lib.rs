@@ -20,6 +20,10 @@
 //! A [`Solid`] is a boundary representation bounded by planar faces. It can only be built
 //! valid: [`Solid::from_faces`] checks topology, the Euler–Poincaré formula, planarity,
 //! orientation, [`MODEL_EXTENT`] and [`LINEAR_TOLERANCE`], and returns a [`BrepError`] otherwise.
+//!
+//! [`Solid::extrude`] builds a solid from a profile and a direction (GEO-02), holes included.
+//! Arcs become chords within [`ARC_CHORD_TOLERANCE`], since faces are planar; failures are an
+//! [`ExtrusionError`].
 
 // ARCH-02: forbid, not deny, so nothing in this crate can opt out. See docs/dev/quality.md.
 #![forbid(clippy::disallowed_methods, clippy::disallowed_types)]
@@ -30,11 +34,11 @@ mod predicates;
 mod profile;
 mod tolerance;
 
-pub use brep::{BrepError, FaceInput, Shell, Solid};
-pub use point::{Point2, Point3};
+pub use brep::{BrepError, ExtrusionError, FaceInput, Shell, Solid};
+pub use point::{Point2, Point3, Vector3};
 pub use predicates::{
     MAX_COORDINATE, MIN_COORDINATE, Orientation, PredicateError, incircle, insphere, orient2d,
     orient3d,
 };
 pub use profile::{ArcDirection, Edge, LoopId, MAX_PROFILE_EDGES, Profile, ProfileError};
-pub use tolerance::{LINEAR_TOLERANCE, MODEL_EXTENT};
+pub use tolerance::{ARC_CHORD_TOLERANCE, LINEAR_TOLERANCE, MODEL_EXTENT};

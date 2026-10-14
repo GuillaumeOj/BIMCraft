@@ -4,8 +4,9 @@
 //! of planar faces; a face is an outer ring of vertices plus zero or more hole rings. Inside, each
 //! edge is a pair of opposite half-edges, so walking around a face or a vertex needs no search.
 //!
-//! The only way to get a [`Solid`] is [`Solid::from_faces`], which runs [`Solid::validate`]
-//! before returning, so an invalid solid never exists, in debug or release builds. Operations that
+//! Every way to get a [`Solid`] goes through [`Solid::from_faces`], which runs
+//! [`Solid::validate`] before returning, so an invalid solid never exists, in debug or release
+//! builds. [`Solid::extrude`] builds the faces of a prism and hands them to it. Operations that
 //! will later edit a solid in place must call [`Solid::validate`] on their result too, as ADR 0001
 //! requires of the booleans.
 //!
@@ -16,9 +17,11 @@
 
 mod build;
 mod error;
+mod extrude;
 mod validate;
 
 pub use error::BrepError;
+pub use extrude::ExtrusionError;
 
 use crate::Point3;
 

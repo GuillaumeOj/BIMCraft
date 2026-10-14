@@ -11,7 +11,10 @@
 use std::f64::consts::PI;
 use std::fmt::Write as _;
 
-use geom::{Orientation, Point2, Point3, incircle, insphere, orient2d, orient3d};
+use geom::{
+    ArcDirection, Edge, Orientation, Point2, Point3, Profile, Solid, Vector3, incircle, insphere,
+    orient2d, orient3d,
+};
 
 const GOLDEN: &str = include_str!("golden.txt");
 const GOLDEN_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/golden.txt");
@@ -248,12 +251,41 @@ fn predicates(out: &mut Output) {
     }
 }
 
+/// Extrusions of random circles: the chords' points come from `libm`, so the vertices and the
+/// volume depend on it being identical everywhere.
+fn extrusions(out: &mut Output) {
+    let mut rng = Rng::for_case("extrude");
+    for i in 0..SAMPLES {
+        let centre = rng.point2();
+        let start = Point2::new(centre.x + rng.uniform(1e-2, 10.0), centre.y);
+        let circle = Edge::Arc {
+            start,
+            end: start,
+            centre,
+            direction: ArcDirection::CounterClockwise,
+        };
+        let direction = Vector3::new(rng.uniform(-1.0, 1.0), rng.uniform(-1.0, 1.0), 1.0);
+        let solid = Profile::new(vec![circle], vec![])
+            .ok()
+            .and_then(|profile| Solid::extrude(&profile, direction).ok());
+        let Some(solid) = solid else {
+            let _ = writeln!(out.0, "extrude[{i}] error");
+            continue;
+        };
+        let middle = solid.vertices()[solid.vertices().len() / 4];
+        out.value("extrude.x", i, middle.x);
+        out.value("extrude.y", i, middle.y);
+        out.value("extrude.volume", i, solid.volume());
+    }
+}
+
 fn compute() -> String {
     let mut out = Output::default();
     unary(&mut out);
     binary(&mut out);
     compositions(&mut out);
     predicates(&mut out);
+    extrusions(&mut out);
     out.0
 }
 
