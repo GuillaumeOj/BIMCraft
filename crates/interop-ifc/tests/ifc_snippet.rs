@@ -3,12 +3,12 @@
 
 use interop_ifc::step::{Instance, InstanceBody, Limits, Parameter, Record, StepReader};
 
-const FILE: &str = include_str!("fixtures/wall.ifc");
+const WALL: &str = include_str!("fixtures/wall.ifc");
 const SYNTAX: &str = include_str!("fixtures/syntax.ifc");
 
 #[test]
 fn reads_a_small_ifc_file() {
-    let reader = StepReader::new(FILE.as_bytes(), Limits::default()).unwrap();
+    let reader = StepReader::new(WALL.as_bytes(), Limits::default()).unwrap();
     let schemas: Vec<&str> = reader.header().iter().map(|r| r.name.as_str()).collect();
     assert_eq!(schemas, ["FILE_DESCRIPTION", "FILE_NAME", "FILE_SCHEMA"]);
 
@@ -48,10 +48,6 @@ fn record(name: &str, parameters: Vec<Parameter>) -> Record {
     }
 }
 
-fn instance(id: u64, body: InstanceBody) -> Instance {
-    Instance { id, body }
-}
-
 fn enumeration(value: &str) -> Parameter {
     Parameter::Enumeration(value.to_owned())
 }
@@ -64,19 +60,19 @@ fn reads_complex_instances_binaries_and_several_data_sections() {
     assert_eq!(reader.header().len(), 3);
     let instances = reader.collect::<Result<Vec<_>, _>>().unwrap();
     let expected = [
-        instance(
-            1,
-            InstanceBody::Complex(vec![
+        Instance {
+            id: 1,
+            body: InstanceBody::Complex(vec![
                 record("IFCNAMEDUNIT", vec![Derived, enumeration("LENGTHUNIT")]),
                 record(
                     "IFCSIUNIT",
                     vec![enumeration("MILLI"), enumeration("METRE")],
                 ),
             ]),
-        ),
-        instance(
-            2,
-            InstanceBody::Simple(record(
+        },
+        Instance {
+            id: 2,
+            body: InstanceBody::Simple(record(
                 "IFCPIXELTEXTURE",
                 vec![
                     Null,
@@ -90,10 +86,10 @@ fn reads_complex_instances_binaries_and_several_data_sections() {
                     List(vec![Binary("0FF".to_owned()), Binary("3E".to_owned())]),
                 ],
             )),
-        ),
-        instance(
-            3,
-            InstanceBody::Simple(record(
+        },
+        Instance {
+            id: 3,
+            body: InstanceBody::Simple(record(
                 "!PRIVATE_ENTITY",
                 vec![
                     Parameter::String("It's a long string wrapped on two lines".to_owned()),
@@ -102,14 +98,14 @@ fn reads_complex_instances_binaries_and_several_data_sections() {
                     List(vec![Reference(1), List(vec![Reference(2), Null])]),
                 ],
             )),
-        ),
-        instance(
-            10,
-            InstanceBody::Simple(record(
+        },
+        Instance {
+            id: 10,
+            body: InstanceBody::Simple(record(
                 "IFCCARTESIANPOINT",
                 vec![List(vec![Real(-1.5), Real(2.0), Real(0.25)])],
             )),
-        ),
+        },
     ];
     assert_eq!(instances, expected);
 }

@@ -111,7 +111,7 @@ fn print_parameter(parameter: &Parameter, tokens: &mut Vec<String>) {
         Parameter::Derived => "*".into(),
         Parameter::Integer(value) => value.to_string(),
         Parameter::Real(value) => real(*value),
-        Parameter::String(text) => format!("'{}'", text.replace('\'', "''")),
+        Parameter::String(text) => string(text),
         Parameter::Enumeration(name) => format!(".{name}."),
         Parameter::Binary(digits) => format!("\"{digits}\""),
         Parameter::Reference(id) => format!("#{id}"),
@@ -123,6 +123,17 @@ fn print_parameter(parameter: &Parameter, tokens: &mut Vec<String>) {
         Parameter::List(items) => return print_list(items, tokens),
     };
     tokens.push(token);
+}
+
+/// A string literal. Strings of odd length are wrapped in their middle, a line break the reader
+/// must drop; each half is escaped on its own so the break never splits a doubled quote.
+fn string(text: &str) -> String {
+    let escape = |part: &str| part.replace('\'', "''");
+    if text.len().is_multiple_of(2) {
+        return format!("'{}'", escape(text));
+    }
+    let (start, end) = text.split_at(text.len() / 2);
+    format!("'{}\r\n{}'", escape(start), escape(end))
 }
 
 /// A real in Part 21 form, which needs a `.` in the mantissa: `1e-5` becomes `1.E-5`. Rust prints
@@ -256,23 +267,25 @@ proptest! {
     ) {
         let text = file.print(&separators);
         let prefix = &text[..cut.index(text.len())];
-        let mut read = Vec::new();
-        let mut error = None;
-        match StepReader::new(prefix.as_bytes(), Limits::default()) {
-            Err(e) => error = Some(e),
+        let mut yielded = Vec::new();
+        let error = match StepReader::new(prefix.as_bytes(), Limits::default()) {
+            Err(error) => Some(error),
             Ok(mut reader) => {
-                for result in reader.by_ref() {
-                    match result {
-                        Ok(instance) => read.push(instance),
-                        Err(e) => error = Some(e),
+                let error = reader.by_ref().find_map(|result| match result {
+                    Ok(instance) => {
+                        yielded.push(instance);
+                        None
                     }
-                }
+                    Err(error) => Some(error),
+                });
                 prop_assert!(reader.next().is_none(), "the reader goes on after an error");
+                error
             }
-        }
+        };
         prop_assert!(error.is_some(), "a truncated file was accepted");
         let all = file.instances();
-        prop_assert_eq!(read.as_slice(), &all[..read.len()]);
+        prop_assert!(yielded.len() <= all.len());
+        prop_assert_eq!(yielded.as_slice(), &all[..yielded.len()]);
     }
 
     #[test]
@@ -286,8 +299,8 @@ proptest! {
         file.instances.push((Instance { id, body }, false));
         let text = file.print(&[" "]);
         let mut reader = StepReader::new(text.as_bytes(), Limits::default()).unwrap();
-        let read: Vec<_> = reader.by_ref().take(count).collect::<Result<_, _>>().unwrap();
-        prop_assert_eq!(read.len(), count);
+        let yielded: Vec<_> = reader.by_ref().take(count).collect::<Result<_, _>>().unwrap();
+        prop_assert_eq!(yielded.len(), count);
         prop_assert_eq!(reader.next().unwrap().unwrap_err().kind, StepErrorKind::DuplicateInstance(id));
     }
 }
