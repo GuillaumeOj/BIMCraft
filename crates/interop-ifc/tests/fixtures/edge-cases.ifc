@@ -1,0 +1,25 @@
+ISO-10303-21;
+HEADER;
+/* Written for the round-trip tests; not taken from a real project. It covers the forms a
+   writer must reproduce: complex instances, binaries, nested lists and typed values, extreme
+   reals, encoded and wrapped strings, user-defined keywords and several data sections. */
+FILE_DESCRIPTION(('ViewDefinition [ReferenceView]'),'2;1');
+FILE_NAME('edge-cases.ifc','2026-10-14T09:00:00',('Author'),('Office'),'','BIMCraft','');
+FILE_SCHEMA(('IFC4X3_ADD2'));
+ENDSEC;
+DATA;
+#10=IFCCARTESIANPOINTLIST3D(((0.,0.,0.),(1.E-05,-2.5E+3,1.7976931348623157E308),(4.9E-324,-0.,
+  123456789.123456789)),$);
+#11=(IFCREPRESENTATIONITEM()IFCGEOMETRICREPRESENTATIONITEM()IFCCURVE());
+#12=IFCPIXELTEXTURE($,$,$,$,2,2,3,("0FFFFFF","1FFFF00","3A","0"));
+#13=IFCPROPERTYLISTVALUE('Grid',$,(IFCINTEGER(1),IFCREAL(2.),IFCLABEL('It''s \X\E9t\X\E9'),
+IFCLABEL('Wrapped
+ string \X2\03A9\X0\ \S\a')),$);
+#14=IFCPROPERTYSINGLEVALUE('Flag',$,IFCBOOLEAN(.T.),$);
+#15=!VENDOR_EXTENSION(#10,*,$,-9223372036854775808,9223372036854775807);
+ENDSEC;
+DATA;
+#20=IFCRELASSOCIATESMATERIAL('3vB2YO$MX4xv5uCqZZG05x',$,$,$,(#11,#12,#13,#14),#21);
+#21=IFCMATERIAL('Concrete C30/37 \X2\00E9\X0\',$,$);
+ENDSEC;
+END-ISO-10303-21;

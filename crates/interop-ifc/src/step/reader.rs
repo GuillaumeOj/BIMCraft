@@ -4,15 +4,11 @@ use std::iter::FusedIterator;
 use std::mem;
 
 use super::error::{Position, StepError, StepErrorKind};
-use super::lexer::{Lexer, Spanned, Token, unexpected_token};
+use super::lexer::{
+    DATA, END_MAGIC, ENDSEC, HEADER, Lexer, MAGIC, Spanned, Token, unexpected_token,
+};
 use super::limits::Limits;
 use super::value::{Instance, InstanceBody, Parameter, Record};
-
-const MAGIC: &str = "ISO-10303-21";
-const END_MAGIC: &str = "END-ISO-10303-21";
-const HEADER: &str = "HEADER";
-const DATA: &str = "DATA";
-const ENDSEC: &str = "ENDSEC";
 
 /// Reads a Part 21 file as a stream of instances.
 ///
@@ -344,10 +340,10 @@ mod tests {
     use proptest::prelude::*;
 
     use super::*;
+    use crate::step::test_support::{END_PART, record, text, typed};
 
     const HEADER_PART: &str =
         "ISO-10303-21;\nHEADER;\nFILE_SCHEMA(('IFC4X3_ADD2'));\nENDSEC;\nDATA;\n";
-    const END_PART: &str = "ENDSEC;\nEND-ISO-10303-21;\n";
 
     fn file(data: &str) -> String {
         format!("{HEADER_PART}{data}\n{END_PART}")
@@ -392,24 +388,6 @@ mod tests {
 
     fn unexpected_kind(expected: &'static str, found: &'static str) -> StepErrorKind {
         StepErrorKind::UnexpectedToken { expected, found }
-    }
-
-    fn record(name: &str, parameters: Vec<Parameter>) -> Record {
-        Record {
-            name: name.to_owned(),
-            parameters,
-        }
-    }
-
-    fn text(value: &str) -> Parameter {
-        Parameter::String(value.to_owned())
-    }
-
-    fn typed(type_name: &str, value: Parameter) -> Parameter {
-        Parameter::Typed {
-            type_name: type_name.to_owned(),
-            value: Box::new(value),
-        }
     }
 
     #[test]
