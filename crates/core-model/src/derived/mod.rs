@@ -1,0 +1,314 @@
+//! Lazy, incremental recomputation of derived data through a dependency graph (CORE-08).
+//!
+//! Geometry, views and analytical models are computed from the model and from each other. A
+//! [`DependencyGraph`] records which node is computed from which, caches every computed value,
+//! and recomputes only what a change makes stale:
+//!
+//! - **incremental**: [`DependencyGraph::invalidate`] marks the changed nodes and everything that
+//!   depends on them, transitively, as stale; every other cached value is kept;
+//! - **lazy**: nothing is computed until [`DependencyGraph::get`] asks for a node, and then only
+//!   the stale nodes it depends on are recomputed, each once, dependencies first.
+//!
+//! Keys are chosen by the caller, for example `(EntityId, attribute)` for model inputs and
+//! `(EntityId, representation)` for geometry. A key that only appears as a dependency is an input:
+//! it is computed like any other node, with no dependency values, and it leaves the graph once
+//! nothing depends on it any more. Declare it with no dependencies to keep it.
+//!
+//! ```
+//! use core_model::derived::DependencyGraph;
+//!
+//! let mut width = 3;
+//! let mut graph = DependencyGraph::new();
+//! graph.set_dependencies("area", ["width", "depth"]).unwrap();
+//! let compute = |width: i32| {
+//!     move |key: &&str, deps: &[(&&str, &i32)]| match *key {
+//!         "width" => width,
+//!         "depth" => 2,
+//!         _ => deps.iter().map(|(_, value)| **value).product(),
+//!     }
+//! };
+//! assert_eq!(graph.get(&"area", compute(width)), Ok(&6));
+//!
+//! width = 4;
+//! graph.invalidate(["width"]);
+//! assert_eq!(graph.get(&"area", compute(width)), Ok(&8));
+//! ```
+//!
+//! A value is recomputed whenever a dependency was invalidated, even if the dependency's new value
+//! equals the old one; stopping early in that case is left for when profiling asks for it.
+
+mod error;
+
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
+
+pub use error::DerivedError;
+
+/// Derived values and the dependencies between them, with lazy, incremental recomputation.
+///
+/// The graph never contains a cycle: [`set_dependencies`](Self::set_dependencies) rejects any
+/// declaration that would close one. Every traversal is iterative, so deep graphs cannot overflow
+/// the stack.
+#[derive(Debug)]
+pub struct DependencyGraph<K, V> {
+    nodes: BTreeMap<K, Node<K, V>>,
+}
+
+/// One node: its edges in both directions and its cached value.
+#[derive(Debug)]
+struct Node<K, V> {
+    /// Nodes this one is computed from.
+    deps: BTreeSet<K>,
+    /// Nodes computed from this one.
+    dependents: BTreeSet<K>,
+    /// The cached value; `None` while stale.
+    value: Option<V>,
+    /// Whether the caller declared this node, rather than it only being named as a dependency.
+    /// Undeclared nodes leave the graph once nothing depends on them.
+    declared: bool,
+}
+
+impl<K, V> Default for Node<K, V> {
+    fn default() -> Self {
+        Self {
+            deps: BTreeSet::new(),
+            dependents: BTreeSet::new(),
+            value: None,
+            declared: false,
+        }
+    }
+}
+
+impl<K: Ord + Clone, V> Default for DependencyGraph<K, V> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<K: Ord + Clone, V> DependencyGraph<K, V> {
+    /// An empty graph.
+    #[must_use]
+    pub fn new() -> Self {
+        Self {
+            nodes: BTreeMap::new(),
+        }
+    }
+
+    /// Declares that `node` is computed from `deps`, replacing its previous dependencies.
+    ///
+    /// Unknown keys are added as nodes. If the dependencies differ from the previous ones, `node`
+    /// and everything that depends on it become stale; redeclaring the same ones changes nothing.
+    /// Former dependencies that were never declared and that nothing depends on any more leave the
+    /// graph.
+    ///
+    /// # Errors
+    ///
+    /// [`DerivedError::Cycle`] if `node` would depend on itself, directly or transitively. The
+    /// graph is then left unchanged.
+    pub fn set_dependencies(
+        &mut self,
+        node: K,
+        deps: impl IntoIterator<Item = K>,
+    ) -> Result<(), DerivedError<K>> {
+        let deps: BTreeSet<K> = deps.into_iter().collect();
+        let old_deps = self.nodes.get(&node).map(|n| &n.deps);
+        let added: BTreeSet<K> = deps
+            .iter()
+            .filter(|dep| !old_deps.is_some_and(|old| old.contains(dep)))
+            .cloned()
+            .collect();
+        let dropped: Vec<K> = old_deps
+            .into_iter()
+            .flatten()
+            .filter(|dep| !deps.contains(dep))
+            .cloned()
+            .collect();
+        if let Some(path) = self.cycle_through(&node, &added) {
+            return Err(DerivedError::Cycle { path });
+        }
+        let current = self.nodes.entry(node.clone()).or_default();
+        current.declared = true;
+        if added.is_empty() && dropped.is_empty() {
+            return Ok(());
+        }
+        current.deps = deps;
+        for dep in added {
+            self.nodes
+                .entry(dep)
+                .or_default()
+                .dependents
+                .insert(node.clone());
+        }
+        self.unlink(&node, dropped);
+        self.mark_stale(node, |_| {});
+        Ok(())
+    }
+
+    /// Removes `node`, for example when its object is deleted, and returns the other nodes it made
+    /// stale.
+    ///
+    /// Its own dependencies are dropped. If other nodes still depend on it, it stays as an input
+    /// they keep listing, so their `compute` still sees the key and can tell it is gone; it leaves
+    /// the graph once they are redeclared without it. Removing an unknown key does nothing.
+    pub fn remove(&mut self, node: &K) -> BTreeSet<K> {
+        let mut stale = self.invalidate([node.clone()]);
+        stale.remove(node);
+        let Some(current) = self.nodes.get_mut(node) else {
+            return stale;
+        };
+        current.declared = false;
+        let deps = std::mem::take(&mut current.deps);
+        self.release(node);
+        self.unlink(node, deps);
+        stale
+    }
+
+    /// Marks the `changed` nodes and everything that depends on them as stale, and returns the
+    /// nodes that were up to date before. Computes nothing; unknown keys are ignored.
+    pub fn invalidate(&mut self, changed: impl IntoIterator<Item = K>) -> BTreeSet<K> {
+        let mut stale = BTreeSet::new();
+        for key in changed {
+            self.mark_stale(key, |stale_key| {
+                stale.insert(stale_key);
+            });
+        }
+        stale
+    }
+
+    /// Whether `node` is known and holds an up-to-date value.
+    #[must_use]
+    pub fn is_clean(&self, node: &K) -> bool {
+        self.nodes.get(node).is_some_and(|n| n.value.is_some())
+    }
+
+    /// The nodes `node` is computed from, in key order; empty for an input or an unknown key.
+    pub fn dependencies<'a>(&'a self, node: &K) -> impl Iterator<Item = &'a K> + use<'a, K, V> {
+        self.nodes.get(node).into_iter().flat_map(|n| n.deps.iter())
+    }
+
+    /// The value of `node`, recomputing first whatever is stale among it and its dependencies.
+    ///
+    /// `compute(key, deps)` is called once per stale node, dependencies first, with the values of
+    /// the node's dependencies in key order. Up-to-date nodes are not recomputed.
+    ///
+    /// # Errors
+    ///
+    /// [`DerivedError::UnknownNode`] if `node` was never declared.
+    pub fn get(
+        &mut self,
+        node: &K,
+        mut compute: impl FnMut(&K, &[(&K, &V)]) -> V,
+    ) -> Result<&V, DerivedError<K>> {
+        if !self.nodes.contains_key(node) {
+            return Err(DerivedError::UnknownNode);
+        }
+        // Depth-first walk over stale nodes: a node is computed once every dependency has a value,
+        // otherwise it waits on the stack under its stale dependencies. The graph is acyclic, so
+        // this terminates.
+        let mut stack = vec![node.clone()];
+        while let Some(key) = stack.pop() {
+            let Some(current) = self.nodes.get(&key).filter(|n| n.value.is_none()) else {
+                continue;
+            };
+            let mut dep_values: Vec<(&K, &V)> = Vec::with_capacity(current.deps.len());
+            let mut stale_deps: Vec<K> = Vec::new();
+            for dep in &current.deps {
+                match self.nodes.get(dep).and_then(|n| n.value.as_ref()) {
+                    Some(value) => dep_values.push((dep, value)),
+                    None => stale_deps.push(dep.clone()),
+                }
+            }
+            if stale_deps.is_empty() {
+                let value = compute(&key, &dep_values);
+                if let Some(current) = self.nodes.get_mut(&key) {
+                    current.value = Some(value);
+                }
+            } else {
+                stack.push(key);
+                stack.extend(stale_deps);
+            }
+        }
+        self.nodes
+            .get(node)
+            .and_then(|n| n.value.as_ref())
+            .ok_or(DerivedError::UnknownNode)
+    }
+
+    /// Removes `node` from the dependents of `deps` and releases them.
+    fn unlink(&mut self, node: &K, deps: impl IntoIterator<Item = K>) {
+        for dep in deps {
+            if let Some(dep_node) = self.nodes.get_mut(&dep) {
+                dep_node.dependents.remove(node);
+            }
+            self.release(&dep);
+        }
+    }
+
+    /// Drops `node` if it is undeclared and nothing depends on it. An undeclared node has no
+    /// dependencies of its own, so this never cascades.
+    fn release(&mut self, node: &K) {
+        if self
+            .nodes
+            .get(node)
+            .is_some_and(|n| !n.declared && n.dependents.is_empty())
+        {
+            self.nodes.remove(node);
+        }
+    }
+
+    /// Marks `start` and its transitive dependents stale, passing each one that was up to date to
+    /// `on_stale`.
+    ///
+    /// A stale node's dependents are always stale already, so the walk stops at stale nodes.
+    fn mark_stale(&mut self, start: K, mut on_stale: impl FnMut(K)) {
+        let mut pending = vec![start];
+        while let Some(key) = pending.pop() {
+            let Some(current) = self.nodes.get_mut(&key) else {
+                continue;
+            };
+            if current.value.take().is_some() {
+                pending.extend(current.dependents.iter().cloned());
+                on_stale(key);
+            }
+        }
+    }
+
+    /// The cycle that making `node` depend on `added` would close, if any: `node`, one of `added`,
+    /// …, `node`, each key depending on the next.
+    ///
+    /// Only new edges can close a cycle, and one closes exactly when a new dependency already
+    /// depends on `node`; so search upward from `node` through dependents, breadth first.
+    fn cycle_through(&self, node: &K, added: &BTreeSet<K>) -> Option<Vec<K>> {
+        if added.is_empty() {
+            return None;
+        }
+        // Each reached key maps to the key it was reached from, which it depends on.
+        let mut reached_from: BTreeMap<K, Option<K>> = BTreeMap::from([(node.clone(), None)]);
+        let mut queue = VecDeque::from([node.clone()]);
+        while let Some(key) = queue.pop_front() {
+            if added.contains(&key) {
+                return Some(Self::cycle_path(node, key, &reached_from));
+            }
+            for next in self.nodes.get(&key).into_iter().flat_map(|n| &n.dependents) {
+                if !reached_from.contains_key(next) {
+                    reached_from.insert(next.clone(), Some(key.clone()));
+                    queue.push_back(next.clone());
+                }
+            }
+        }
+        None
+    }
+
+    /// Rebuilds `node → hit → … → node` from the search's back links.
+    fn cycle_path(node: &K, hit: K, reached_from: &BTreeMap<K, Option<K>>) -> Vec<K> {
+        let mut path = vec![node.clone()];
+        let mut current = Some(hit);
+        while let Some(key) = current {
+            current = reached_from.get(&key).cloned().flatten();
+            path.push(key);
+        }
+        path
+    }
+}
+
+#[cfg(test)]
+mod tests;

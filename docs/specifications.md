@@ -84,7 +84,7 @@ Arrows point from a caller to what it calls; the two hosts implement the platfor
 | --- | --- | --- |
 | `schema` | Entity definition parser, validator, canonical model and registry | wasm32-compatible |
 | `schema-gen` | Code and documentation generators for core entities (section 5.1) | Build-time only |
-| `core-model` | Entities, attribute tables, relationships, IDs, units | wasm32-compatible |
+| `core-model` | Entities, attribute tables, relationships, IDs, units, derived-data dependency graph | wasm32-compatible |
 | `core-txn` | Commands, transactions, undo/redo, events | wasm32-compatible |
 | `geom` | Geometry kernel, representations, tessellation | wasm32-compatible |
 | `persist` | Project files as SQLite databases: schema version, migrations (section 5.3) | wasm32-compatible |
