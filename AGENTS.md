@@ -52,7 +52,7 @@ Every feature or fix is done only when all of these hold. Check them before sayi
 - UI: Vitest + Testing Library for units, Playwright for e2e (`ui/e2e/`). Coverage with V8 provider.
 - Thresholds: **90 % lines** globally (CI fails below). **98 % lines** for critical areas (and 98 % branches in the UI; Rust branch coverage needs nightly); aim for 100 % and justify each uncovered line.
 - **Critical areas**: `schema`, `schema-gen`, `core-model`, `core-txn`, `geom`, `georef`, `analysis`, `api`, all `interop-*` parsers and writers, `platform` implementations that touch files; in the UI, the command/API client layer (`ui/src/api/`). The list lives in `scripts/critical-crates.txt` (Rust); keep it in sync when crates are added.
-- Parsers (including the `schema` definition parser) and the geometry kernel also need property-based tests (`proptest`) and fuzz targets (`cargo fuzz`) — `ENG-02`.
+- Parsers (including the `schema` definition parser) and the geometry kernel also need property-based tests (`proptest`) and fuzz targets (`cargo fuzz`, in `fuzz/`) — `ENG-02`.
 - Structural calculations need validation cases against hand calculations or published references — `ENG-03`.
 - Tests must be deterministic: no network, no wall clock, no real time sleeps, seeded randomness.
 
@@ -114,6 +114,7 @@ Users are architects and engineers, not developers. For every user-facing featur
 | Rust lint | `cargo clippy --workspace --all-targets --all-features -- -D warnings` |
 | Rust tests + coverage | `cargo llvm-cov --workspace --fail-under-lines 90` |
 | Dependency audit | `cargo deny check` |
+| Fuzz targets (bounded, seeded run) | `scripts/check-all.sh fuzz` (details: [quality.md](docs/dev/quality.md#fuzzing)) |
 | TOML format | `taplo fmt --check` |
 | Spelling | `typos` |
 | Pinned versions | `bun scripts/check-pinned-deps.ts` |

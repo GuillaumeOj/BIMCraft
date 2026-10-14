@@ -79,7 +79,8 @@ check_fuzz() {
     # Inside fuzz/, rustup picks the nightly pinned in fuzz/rust-toolchain.toml.
     cd fuzz
     cargo fmt --check
-    cargo clippy --all-targets --locked -- -D warnings
+    # --no-deps: the crates under test are linted on stable by the rust section.
+    cargo clippy --all-targets --locked --no-deps -- -D warnings
     cargo deny --locked check
     for target in $(cargo fuzz list --fuzz-dir .); do
       corpus=$(mktemp -d)
