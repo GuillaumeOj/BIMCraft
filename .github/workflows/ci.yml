@@ -99,7 +99,7 @@ jobs:
       - uses: ./.github/actions/setup-rust
       - uses: taiki-e/install-action@83ac0ad63c0167e6f06796fab0fce28db1bf3db0 # v2.87.22
         with:
-          tool: cargo-deny@${{ env.CARGO_DENY_VERSION }}
+          tool: cargo-audit@${{ env.CARGO_AUDIT_VERSION }},cargo-deny@${{ env.CARGO_DENY_VERSION }}
       - run: scripts/check-all.sh rust
       - name: Find the wasm32 C toolchain
         run: scripts/wasm-toolchain.sh
@@ -156,7 +156,7 @@ jobs:
           directory: fuzz
       - uses: taiki-e/install-action@83ac0ad63c0167e6f06796fab0fce28db1bf3db0 # v2.87.22
         with:
-          tool: cargo-deny@${{ env.CARGO_DENY_VERSION }}
+          tool: cargo-audit@${{ env.CARGO_AUDIT_VERSION }},cargo-deny@${{ env.CARGO_DENY_VERSION }}
       # From fuzz/, so it builds with the nightly installed above, not the root toolchain.
       - name: Install cargo-fuzz
         working-directory: fuzz
