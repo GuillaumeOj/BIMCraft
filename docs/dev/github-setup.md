@@ -5,7 +5,7 @@ Settings to apply once the GitHub repository exists. They make CI the final gate
 ## Branch protection (ruleset on `main`)
 
 - Require a pull request before merging, with at least one approval and dismissal of stale approvals.
-- Require status checks to pass: **Repository checks**, **Commits and user docs**, **Rust (ubuntu-24.04)**, **Rust (macos-15)**, **Rust (windows-2025)**, **Rust coverage**, **Fuzzing**, **UI**, **End-to-end** and **Analyze (actions)** (add the Rust and TypeScript CodeQL checks once that code exists). Require branches to be up to date.
+- Require status checks to pass: **Repository checks**, **Commits and user docs**, **Rust (ubuntu-24.04)**, **Rust (macos-15)**, **Rust (windows-2025)**, **wasm32**, **Rust coverage**, **Fuzzing**, **UI**, **End-to-end** and **Analyze (actions)** (add the Rust and TypeScript CodeQL checks once that code exists). Require branches to be up to date.
 - Require conversation resolution and linear history.
 - Block force pushes and deletions.
 - Restrict who can bypass the rules to repository administrators, and use it only in emergencies.
