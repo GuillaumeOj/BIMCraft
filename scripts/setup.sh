@@ -34,6 +34,12 @@ check gitleaks "https://github.com/gitleaks/gitleaks/releases/tag/v$GITLEAKS_VER
 check actionlint "https://github.com/rhysd/actionlint/releases/tag/v$ACTIONLINT_VERSION"
 check mdbook  "cargo install --locked mdbook@$MDBOOK_VERSION"
 check wasmtime "cargo install --locked wasmtime-cli@$WASMTIME_VERSION"
+if scripts/wasm-toolchain.sh >/dev/null 2>&1; then
+  printf '  ok       clang and llvm-ar for wasm32\n'
+else
+  printf '  MISSING  clang and llvm-ar for wasm32  ->  install LLVM (macOS: brew install llvm)\n'
+  missing=1
+fi
 
 bun_version=$(bun --version 2>/dev/null || true)
 if [ -n "$bun_version" ] && [ "$bun_version" != "$BUN_VERSION" ]; then

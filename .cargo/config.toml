@@ -1,3 +1,9 @@
 # wasm32-wasip1 test binaries run under wasmtime, locally and in CI (ENG-04 golden test).
 [target.wasm32-wasip1]
 runner = "wasmtime"
+
+# The SQLite C code built for the browser must be archived by llvm-ar: the system `ar` silently
+# drops wasm objects (Apple) or writes no symbol index (GNU), leaving an archive that cannot be
+# linked (ADR 0006). A missing llvm-ar now fails the build; an exported value still takes priority.
+[env]
+AR_wasm32_unknown_unknown = "llvm-ar"
