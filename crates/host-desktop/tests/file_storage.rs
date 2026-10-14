@@ -5,6 +5,7 @@
 
 use std::fs;
 use std::path::Path;
+use std::thread;
 
 use host_desktop::FileStorage;
 use platform::testing::now_or_never;
@@ -64,9 +65,34 @@ fn removes_values() {
 fn reports_missing_values() {
     let dir = TempDir::new().unwrap();
     let storage = FileStorage::new(dir.path());
+    run(storage.write("value", b"x")).unwrap();
 
-    assert_eq!(run(storage.read("missing")), Err(StorageError::NotFound));
-    assert_eq!(run(storage.remove("missing")), Err(StorageError::NotFound));
+    for key in ["missing", "missing/value", "value/below"] {
+        assert_eq!(run(storage.read(key)), Err(StorageError::NotFound), "{key}");
+        assert_eq!(
+            run(storage.remove(key)),
+            Err(StorageError::NotFound),
+            "{key}"
+        );
+    }
+}
+
+#[test]
+fn concurrent_writes_to_one_key_keep_one_whole_value() {
+    let dir = TempDir::new().unwrap();
+    let storage = FileStorage::new(dir.path());
+    let values: Vec<Vec<u8>> = (0..8_u8).map(|i| vec![i; 1 << 20]).collect();
+
+    thread::scope(|scope| {
+        for value in &values {
+            let storage = &storage;
+            scope.spawn(move || run(storage.write("model.bim", value)).unwrap());
+        }
+    });
+
+    let stored = run(storage.read("model.bim")).unwrap();
+    assert!(values.contains(&stored));
+    assert_eq!(entries(dir.path()), ["model.bim"]);
 }
 
 #[test]

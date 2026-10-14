@@ -2,12 +2,20 @@ use std::ffi::OsString;
 use std::fs::{self, File};
 use std::io::{self, ErrorKind, Write};
 use std::path::{Path, PathBuf};
+use std::process;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use platform::{BoxFuture, Storage, StorageError};
 
 /// Suffix of the file a value is written to before it replaces the previous one. Keys cannot
 /// end with it, so a temporary file never overwrites a stored value.
 const TEMP_SUFFIX: &str = ".bimcraft-tmp";
+
+/// Characters Windows does not allow in file names; `/` already separates names in keys.
+const FORBIDDEN: [char; 8] = ['<', '>', ':', '"', '\\', '|', '?', '*'];
+
+/// Numbers the temporary files of this process, so concurrent writes never share one.
+static NEXT_TEMP: AtomicU64 = AtomicU64::new(0);
 
 /// A [`Storage`] that keeps each value in a file under a root directory.
 ///
@@ -71,9 +79,32 @@ impl Storage for FileStorage {
 
 /// Whether `name` names one file or folder inside its parent on every desktop system.
 ///
-/// `\` and `:` are separators or drive and stream markers on Windows.
+/// Windows trims trailing dots and spaces (so `a.` would be `a`), treats `\\` and `:` as
+/// separators and drive or stream markers, and maps device names such as `nul` to devices.
 fn is_plain_name(name: &str) -> bool {
-    !matches!(name, "" | "." | "..") && !name.contains(['\\', ':', '\0'])
+    let stem = name.split_once('.').map_or(name, |(stem, _)| stem);
+    !name.is_empty()
+        && !name.ends_with(['.', ' '])
+        && !name.contains(|c: char| c.is_control() || FORBIDDEN.contains(&c))
+        && !is_windows_device(stem.trim_end())
+}
+
+/// Whether Windows reserves `stem` for a device, in any case and with any extension.
+fn is_windows_device(stem: &str) -> bool {
+    let stem = stem.to_ascii_uppercase();
+    let port = stem
+        .strip_prefix("COM")
+        .or_else(|| stem.strip_prefix("LPT"));
+    matches!(
+        stem.as_str(),
+        "CON" | "PRN" | "AUX" | "NUL" | "CONIN$" | "CONOUT$"
+    ) || port.is_some_and(|digit| {
+        let mut chars = digit.chars();
+        chars
+            .next()
+            .is_some_and(|c| c.is_ascii_digit() || "¹²³".contains(c))
+            && chars.next().is_none()
+    })
 }
 
 /// Writes `bytes` to `path` through a temporary file, so a crash or a full disk leaves either the
@@ -83,7 +114,8 @@ fn write_atomically(path: &Path, bytes: &[u8]) -> io::Result<()> {
         fs::create_dir_all(parent)?;
     }
     let mut temp = OsString::from(path);
-    temp.push(TEMP_SUFFIX);
+    let number = NEXT_TEMP.fetch_add(1, Ordering::Relaxed);
+    temp.push(format!(".{}-{number}{TEMP_SUFFIX}", process::id()));
     let temp = PathBuf::from(temp);
     let written = write_and_sync(&temp, bytes).and_then(|()| fs::rename(&temp, path));
     if written.is_err() {
@@ -100,8 +132,10 @@ fn write_and_sync(path: &Path, bytes: &[u8]) -> io::Result<()> {
     file.sync_all()
 }
 
+/// Maps a failed read or remove to a [`StorageError`]. A folder in the key that is a file means
+/// nothing is stored there, as Windows already reports.
 fn storage_error(error: &io::Error) -> StorageError {
-    if error.kind() == ErrorKind::NotFound {
+    if matches!(error.kind(), ErrorKind::NotFound | ErrorKind::NotADirectory) {
         StorageError::NotFound
     } else {
         other(error)
@@ -140,6 +174,17 @@ mod tests {
             storage.path(".hidden/a..b"),
             Ok(Path::new("root").join(".hidden").join("a..b"))
         );
+        for name in [
+            "console",
+            "com",
+            "com10",
+            "lpt",
+            "nul-model",
+            " a b",
+            "a.bimcraft-tmp.x",
+        ] {
+            assert!(storage.path(name).is_ok(), "{name:?}");
+        }
     }
 
     #[test]
@@ -159,6 +204,19 @@ mod tests {
             "C:x",
             "file:stream",
             "nul\0byte",
+            "line\nbreak",
+            "a?b",
+            "a*",
+            "trailing.",
+            "trailing ",
+            "nul",
+            "Con",
+            "aux.txt",
+            "prn .bim",
+            "folder/COM1/x",
+            "lpt9",
+            "com²",
+            "conin$",
             "model.bim.bimcraft-tmp",
         ] {
             assert_eq!(storage.path(key), Err(invalid_key()), "{key:?}");
@@ -174,7 +232,9 @@ mod tests {
                 message: ErrorKind::PermissionDenied.to_string()
             }
         );
-        let missing = io::Error::new(ErrorKind::NotFound, "/home/someone/secret.bim");
-        assert_eq!(storage_error(&missing), StorageError::NotFound);
+        for kind in [ErrorKind::NotFound, ErrorKind::NotADirectory] {
+            let missing = io::Error::new(kind, "/home/someone/secret.bim");
+            assert_eq!(storage_error(&missing), StorageError::NotFound);
+        }
     }
 }

@@ -14,7 +14,8 @@ pub struct ExecutorError(#[from] ThreadPoolBuildError);
 /// A [`TaskExecutor`] that runs each task on a rayon thread pool.
 ///
 /// A task keeps its worker thread until it finishes, even while it waits, so tasks should do
-/// computation rather than wait on slow I/O.
+/// computation rather than wait on slow I/O, and must not wait for a task spawned after them: with
+/// every worker busy, that task never starts. A task that panics ends alone; the others go on.
 #[derive(Debug)]
 pub struct RayonExecutor {
     pool: ThreadPool,
@@ -30,6 +31,9 @@ impl RayonExecutor {
         let pool = ThreadPoolBuilder::new()
             .num_threads(threads)
             .thread_name(|index| format!("bimcraft-worker-{index}"))
+            // Rayon aborts the process on a panicking task by default. The panic hook has already
+            // reported it, and the task has no caller waiting for its result.
+            .panic_handler(|_payload| {})
             .build()?;
         Ok(Self { pool })
     }
@@ -98,6 +102,15 @@ mod tests {
             assert_eq!(task, expected);
             assert!(worker.unwrap().starts_with("bimcraft-worker-"));
         }
+    }
+
+    #[test]
+    fn a_panicking_task_does_not_stop_the_others() {
+        let executor = RayonExecutor::new(1).unwrap();
+        let (sender, receiver) = mpsc::channel();
+        executor.spawn(Box::pin(async { panic!("task failed") }));
+        executor.spawn(Box::pin(async move { sender.send(()).unwrap() }));
+        receiver.recv().unwrap();
     }
 
     #[test]
