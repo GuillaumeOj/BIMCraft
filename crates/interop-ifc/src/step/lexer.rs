@@ -125,10 +125,7 @@ impl<R: BufRead> Lexer<R> {
         let start = self.position;
         self.bump(b'/');
         if self.peek()? != Some(b'*') {
-            return Err(StepError {
-                kind: StepErrorKind::UnexpectedByte(b'/'),
-                position: start,
-            });
+            return Err(StepError::new(StepErrorKind::UnexpectedByte(b'/'), start));
         }
         self.bump(b'*');
         let mut after_star = false;
@@ -156,10 +153,10 @@ impl<R: BufRead> Lexer<R> {
                 b'\r' | b'\n' => continue,
                 b' '..=b'~' => {}
                 _ => {
-                    return Err(StepError {
-                        kind: StepErrorKind::UnexpectedByte(byte),
+                    return Err(StepError::new(
+                        StepErrorKind::UnexpectedByte(byte),
                         position,
-                    });
+                    ));
                 }
             }
             self.push(&mut text, byte, start)?;
@@ -175,21 +172,14 @@ impl<R: BufRead> Lexer<R> {
             match byte {
                 b'"' => break,
                 b'0'..=b'9' | b'A'..=b'F' => self.push(&mut digits, byte, start)?,
-                _ => return Err(Self::invalid_binary(start)),
+                _ => return Err(StepError::new(StepErrorKind::InvalidBinary, start)),
             }
         }
         // The first digit counts the unused bits of the last byte, so it is between 0 and 3.
         if matches!(digits.as_bytes().first(), Some(b'0'..=b'3')) {
             Ok(Token::Binary(digits))
         } else {
-            Err(Self::invalid_binary(start))
-        }
-    }
-
-    fn invalid_binary(start: Position) -> StepError {
-        StepError {
-            kind: StepErrorKind::InvalidBinary,
-            position: start,
+            Err(StepError::new(StepErrorKind::InvalidBinary, start))
         }
     }
 
@@ -218,7 +208,7 @@ impl<R: BufRead> Lexer<R> {
         digits
             .parse()
             .map(Token::InstanceName)
-            .map_err(|_| Self::out_of_range(start))
+            .map_err(|_| StepError::new(StepErrorKind::NumberOutOfRange, start))
     }
 
     fn number(&mut self, start: Position) -> Result<Token, StepError> {
@@ -232,7 +222,7 @@ impl<R: BufRead> Lexer<R> {
             return text
                 .parse()
                 .map(Token::Integer)
-                .map_err(|_| Self::out_of_range(start));
+                .map_err(|_| StepError::new(StepErrorKind::NumberOutOfRange, start));
         }
         self.bump(b'.');
         self.push(&mut text, b'.', start)?;
@@ -248,14 +238,7 @@ impl<R: BufRead> Lexer<R> {
         }
         match text.parse::<f64>() {
             Ok(value) if value.is_finite() => Ok(Token::Real(value)),
-            _ => Err(Self::out_of_range(start)),
-        }
-    }
-
-    fn out_of_range(start: Position) -> StepError {
-        StepError {
-            kind: StepErrorKind::NumberOutOfRange,
-            position: start,
+            _ => Err(StepError::new(StepErrorKind::NumberOutOfRange, start)),
         }
     }
 
@@ -263,16 +246,22 @@ impl<R: BufRead> Lexer<R> {
         self.bump(first);
         let mut name = String::new();
         self.push(&mut name, first, start)?;
+        // A user-defined keyword is `!` followed by a name, which starts with a letter.
+        if first == b'!' {
+            match self.peek()? {
+                Some(byte @ (b'A'..=b'Z' | b'a'..=b'z')) => {
+                    self.bump(byte);
+                    self.push(&mut name, byte, start)?;
+                }
+                next => return Err(self.unexpected(next, "a name after `!`")),
+            }
+        }
         // Section keywords such as `ISO-10303-21` contain hyphens, entity names never do.
         while let Some(byte @ (b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'_' | b'-')) =
             self.peek()?
         {
             self.bump(byte);
             self.push(&mut name, byte, start)?;
-        }
-        if name == "!" {
-            let next = self.peek()?;
-            return Err(self.unexpected(next, "a name after `!`"));
         }
         Ok(Token::Keyword(name))
     }
@@ -305,12 +294,8 @@ impl<R: BufRead> Lexer<R> {
     /// Appends an ASCII byte to a token, failing once the token would exceed its limit.
     fn push(&self, text: &mut String, byte: u8, start: Position) -> Result<(), StepError> {
         if text.len() >= self.max_token_len {
-            return Err(StepError {
-                kind: StepErrorKind::TokenTooLong {
-                    limit: self.max_token_len,
-                },
-                position: start,
-            });
+            let limit = self.max_token_len;
+            return Err(StepError::new(StepErrorKind::TokenTooLong { limit }, start));
         }
         text.push(char::from(byte));
         Ok(())
@@ -332,10 +317,7 @@ impl<R: BufRead> Lexer<R> {
     }
 
     fn error(&self, kind: StepErrorKind) -> StepError {
-        StepError {
-            kind,
-            position: self.position,
-        }
+        StepError::new(kind, self.position)
     }
 
     /// The next byte, failing at the end of the input.
@@ -432,11 +414,18 @@ mod tests {
     }
 
     #[test]
-    fn rejects_a_bare_exclamation_mark() {
+    fn rejects_user_defined_keywords_without_a_name() {
         assert_eq!(
             error("! "),
             StepError {
                 kind: StepErrorKind::UnexpectedByte(b' '),
+                position: at(1, 2),
+            }
+        );
+        assert_eq!(
+            error("!1"),
+            StepError {
+                kind: StepErrorKind::UnexpectedByte(b'1'),
                 position: at(1, 2),
             }
         );

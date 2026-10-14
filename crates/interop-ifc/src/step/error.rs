@@ -33,6 +33,12 @@ pub struct StepError {
     pub position: Position,
 }
 
+impl StepError {
+    pub(super) fn new(kind: StepErrorKind, position: Position) -> Self {
+        Self { kind, position }
+    }
+}
+
 /// The kinds of [`StepError`].
 #[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum StepErrorKind {

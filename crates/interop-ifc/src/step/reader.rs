@@ -66,7 +66,7 @@ impl<R: BufRead> StepReader<R> {
             match spanned.token {
                 Token::Keyword(name) if name == ENDSEC => break,
                 Token::Keyword(name) => {
-                    this.check_instance_count(spanned.position, this.header.len())?;
+                    this.check_instance_count(spanned.position)?;
                     let record = this.record(name)?;
                     this.expect(&Token::Semicolon)?;
                     this.header.push(record);
@@ -134,12 +134,12 @@ impl<R: BufRead> StepReader<R> {
     /// Reads an instance after its name.
     fn instance(&mut self, id: u64, position: Position) -> Result<Instance, StepError> {
         if self.ids.contains(&id) {
-            return Err(StepError {
-                kind: StepErrorKind::DuplicateInstance(id),
+            return Err(StepError::new(
+                StepErrorKind::DuplicateInstance(id),
                 position,
-            });
+            ));
         }
-        self.check_instance_count(position, self.ids.len())?;
+        self.check_instance_count(position)?;
         self.expect(&Token::Equals)?;
         let spanned = self.token()?;
         let body = match spanned.token {
@@ -158,16 +158,16 @@ impl<R: BufRead> StepReader<R> {
         Ok(Instance { id, body })
     }
 
-    fn check_instance_count(&self, position: Position, count: usize) -> Result<(), StepError> {
-        if count < self.limits.max_instances {
+    /// Fails if one more header entry or instance would exceed the limit, which they share.
+    fn check_instance_count(&self, position: Position) -> Result<(), StepError> {
+        let limit = self.limits.max_instances;
+        if self.header.len() + self.ids.len() < limit {
             return Ok(());
         }
-        Err(StepError {
-            kind: StepErrorKind::TooManyInstances {
-                limit: self.limits.max_instances,
-            },
+        Err(StepError::new(
+            StepErrorKind::TooManyInstances { limit },
             position,
-        })
+        ))
     }
 
     /// Reads the records of a complex instance after its opening parenthesis.
@@ -202,7 +202,7 @@ impl<R: BufRead> StepReader<R> {
         loop {
             let spanned = self.token()?;
             let position = spanned.position;
-            let value = match spanned.token {
+            let mut value = match spanned.token {
                 Token::Comma if !expecting_value => {
                     expecting_value = true;
                     continue;
@@ -231,7 +231,6 @@ impl<R: BufRead> StepReader<R> {
                     .map_err(|token| unexpected("a parameter", &token, position))?,
                 token => return Err(unexpected("`,` or `)`", &token, position)),
             };
-            let mut value = value;
             while let Some(type_name) = current.typed.pop() {
                 self.expect(&Token::CloseParen)?;
                 depth -= 1;
@@ -246,15 +245,11 @@ impl<R: BufRead> StepReader<R> {
     }
 
     fn check_depth(&self, depth: usize, position: Position) -> Result<(), StepError> {
-        if depth < self.limits.max_nesting_depth {
+        let limit = self.limits.max_nesting_depth;
+        if depth < limit {
             return Ok(());
         }
-        Err(StepError {
-            kind: StepErrorKind::TooDeep {
-                limit: self.limits.max_nesting_depth,
-            },
-            position,
-        })
+        Err(StepError::new(StepErrorKind::TooDeep { limit }, position))
     }
 
     /// Reads a section keyword followed by `;`.
@@ -278,10 +273,8 @@ impl<R: BufRead> StepReader<R> {
         let spanned = self.lexer.next_token()?;
         let limit = self.limits.max_instance_len;
         if spanned.offset - self.statement_start > u64::try_from(limit).unwrap_or(u64::MAX) {
-            return Err(StepError {
-                kind: StepErrorKind::InstanceTooLong { limit },
-                position: spanned.position,
-            });
+            let kind = StepErrorKind::InstanceTooLong { limit };
+            return Err(StepError::new(kind, spanned.position));
         }
         Ok(spanned)
     }
@@ -345,13 +338,8 @@ fn simple_parameter(token: Token) -> Result<Parameter, Token> {
 }
 
 fn unexpected(expected: &'static str, found: &Token, position: Position) -> StepError {
-    StepError {
-        kind: StepErrorKind::UnexpectedToken {
-            expected,
-            found: found.describe(),
-        },
-        position,
-    }
+    let found = found.describe();
+    StepError::new(StepErrorKind::UnexpectedToken { expected, found }, position)
 }
 
 #[cfg(test)]
@@ -720,10 +708,17 @@ mod tests {
             max_instances: 2,
             ..Limits::default()
         };
-        assert_eq!(read_with(&file("#1=A();#2=B();"), limits).unwrap().len(), 2);
-        let error = read_with(&file("#1=A();#2=B();#3=C();"), limits).unwrap_err();
+        assert_eq!(
+            read_with(&minimal("#1=A();#2=B();"), limits).unwrap().len(),
+            2
+        );
+        let error = read_with(&minimal("#1=A();#2=B();#3=C();"), limits).unwrap_err();
         assert_eq!(error.kind, StepErrorKind::TooManyInstances { limit: 2 });
-        assert_eq!(error.position.column, 15);
+        assert_eq!(error.position.column, MINIMAL_DATA_COLUMN + 14);
+        // `file` has one header entry, which takes a share of the same budget.
+        let error = read_with(&file("#1=A();#2=B();"), limits).unwrap_err();
+        assert_eq!(error.kind, StepErrorKind::TooManyInstances { limit: 2 });
+        assert_eq!(error.position.column, 8);
     }
 
     #[test]

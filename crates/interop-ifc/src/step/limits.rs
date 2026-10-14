@@ -1,8 +1,13 @@
 /// Bounds that keep a hostile file from exhausting memory or the stack.
 ///
-/// Together they bound the memory used for one instance; [`max_instances`](Self::max_instances)
-/// bounds the set of instance names kept to detect duplicates. The defaults accept every real IFC
-/// model we know of; raise them for exceptional files.
+/// Together they bound the memory used for one instance: parsed values take up to about 20 times
+/// [`max_instance_len`](Self::max_instance_len), for instances made of many tiny parameters such
+/// as `$,$,$`. [`max_instances`](Self::max_instances) bounds the set of instance names kept to
+/// detect duplicates. The defaults accept every real IFC model we know of; raise them for
+/// exceptional files.
+///
+/// The token and instance lengths also apply to the section markers, so values below 16 bytes,
+/// the length of the end marker `END-ISO-10303-21`, reject every file.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Limits {
     /// Longest token in bytes: a string or binary literal (without its delimiters), a keyword, an
@@ -16,7 +21,7 @@ pub struct Limits {
     /// Parsed values are recursive, so very large values (thousands) risk exhausting the stack
     /// when the values are dropped or walked.
     pub max_nesting_depth: usize,
-    /// Most instances in the file. Header entries count against it as well.
+    /// Most instances and header entries in the file, counted together.
     pub max_instances: usize,
 }
 
