@@ -203,18 +203,3 @@ jobs:
           name: playwright-report
           path: ui/playwright-report
           if-no-files-found: ignore
-
-  # Single required status check for branch protection: passes only if every job passed or was skipped.
-  ci-ok:
-    name: CI OK
-    if: always()
-    needs: [detect, repo, pull-request, rust, coverage, fuzz, ui, e2e]
-    runs-on: ubuntu-24.04
-    steps:
-      - env:
-          RESULTS: ${{ join(needs.*.result, ' ') }}
-        run: |
-          echo "Job results: $RESULTS"
-          for result in $RESULTS; do
-            case "$result" in success|skipped) ;; *) exit 1 ;; esac
-          done
