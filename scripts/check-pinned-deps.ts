@@ -140,13 +140,15 @@ export function gitEnv(): Record<string, string | undefined> {
   return Object.fromEntries(Object.entries(process.env).filter(([name]) => !name.startsWith("GIT_")));
 }
 
+/** Runs git in `root` and returns its output; throws with git's message when it fails. */
+export function git(root: string, ...args: string[]): string {
+  const result = Bun.spawnSync(["git", ...args], { cwd: root, env: gitEnv() });
+  if (result.exitCode !== 0) throw new Error(`git ${args.join(" ")}: ${result.stderr.toString().trim()}`);
+  return result.stdout.toString();
+}
+
 function listRepoFiles(root: string): string[] {
-  const result = Bun.spawnSync(
-    ["git", "ls-files", "--cached", "--others", "--exclude-standard"],
-    { cwd: root, env: gitEnv() },
-  );
-  if (result.exitCode !== 0) throw new Error(result.stderr.toString());
-  return result.stdout.toString().split("\n").filter(Boolean);
+  return git(root, "ls-files", "--cached", "--others", "--exclude-standard").split("\n").filter(Boolean);
 }
 
 export function checkRepo(root: string): Issue[] {

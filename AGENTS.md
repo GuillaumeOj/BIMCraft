@@ -108,6 +108,7 @@ Users are architects and engineers, not developers. For every user-facing featur
 | --- | --- |
 | One-time setup (hooks + tool check) | `scripts/setup.sh` |
 | Everything CI runs that applies | `scripts/check-all.sh` (or one section: `repo rust coverage wasm fuzz ui e2e docs`) |
+| Checks the pre-push hook will run for this branch | `bun scripts/affected.ts` (push with `BIMCRAFT_FULL_CHECKS=1` to run them all) |
 | Commit messages + user-docs rule for a branch | `scripts/check-pr.sh main` |
 | Rust format | `cargo fmt --all --check` |
 | Rust lint | `cargo clippy --workspace --all-targets --all-features -- -D warnings` |
