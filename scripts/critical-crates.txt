@@ -2,6 +2,7 @@ schema
 schema-gen
 core-model
 core-txn
+persist
 geom
 georef
 analysis

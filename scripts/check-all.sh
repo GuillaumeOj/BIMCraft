@@ -60,6 +60,8 @@ check_coverage() {
 check_wasm() {
   has_rust || { step "wasm32: no crates yet, skipped"; return; }
   step "wasm32: core crates build for the browser (ARCH-01)"
+  CC_wasm32_unknown_unknown=$(scripts/wasm-cc.sh)
+  export CC_wasm32_unknown_unknown
   for crate in $(existing_crates scripts/wasm-crates.txt); do
     in_scope "$crate" || continue
     cargo build --package "$crate" --target wasm32-unknown-unknown --all-features --locked

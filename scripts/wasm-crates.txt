@@ -1,6 +1,7 @@
 schema
 core-model
 core-txn
+persist
 geom
 georef
 disc-arch

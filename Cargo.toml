@@ -23,6 +23,11 @@ platform = { path = "crates/platform" }
 proptest = "=1.11.0"
 rayon = "=1.12.0"
 robust = "=1.2.0"
+# Without the default `cache` feature, which only adds a statement cache and its dependencies.
+rusqlite = { version = "=0.40.2", default-features = false, features = [
+  "bundled",
+  "ffi-sqlite-wasm-rs",
+] }
 serde = { version = "=1.0.229", features = ["derive"] }
 serde_json = "=1.0.151"
 tempfile = "=3.27.0"

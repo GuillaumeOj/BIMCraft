@@ -1,0 +1,15 @@
+[package]
+name = "persist"
+version = "0.0.0"
+description = "Project files as SQLite databases: schema version, migrations, atomic saves."
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+rusqlite = { workspace = true }
+thiserror = { workspace = true }
+
+[lints]
+workspace = true
