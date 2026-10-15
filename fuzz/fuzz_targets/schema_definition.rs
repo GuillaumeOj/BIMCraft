@@ -1,10 +1,11 @@
 //! Any bytes, read as an entity file and as a property set file, are either accepted and turned
-//! into Rust, or rejected with errors; nothing panics, overflows the stack or runs away.
+//! into Rust and reference pages, or rejected with errors; nothing panics, overflows the stack or
+//! runs away.
 
 #![no_main]
 
 use libfuzzer_sys::fuzz_target;
-use schema_gen::{RustOptions, Source, emit_rust, parse_sources};
+use schema_gen::{RustOptions, Source, emit_reference, emit_rust, parse_sources};
 
 const NAMESPACE: &str = "format = 1\n[namespace]\nname = \"core\"\nversion = 1\n";
 
@@ -28,6 +29,7 @@ fuzz_target!(|data: &[u8]| {
                 id_type: "Id".into(),
             };
             let _ = emit_rust(&namespace, &options);
+            let _ = emit_reference(&namespace, &[]);
         }
     }
 });

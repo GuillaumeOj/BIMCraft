@@ -8,7 +8,7 @@ use std::path::PathBuf;
 use schema::{EntityKind, Namespace, ValidationErrorKind};
 use schema_gen::{
     Error, ErrorKind, JsonSchemaOptions, MAX_FILE_SIZE, RustOptions, Source, emit_json_schema,
-    emit_rust, generate_rust, load_dir, parse_sources,
+    emit_rust, generate_reference, generate_rust, load_dir, parse_sources,
 };
 
 const NAMESPACE: &str = "format = 1\n[namespace]\nname = \"core\"\nversion = 1\n";
@@ -561,4 +561,48 @@ mod hostile_input {
             let _ = parse_with(&[("entities/wall.toml", &wall(&attributes))]);
         }
     }
+}
+
+#[test]
+fn reference_generation_reports_definition_and_snapshot_errors() {
+    let dir = TempNamespace::new("reference", &[("namespace.toml", "format = 9\n")]).unwrap();
+    let errors = generate_reference(&dir.0).unwrap_err();
+    assert_eq!(errors[0].file.as_deref(), Some("namespace.toml"));
+
+    let dir = TempNamespace::new(
+        "reference-snapshots",
+        &[
+            (
+                "namespace.toml",
+                "format = 1\n[namespace]\nname = \"core\"\nversion = 2\n",
+            ),
+            ("snapshots/0001.json", "{"),
+            (
+                "snapshots/0002.json",
+                r#"{"name":"core","version":3,"entities":[],"property_sets":[]}"#,
+            ),
+            ("snapshots/0003.json", "ignored: past the current version"),
+        ],
+    )
+    .unwrap();
+    let files: Vec<Option<String>> = generate_reference(&dir.0)
+        .unwrap_err()
+        .into_iter()
+        .map(|error| error.file)
+        .collect();
+    assert_eq!(
+        files,
+        [
+            Some("snapshots/0001.json".to_owned()),
+            Some("snapshots/0002.json".to_owned())
+        ]
+    );
+
+    let dir = TempNamespace::new(
+        "reference-stray",
+        &[("namespace.toml", NAMESPACE), ("snapshots/README.md", "")],
+    )
+    .unwrap();
+    let errors = generate_reference(&dir.0).unwrap_err();
+    assert_eq!(errors[0].file.as_deref(), Some("snapshots/README.md"));
 }

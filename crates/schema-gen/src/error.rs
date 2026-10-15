@@ -50,6 +50,16 @@ impl Error {
         }
     }
 
+    /// Validates `namespace`, turning each problem into an error without a position.
+    pub(crate) fn validate(namespace: &schema::Namespace) -> Result<(), Vec<Self>> {
+        schema::validate(namespace).map_err(|errors| {
+            errors
+                .into_iter()
+                .map(|error| Self::new(ErrorKind::Validation(Box::new(error))))
+                .collect()
+        })
+    }
+
     /// A [`ErrorKind::Definition`] error about the whole of `file`.
     pub(crate) fn definition(file: &str, message: String) -> Self {
         Self::at(file, "", None, ErrorKind::Definition(message))

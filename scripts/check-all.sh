@@ -134,9 +134,10 @@ check_e2e() {
 }
 
 check_docs() {
-  step "User documentation builds"
+  step "User guide and reference book build"
   require mdbook
   mdbook build docs/user
+  mdbook build docs/reference
 }
 
 sections=${*:-repo rust coverage wasm fuzz corpus ui e2e docs}

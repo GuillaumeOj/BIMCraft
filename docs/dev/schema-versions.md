@@ -32,7 +32,7 @@ Project files must open in every later version of BIMCraft (PERS-01). Two versio
    | `custom` | `entities`, `function`, `doc` | Anything else. The function runs on the file's tables; the host passes it to `persist` in `Schema::custom_steps`. |
 
    Added and removed entities and attributes need no step: they are inferred from the snapshots, an added attribute taking its default.
-4. Run `UPDATE_SNAPSHOTS=1 cargo test -p schema-gen` to write `snapshots/NNNN.json`, then `cargo test -p schema-gen`. Existing snapshots are never rewritten.
+4. Run `UPDATE_SNAPSHOTS=1 cargo test -p schema-gen` to write `snapshots/NNNN.json`, then `cargo test -p schema-gen`. Existing snapshots are never rewritten. The same run regenerates the files derived from the definitions, `schema/core/api.schema.json` and the reference pages in `docs/reference/schema/`, which date each item from the snapshots; commit them with the change.
 
 The check reports what is missing: definitions that differ from the last snapshot ("raise the version"), a value type change without `change_value`, a new required attribute without `set_value`, or a step naming something that does not exist.
 

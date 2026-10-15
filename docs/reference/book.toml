@@ -1,0 +1,12 @@
+[book]
+title = "BIMCraft Reference"
+authors = ["BIMCraft contributors"]
+language = "en"
+src = "."
+
+[build]
+build-dir = "../../target/reference"
+create-missing = false
+
+[output.html]
+no-section-label = true
