@@ -1136,3 +1136,11 @@ extrude.volume[30] 4056809e93b7ea00
 extrude.x[31] 4067eb3607d3a5fd
 extrude.y[31] 40648584749f7068
 extrude.volume[31] 407149180237d28f
+shear_centre.x[0] 405dbcbf26377a4f
+shear_centre.y[0] c084f7fe4b1fa9f5
+shear_centre.x[1] c0854d5d833b2542
+shear_centre.y[1] 408f3aa6d3b64575
+shear_centre.x[2] 4080f47fec7d4f3c
+shear_centre.y[2] 407c45c04393f40f
+shear_centre.x[3] c0800c0a2a0dff80
+shear_centre.y[3] c05c3321b88bbb25

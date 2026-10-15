@@ -21,6 +21,12 @@ pub(crate) fn polygon(points: &[(f64, f64)]) -> Vec<Edge> {
         .collect()
 }
 
+/// A straight-edged profile from corners given in millimetres, the unit of hand calculations.
+pub(crate) fn mm_profile(corners: &[(f64, f64)]) -> Profile {
+    let metres: Vec<(f64, f64)> = corners.iter().map(|&(x, y)| (x * 1e-3, y * 1e-3)).collect();
+    Profile::new(polygon(&metres), vec![]).expect("valid profile")
+}
+
 /// A 2 m square whose top side bulges out as a half circle.
 pub(super) fn bulged_square() -> Vec<Edge> {
     vec![
@@ -478,5 +484,28 @@ fn errors_name_the_loop_and_edges_but_no_coordinates() {
     assert_eq!(
         ToString::to_string(&ProfileError::NestedHoles { outer: 0, inner: 1 }),
         "hole 1 is inside hole 0"
+    );
+}
+
+#[test]
+fn bounds_are_tight_around_arcs() {
+    // A half disc of radius 1 above the x axis: bounds (−1, 0)–(1, 1), not the whole circle's.
+    let half_disc = Profile::new(
+        vec![
+            line(p(-1.0, 0.0), p(1.0, 0.0)),
+            ccw(p(1.0, 0.0), p(-1.0, 0.0), p(0.0, 0.0)),
+        ],
+        vec![],
+    )
+    .expect("valid profile");
+    assert_eq!(
+        half_disc.bounds().map(f64::to_bits),
+        [-1.0, 0.0, 1.0, 1.0].map(f64::to_bits)
+    );
+    // The bulge rises 1 m above the 2 m square.
+    let bulged = Profile::new(bulged_square(), vec![]).expect("valid profile");
+    assert_eq!(
+        bulged.bounds().map(f64::to_bits),
+        [0.0, 0.0, 2.0, 3.0].map(f64::to_bits)
     );
 }

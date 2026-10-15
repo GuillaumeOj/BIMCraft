@@ -1,6 +1,6 @@
 //! Profile edges and the plane geometry the validation and mass properties share.
 
-use core::f64::consts::TAU;
+use core::f64::consts::{FRAC_PI_2, PI, TAU};
 
 use crate::Point2;
 
@@ -141,10 +141,18 @@ impl Curve {
         }
     }
 
+    /// The smallest box containing the curve, `[min_x, min_y, max_x, max_y]`.
+    pub(crate) fn extent(&self) -> [f64; 4] {
+        match self {
+            Self::Segment(a, b) => segment_box(*a, *b),
+            Self::Arc(arc) => arc.extent(),
+        }
+    }
+
     /// A box containing the curve, `[min_x, min_y, max_x, max_y]`; a whole circle for an arc.
     pub(crate) fn bounds(&self) -> [f64; 4] {
         match self {
-            Self::Segment(a, b) => [a.x.min(b.x), a.y.min(b.y), a.x.max(b.x), a.y.max(b.y)],
+            Self::Segment(a, b) => segment_box(*a, *b),
             Self::Arc(arc) => [
                 arc.centre.x - arc.radius,
                 arc.centre.y - arc.radius,
@@ -219,6 +227,23 @@ impl Arc {
         self.start == self.end
     }
 
+    /// The smallest box containing the arc, `[min_x, min_y, max_x, max_y]`: its ends, plus each
+    /// extreme point of the circle (east, north, west, south) that the arc passes through.
+    pub(crate) fn extent(&self) -> [f64; 4] {
+        let (c, r) = (self.centre, self.radius);
+        let extremes = [
+            (0.0, Point2::new(c.x + r, c.y)),
+            (FRAC_PI_2, Point2::new(c.x, c.y + r)),
+            (PI, Point2::new(c.x - r, c.y)),
+            (-FRAC_PI_2, Point2::new(c.x, c.y - r)),
+        ];
+        extremes
+            .into_iter()
+            .filter(|&(angle, _)| self.spans(angle))
+            .map(|(_, p)| p)
+            .fold(segment_box(self.start, self.end), include)
+    }
+
     /// Whether the ray from the centre at `angle` passes through the arc.
     fn spans(&self, angle: f64) -> bool {
         let offset = if self.sweep > 0.0 {
@@ -278,6 +303,24 @@ pub(crate) fn point_on_circle(centre: Point2, radius: f64, angle: f64) -> Point2
 
 pub(crate) fn angle_of(v: Point2) -> f64 {
     libm::atan2(v.y, v.x)
+}
+
+fn segment_box(a: Point2, b: Point2) -> [f64; 4] {
+    [a.x.min(b.x), a.y.min(b.y), a.x.max(b.x), a.y.max(b.y)]
+}
+
+/// The smallest box containing two boxes.
+pub(crate) fn union(a: [f64; 4], b: [f64; 4]) -> [f64; 4] {
+    [
+        a[0].min(b[0]),
+        a[1].min(b[1]),
+        a[2].max(b[2]),
+        a[3].max(b[3]),
+    ]
+}
+
+fn include(b: [f64; 4], p: Point2) -> [f64; 4] {
+    [b[0].min(p.x), b[1].min(p.y), b[2].max(p.x), b[3].max(p.y)]
 }
 
 fn distance_to_segment(p: Point2, a: Point2, b: Point2) -> f64 {

@@ -28,6 +28,9 @@
 //! A [`LocationLine`] says which line of a [`LayerSet`] a wall is drawn along (ARC-30). It
 //! resolves into an offset of the section from the wall's axis (GEO-13); failures are a
 //! [`LocationError`].
+//!
+//! [`Profile::shear_centre`] computes the shear centre of any profile with finite elements, for
+//! members placed on it (STR-14); failures are a [`ShearCentreError`].
 
 // ARCH-02: forbid, not deny, so nothing in this crate can opt out. See docs/dev/quality.md.
 #![forbid(clippy::disallowed_methods, clippy::disallowed_types)]
@@ -37,6 +40,7 @@ mod location;
 mod point;
 mod predicates;
 mod profile;
+mod section;
 mod tolerance;
 
 pub use brep::{BrepError, ExtrusionError, FaceInput, Shell, Solid};
@@ -50,4 +54,5 @@ pub use predicates::{
     orient3d,
 };
 pub use profile::{ArcDirection, Edge, LoopId, MAX_PROFILE_EDGES, Profile, ProfileError};
+pub use section::{MAX_MESH_NODES, ShearCentreError};
 pub use tolerance::{ARC_CHORD_TOLERANCE, LINEAR_TOLERANCE, MODEL_EXTENT};

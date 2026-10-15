@@ -241,4 +241,18 @@ proptest! {
             prop_assert!(profile.area() > 0.0);
         }
     }
+
+    #[test]
+    fn a_disc_is_bounded_by_its_circle(
+        radius in 1e-2..10.0f64,
+        cx in -1e2..1e2f64,
+        cy in -1e2..1e2f64,
+    ) {
+        let disc = Profile::new(circle(cx, cy, radius), vec![]).expect("a circle is valid");
+        let expected = [cx - radius, cy - radius, cx + radius, cy + radius];
+        for (got, want) in disc.bounds().into_iter().zip(expected) {
+            // The radius is measured from the stored points, so it may differ in the last bits.
+            prop_assert!((got - want).abs() <= 1e-12 * (1.0 + want.abs()));
+        }
+    }
 }
