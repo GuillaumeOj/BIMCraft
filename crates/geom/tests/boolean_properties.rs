@@ -338,29 +338,14 @@ proptest! {
 
     #[test]
     fn booleans_of_prisms_are_valid_and_add_up((_, a) in prism(), (_, b) in prism()) {
-        // The engine still rejects a few of these pairs with a typed error; whatever it returns
-        // must be valid and its volumes must add up.
-        let volume = |result: Result<Option<Solid>, geom::BooleanError>| {
-            result.ok().map(|solid| {
-                solid.as_ref().map_or(Ok(0.0), |solid| solid.validate().map(|()| solid.volume()))
-            })
-        };
         let (va, vb) = (a.volume(), b.volume());
-        let union = volume(a.union(&b)).transpose()?;
-        let cut = volume(a.difference(&b)).transpose()?;
-        let shared = volume(a.intersection(&b)).transpose()?;
-        if let Some(union) = union {
-            prop_assert!(union <= va + vb + 1e-9 && union + 1e-9 >= va.max(vb));
-        }
-        if let Some(shared) = shared {
-            prop_assert!(shared <= va.min(vb) + 1e-9);
-        }
+        let union = volume_of(checked(a.union(&b))?.as_ref());
+        let cut = volume_of(checked(a.difference(&b))?.as_ref());
+        let shared = volume_of(checked(a.intersection(&b))?.as_ref());
+        prop_assert!(union <= va + vb + 1e-9 && union + 1e-9 >= va.max(vb));
+        prop_assert!(shared <= va.min(vb) + 1e-9);
         // Merging moves vertices by less than the tolerance; elsewhere the volumes are exact.
-        if let (Some(union), Some(shared)) = (union, shared) {
-            prop_assert!((union + shared - va - vb).abs() <= 1e-4);
-        }
-        if let (Some(cut), Some(shared)) = (cut, shared) {
-            prop_assert!((cut + shared - va).abs() <= 1e-4);
-        }
+        prop_assert!((union + shared - va - vb).abs() <= 1e-4);
+        prop_assert!((cut + shared - va).abs() <= 1e-4);
     }
 }

@@ -636,3 +636,113 @@ fn turned_boxes_sharing_planes_through_the_origin() {
     assert_eq!(result.shells().len(), 1);
     assert_close(result.volume(), 2.25 + 0.125);
 }
+
+/// A prism over the polygon with corners at `corners` sixteenths of a turn on a circle, maybe
+/// with a square hole a quarter of the radius from the centre each way, extruded along
+/// `direction`.
+fn prism(
+    corners: &[u32],
+    (centre, radius): (Point2, f64),
+    with_hole: bool,
+    along: Vector3,
+) -> Solid {
+    let polygon = |points: &[Point2]| {
+        (0..points.len())
+            .map(|i| Edge::Line {
+                start: points[i],
+                end: points[(i + 1) % points.len()],
+            })
+            .collect::<Vec<_>>()
+    };
+    let at = |x: f64, y: f64| Point2::new(centre.x + x, centre.y + y);
+    let outer: Vec<Point2> = corners
+        .iter()
+        .map(|&k| {
+            let angle = std::f64::consts::TAU * f64::from(k) / 16.0;
+            at(radius * libm::cos(angle), radius * libm::sin(angle))
+        })
+        .collect();
+    let side = radius / 4.0;
+    let hole = [
+        at(-side, -side),
+        at(side, -side),
+        at(side, side),
+        at(-side, side),
+    ];
+    let holes = if with_hole {
+        vec![polygon(&hole)]
+    } else {
+        Vec::new()
+    };
+    Solid::extrude(&Profile::new(polygon(&outer), holes).unwrap(), along).unwrap()
+}
+
+#[test]
+fn a_prism_poking_out_beside_a_shared_corner() {
+    // Both prisms stand on z = 0 and share a bottom corner. The second, slanted the other way,
+    // pokes out through a side face of the first in a triangle whose tip is that corner: what is
+    // left of the side face is a ring passing through the corner twice, which no face may be.
+    // Hand calculation (ENG-03): a polygon inscribed in a circle of radius r has the area
+    // r²/2 · Σ sin θ over the angles θ between its corners; the shear by the extrusion keeps it at
+    // every height. First: 9/8 · (sin 90° + 2 sin 67.5° + sin 135°) · 1 = 3.999 224 m³. Second:
+    // 9/8 · (sin 112.5° + sin 22.5° − sin 135°) · 0.5 = 0.337 194 m³. Undoing the common shear
+    // along x turns the overlap at height z into the triangle against the quadrilateral moved
+    // z/2 along y; integrating its clipped area over z gives 0.249 807 m³.
+    let circle = (Point2::new(0.0, 1.0), 1.5);
+    let first = prism(&[3, 7, 10, 13], circle, false, Vector3::new(-1.0, 0.5, 1.0));
+    let second = prism(&[7, 12, 13], circle, false, Vector3::new(-0.5, 0.0, 0.5));
+    assert_close(first.volume(), 3.999_224_077);
+    assert_close(second.volume(), 0.337_194_103);
+    let shared = 0.249_807_489;
+    for (one, other) in [(&first, &second), (&second, &first)] {
+        let joined = union(one, other);
+        assert_eq!(joined.shells().len(), 1);
+        assert!((joined.volume() - (3.999_224_077 + 0.337_194_103 - shared)).abs() < 1e-8);
+        let overlap = intersection(one, other).unwrap();
+        assert!((overlap.volume() - shared).abs() < 1e-8);
+    }
+    let cut = difference(&first, &second).unwrap();
+    assert!((cut.volume() - (3.999_224_077 - shared)).abs() < 1e-8);
+    let cut = difference(&second, &first).unwrap();
+    assert!((cut.volume() - (0.337_194_103 - shared)).abs() < 1e-8);
+}
+
+#[test]
+fn a_hole_wall_rising_from_a_side_along_the_floor() {
+    use std::f64::consts::SQRT_2;
+
+    // Both prisms stand on z = 0. The bottom edge of the second's hole lies along the first's
+    // side, and the hole's wall leans away from it: the union touches itself along that edge,
+    // which runs through the middle of the merged floor and ends at a corner of the first prism,
+    // where a wedge-shaped gap between the wall and the side touches the floor. Hand calculation
+    // (ENG-03), areas as in `a_prism_poking_out_beside_a_shared_corner`: first,
+    // 2 · (sin 135° + sin 45° + sin 180°) · 0.5 = √2 m³; second,
+    // (2 · (sin 90° + 2 sin 135°) − 1) · 0.5 = 0.5 + √2 m³. Undoing the second's shear, the
+    // overlap at height z is the first triangle against the second's triangle less its hole,
+    // both moved by −z along x and y; integrating its clipped area over z gives 0.095 866 m³.
+    let first = prism(
+        &[0, 6, 8],
+        (Point2::new(0.0, -1.5), 2.0),
+        false,
+        Vector3::new(0.0, 0.0, 0.5),
+    );
+    let second = prism(
+        &[0, 4, 10],
+        (Point2::new(1.5, -1.0), 2.0),
+        true,
+        Vector3::new(-0.5, -0.5, 0.5),
+    );
+    let (first_volume, second_volume) = (SQRT_2, 0.5 + SQRT_2);
+    assert_close(first.volume(), first_volume);
+    assert_close(second.volume(), second_volume);
+    let shared = 0.095_865_648;
+    for (one, other) in [(&first, &second), (&second, &first)] {
+        let joined = union(one, other);
+        assert_eq!(joined.shells().len(), 1);
+        assert!((joined.volume() - (first_volume + second_volume - shared)).abs() < 1e-8);
+        let overlap = intersection(one, other).unwrap();
+        assert!((overlap.volume() - shared).abs() < 1e-8);
+    }
+    let cut = difference(&first, &second).unwrap();
+    assert!((cut.volume() - (first_volume - shared)).abs() < 1e-8);
+}
