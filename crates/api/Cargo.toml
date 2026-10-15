@@ -1,0 +1,17 @@
+[package]
+name = "api"
+version = "0.0.0"
+description = "The command and query API every client reaches the core through."
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+core-txn = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+
+[lints]
+workspace = true
