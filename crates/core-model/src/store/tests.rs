@@ -1,7 +1,10 @@
 use std::collections::BTreeMap;
 
 use proptest::prelude::*;
-use schema::{Attribute, Entity, EntityKind, IfcMapping, QuantityKind, TypeDef, Value, ValueType};
+use schema::{
+    Attribute, Entity, EntityKind, IfcMapping, Placement, Presence, QuantityKind, TypeDef, Value,
+    ValueType,
+};
 
 use super::*;
 use crate::{IdSource, SeededIdSource};
@@ -206,6 +209,31 @@ fn type_attributes_are_not_stored_on_instances() {
             [axis(), ("layers", AttributeValue::List(vec![]))]
         ),
         Err(unknown)
+    );
+}
+
+#[test]
+fn types_have_their_own_tables() {
+    let mut store = store();
+    let layers = AttributeValue::List(vec![real(0.2), real(0.05)]);
+    store
+        .insert(id(1), "WallType", [("layers", layers.clone())])
+        .unwrap();
+    assert_eq!(store.entity_of(id(1)), Some("WallType"));
+    assert_eq!(store.get(id(1), "layers"), Ok(Some(layers)));
+    // On the type, a type_overridable attribute takes its default.
+    assert_eq!(store.get(id(1), "height"), Ok(Some(real(2.5))));
+    assert_eq!(
+        store.get(id(1), "axis"),
+        Err(StoreError::UnknownAttribute {
+            entity: "WallType".into(),
+            attribute: "axis".into(),
+        })
+    );
+    // Entities without a type have no type table.
+    assert_eq!(
+        store.insert(id(2), "StoreyType", [("elevation", real(0.0))]),
+        Err(StoreError::UnknownEntity("StoreyType".into()))
     );
 }
 
