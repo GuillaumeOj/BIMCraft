@@ -34,9 +34,10 @@ describe("guard-bash.sh", () => {
     "FOO=1 git push --force origin feat",
     "git -C . push -f origin feat",
     "git push -uf origin feat",
-    "git push --force origin feat",
-    "git push --force-with-lease -f origin feat",
-    "git push --force-with-lease origin main",
+    "git --no-pager push --force-with-lease origin feat",
+    "git push --force-with-lease=feat origin feat",
+    "git push --force-with-lease --force-if-includes -f origin feat",
+    "git push --force-with-lease --force-if-includes origin main",
     "git push \\\n  --force origin feat",
     "git push origin +feat",
     'git push origin "+feat"',
@@ -76,11 +77,8 @@ describe("guard-bash.sh", () => {
     'git push -u origin "claude/feature"',
     "git push origin feat/main-fix",
     "git push --dry-run origin feat",
-    "git push --force-with-lease",
-    "git --no-pager push --force-with-lease origin feat",
-    "git push --force-with-lease=feat origin feat",
-    "git push --force-with-lease --force-if-includes origin feat",
-    "git push --atomic --force-with-lease --force-if-includes origin one two three",
+    "git push --force-with-lease --force-if-includes",
+    "git push --force-with-lease=feat --force-if-includes origin feat",
     "gh pr create --draft --title x --body-file pr.md",
     "gh pr checks 12 --watch",
     "gh run view 34 --log-failed",
@@ -93,7 +91,7 @@ describe("guard-bash.sh", () => {
   test.each([
     "git push",
     "git push origin feat:feat",
-    "git push --force-with-lease",
+    "git push --force-with-lease --force-if-includes",
   ])("blocks %s from a checkout of main", (command) => {
     expect(exitCode(command, mainRepo)).toBe(2);
   });

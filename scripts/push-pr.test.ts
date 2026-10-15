@@ -486,7 +486,7 @@ describe("main", () => {
     expect(gh.prs).toHaveLength(3);
     expect(gh.prs[1]?.base).toBe("one");
     expect(gh.prs.map((p) => p.body)).toEqual(bodies);
-    expect(calls).toContainEqual(["git", "push", "--atomic", "--force-with-lease", "-u", "origin", "one", "two", "three"]);
+    expect(calls).toContainEqual(["git", "push", "--atomic", "--force-with-lease", "--force-if-includes", "-u", "origin", "one", "two", "three"]);
   });
 
   test("--only ships the listed branches", () => {

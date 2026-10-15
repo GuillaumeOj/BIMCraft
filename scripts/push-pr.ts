@@ -19,7 +19,7 @@ Stack options (anywhere):
   --only a,b,c          ship exactly these branches, bottom to top (the last one must be checked out)
   --base <branch>       base of the bottom pull request (default: main)
   --remote <name>       remote to push to (default: origin)
-  --force               push with --force-with-lease (after a rebase or a restack)
+  --force               push with --force-with-lease --force-if-includes (after a rebase or a restack)
   --no-pr               stamp and push only
   --dry-run             print the commands that would change anything, run none, stamp nothing
   -h, --help            show this help
@@ -451,7 +451,7 @@ function ship(args: Args, run: Run): number {
   if (args.dryRun) console.log("dry run: nothing is stamped, pushed or published.");
   else if (run([join(SCRIPTS, "mark-reviewed.sh")], { inherit: true }).code !== 0) throw new Error("not stamped; nothing pushed");
 
-  exec(["git", "push", "--atomic", ...(args.force ? ["--force-with-lease"] : []), "-u", args.remote, ...branches], {
+  exec(["git", "push", "--atomic", ...(args.force ? ["--force-with-lease", "--force-if-includes"] : []), "-u", args.remote, ...branches], {
     inherit: true,
   });
   if (args.noPr) return 0;
