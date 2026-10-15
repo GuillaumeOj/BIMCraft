@@ -22,29 +22,35 @@ git_cmd="${at_cmd}git([[:space:]]+(-c[[:space:]]+[^[:space:]]+|--[^[:space:]]+))
 matches() { printf '%s\n' "$command" | grep -Eiq "$1"; }
 
 # Fast path: this runs on every Bash call, and most mention none of the trigger words.
-matches 'push|gh|verify|commit|hookspath|review-stamp' || exit 0
+matches 'push|(^|[^a-z0-9_.-])gh[[:space:]]|verify|commit|hookspath|review-stamp' || exit 0
 
-# A push and its arguments up to the next shell operator, then one whole, possibly quoted, argument.
-push="${git_cmd}push([[:space:]][^;&|]*)?[[:space:]]"
+# Arguments up to the next shell operator, then one whole, possibly quoted, argument.
+args='([[:space:]][^;&|]*)?[[:space:]]'
 q="[\"']?"
 end="${q}([[:space:]]|$)"
-matches "${push}${q}(-[a-z]*f[a-z]*|--force[^[:space:]]*|\+[^[:space:]]*)${end}" && block "force pushes are reserved to the user"
-matches "${push}${q}(-[a-z]*d[a-z]*|--delete|--mirror|--all|--tags|--prune|:[^[:space:]]*)${end}" &&
-  block "deleting, mirroring or pushing tags is reserved to the user"
-matches "${push}${q}([^[:space:]]*:)?(refs/heads/)?main${end}" && block "pushing main is reserved to the user"
-# From a checkout of main, any push is refused: without a refspec, or with HEAD, it updates main.
-if matches "${git_cmd}push([[:space:]]|$)" && [ "$(git symbolic-ref --quiet --short HEAD 2>/dev/null)" = main ]; then
-  block "pushing from main is reserved to the user"
+
+if matches "${git_cmd}push([[:space:]]|$)"; then
+  push="${git_cmd}push${args}${q}"
+  matches "${push}(-[a-z]*f[a-z]*|--force[^[:space:]]*|\+[^[:space:]]*)${end}" && block "force pushes are reserved to the user"
+  matches "${push}(-[a-z]*d[a-z]*|--delete|--mirror|--all|--tags|--prune|:[^[:space:]]*)${end}" &&
+    block "deleting, mirroring or pushing tags is reserved to the user"
+  matches "${push}([^[:space:]]*:)?(refs/heads/)?main${end}" && block "pushing main is reserved to the user"
+  # From a checkout of main, any push is refused: without a refspec, or with HEAD, it updates main.
+  [ "$(git symbolic-ref --quiet --short HEAD 2>/dev/null)" = main ] && block "pushing from main is reserved to the user"
 fi
-matches "${at_cmd}gh[[:space:]]+(pr[[:space:]]+(merge|ready)|release|repo[[:space:]]+create)" &&
-  block "merging, marking pull requests ready and publishing are reserved to the user"
-pr_create="${at_cmd}gh[[:space:]]+pr[[:space:]]+create"
-if matches "${pr_create}" && ! matches "${pr_create}([[:space:]][^;&|]*)?[[:space:]](--draft|-d)${end}"; then
-  block "agents open pull requests as drafts (gh pr create --draft)"
+
+if matches "${at_cmd}gh[[:space:]]"; then
+  matches "${at_cmd}gh[[:space:]]+(pr[[:space:]]+(merge|ready)|release|repo[[:space:]]+create)" &&
+    block "merging, marking pull requests ready and publishing are reserved to the user"
+  pr_create="${at_cmd}gh[[:space:]]+pr[[:space:]]+create"
+  if matches "${pr_create}" && ! matches "${pr_create}${args}(--draft|-d)${end}"; then
+    block "agents open pull requests as drafts (gh pr create --draft)"
+  fi
 fi
+
 matches '(^|[[:space:]])--no-verify([[:space:]]|$)' && block "bypassing git hooks is not allowed"
 # `-n` is the short form of --no-verify for git commit (alone or bundled, e.g. -an).
-matches "${git_cmd}commit([[:space:]][^;&|]*)?[[:space:]]-[a-z]*n" && block "bypassing git hooks is not allowed"
+matches "${git_cmd}commit${args}-[a-z]*n" && block "bypassing git hooks is not allowed"
 # Reading the value (`git config core.hooksPath`, `--get`) is fine; setting, unsetting or
 # overriding it for one command (`git -c core.hooksPath=…`) is not.
 matches "${git_cmd}config[^;&|]*(--unset[^;&|]*core\.hooksPath|core\.hooksPath[[:space:]]+[^-;&|[:space:]])" &&

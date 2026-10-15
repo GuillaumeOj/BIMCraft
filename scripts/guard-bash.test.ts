@@ -6,23 +6,20 @@ import { gitEnv, git } from "./check-pinned-deps";
 
 const GUARD = join(import.meta.dir, "..", ".claude", "hooks", "guard-bash.sh");
 
-// The guard reads the current branch, so every case runs in a repository of known branch, never
-// in this checkout (CI tests main on main).
-function repoOn(branch: string): string {
-  const repo = mkdtempSync(join(tmpdir(), "guard-bash-"));
-  git(repo, "init", "--quiet", "--initial-branch", branch);
-  return repo;
-}
-const featureRepo = repoOn("feat");
-const mainRepo = repoOn("main");
+// The guard reads the current branch, so cases run outside this checkout (CI tests main on main):
+// in a plain directory, or in a repository on main for the main-only cases.
+const plainDir = mkdtempSync(join(tmpdir(), "guard-bash-"));
+const mainRepo = mkdtempSync(join(tmpdir(), "guard-bash-main-"));
+git(mainRepo, "init", "--quiet", "--initial-branch", "main");
 afterAll(() => {
-  rmSync(featureRepo, { recursive: true });
+  rmSync(plainDir, { recursive: true });
   rmSync(mainRepo, { recursive: true });
 });
 
-function exitCode(command: string, cwd = featureRepo): number {
+const env = gitEnv();
+function exitCode(command: string, cwd = plainDir): number {
   const input = JSON.stringify({ tool_input: { command } });
-  return Bun.spawnSync(["sh", GUARD], { cwd, env: gitEnv(), stdin: Buffer.from(input) }).exitCode;
+  return Bun.spawnSync(["sh", GUARD], { cwd, env, stdin: Buffer.from(input) }).exitCode;
 }
 
 describe("guard-bash.sh", () => {
