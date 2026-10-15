@@ -6,8 +6,8 @@ BIMCraft is an open-source BIM authoring tool: a Rust core (native + WebAssembly
 
 ## 1. Golden rules (never break)
 
-1. **Never push.** Do not run `git push`, create or merge pull requests, push tags or publish anything remote (including creating or editing issues, comments, labels and project items) until the user explicitly says so **in the current conversation**. Committing locally is fine.
-2. **Review before push.** Before any push, the user must have run a code review and a simplification pass on the changes (Claude Code: `/code-review`, then `/simplify`; other agents: an equivalent review the user asks for). Only then does the user stamp `HEAD` with `scripts/mark-reviewed.sh`, which asks them to confirm at a terminal. The `pre-push` hook rejects any push whose `HEAD` is not stamped. Never stamp, or try to answer the confirmation, yourself.
+1. **Push only with the user's OK.** Committing locally is fine. Push your own feature branch (plain `git push`, never `main`) and open a **draft** pull request (`gh pr create --draft`) only when the user explicitly says so **in the current conversation**, and only once they have stamped `HEAD` (rule 2); every later push needs a new OK. Never force-push, delete remote branches, push tags, merge pull requests, publish releases, or create or edit issues, comments, labels and project items unless the user asks. `scripts/push-pr.ts` is the user's tool; run it only with `--dry-run`.
+2. **Review before push.** Before any push, the user must have run a code review and a simplification pass on the changes (Claude Code: `/code-review`, then `/simplify`; other agents: an equivalent review the user asks for). Only then does the user stamp `HEAD` with `scripts/mark-reviewed.sh`, which asks them to confirm at a terminal. The `pre-push` hook rejects any push whose `HEAD` is not stamped; it runs no tests (CI does). Every new commit, a CI fix included, needs a new review (of the new commits) and a new stamp. Never stamp, or try to answer the confirmation, yourself.
 3. **Never bypass checks.** No `--no-verify`, no editing `core.hooksPath`, no disabling lints, lowering coverage thresholds or skipping tests to make a check pass. Fix the cause, or stop and ask the user.
 4. **Exact versions only.** Every dependency, tool and CI action is pinned to an exact version (section 4).
 5. **Done means documented.** A user-facing change is not done until its end-user documentation exists (section 6).
@@ -24,17 +24,27 @@ Every feature or fix is done only when all of these hold. Check them before sayi
 - [ ] `cargo deny check` is clean; no new dependency without justification (section 4).
 - [ ] End-user documentation is added or updated in `docs/user/`, or the PR states “User docs: N/A” with a reason (section 6).
 - [ ] Commits follow Conventional Commits and are signed off (`git commit -s`).
-- [ ] `scripts/check-all.sh` passes locally. CI is the final authority.
+- [ ] The targeted local checks pass (section 3a), and **CI is green** on the pull request. CI is the gate.
 
 ## 3. Workflow
 
 1. Understand the task; find its issue ([docs/dev/project-management.md](docs/dev/project-management.md)), the relevant spec section and requirement IDs and, for UI work, the matching board in the Penpot design ([docs/dev/ui-design.md](docs/dev/ui-design.md)).
 2. Write or update tests first when practical, then implement.
 3. Keep changes small and focused: one concern per commit, one feature per PR.
-4. Run `scripts/check-all.sh`.
+4. Run the targeted checks for what you changed (section 3a), not the whole suite.
 5. Write the user documentation.
 6. Commit locally (`git commit -s`, Conventional Commits, e.g. `feat(geom): add exact orientation predicate`).
-7. Stop. Tell the user the work is ready for review. Wait for the review, the simplification pass and an explicit instruction to push.
+7. Stop. Tell the user the work is ready for review. Wait for the review, the simplification pass, their stamp and an explicit instruction to push (or for them to push with `scripts/push-pr.ts`).
+8. **Track CI** on the pull request: `gh pr checks <number> --watch`, then `gh run view <run-id> --log-failed` for a failed job. Fix each failure at its cause, rerun the targeted check that reproduces it, commit, and go back to step 7. Repeat until CI is green.
+
+## 3a. Local checks while working
+
+CI runs every check on every pull request, on Linux, macOS and Windows. Locally, run only what the change can break, with the narrowest command:
+
+- **Rust**: `cargo test -p <crate>`, `cargo clippy -p <crate> --all-targets --all-features -- -D warnings`, `cargo fmt --all --check`; for a critical crate you changed, `cargo llvm-cov -p <crate> --all-features --fail-under-lines 98`. `CHECK_CRATES="<crate> …" scripts/check-all.sh rust` runs the whole Rust section on those crates only.
+- **UI**: `bunx vitest run <files>` (or `bunx vitest related <files>`), `bunx biome check <files>`, `bunx tsc --noEmit`.
+- **Before each commit**: `scripts/check-all.sh repo` (seconds).
+- **A full section only when nothing narrower checks the change**: workspace manifests, the toolchain, `clippy.toml`, `deny.toml`, the critical or wasm crate lists or `scripts/check-all.sh` changed (run the sections they affect); a core crate's platform use changed (`wasm`); a fuzz target changed (`fuzz`); or a CI failure cannot be reproduced otherwise. Never run the whole `scripts/check-all.sh` by default.
 
 ## 4. Dependencies
 
@@ -107,8 +117,7 @@ Users are architects and engineers, not developers. For every user-facing featur
 | Check | Command |
 | --- | --- |
 | One-time setup (hooks + tool check) | `scripts/setup.sh` |
-| Everything CI runs that applies | `scripts/check-all.sh` (or one section: `repo rust coverage wasm fuzz ui e2e docs`) |
-| Checks the pre-push hook will run for this branch | `bun scripts/affected.ts` (push with `BIMCRAFT_FULL_CHECKS=1` to run them all) |
+| Everything CI runs that applies (rarely needed locally, section 3a) | `scripts/check-all.sh` (or one section: `repo rust coverage wasm fuzz ui e2e docs`; `CHECK_CRATES="a b"` limits the Rust sections) |
 | Commit messages + user-docs rule for a branch | `scripts/check-pr.sh main` |
 | Rust format | `cargo fmt --all --check` |
 | Rust lint | `cargo clippy --workspace --all-targets --all-features -- -D warnings` |
@@ -126,6 +135,8 @@ Users are architects and engineers, not developers. For every user-facing featur
 | User guide build | `mdbook build docs/user` |
 | Stamp HEAD as reviewed (user only, at a terminal) | `scripts/mark-reviewed.sh` |
 | Stamp, push and open the PR, or a whole stack of PRs (user only) | `bun scripts/push-pr.ts --help` |
+| Watch CI on a pull request | `gh pr checks <number> --watch` |
+| Logs of the failed CI jobs | `gh run view <run-id> --log-failed` |
 
 ## 10. Where things live
 
