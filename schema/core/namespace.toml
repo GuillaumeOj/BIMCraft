@@ -2,6 +2,10 @@
 # entities/, relationships/ and property-sets/. api.schema.json is generated from them (API-02):
 # `cargo test -p schema-gen` fails when it is out of date, and
 # `UPDATE_SNAPSHOTS=1 cargo test -p schema-gen` regenerates it.
+# snapshots/ holds the canonical model of every released version and migrations/ the steps between
+# versions (PERS-01). A definition change needs a new version below and, when stored data changes
+# in a way the difference cannot tell, migrations/NNNN.toml; `UPDATE_SNAPSHOTS=1` then writes the
+# new snapshot. See docs/dev/schema-versions.md.
 format = 1
 
 [namespace]

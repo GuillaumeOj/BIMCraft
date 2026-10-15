@@ -24,6 +24,8 @@ Rust code talks to SQLite through **[`rusqlite`](https://crates.io/crates/rusqli
 
 A new core crate, **`persist`**, owns what is inside a project file: the schema version (`PRAGMA user_version`, PERS-01), the `application_id` that marks a database as a BIMCraft project, migrations, and transactions. It is listed with the wasm32 crates and the critical crates.
 
+The tables inside the file are described in [ADR 0016](0016-project-file-layout.md).
+
 `persist` never opens a file and never chooses a VFS. The host opens a `rusqlite::Connection` on its own storage (a path on desktop, the OPFS VFS in a worker in the browser) and passes it in. The crate therefore stays within ARCH-02 without a new platform trait. `platform::Storage` remains the interface for whole-file data such as side files (PERS-03).
 
 ### `unsafe` and native code

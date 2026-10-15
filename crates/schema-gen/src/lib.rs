@@ -22,6 +22,9 @@
 //! published as `schema/core/api.schema.json`.
 //!
 //! Generation is deterministic: the same definitions always give byte-identical code.
+//!
+//! [`load_history`] checks a namespace's version history (`snapshots/`, `migrations/`) against
+//! its definitions and resolves the migrations between versions (PERS-01).
 
 // Build-time only (not in scripts/wasm-crates.txt): reading definition files from disk is this
 // crate's job, so it opts out of the ARCH-02 forbidden-API lints that bind the core crates.
@@ -29,19 +32,23 @@
 
 mod definition;
 mod error;
+mod history;
 mod json_schema;
 mod layout;
 mod load;
 mod parse;
 mod rust;
+mod snapshot;
 
 use std::path::{Path, PathBuf};
 
 pub use error::{Error, ErrorKind};
+pub use history::{History, MAX_SNAPSHOT_SIZE, check_history, load_history, snapshot_path};
 pub use json_schema::{DRAFT, JsonSchemaOptions, emit_json_schema};
 pub use load::load_dir;
 pub use parse::{FORMAT, MAX_FILE_SIZE, Source, parse_sources};
 pub use rust::{RustOptions, emit_rust};
+pub use snapshot::{parse_snapshot, snapshot};
 
 /// Generated code and the files it was generated from.
 #[derive(Clone, Debug, PartialEq, Eq)]

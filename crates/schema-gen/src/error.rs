@@ -34,6 +34,9 @@ pub enum ErrorKind {
     /// The namespace is valid but cannot be turned into a JSON Schema.
     #[error("{0}")]
     JsonSchema(String),
+    /// A migration does not turn one snapshot into the next.
+    #[error("{0}")]
+    Migration(Box<schema::MigrationError>),
 }
 
 impl Error {
@@ -45,6 +48,11 @@ impl Error {
             column: None,
             kind,
         }
+    }
+
+    /// A [`ErrorKind::Definition`] error about the whole of `file`.
+    pub(crate) fn definition(file: &str, message: String) -> Self {
+        Self::at(file, "", None, ErrorKind::Definition(message))
     }
 
     /// An error in `file`, at a byte offset of its `contents` when one is known.

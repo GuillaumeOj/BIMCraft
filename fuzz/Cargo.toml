@@ -19,6 +19,8 @@ express = { path = "../crates/express" }
 geom = { path = "../crates/geom" }
 interop-ifc = { path = "../crates/interop-ifc" }
 libfuzzer-sys = "=0.4.13"
+persist = { path = "../crates/persist" }
+schema = { path = "../crates/schema" }
 schema-gen = { path = "../crates/schema-gen" }
 
 # A native test tool, not a core crate: libFuzzer's harness writes crash files, which the ARCH-02
@@ -44,6 +46,13 @@ bench = false
 [[bin]]
 name = "parse_quantity"
 path = "fuzz_targets/parse_quantity.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "project_values"
+path = "fuzz_targets/project_values.rs"
 test = false
 doc = false
 bench = false
