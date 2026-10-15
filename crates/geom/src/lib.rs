@@ -25,7 +25,8 @@
 //! Arcs become chords within [`ARC_CHORD_TOLERANCE`], since faces are planar; failures are an
 //! [`ExtrusionError`].
 //!
-//! [`Solid::union`] combines two solids (GEO-03). Where they meet is decided with the exact
+//! [`Solid::union`] combines two solids and [`Solid::difference`] cuts one out of another, for
+//! openings and voids (GEO-03). Where they meet is decided with the exact
 //! predicates; vertices, faces and gaps closer than [`LINEAR_TOLERANCE`] merge, as the tolerance
 //! policy prescribes. The result is checked like any solid; failures are a [`BooleanError`].
 //!

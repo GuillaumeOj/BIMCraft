@@ -321,3 +321,127 @@ fn a_peg_flush_with_a_plate_fills_its_hole() {
     assert_eq!((whole.vertices().len(), whole.face_count()), (8, 6));
     assert_close(whole.volume(), 1.125);
 }
+
+fn difference(a: &Solid, b: &Solid) -> Option<Solid> {
+    let result = a.difference(b).unwrap();
+    if let Some(solid) = &result {
+        solid.validate().unwrap();
+    }
+    result
+}
+
+#[test]
+fn an_opening_through_a_wall() {
+    // A 4 × 0.2 × 3 m wall with a 1 × 2 m door cut right through it, from the floor: the cut
+    // is a notch, so the wall stays genus 0. Hand calculation (ENG-03): 2.4 − 0.4 m³.
+    let wall = cuboid([0.0, 0.0, 0.0], [4.0, 0.2, 3.0]);
+    let door = cuboid([1.0, -0.1, 0.0], [2.0, 0.3, 2.0]);
+    let result = difference(&wall, &door).unwrap();
+    assert_eq!(result.shells().len(), 1);
+    assert_eq!(result.shells()[0].genus(), 0);
+    assert_close(result.volume(), 2.0);
+    // A window above the floor goes right through: genus 1, the hole's sides inside.
+    let window = cuboid([2.5, -0.1, 1.0], [3.5, 0.3, 2.0]);
+    let result = difference(&result, &window).unwrap();
+    assert_eq!(result.shells()[0].genus(), 1);
+    assert_close(result.volume(), 2.0 - 0.2);
+}
+
+#[test]
+fn a_flush_cutter_leaves_no_skin() {
+    // ADR 0001: the cutter's top is flush with the box's top. A 1 × 1 × 0.5 m pocket.
+    let result = difference(
+        &cuboid([0.0; 3], [3.0, 3.0, 1.0]),
+        &cuboid([1.0, 1.0, 0.5], [2.0, 2.0, 1.0]),
+    )
+    .unwrap();
+    assert_eq!(result.shells().len(), 1);
+    assert_eq!(result.shells()[0].genus(), 0);
+    assert_close(result.volume(), 9.0 - 0.5);
+    // The box's top keeps a square hole: the pocket's mouth.
+    assert!(result.to_faces().iter().any(|face| face.holes.len() == 1));
+}
+
+#[test]
+fn a_skin_thinner_than_the_tolerance_is_removed() {
+    // ADR 0001: the pocket would leave a 0.1 µm floor; the floor goes and the pocket opens.
+    let skin = 0.1 * LINEAR_TOLERANCE;
+    let result = difference(
+        &cuboid([0.0; 3], [3.0, 3.0, 1.0]),
+        &cuboid([1.0, 1.0, skin], [2.0, 2.0, 2.0]),
+    )
+    .unwrap();
+    assert_eq!(result.shells()[0].genus(), 1);
+    // Merging moves vertices by at most the skin's thickness.
+    assert!((result.volume() - 8.0).abs() <= skin);
+}
+
+#[test]
+fn a_cut_leaving_a_micro_edge_merges_it() {
+    // ADR 0001: the cutter's corner is 0.3 µm from the box's edge.
+    let off = 0.3 * LINEAR_TOLERANCE;
+    let result = difference(
+        &unit_cube(),
+        &cuboid([0.5, -1.0, 0.5], [2.0, 1.0 - off, 2.0]),
+    )
+    .unwrap();
+    assert_eq!(result.shells().len(), 1);
+    assert!((result.volume() - 0.75).abs() <= off);
+}
+
+#[test]
+fn a_cutter_inside_leaves_a_void() {
+    let result = difference(&cuboid([0.0; 3], [3.0; 3]), &cuboid([1.0; 3], [2.0; 3])).unwrap();
+    let shells = result.shells();
+    assert_eq!(shells.len(), 2);
+    assert_eq!(shells.iter().filter(|shell| shell.is_void()).count(), 1);
+    assert_close(result.volume(), 26.0);
+}
+
+#[test]
+fn a_cutter_elsewhere_changes_nothing() {
+    let result = difference(&unit_cube(), &cuboid([2.0; 3], [3.0; 3])).unwrap();
+    assert_eq!(summary(&result), summary(&unit_cube()));
+    // Touching along a face, an edge or a corner removes nothing either.
+    for cutter in [
+        cuboid([1.0, 0.0, 0.0], [2.0, 1.0, 1.0]),
+        cuboid([1.0, 1.0, 0.0], [2.0, 2.0, 1.0]),
+        cuboid([1.0; 3], [2.0; 3]),
+    ] {
+        let result = difference(&unit_cube(), &cutter).unwrap();
+        assert_eq!(summary(&result), summary(&unit_cube()));
+    }
+}
+
+#[test]
+fn a_cutter_covering_everything_leaves_nothing() {
+    assert!(difference(&unit_cube(), &cuboid([-1.0; 3], [2.0; 3])).is_none());
+    assert!(difference(&unit_cube(), &unit_cube()).is_none());
+}
+
+#[test]
+fn turned_cuts_keep_their_volume() {
+    // A corner cut off a turned cube: 1 − 0.125 m³.
+    let turn = (0.7, 1.9);
+    let result = difference(
+        &turned([0.0; 3], [1.0; 3], turn),
+        &turned([0.5; 3], [1.5; 3], turn),
+    )
+    .unwrap();
+    assert_close(result.volume(), 0.875);
+}
+
+#[test]
+fn putting_back_a_flush_cut_restores_the_slab() {
+    // A hole through a turned slab, flush with both faces, then the cutter put back: the slab
+    // is whole again, one box with no hole. The cutter's top lies in the plane of the slab's
+    // top, inside the hole, which the winding number must see as outside the slab.
+    let turn = (1.610_129_385_758_991_1, 0.0);
+    let slab = turned([2.0, 0.0, 2.5], [3.5, 1.5, 3.0], turn);
+    let cutter = turned([2.5, 0.5, 2.5], [3.0, 1.0, 3.0], turn);
+    let holed = difference(&slab, &cutter).unwrap();
+    assert_eq!(holed.shells()[0].genus(), 1);
+    let whole = union(&holed, &cutter);
+    assert_eq!((whole.vertices().len(), whole.face_count()), (8, 6));
+    assert_close(whole.volume(), 1.125);
+}

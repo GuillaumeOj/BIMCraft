@@ -1,8 +1,9 @@
 //! Feeds pairs of boxes to the booleans of the geometry kernel (GEO-03). Corners lie on a 0.25 m
 //! grid, so faces, edges and corners of the two boxes coincide often, and both boxes are turned
 //! together by any of 256 × 256 angles, so the coincidences are not axis-aligned. Nothing may
-//! panic; an operation may fail with a typed error, but any solid it returns must be valid, and
-//! a union holds at least the larger box and at most both.
+//! panic; an operation may fail with a typed error, but any solid it returns must be valid, a
+//! union holds at least the larger box and at most both, and a difference at most the first box
+//! and at least what the second cannot remove from it.
 
 #![no_main]
 
@@ -69,5 +70,12 @@ fuzz_target!(|input: Input| {
         assert_eq!(union.validate(), Ok(()));
         let volume = union.volume();
         assert!(volume <= va + vb + 1e-6 && volume >= va.max(vb) - 1e-6);
+    }
+    if let Ok(result) = a.difference(&b) {
+        let volume = result.map_or(0.0, |cut| {
+            assert_eq!(cut.validate(), Ok(()));
+            cut.volume()
+        });
+        assert!(volume <= va + 1e-6 && volume >= va - vb - 1e-6);
     }
 });

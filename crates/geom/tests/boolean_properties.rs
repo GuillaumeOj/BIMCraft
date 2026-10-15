@@ -1,4 +1,5 @@
-//! Property-based tests of the booleans on random pairs of boxes (GEO-03, ENG-02).
+//! Property-based tests of the booleans on random pairs of boxes (GEO-03, ENG-02): union and
+//! difference.
 //!
 //! Boxes on a coarse grid share faces, edges and corners often, which exercises the degenerate
 //! cases; boxes at random coordinates, and pairs turned together to any angle, exercise the
@@ -156,7 +157,26 @@ proptest! {
     #![proptest_config(config())]
 
     #[test]
-    fn union_of_boxes_turned_apart_is_valid(
+    fn difference_removes_the_overlap(case in cases()) {
+        let (a, b) = (cuboid(case.a, case.turn)?, cuboid(case.b, case.turn)?);
+        let cut = checked(a.difference(&b))?;
+        let expected = volume(case.a) - overlap(case.a, case.b);
+        prop_assert!((volume_of(cut.as_ref()) - expected).abs() <= 1e-4);
+        // Putting the cutter back gives the union.
+        let union = match &cut {
+            Some(cut) => checked(cut.union(&b))?,
+            None => Some(b.clone()),
+        };
+        let expected = volume(case.a) + volume(case.b) - overlap(case.a, case.b);
+        prop_assert!((volume_of(union.as_ref()) - expected).abs() <= 1e-4);
+    }
+}
+
+proptest! {
+    #![proptest_config(config())]
+
+    #[test]
+    fn booleans_of_boxes_turned_apart_are_valid(
         a in free_box(),
         b in free_box(),
         turn_a in (0.0..std::f64::consts::TAU, 0.0..std::f64::consts::TAU),
@@ -167,5 +187,8 @@ proptest! {
         let backward = volume_of(checked(b_solid.union(&a_solid))?.as_ref());
         prop_assert!(forward <= volume(a) + volume(b) + 1e-9 && forward + 1e-9 >= volume(a).max(volume(b)));
         prop_assert!((forward - backward).abs() <= 1e-9 * forward);
+        // What the cut removes is what the union adds back.
+        let cut = volume_of(checked(a_solid.difference(&b_solid))?.as_ref());
+        prop_assert!((cut - (forward - volume(b))).abs() <= 1e-9 * forward);
     }
 }

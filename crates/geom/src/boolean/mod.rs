@@ -40,6 +40,7 @@ use crate::{Point2, Solid};
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Operation {
     Union,
+    Difference,
 }
 
 /// Which operand a face comes from.
@@ -57,7 +58,19 @@ impl Operation {
             Self::Union => {
                 class == Class::Outside || (class == Class::OnSame && operand == Operand::First)
             }
+            // The cutter's faces inside the first solid bound the cut, turned to face out of
+            // it. Where the two solids' faces meet back to back the first solid's face stays;
+            // where they coincide the cut removes it, so a flush cutter leaves no skin.
+            Self::Difference => match operand {
+                Operand::First => class == Class::Outside || class == Class::OnOpposite,
+                Operand::Second => class == Class::Inside,
+            },
         }
+    }
+
+    /// Whether the kept faces of `operand` are turned inside out.
+    fn reverses(self, operand: Operand) -> bool {
+        self == Self::Difference && operand == Operand::Second
     }
 }
 
@@ -74,6 +87,21 @@ impl Solid {
     /// result is not a valid solid.
     pub fn union(&self, other: &Self) -> Result<Option<Self>, BooleanError> {
         run(self, other, Operation::Union)
+    }
+
+    /// This solid with another cut out of it: every point in this solid and not in the other.
+    /// Openings and voids in walls and slabs are made this way.
+    ///
+    /// A cutter flush with a face leaves no skin over the cut, and a cut that would leave a
+    /// layer thinner than [`crate::LINEAR_TOLERANCE`] removes it. A cutter strictly inside
+    /// leaves a void. `None` if the cutter covers this solid.
+    ///
+    /// # Errors
+    ///
+    /// Returns a [`BooleanError`] if near-coincident vertices cannot be merged safely, or if the
+    /// result is not a valid solid.
+    pub fn difference(&self, cutter: &Self) -> Result<Option<Self>, BooleanError> {
+        run(self, cutter, Operation::Difference)
     }
 }
 
@@ -109,7 +137,11 @@ fn run(first: &Solid, second: &Solid, operation: Operation) -> Result<Option<Sol
             .collect();
         let pieces = arrange::split(face, &cuts, &mut pool);
         let keep = |q: Point2| operation.keeps(operand, classify(face.lift(q), face, other, &pool));
-        kept.extend(kept_parts(face, &pieces, keep, &pool));
+        let mut parts = kept_parts(face, &pieces, keep, &pool);
+        if operation.reverses(operand) {
+            parts.iter_mut().flatten().for_each(|ring| ring.reverse());
+        }
+        kept.extend(parts);
     }
     assemble::assemble(kept, &mut pool)
 }
