@@ -2,12 +2,13 @@ use std::collections::BTreeMap;
 
 use proptest::prelude::*;
 use schema::{
-    Attribute, Cardinality, Entity, IfcMapping, Placement, Presence, Role, RoleTarget, ValueType,
+    Attribute, Cardinality, Entity, IfcMapping, Placement, Presence, PropertySet, QuantityKind,
+    Role, RoleTarget, TypeDef, Value, ValueType,
 };
 
 use super::*;
 
-fn entity(name: &str, kind: EntityKind, ifc: &str) -> Entity {
+pub(super) fn entity(name: &str, kind: EntityKind, ifc: &str) -> Entity {
     Entity {
         name: name.into(),
         kind,
@@ -49,12 +50,20 @@ fn relationship(name: &str, ifc: &str, roles: Vec<Role>) -> Entity {
     }
 }
 
-/// Walls, openings, groups and storeys, with containment, voiding and group assignment.
-fn namespace() -> Namespace {
+/// Walls, openings, groups and storeys, with containment, voiding and group assignment, and a
+/// property set for walls.
+pub(super) fn namespace() -> Namespace {
     use Cardinality::{Many, One};
     let named = |name: &str| RoleTarget::Entity(name.into());
     let entities = [
-        entity("Wall", EntityKind::Element, "IfcWall"),
+        Entity {
+            type_def: Some(TypeDef {
+                name: "WallType".into(),
+                doc: None,
+            }),
+            property_sets: vec!["Pset_WallCommon".into()],
+            ..entity("Wall", EntityKind::Element, "IfcWall")
+        },
         entity("Opening", EntityKind::Element, "IfcOpeningElement"),
         entity("Group", EntityKind::Element, "IfcGroup"),
         entity("Storey", EntityKind::Spatial, "IfcBuildingStorey"),
@@ -108,11 +117,52 @@ fn namespace() -> Namespace {
             .into_iter()
             .map(|entity| (entity.name.clone(), entity))
             .collect(),
-        property_sets: BTreeMap::new(),
+        property_sets: BTreeMap::from([("Pset_WallCommon".into(), wall_common())]),
     }
 }
 
-fn id(raw: u128) -> EntityId {
+fn property(name: &str, value: ValueType, presence: Presence, placement: Placement) -> Attribute {
+    Attribute {
+        name: name.into(),
+        value,
+        presence,
+        placement,
+        doc: None,
+    }
+}
+
+/// A property set for walls with one property of each rule and placement.
+pub(super) fn wall_common() -> PropertySet {
+    use Placement::{Instance, Type, TypeOverridable};
+    PropertySet {
+        name: "Pset_WallCommon".into(),
+        applies_to: vec!["Wall".into()],
+        properties: vec![
+            property("Reference", ValueType::Text, Presence::Required, Instance),
+            property(
+                "IsExternal",
+                ValueType::Bool,
+                Presence::Default(Value::Bool(true)),
+                TypeOverridable,
+            ),
+            property(
+                "LoadBearing",
+                ValueType::Bool,
+                Presence::Default(Value::Bool(false)),
+                Instance,
+            ),
+            property("FireRating", ValueType::Text, Presence::Optional, Type),
+            property(
+                "Width",
+                ValueType::Quantity(QuantityKind::Length),
+                Presence::Default(Value::Real(0.2)),
+                Instance,
+            ),
+        ],
+    }
+}
+
+pub(super) fn id(raw: u128) -> EntityId {
     EntityId::new(raw)
 }
 
@@ -120,15 +170,15 @@ fn ids<const N: usize>(raws: [u128; N]) -> Vec<EntityId> {
     raws.into_iter().map(id).collect()
 }
 
-const STOREY: u128 = 1;
+pub(super) const STOREY: u128 = 1;
 const OTHER_STOREY: u128 = 2;
-const WALLS: [u128; 3] = [11, 12, 13];
+pub(super) const WALLS: [u128; 3] = [11, 12, 13];
 const OPENING: u128 = 21;
 const GROUP: u128 = 31;
 const CONTAINMENT: u128 = 100;
 
 /// Two storeys, three walls, an opening and a group, no relationship.
-fn model() -> Model {
+pub(super) fn model() -> Model {
     let mut model = Model::new(&namespace()).unwrap();
     let objects = [
         (STOREY, "Storey"),
@@ -145,7 +195,7 @@ fn model() -> Model {
     model
 }
 
-const NO_VALUES: [(&str, AttributeValue); 0] = [];
+pub(super) const NO_VALUES: [(&str, AttributeValue); 0] = [];
 
 /// The model with the first two walls contained in the first storey.
 fn contained() -> Model {

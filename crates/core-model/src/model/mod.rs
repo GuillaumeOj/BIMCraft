@@ -1,18 +1,21 @@
-//! The model: stored objects and the relationships between them (CORE-03, ADR 0012).
+//! The model: stored objects, the relationships between them (CORE-03, ADR 0012) and their
+//! property sets (CORE-04, ADR 0013).
 
 mod error;
+mod property_sets;
 mod relationships;
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use schema::{EntityKind, Namespace};
 
 pub use self::error::ModelError;
+use self::property_sets::PropertyTable;
 pub use self::relationships::Participation;
 use self::relationships::{Link, Relationships};
 use crate::{AttributeValue, EntityId, RemovedEntity, Store, StoreError};
 
-/// Every object of a model and the relationships between them.
+/// Every object of a model, the relationships between them and their property sets.
 ///
 /// A model owns the attribute tables of a namespace ([`Store`]) and keeps every
 /// cross-object rule in one place.
@@ -27,6 +30,15 @@ use crate::{AttributeValue, EntityId, RemovedEntity, Store, StoreError};
 /// [`Model::participants`] reads a relationship's roles and [`Model::relationships_of`] the roles
 /// an object plays, so relationships can be queried both ways.
 ///
+/// # Property sets
+///
+/// Properties are grouped in property sets (CORE-04) with typed values; quantities are stored in
+/// the SI unit of their kind and read and written as [`Quantity`](crate::units::Quantity) values
+/// of the matching dimension (CORE-09). The schema's built-in sets and the sets users and
+/// plugins add with [`Model::define_property_set`] are one mechanism: same definition, same
+/// validation, same storage and same checks on every value. An object carries a set it applies
+/// to once it has a value for it; reading a property it has no value for gives the default.
+///
 /// # Deleting objects
 ///
 /// [`Model::remove`] follows one rule, mirroring IFC, where a relationship cannot exist without
@@ -36,7 +48,8 @@ use crate::{AttributeValue, EntityId, RemovedEntity, Store, StoreError};
 /// 2. a relationship left with an empty role is deleted too, and so on for relationships that
 ///    relate it;
 /// 3. no other object is deleted: removing a storey deletes its containment relationship but not
-///    the walls it contained, and removing a relationship deletes only that relationship.
+///    the walls it contained, and removing a relationship deletes only that relationship;
+/// 4. the property values of every deleted object go with it.
 ///
 /// The returned [`Removal`] lists what was deleted and [`Model::restore`] puts it back exactly,
 /// participants in their former positions.
@@ -45,6 +58,8 @@ pub struct Model {
     namespace: Namespace,
     store: Store,
     relationships: Relationships,
+    /// Values of every property set, built-in and custom, by name.
+    property_sets: BTreeMap<String, PropertyTable>,
 }
 
 /// What [`Model::remove`] deleted; [`Model::restore`] puts it back.
@@ -62,6 +77,8 @@ struct RemovedObject {
     roles: Option<Vec<Vec<EntityId>>>,
     /// The roles the object left, in the order it left them.
     detached: Vec<Detached>,
+    /// The property sets it carried, with their values.
+    properties: Vec<(String, Vec<(String, AttributeValue)>)>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -88,6 +105,11 @@ impl Model {
             store: Store::new(namespace)?,
             namespace: namespace.clone(),
             relationships: Relationships::default(),
+            property_sets: namespace
+                .property_sets
+                .values()
+                .map(|set| (set.name.clone(), PropertyTable::new(set)))
+                .collect(),
         })
     }
 
@@ -196,12 +218,18 @@ impl Model {
                     .map(|link| link.relationship),
             );
             let roles = self.relationships.take(next);
+            let properties = self
+                .property_sets
+                .iter_mut()
+                .filter_map(|(name, table)| Some((name.clone(), table.remove(next)?)))
+                .collect();
             let entity = self.store.remove(next)?;
             objects.push(RemovedObject {
                 id: next,
                 entity,
                 roles,
                 detached,
+                properties,
             });
         }
         Ok(Removal { objects })
@@ -259,10 +287,15 @@ impl Model {
                 self.relationships
                     .attach(detached.link, object.id, detached.position);
             }
+            for (set, values) in object.properties {
+                self.property_table(&set)?.insert(object.id, values)?;
+            }
         }
         Ok(())
     }
 }
 
+#[cfg(test)]
+mod property_set_tests;
 #[cfg(test)]
 mod tests;

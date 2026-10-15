@@ -1,9 +1,12 @@
+use schema::ValidationError;
+
+use crate::units::Dimension;
 use crate::{EntityId, StoreError};
 
 /// Why a [`Model`](super::Model) operation failed. Nothing was changed.
 ///
-/// The messages name entities, attributes and roles from the schema but never repeat values or
-/// ids, which come from a user's model (SEC-03).
+/// The messages name entities, attributes, roles and property sets from the schema but never
+/// repeat values or ids, which come from a user's model (SEC-03).
 #[derive(Clone, Debug, PartialEq, thiserror::Error)]
 pub enum ModelError {
     /// The attribute tables rejected the operation.
@@ -61,4 +64,59 @@ pub enum ModelError {
     /// The object does not play this role in the relationship.
     #[error("the object does not play role \"{0}\" in this relationship")]
     NotParticipant(String),
+    /// The schema has no property set of this name, and none was defined.
+    #[error("unknown property set \"{0}\"")]
+    UnknownPropertySet(String),
+    /// A property set of this name already exists.
+    #[error("property set \"{0}\" already exists")]
+    PropertySetExists(String),
+    /// A custom property set does not pass [`schema::validate`].
+    #[error("the property set does not pass validation")]
+    InvalidPropertySet(Vec<ValidationError>),
+    /// The property set does not apply to the object's entity.
+    #[error("property set \"{set}\" does not apply to entity \"{entity}\"")]
+    NotApplicable {
+        /// The property set.
+        set: String,
+        /// The object's entity.
+        entity: String,
+    },
+    /// The property set has no such property.
+    #[error("property set \"{set}\" has no property \"{property}\"")]
+    UnknownProperty {
+        /// The property set.
+        set: String,
+        /// The unknown property.
+        property: String,
+    },
+    /// The object already carries the property set.
+    #[error("the object already carries property set \"{0}\"")]
+    AlreadyAttached(String),
+    /// The object does not carry the property set.
+    #[error("the object does not carry property set \"{0}\"")]
+    NotAttached(String),
+    /// A property value was rejected.
+    #[error("property set \"{set}\": {error}")]
+    PropertyValue {
+        /// The property set.
+        set: String,
+        /// Why the value was rejected.
+        error: StoreError,
+    },
+    /// The value is set on the type and instances cannot override it (CORE-02).
+    #[error("\"{name}\" of \"{owner}\" is set on the type and cannot be overridden")]
+    NotOverridable {
+        /// The entity or property set.
+        owner: String,
+        /// The attribute or property.
+        name: String,
+    },
+    /// The property does not hold quantities of the requested dimension (CORE-09).
+    #[error("property \"{property}\" does not hold quantities of {dimension}")]
+    QuantityMismatch {
+        /// The property.
+        property: String,
+        /// The requested dimension.
+        dimension: Dimension,
+    },
 }

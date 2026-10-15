@@ -1,7 +1,10 @@
 use std::collections::BTreeMap;
 
 use proptest::prelude::*;
-use schema::{Attribute, Entity, EntityKind, IfcMapping, QuantityKind, TypeDef, Value, ValueType};
+use schema::{
+    Attribute, Entity, EntityKind, IfcMapping, Placement, Presence, QuantityKind, TypeDef, Value,
+    ValueType,
+};
 
 use super::*;
 use crate::{IdSource, SeededIdSource};

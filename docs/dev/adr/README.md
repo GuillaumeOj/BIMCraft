@@ -31,5 +31,6 @@ Copy [`_template.md`](_template.md) and follow its comments.
 | [0010](0010-location-lines.md) | Location lines and location points | Accepted |
 | [0011](0011-shear-centre.md) | Shear centre of arbitrary profiles | Accepted |
 | [0012](0012-relationships.md) | Relationships | Accepted |
+| [0013](0013-property-sets.md) | Property sets | Accepted |
 
 One decision predates this folder and stays in the specification: the web UI over an all-Rust UI ([specification §13](../../specifications.md#13-ui-and-rendering), "Decision record").
