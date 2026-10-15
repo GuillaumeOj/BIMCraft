@@ -11,6 +11,7 @@
 mod commands;
 mod descriptor;
 mod error;
+pub mod jsonrpc;
 mod queries;
 mod registry;
 pub mod schema;

@@ -14,7 +14,9 @@ publish = false
 cargo-fuzz = true
 
 [dependencies]
+api = { path = "../crates/api" }
 core-model = { path = "../crates/core-model" }
+core-txn = { path = "../crates/core-txn" }
 express = { path = "../crates/express" }
 geom = { path = "../crates/geom" }
 interop-ifc = { path = "../crates/interop-ifc" }
@@ -24,6 +26,8 @@ libm = "=0.2.16"
 persist = { path = "../crates/persist" }
 schema = { path = "../crates/schema" }
 schema-gen = { path = "../crates/schema-gen" }
+# Already in the lockfile through api: reads the server's answers back.
+serde_json = "=1.0.151"
 
 # A native test tool, not a core crate: libFuzzer's harness writes crash files, which the ARCH-02
 # lints of clippy.toml would flag inside `fuzz_target!`.
@@ -41,6 +45,13 @@ bench = false
 [[bin]]
 name = "express_schema"
 path = "fuzz_targets/express_schema.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "jsonrpc"
+path = "fuzz_targets/jsonrpc.rs"
 test = false
 doc = false
 bench = false

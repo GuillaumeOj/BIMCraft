@@ -1,0 +1,1 @@
+{"jsonrpc":"2.0","id":3,"method":"model.set","params":{"id":"00000000000000000000000000000001","attribute":"name","value":{"Text":"\"]}"}}}
