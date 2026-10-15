@@ -1,8 +1,7 @@
-import { type KeyboardEvent, useEffect, useId, useRef, useState } from "react";
+import { type KeyboardEvent, useCallback, useEffect, useId, useRef, useState } from "react";
 import { useI18n } from "../i18n/I18nProvider";
 import type { MessageKey } from "../i18n/i18n";
 import { LanguageSelect } from "../i18n/LanguageSelect";
-import "./theme.css";
 import "./shell.css";
 
 const RIGHT_PANELS = ["properties", "history"] as const;
@@ -17,13 +16,14 @@ const EMPTY_TEXT: Record<RightPanel, MessageKey> = {
 function nextRegion(regions: HTMLElement[], backwards: boolean): HTMLElement | undefined {
   const live = regions.filter((region) => region.isConnected);
   const current = live.findIndex((region) => region.contains(document.activeElement));
-  if (current === -1) return live[0];
+  if (current === -1) return backwards ? live.at(-1) : live[0];
   const step = backwards ? -1 : 1;
   return live[(current + step + live.length) % live.length];
 }
 
+// Ignores auto-repeat so that holding the keys does not toggle the console back and forth.
 const isConsoleShortcut = (event: globalThis.KeyboardEvent) =>
-  event.ctrlKey && !event.altKey && !event.metaKey && event.key === "`";
+  event.ctrlKey && !event.altKey && !event.metaKey && !event.repeat && event.key === "`";
 
 /**
  * The empty application shell (UI-02, UI-06): title bar, viewport and the panel slots, from the
@@ -37,33 +37,24 @@ export function Shell() {
   const [consoleOpen, setConsoleOpen] = useState(false);
   const regions = useRef<HTMLElement[]>([]);
   const viewport = useRef<HTMLElement>(null);
-  const consolePanel = useRef<HTMLElement>(null);
   const tabs = useRef<Partial<Record<RightPanel, HTMLButtonElement | null>>>({});
-  // Where focus goes after the console opens or closes; null on first render.
-  const focusAfterToggle = useRef<"console" | "viewport" | null>(null);
 
   const register = (index: number) => (element: HTMLElement | null) => {
     if (element !== null) regions.current[index] = element;
   };
 
-  useEffect(() => {
-    const target = focusAfterToggle.current;
-    focusAfterToggle.current = null;
-    if (target === "console") consolePanel.current?.focus();
-    if (target === "viewport") viewport.current?.focus();
-  });
-
-  const toggleConsole = (open: boolean) => {
-    focusAfterToggle.current = open ? "console" : "viewport";
-    setConsoleOpen(open);
-  };
+  // The console takes focus when it opens and hands it to the viewport when it closes.
+  const consoleRef = useCallback((element: HTMLElement) => {
+    regions.current[4] = element;
+    element.focus();
+    return () => viewport.current?.focus();
+  }, []);
 
   useEffect(() => {
     const onKeyDown = (event: globalThis.KeyboardEvent) => {
       if (isConsoleShortcut(event)) {
         event.preventDefault();
-        focusAfterToggle.current = consoleOpen ? "viewport" : "console";
-        setConsoleOpen(!consoleOpen);
+        setConsoleOpen((open) => !open);
       } else if (event.key === "F6") {
         event.preventDefault();
         nextRegion(regions.current, event.shiftKey)?.focus();
@@ -71,7 +62,7 @@ export function Shell() {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [consoleOpen]);
+  }, []);
 
   const selectTab = (panel: RightPanel) => {
     setRightPanel(panel);
@@ -100,7 +91,8 @@ export function Shell() {
         className="skip-link"
         href={`#${ids}-viewport`}
         onClick={(event) => {
-          // Focus explicitly rather than through the URL fragment, which useId makes awkward.
+          // Focus directly instead of navigating to the fragment: the URL stays clean, and not
+          // every webview moves focus to a fragment target.
           event.preventDefault();
           viewport.current?.focus();
         }}
@@ -120,7 +112,7 @@ export function Shell() {
           className="ghost-button"
           aria-pressed={consoleOpen}
           aria-keyshortcuts="Control+`"
-          onClick={() => toggleConsole(!consoleOpen)}
+          onClick={() => setConsoleOpen((open) => !open)}
         >
           {t("panel.console")}
         </button>
@@ -183,10 +175,7 @@ export function Shell() {
           <section
             className="panel panel-console"
             aria-labelledby={`${ids}-console`}
-            ref={(element) => {
-              consolePanel.current = element;
-              register(4)(element);
-            }}
+            ref={consoleRef}
             tabIndex={-1}
           >
             <div className="panel-header">
@@ -195,7 +184,7 @@ export function Shell() {
                 type="button"
                 className="ghost-button"
                 aria-label={t("panel.closeConsole")}
-                onClick={() => toggleConsole(false)}
+                onClick={() => setConsoleOpen(false)}
               >
                 <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
                   <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.5" />
