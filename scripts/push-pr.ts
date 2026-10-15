@@ -1,7 +1,8 @@
 #!/usr/bin/env bun
 // Stamps HEAD as reviewed, pushes the branch (or the whole stack of branches ending at HEAD) and
 // opens or updates one pull request per branch, each based on the branch below it (AGENTS.md §1).
-// Reserved to the user: agents are blocked from running it. Run with --help for the options.
+// Only the user can ship: the stamp asks them to confirm the review at a terminal. Run with --help for
+// the options.
 
 import { existsSync } from "node:fs";
 import { join } from "node:path";
@@ -9,7 +10,8 @@ import { join } from "node:path";
 const USAGE = `Usage: bun scripts/push-pr.ts [options] [--branch <name> [pr options]]...
 
 Stamps HEAD as reviewed (scripts/mark-reviewed.sh), pushes, then opens or updates the pull request.
-Run it only after /code-review and /simplify (or equivalent reviews) on these changes.
+Run it only after /code-review and /simplify (or equivalent reviews) on these changes; the stamp
+asks you to confirm that at the terminal.
 
 Stack options (anywhere):
   --stack               ship every local branch between <remote>/<base> and HEAD, bottom first;
@@ -19,7 +21,6 @@ Stack options (anywhere):
   --remote <name>       remote to push to (default: origin)
   --force               push with --force-with-lease (after a rebase or a restack)
   --no-pr               stamp and push only
-  --yes                 do not ask for the review confirmation
   --dry-run             print the commands that would change anything, run none, stamp nothing
   -h, --help            show this help
 
@@ -69,7 +70,6 @@ export type Args = {
   remote: string;
   force: boolean;
   noPr: boolean;
-  yes: boolean;
   dryRun: boolean;
   /** Options given before any --branch. */
   global: PrOptions;
@@ -89,7 +89,6 @@ type FoundPr = Pr & { state: "OPEN" | "CLOSED" | "MERGED" };
 export type Result = { code: number; stdout: string; stderr: string };
 export type RunOptions = { input?: string; env?: Record<string, string>; inherit?: boolean };
 export type Run = (cmd: string[], options?: RunOptions) => Result;
-export type Deps = { run: Run; ask: (question: string) => string | null };
 
 export const emptyPr = (): PrOptions => ({ labels: [], assignees: [], reviewers: [], draft: false });
 
@@ -100,7 +99,6 @@ const FLAGS = {
   "--stack": "stack",
   "--force": "force",
   "--no-pr": "noPr",
-  "--yes": "yes",
   "--dry-run": "dryRun",
 } as const;
 const LISTS = { "--label": "labels", "--assignee": "assignees", "--reviewer": "reviewers" } as const;
@@ -129,7 +127,6 @@ export function parseArgs(argv: string[]): Args {
     remote: "origin",
     force: false,
     noPr: false,
-    yes: false,
     dryRun: false,
     global: emptyPr(),
     branches: new Map(),
@@ -342,7 +339,7 @@ function openPr(run: Run, branch: string, base: string): Pr | undefined {
   return latest?.state === "OPEN" ? latest : undefined;
 }
 
-function ship(args: Args, { run, ask }: Deps): number {
+function ship(args: Args, run: Run): number {
   const exec = (cmd: string[], options?: RunOptions): string => {
     if (!args.dryRun) return must(run, cmd, options);
     console.log(`would run: ${cmd.map(quote).join(" ")}`);
@@ -391,14 +388,7 @@ function ship(args: Args, { run, ask }: Deps): number {
     console.log(`  ${p.branch} (${sha})${args.noPr ? "" : ` → pull request into ${p.base}`}`);
   }
   if (args.dryRun) console.log("dry run: nothing is stamped, pushed or published.");
-  else {
-    const answer = args.yes ? "y" : ask("Have /code-review and /simplify been run on these changes? [y/N]");
-    if (!/^y(es)?$/i.test(answer?.trim() ?? "")) {
-      console.error("push-pr: aborted; review the changes first.");
-      return 1;
-    }
-    must(run, [join(SCRIPTS, "mark-reviewed.sh")], { inherit: true });
-  }
+  else if (run([join(SCRIPTS, "mark-reviewed.sh")], { inherit: true }).code !== 0) throw new Error("not stamped; nothing pushed");
 
   exec(["git", "push", "--atomic", ...(args.force ? ["--force-with-lease"] : []), "-u", args.remote, ...branches], {
     inherit: true,
@@ -430,18 +420,18 @@ function ship(args: Args, { run, ask }: Deps): number {
   return 0;
 }
 
-export function main(argv: string[], deps: Deps): number {
+export function main(argv: string[], run: Run): number {
   try {
     const args = parseArgs(argv);
     if (args.help) {
       console.log(USAGE);
       return 0;
     }
-    return ship(args, deps);
+    return ship(args, run);
   } catch (error) {
     console.error(`push-pr: ${(error as Error).message}`);
     return 1;
   }
 }
 
-if (import.meta.main) process.exit(main(process.argv.slice(2), { run: makeRun(process.cwd()), ask: prompt }));
+if (import.meta.main) process.exit(main(process.argv.slice(2), makeRun(process.cwd())));

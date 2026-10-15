@@ -58,10 +58,9 @@ describe("parseArgs", () => {
       "up",
       "--force",
       "--no-pr",
-      "--yes",
       "--dry-run",
     ]);
-    expect(args).toMatchObject({ stack: true, base: "dev", remote: "up", force: true, noPr: true, yes: true, dryRun: true });
+    expect(args).toMatchObject({ stack: true, base: "dev", remote: "up", force: true, noPr: true, dryRun: true });
     expect(args.global).toEqual(pr({ labels: ["a", "b", "c"], assignees: ["@me"], draft: true }));
     expect(args.branches.get("one")).toEqual(
       pr({ title: "One", body: "Body", reviewers: ["x", "y"], milestone: "M1", project: "P" }),
@@ -258,11 +257,12 @@ describe("main", () => {
   let checkPrFails: boolean;
   let output: string[];
   let errors: string[];
-  let answer: string | null;
+  let reviewed: boolean;
 
   let template: string;
 
   const git = (...args: string[]): string => gitIn(dir, ...args).trim();
+  const stampFile = (): string => join(dir, ".git", "bimcraft-review-stamp");
   const commit = (message: string): void => {
     writeFileSync(join(dir, `${message.replace(/\W/g, "_")}.txt`), message);
     git("add", "-A");
@@ -272,12 +272,17 @@ describe("main", () => {
     calls.push(cmd);
     if (cmd[0] === "gh") return gh.handle(cmd, options.input);
     if (cmd[0]?.endsWith("check-pr.sh")) return { code: checkPrFails ? 1 : 0, stdout: "", stderr: "" };
+    // The real script needs a terminal; `reviewed` stands for the user's answer to its question.
+    if (cmd[0]?.endsWith("mark-reviewed.sh")) {
+      if (reviewed) writeFileSync(stampFile(), `${git("rev-parse", "HEAD")}\n`);
+      return { code: reviewed ? 0 : 1, stdout: "", stderr: "" };
+    }
     return makeRun(dir, gitEnv())(cmd, { ...options, inherit: false });
   };
-  const ship = (...argv: string[]): number => main(argv, { run, ask: () => answer });
+  const ship = (...argv: string[]): number => main(argv, run);
   const stamp = (): string => {
     try {
-      return readFileSync(join(dir, ".git", "bimcraft-review-stamp"), "utf8").trim();
+      return readFileSync(stampFile(), "utf8").trim();
     } catch {
       return "";
     }
@@ -308,7 +313,7 @@ describe("main", () => {
     gh = new FakeGitHub();
     calls = [];
     checkPrFails = false;
-    answer = "y";
+    reviewed = true;
     output = [];
     errors = [];
     spyOn(console, "log").mockImplementation((line: string) => output.push(line));
@@ -349,7 +354,7 @@ describe("main", () => {
 
   test("defaults the title and description to the first commit", () => {
     featureBranch("feat: first\n\nWhy it matters.\n\nCo-Authored-By: A <a@example.com>\nSigned-off-by: T <t@example.com>", "fix: second");
-    expect(ship("--yes")).toBe(0);
+    expect(ship()).toBe(0);
     expect(gh.prs[0]).toMatchObject({ title: "feat: first", body: "Why it matters." });
   });
 
@@ -430,20 +435,18 @@ describe("main", () => {
       if (cmd[0]?.endsWith("check-pr.sh")) env = options.env;
       return run(cmd, options);
     };
-    expect(main(["--label", "no-user-docs"], { run: spy, ask: () => "y" })).toBe(0);
+    expect(main(["--label", "no-user-docs"], spy)).toBe(0);
     expect(env).toEqual({ NO_USER_DOCS: "true" });
   });
 
-  test("asks before stamping and stops on anything but yes", () => {
+  test("pushes nothing when the stamp is refused", () => {
     featureBranch("feat: add thing");
-    answer = "n";
+    reviewed = false;
     expect(ship()).toBe(1);
-    answer = null;
-    expect(ship()).toBe(1);
+    expect(errors).toContain("push-pr: not stamped; nothing pushed");
     expect(stamp()).toBe("");
     expect(remoteBranches()).toEqual(["main"]);
-    answer = "yes";
-    expect(ship()).toBe(0);
+    expect(gh.prs).toHaveLength(0);
   });
 
   describe("refuses", () => {

@@ -29,11 +29,6 @@ describe("guard-bash.sh", () => {
     "git config --unset core.hooksPath",
     "git rev-parse HEAD | tee .git/bimcraft-review-stamp",
     "cp x .git/bimcraft-review-stamp",
-    "bun scripts/push-pr.ts --yes",
-    "bun run ./scripts/push-pr.ts --stack",
-    "cd .. && scripts/push-pr.ts",
-    "bun --bun scripts/push-pr.ts",
-    "sh -c 'bun scripts/push-pr.ts --yes'",
   ])("blocks %s", (command) => {
     expect(exitCode(command)).toBe(2);
   });
@@ -46,8 +41,6 @@ describe("guard-bash.sh", () => {
     "gh pr view 1",
     "scripts/mark-reviewed.sh",
     "grep -rn push scripts",
-    "git add scripts/push-pr.ts",
-    "cd scripts && bun test push-pr",
   ])("allows %s", (command) => {
     expect(exitCode(command)).toBe(0);
   });

@@ -7,7 +7,7 @@ BIMCraft is an open-source BIM authoring tool: a Rust core (native + WebAssembly
 ## 1. Golden rules (never break)
 
 1. **Never push.** Do not run `git push`, create or merge pull requests, push tags or publish anything remote (including creating or editing issues, comments, labels and project items) until the user explicitly says so **in the current conversation**. Committing locally is fine.
-2. **Review before push.** Before any push, the user must have run a code review and a simplification pass on the changes (Claude Code: `/code-review`, then `/simplify`; other agents: an equivalent review the user asks for). Only then may `scripts/mark-reviewed.sh` stamp `HEAD`. The `pre-push` hook rejects any push whose `HEAD` is not stamped. Never stamp on your own initiative.
+2. **Review before push.** Before any push, the user must have run a code review and a simplification pass on the changes (Claude Code: `/code-review`, then `/simplify`; other agents: an equivalent review the user asks for). Only then does the user stamp `HEAD` with `scripts/mark-reviewed.sh`, which asks them to confirm at a terminal. The `pre-push` hook rejects any push whose `HEAD` is not stamped. Never stamp, or try to answer the confirmation, yourself.
 3. **Never bypass checks.** No `--no-verify`, no editing `core.hooksPath`, no disabling lints, lowering coverage thresholds or skipping tests to make a check pass. Fix the cause, or stop and ask the user.
 4. **Exact versions only.** Every dependency, tool and CI action is pinned to an exact version (section 4).
 5. **Done means documented.** A user-facing change is not done until its end-user documentation exists (section 6).
@@ -124,7 +124,7 @@ Users are architects and engineers, not developers. For every user-facing featur
 | UI tests + coverage | `cd ui && bunx vitest run --coverage` |
 | UI e2e | `cd ui && bunx playwright test` |
 | User guide build | `mdbook build docs/user` |
-| Stamp HEAD as reviewed (user-approved only) | `scripts/mark-reviewed.sh` |
+| Stamp HEAD as reviewed (user only, at a terminal) | `scripts/mark-reviewed.sh` |
 | Stamp, push and open the PR, or a whole stack of PRs (user only) | `bun scripts/push-pr.ts --help` |
 
 ## 10. Where things live
