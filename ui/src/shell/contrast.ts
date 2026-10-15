@@ -20,7 +20,7 @@ export function contrastRatio(a: string, b: string): number {
   return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
 }
 
-export type Themes = { light: Record<string, string>; dark: Record<string, string> };
+type Themes = { light: Record<string, string>; dark: Record<string, string> };
 
 const tokens = (css: string) =>
   Object.fromEntries(

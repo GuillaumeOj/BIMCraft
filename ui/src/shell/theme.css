@@ -2,19 +2,15 @@
    them against WCAG 2.2 AA, so keep every value a #rrggbb literal. */
 :root {
   color-scheme: light dark;
-  --bc-background: #e9eaec;
   --bc-paper: #fbfbfa;
   --bc-surface: #ffffff;
   --bc-raised: #f4f5f6;
   --bc-hover: #eceef0;
   --bc-line: #d3d6da;
-  --bc-line-soft: #e7e9eb;
   --bc-ink: #1b1d21;
   --bc-ink-2: #474c55;
   --bc-muted: #5f6570;
   --bc-verdigris: #0f6b5e;
-  --bc-verdigris-ink: #0b5247;
-  --bc-verdigris-tint: #d6eee9;
   --bc-on-verdigris: #ffffff;
   --bc-shadow: 0 4px 16px rgb(0 0 0 / 10%);
   --bc-font: "IBM Plex Sans", system-ui, sans-serif;
@@ -22,19 +18,15 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bc-background: #17181a;
     --bc-paper: #1c1e21;
     --bc-surface: #26282c;
     --bc-raised: #2e3135;
     --bc-hover: #363a40;
     --bc-line: #3a3e44;
-    --bc-line-soft: #33363b;
     --bc-ink: #e6e7e9;
     --bc-ink-2: #b9bdc3;
     --bc-muted: #9aa0a8;
     --bc-verdigris: #4db6a3;
-    --bc-verdigris-ink: #8fd9cb;
-    --bc-verdigris-tint: #1d3f39;
     --bc-on-verdigris: #0e1513;
     --bc-shadow: 0 4px 16px rgb(0 0 0 / 40%);
   }

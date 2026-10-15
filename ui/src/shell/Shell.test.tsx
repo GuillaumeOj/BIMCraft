@@ -1,24 +1,12 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { I18nProvider } from "../i18n/I18nProvider";
 import { Shell } from "./Shell";
 
-beforeEach(() => {
-  vi.spyOn(navigator, "languages", "get").mockReturnValue(["en-US"]);
-});
-
-afterEach(() => {
-  vi.restoreAllMocks();
-  localStorage.clear();
-});
-
+// jsdom reports an English system language (navigator.languages is ["en-US", "en"]).
 function renderShell() {
-  render(
-    <I18nProvider>
-      <Shell />
-    </I18nProvider>,
-  );
+  render(<Shell />, { wrapper: I18nProvider });
   return userEvent.setup();
 }
 
