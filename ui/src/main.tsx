@@ -1,3 +1,5 @@
+// Global tokens and page styles first, so component styles can build on them.
+import "./shell/theme.css";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { I18nProvider } from "./i18n/I18nProvider";

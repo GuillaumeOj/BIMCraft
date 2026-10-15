@@ -62,6 +62,22 @@ describe("Shell", () => {
     expect(order[3]).toHaveFocus();
   });
 
+  it("goes to the last panel on Shift+F6 when focus is outside every panel", async () => {
+    const user = renderShell();
+    await user.tab();
+    expect(screen.getByRole("link", { name: "Skip to viewport" })).toHaveFocus();
+    await user.keyboard("{Shift>}{F6}{/Shift}");
+    expect(region("Properties")).toHaveFocus();
+  });
+
+  it("does not toggle the console again while the shortcut is held", async () => {
+    const user = renderShell();
+    await user.keyboard("{Control>}`{/Control}");
+    expect(region("Console")).toBeInTheDocument();
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "`", ctrlKey: true, repeat: true }));
+    expect(region("Console")).toBeInTheDocument();
+  });
+
   it("switches the right panel between Properties and History with the arrow keys", async () => {
     const user = renderShell();
     const properties = screen.getByRole("tab", { name: "Properties" });
