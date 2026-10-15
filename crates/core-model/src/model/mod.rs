@@ -6,7 +6,8 @@ mod property_sets;
 mod relationships;
 mod types;
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::hash::Hash;
 
 use schema::{Attribute, EntityKind, Namespace, Placement};
 
@@ -14,8 +15,8 @@ pub use self::error::ModelError;
 use self::property_sets::PropertyTable;
 pub use self::relationships::Participation;
 use self::relationships::{Link, Relationships};
-use self::types::Types;
 pub use self::types::{Component, LibraryRef};
+use self::types::{Object, Types};
 use crate::store::default_value;
 use crate::{AttributeValue, EntityId, RemovedEntity, Store, StoreError};
 
@@ -195,24 +196,17 @@ impl Model {
     ///
     /// # Errors
     ///
-    /// Fails when no object has this id or its entity has no such attribute on that object.
+    /// Fails when no object has this id, its entity has no such attribute, or the object is a
+    /// type and the attribute is set on each instance.
     pub fn get(&self, id: EntityId, attribute: &str) -> Result<Option<AttributeValue>, ModelError> {
         let object = self.object(id)?;
-        let definition = find_attribute(&object.entity().attributes, attribute);
-        let Some(definition) = definition
-            .filter(|definition| !object.is_type() && definition.placement != Placement::Instance)
-        else {
+        let entity = object.entity();
+        let Some(definition) = find_attribute(&entity.attributes, attribute) else {
             return Ok(self.store.get(id, attribute)?);
         };
-        let own = match definition.placement {
-            Placement::TypeOverridable => self.store.get(id, attribute)?,
-            Placement::Instance | Placement::Type => None,
-        };
-        Ok(own.or_else(|| {
-            self.inherit(id, definition, |type_id| {
-                self.store.get(type_id, attribute).ok().flatten()
-            })
-        }))
+        self.resolve(id, object, &entity.name, definition, |id, _| {
+            self.store.get(id, attribute).ok().flatten()
+        })
     }
 
     /// Sets, or with `None` clears, an attribute of the object with this id and returns its
@@ -276,10 +270,13 @@ impl Model {
             let roles = self.relationships.take(next);
             let type_of = self.types.unassign(next);
             let (instances, component) = self.types.release(next);
+            let is_type = self.object(next)?.is_type();
             let properties = self
                 .property_sets
                 .iter_mut()
-                .filter_map(|(name, table)| Some((name.clone(), table.remove(next)?)))
+                .filter_map(|(name, table)| {
+                    Some((name.clone(), table.side_mut(is_type).remove(next)?))
+                })
                 .collect();
             let entity = self.store.remove(next)?;
             objects.push(RemovedObject {
@@ -329,7 +326,12 @@ impl Model {
                     }
                 }
             }
-            let mut linked = object.type_of.iter().chain(&object.instances);
+            let mut linked = object.type_of.iter().chain(&object.instances).chain(
+                object
+                    .detached
+                    .iter()
+                    .map(|detached| &detached.link.relationship),
+            );
             if let Some(&gone) = linked.find(|id| !present(id)) {
                 return Err(StoreError::NotFound(gone).into());
             }
@@ -342,13 +344,6 @@ impl Model {
             }
             if let Some(component) = object.component.filter(|&id| !self.types.has_component(id)) {
                 return Err(ModelError::ComponentNotFound(component));
-            }
-            if let Some(gone) = object
-                .detached
-                .iter()
-                .find(|detached| !present(&detached.link.relationship))
-            {
-                return Err(StoreError::NotFound(gone.link.relationship).into());
             }
         }
         for object in removal.objects.into_iter().rev() {
@@ -378,6 +373,45 @@ impl Model {
             }
         }
         Ok(())
+    }
+
+    /// The value of an attribute or property of an object (CORE-02): its own value, else, for an
+    /// instance and a value set on the type, its type's value, else the default. `stored` reads
+    /// a stored value of an object, saying whether that object is a type.
+    fn resolve(
+        &self,
+        id: EntityId,
+        object: Object<'_>,
+        owner: &str,
+        attribute: &Attribute,
+        stored: impl Fn(EntityId, bool) -> Option<AttributeValue>,
+    ) -> Result<Option<AttributeValue>, ModelError> {
+        let own = match (object, attribute.placement) {
+            (Object::Type(_), _) => {
+                object.check_placement(owner, attribute)?;
+                stored(id, true)
+            }
+            (Object::Instance(_), Placement::Type) => None,
+            (Object::Instance(_), _) => stored(id, false),
+        };
+        let inherits = !object.is_type() && attribute.placement != Placement::Instance;
+        Ok(own
+            .or_else(|| {
+                let type_id = self.types.type_of(id).filter(|_| inherits)?;
+                stored(type_id, true)
+            })
+            .or_else(|| default_value(attribute)))
+    }
+}
+
+/// Removes `value` from the set under `key`, and the set once it is empty.
+fn remove_from<K: Eq + Hash, V: Ord>(map: &mut HashMap<K, BTreeSet<V>>, key: &K, value: &V) {
+    let emptied = map.get_mut(key).is_some_and(|set| {
+        set.remove(value);
+        set.is_empty()
+    });
+    if emptied {
+        map.remove(key);
     }
 }
 

@@ -1,19 +1,11 @@
 use schema::{Placement, Presence, PropertySet, ValueType};
 
-use super::tests::{STOREY, WALLS, id, model, wall_common};
+use super::tests::{STOREY, WALLS, bool, id, model, text, wall_common};
 use super::*;
 use crate::units::{Area, AreaUnit, Dimension, Length, LengthUnit};
 
 const BUILT_IN: &str = "Pset_WallCommon";
 const CUSTOM: &str = "Acme_WallChecks";
-
-fn text(value: &str) -> AttributeValue {
-    AttributeValue::Text(value.into())
-}
-
-fn bool(value: bool) -> AttributeValue {
-    AttributeValue::Bool(value)
-}
 
 /// The test model with a custom set that has the same properties as the built-in one.
 fn with_custom_set() -> Model {

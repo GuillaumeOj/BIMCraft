@@ -179,6 +179,18 @@ pub(super) fn wall_common() -> PropertySet {
     }
 }
 
+pub(super) fn real(value: f64) -> AttributeValue {
+    AttributeValue::Real(value)
+}
+
+pub(super) fn text(value: &str) -> AttributeValue {
+    AttributeValue::Text(value.into())
+}
+
+pub(super) fn bool(value: bool) -> AttributeValue {
+    AttributeValue::Bool(value)
+}
+
 pub(super) fn id(raw: u128) -> EntityId {
     EntityId::new(raw)
 }

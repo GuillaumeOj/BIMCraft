@@ -2,11 +2,11 @@
 
 use std::collections::HashMap;
 
-use schema::{Attribute, Placement, PropertySet, ValueType};
+use schema::{Attribute, PropertySet, ValueType};
 
 use super::types::Object;
 use super::{Model, ModelError, find_attribute};
-use crate::store::{Side, Table, default_value};
+use crate::store::{Side, Table};
 use crate::units::{Quantity, Unit};
 use crate::{AttributeValue, EntityId, StoreError};
 
@@ -56,11 +56,6 @@ impl PropertyTable {
     fn carries(&self, id: EntityId) -> bool {
         self.instances.carries(id) || self.types.carries(id)
     }
-
-    /// Removes the object's row, on whichever side it is, and returns its values.
-    pub(super) fn remove(&mut self, id: EntityId) -> Option<Vec<(String, AttributeValue)>> {
-        self.instances.remove(id).or_else(|| self.types.remove(id))
-    }
 }
 
 impl Rows {
@@ -109,7 +104,7 @@ impl Rows {
     }
 
     /// Removes the object's row and returns its values.
-    fn remove(&mut self, id: EntityId) -> Option<Vec<(String, AttributeValue)>> {
+    pub(super) fn remove(&mut self, id: EntityId) -> Option<Vec<(String, AttributeValue)>> {
         let row = self.rows.remove(&id)?;
         let (values, moved) = self.table.swap_remove(row);
         if let Some(moved) = moved {
@@ -228,19 +223,10 @@ impl Model {
     ) -> Result<Option<AttributeValue>, ModelError> {
         let (definition, object) = self.applicable_set(id, set)?;
         let attribute = find_property(definition, property)?;
-        if object.is_type() {
-            object.check_placement(set, attribute)?;
-        }
         let table = self.property_sets.get(set);
-        let stored = |id, is_type| table.and_then(|table| table.side(is_type).get(id, property));
-        let own = match (object, attribute.placement) {
-            (Object::Instance(_), Placement::Type) => None,
-            _ => stored(id, object.is_type()),
-        };
-        if object.is_type() || attribute.placement == Placement::Instance {
-            return Ok(own.or_else(|| default_value(attribute)));
-        }
-        Ok(own.or_else(|| self.inherit(id, attribute, |type_id| stored(type_id, true))))
+        self.resolve(id, object, set, attribute, |id, is_type| {
+            table.and_then(|table| table.side(is_type).get(id, property))
+        })
     }
 
     /// Sets, or with `None` clears, a property of the object and returns its previous stored
@@ -363,13 +349,11 @@ fn find_property<'a>(set: &'a PropertySet, property: &str) -> Result<&'a Attribu
     })
 }
 
-/// A property the object can hold a value for (CORE-02).
-fn settable_property<'a>(
-    set: &'a PropertySet,
+/// Checks that the object can hold a value for the property (CORE-02).
+fn settable_property(
+    set: &PropertySet,
     object: Object<'_>,
     property: &str,
-) -> Result<&'a Attribute, ModelError> {
-    let attribute = find_property(set, property)?;
-    object.check_placement(&set.name, attribute)?;
-    Ok(attribute)
+) -> Result<(), ModelError> {
+    object.check_placement(&set.name, find_property(set, property)?)
 }

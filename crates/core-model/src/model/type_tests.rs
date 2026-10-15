@@ -1,22 +1,10 @@
-use super::tests::{NO_VALUES, STOREY, WALLS, id, model};
+use super::tests::{NO_VALUES, STOREY, WALLS, bool, id, model, real, text};
 use super::*;
 
 const PSET: &str = "Pset_WallCommon";
 const COMPONENT: u128 = 500;
 const WALL_TYPE: u128 = 600;
 const OTHER_TYPE: u128 = 601;
-
-fn real(value: f64) -> AttributeValue {
-    AttributeValue::Real(value)
-}
-
-fn text(value: &str) -> AttributeValue {
-    AttributeValue::Text(value.into())
-}
-
-fn bool(value: bool) -> AttributeValue {
-    AttributeValue::Bool(value)
-}
 
 /// A wall component whose types are 0.2 m thick unless they say otherwise.
 fn component() -> Component {
@@ -550,6 +538,13 @@ fn unknown_attributes_are_rejected_on_both_sides() {
         assert_eq!(model.set(id(object), "colour", Some(text("red"))), unknown);
         assert_eq!(model.get(id(object), "colour"), unknown);
     }
+    assert_eq!(
+        model.get(id(WALL_TYPE), "name"),
+        Err(ModelError::NotOnType {
+            owner: "Wall".into(),
+            name: "name".into(),
+        })
+    );
 }
 
 #[test]

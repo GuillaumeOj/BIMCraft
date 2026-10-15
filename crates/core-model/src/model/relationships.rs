@@ -121,13 +121,7 @@ impl Relationships {
     }
 
     fn unlink(&mut self, participant: EntityId, link: Link) {
-        let emptied = self.links.get_mut(&participant).is_some_and(|links| {
-            links.remove(&link);
-            links.is_empty()
-        });
-        if emptied {
-            self.links.remove(&participant);
-        }
+        super::remove_from(&mut self.links, &participant, &link);
     }
 
     /// Whether both directions of the index describe the same links.

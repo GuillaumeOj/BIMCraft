@@ -2,7 +2,7 @@
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
-use schema::{Attribute, Entity, Namespace, Placement};
+use schema::{Attribute, Entity, Namespace, Placement, TypeDef};
 
 use super::{Model, ModelError, find_attribute};
 use crate::store::{Side, Table};
@@ -59,7 +59,7 @@ impl Types {
     }
 
     /// The entity typed by the type named `name`.
-    pub(super) fn entity_of_type(&self, name: &str) -> Option<&str> {
+    fn entity_of_type(&self, name: &str) -> Option<&str> {
         self.entities.get(name).map(String::as_str)
     }
 
@@ -69,10 +69,6 @@ impl Types {
 
     pub(super) fn type_of(&self, instance: EntityId) -> Option<EntityId> {
         self.type_of.get(&instance).copied()
-    }
-
-    pub(super) fn component_of(&self, type_id: EntityId) -> Option<EntityId> {
-        self.component_of.get(&type_id).copied()
     }
 
     fn instances(&self, type_id: EntityId) -> impl Iterator<Item = EntityId> {
@@ -90,23 +86,20 @@ impl Types {
     /// Unlinks an instance from its type and returns the type.
     pub(super) fn unassign(&mut self, instance: EntityId) -> Option<EntityId> {
         let type_id = self.type_of.remove(&instance)?;
-        let emptied = self.instances.get_mut(&type_id).is_some_and(|instances| {
-            instances.remove(&instance);
-            instances.is_empty()
-        });
-        if emptied {
-            self.instances.remove(&type_id);
-        }
+        super::remove_from(&mut self.instances, &type_id, &instance);
         Some(type_id)
     }
 
     /// Unlinks every instance of a type and its component, and returns them.
     pub(super) fn release(&mut self, type_id: EntityId) -> (Vec<EntityId>, Option<EntityId>) {
-        let instances: Vec<EntityId> = self.instances(type_id).collect();
-        for &instance in &instances {
-            self.unassign(instance);
+        let instances = self.instances.remove(&type_id).unwrap_or_default();
+        for instance in &instances {
+            self.type_of.remove(instance);
         }
-        (instances, self.component_of.remove(&type_id))
+        (
+            instances.into_iter().collect(),
+            self.component_of.remove(&type_id),
+        )
     }
 
     pub(super) fn link_component(&mut self, type_id: EntityId, component: EntityId) {
@@ -173,10 +166,7 @@ impl Model {
             .entities
             .get(&component.entity)
             .ok_or_else(|| StoreError::UnknownEntity(component.entity.clone()))?;
-        let type_def = entity
-            .type_def
-            .as_ref()
-            .ok_or_else(|| ModelError::NoType(entity.name.clone()))?;
+        let type_def = type_def(entity)?;
         // The defaults must fit a type's columns, none of which is required of a component.
         Table::new(&type_def.name, &entity.attributes, Side::Component)
             .insert(id, component.defaults.iter().cloned())?;
@@ -244,14 +234,12 @@ impl Model {
             .cloned()
             .collect();
         values.extend(defaults);
-        let type_name = self
+        let entity = self
             .namespace
             .entities
             .get(&definition.entity)
-            .and_then(|entity| entity.type_def.as_ref())
-            .map(|type_def| type_def.name.clone())
-            .ok_or_else(|| ModelError::NoType(definition.entity.clone()))?;
-        self.store.insert(id, &type_name, values)?;
+            .ok_or_else(|| StoreError::UnknownEntity(definition.entity.clone()))?;
+        self.store.insert(id, &type_def(entity)?.name, values)?;
         self.types.link_component(id, component);
         Ok(())
     }
@@ -259,7 +247,7 @@ impl Model {
     /// The component a type object was made from.
     #[must_use]
     pub fn component_of(&self, type_id: EntityId) -> Option<EntityId> {
-        self.types.component_of(type_id)
+        self.types.component_of.get(&type_id).copied()
     }
 
     /// Makes `type_id` the type of `instance`, or with `None` leaves it untyped, and returns
@@ -277,24 +265,19 @@ impl Model {
         let Object::Instance(entity) = self.object(instance)? else {
             return Err(ModelError::NotAnInstance);
         };
-        let type_def = entity
-            .type_def
-            .as_ref()
-            .ok_or_else(|| ModelError::NoType(entity.name.clone()))?;
+        type_def(entity)?;
         let Some(type_id) = type_id else {
             return Ok(self.types.unassign(instance));
         };
-        let type_entity = self
-            .store
-            .entity_of(type_id)
-            .ok_or(StoreError::NotFound(type_id))?;
-        if type_entity != type_def.name {
-            return Err(ModelError::WrongType {
+        match self.object(type_id)? {
+            Object::Type(typed) if typed.name == entity.name => {
+                Ok(self.types.assign(instance, type_id))
+            }
+            _ => Err(ModelError::WrongType {
                 entity: entity.name.clone(),
-                type_entity: type_entity.to_owned(),
-            });
+                type_entity: self.entity_of(type_id).unwrap_or_default().to_owned(),
+            }),
         }
-        Ok(self.types.assign(instance, type_id))
     }
 
     /// The type of an instance, if it has one.
@@ -342,20 +325,6 @@ impl Model {
             .ok_or_else(|| StoreError::UnknownEntity(name.to_owned()).into())
     }
 
-    /// The value an instance inherits for an attribute or property it has no value of: its
-    /// type's, else the default.
-    pub(super) fn inherit(
-        &self,
-        instance: EntityId,
-        attribute: &Attribute,
-        from_type: impl FnOnce(EntityId) -> Option<AttributeValue>,
-    ) -> Option<AttributeValue> {
-        self.types
-            .type_of(instance)
-            .and_then(from_type)
-            .or_else(|| super::default_value(attribute))
-    }
-
     /// Fails when an object or component already has this id.
     pub(super) fn check_free(&self, id: EntityId) -> Result<(), ModelError> {
         if self.store.contains(id) || self.types.has_component(id) {
@@ -364,4 +333,12 @@ impl Model {
             Ok(())
         }
     }
+}
+
+/// The type definition of an entity, which must have one.
+fn type_def(entity: &Entity) -> Result<&TypeDef, ModelError> {
+    entity
+        .type_def
+        .as_ref()
+        .ok_or_else(|| ModelError::NoType(entity.name.clone()))
 }
