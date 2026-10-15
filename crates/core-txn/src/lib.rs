@@ -1,6 +1,7 @@
 //! Commands and transactions: every change to a `BIMCraft` model is a serialisable [`Command`],
 //! so history, macros, replay and collaboration share one mechanism (CORE-11), and runs as an
-//! atomic [`Transaction`] that a [`Document`]'s history can undo and redo (CORE-06).
+//! atomic [`Transaction`] that a [`Document`]'s history can undo and redo (CORE-06). Each
+//! transaction, undo and redo emits a [`ChangeEvent`] listing the objects it changed (CORE-07).
 //!
 //! This crate builds for native targets and `wasm32-unknown-unknown` (ARCH-01) and never touches
 //! the platform directly (ARCH-02).
@@ -9,10 +10,12 @@
 #![forbid(clippy::disallowed_methods, clippy::disallowed_types)]
 
 mod command;
+mod event;
 mod history;
 mod transaction;
 
 pub use command::{Command, CommandError, ModelCommand, ReplayError, replay};
+pub use event::ChangeEvent;
 pub use history::{Document, HistoryError};
 pub use transaction::Transaction;
 

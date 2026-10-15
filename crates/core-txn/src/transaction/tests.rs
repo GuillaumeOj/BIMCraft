@@ -30,7 +30,7 @@ fn contained() -> Model {
 /// Checks that the changes `command` makes on `model` undo and redo exactly.
 fn assert_reversible(model: &mut Model, command: &ModelCommand) {
     let before = model.clone();
-    let changes = Transaction::run(model, command).unwrap();
+    let (changes, _) = Transaction::run(model, command).unwrap();
     let after = model.clone();
     undo_all(model, &changes).unwrap();
     assert_eq!(*model, before, "undo of {command:?}");

@@ -9,7 +9,7 @@ use schema::{
     PropertySet, QuantityKind, Role, RoleTarget, TypeDef, Value, ValueType,
 };
 
-use crate::{CommandError, ModelCommand, Transaction};
+use crate::{ChangeEvent, CommandError, ModelCommand, Transaction};
 
 fn attribute(name: &str, value: ValueType, presence: Presence, placement: Placement) -> Attribute {
     Attribute {
@@ -371,4 +371,23 @@ impl Run for ModelCommand {
     fn run(&self, model: &mut Model) -> Result<(), CommandError> {
         Transaction::run(model, self).map(drop)
     }
+}
+
+/// The event an exact change from `before` to `after` emits, found by comparing every object:
+/// the reference the transactions' events are checked against.
+pub fn diff(before: &Model, after: &Model) -> ChangeEvent {
+    let mut event = ChangeEvent::default();
+    for id in before.ids() {
+        match after.state(id) {
+            None => {
+                event.deleted.insert(id);
+            }
+            Some(state) if before.state(id).as_ref() != Some(&state) => {
+                event.modified.insert(id);
+            }
+            Some(_) => {}
+        }
+    }
+    event.created = after.ids().filter(|&id| !before.contains(id)).collect();
+    event
 }

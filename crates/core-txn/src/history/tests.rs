@@ -2,7 +2,7 @@ use core_model::StoreError;
 use proptest::prelude::*;
 
 use super::*;
-use crate::fixtures::{any_command, create_wall, id, model};
+use crate::fixtures::{any_command, create_wall, diff, id, model};
 use crate::{ModelCommand, replay};
 
 fn document() -> Document<ModelCommand> {
@@ -104,7 +104,8 @@ proptest! {
     #![proptest_config(crate::proptest_config())]
 
     /// Whatever the sequence of do, undo and redo, the model is the replay of the applied
-    /// commands, and undoing everything gives back the empty model.
+    /// commands, each step emits exactly what it changed, and undoing everything gives back the
+    /// empty model.
     #[test]
     fn any_sequence_keeps_the_model_consistent(
         steps in proptest::collection::vec(step(), 0..64),
@@ -114,22 +115,31 @@ proptest! {
         let mut done: Vec<ModelCommand> = Vec::new();
         let mut undone: Vec<ModelCommand> = Vec::new();
         for step in steps {
-            match step {
+            let before = document.model().clone();
+            let event = match step {
                 Step::Execute(command) => {
-                    if document.execute(command.clone()).is_ok() {
+                    let event = document.execute(command.clone());
+                    if event.is_ok() {
                         done.push(command);
                         undone.clear();
                     }
+                    event.ok()
                 }
                 Step::Undo => {
-                    prop_assert_eq!(document.undo().is_ok(), !done.is_empty());
+                    let event = document.undo();
+                    prop_assert_eq!(event.is_ok(), !done.is_empty());
                     undone.extend(done.pop());
+                    event.ok()
                 }
                 Step::Redo => {
-                    prop_assert_eq!(document.redo().is_ok(), !undone.is_empty());
+                    let event = document.redo();
+                    prop_assert_eq!(event.is_ok(), !undone.is_empty());
                     done.extend(undone.pop());
+                    event.ok()
                 }
-            }
+            };
+            // A failed step changes nothing and emits nothing.
+            prop_assert_eq!(event.unwrap_or_default(), diff(&before, document.model()));
             let mut expected = model();
             prop_assert_eq!(replay(&mut expected, &done), Ok(()));
             prop_assert_eq!(document.model(), &expected);

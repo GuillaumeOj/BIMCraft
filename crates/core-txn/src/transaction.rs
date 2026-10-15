@@ -1,8 +1,10 @@
 //! Atomic transactions (CORE-06).
 
-use core_model::{AttributeValue, Component, EntityId, Model, ModelError, Removal};
+use std::collections::BTreeMap;
 
-use crate::{Command, CommandError};
+use core_model::{AttributeValue, Component, EntityId, Model, ModelError, ObjectState, Removal};
+
+use crate::{ChangeEvent, Command, CommandError};
 
 /// Names and values as a model method takes them, owned for the journal.
 type Values = Vec<(String, AttributeValue)>;
@@ -218,6 +220,8 @@ pub(crate) fn redo_all(model: &mut Model, changes: &[Change]) -> Result<(), Mode
 pub struct Transaction<'a> {
     model: &'a mut Model,
     changes: Vec<Change>,
+    /// Every object a write may have changed, as it was before the first such write (CORE-07).
+    before: BTreeMap<EntityId, Option<ObjectState>>,
 }
 
 impl<'a> Transaction<'a> {
@@ -225,11 +229,13 @@ impl<'a> Transaction<'a> {
         Self {
             model,
             changes: Vec::new(),
+            before: BTreeMap::new(),
         }
     }
 
-    /// Runs `command` on `model` as one transaction and returns the changes it made. Either the
-    /// command applies fully, or the model is left as it was.
+    /// Runs `command` on `model` as one transaction and returns the changes it made and the
+    /// event listing the objects they changed. Either the command applies fully, or the model is
+    /// left as it was.
     ///
     /// # Errors
     ///
@@ -237,10 +243,13 @@ impl<'a> Transaction<'a> {
     pub(crate) fn run<C: Command>(
         model: &'a mut Model,
         command: &C,
-    ) -> Result<Vec<Change>, CommandError> {
+    ) -> Result<(Vec<Change>, ChangeEvent), CommandError> {
         let mut transaction = Self::new(model);
         match command.apply(&mut transaction) {
-            Ok(()) => Ok(transaction.changes),
+            Ok(()) => {
+                let event = ChangeEvent::between(transaction.before, transaction.model);
+                Ok((transaction.changes, event))
+            }
             Err(error) => {
                 // Each recorded change succeeded on this model, so its inverse applies.
                 undo_all(transaction.model, &transaction.changes)?;
@@ -253,6 +262,15 @@ impl<'a> Transaction<'a> {
     #[must_use]
     pub fn model(&self) -> &Model {
         self.model
+    }
+
+    /// Keeps the object as it is before the transaction first writes to it. A write that fails
+    /// changes nothing, so touching before writing is safe, and touching an object a write
+    /// leaves unchanged only costs a comparison.
+    fn touch(&mut self, id: EntityId) {
+        self.before
+            .entry(id)
+            .or_insert_with(|| self.model.state(id));
     }
 
     /// Makes a change that returns nothing the caller needs, and records it.
@@ -273,6 +291,7 @@ impl<'a> Transaction<'a> {
         entity: &str,
         values: impl IntoIterator<Item = (N, AttributeValue)>,
     ) -> Result<(), ModelError> {
+        self.touch(id);
         self.perform(Change::Inserted {
             id,
             entity: entity.to_owned(),
@@ -291,6 +310,7 @@ impl<'a> Transaction<'a> {
         attribute: &str,
         value: Option<AttributeValue>,
     ) -> Result<Option<AttributeValue>, ModelError> {
+        self.touch(id);
         let old = self.model.set(id, attribute, value.clone())?;
         let change = Change::Set {
             id,
@@ -308,6 +328,9 @@ impl<'a> Transaction<'a> {
     ///
     /// Fails, changing nothing, as [`Model::remove`] does.
     pub fn remove(&mut self, id: EntityId) -> Result<Removal, ModelError> {
+        for reached in self.model.removal_reach(id) {
+            self.touch(reached);
+        }
         let removal = self.model.remove(id)?;
         let change = Change::Removed {
             id,
@@ -329,6 +352,7 @@ impl<'a> Transaction<'a> {
         roles: impl IntoIterator<Item = (R, Vec<EntityId>)>,
         values: impl IntoIterator<Item = (N, AttributeValue)>,
     ) -> Result<(), ModelError> {
+        self.touch(id);
         self.perform(Change::Related {
             id,
             entity: entity.to_owned(),
@@ -351,6 +375,7 @@ impl<'a> Transaction<'a> {
         role: &str,
         participant: EntityId,
     ) -> Result<usize, ModelError> {
+        self.touch(relationship);
         let position = self
             .model
             .add_participant(relationship, role, participant)?;
@@ -375,6 +400,7 @@ impl<'a> Transaction<'a> {
         role: &str,
         participant: EntityId,
     ) -> Result<usize, ModelError> {
+        self.touch(relationship);
         let position = self
             .model
             .remove_participant(relationship, role, participant)?;
@@ -402,6 +428,7 @@ impl<'a> Transaction<'a> {
     ) -> Result<Option<AttributeValue>, ModelError> {
         let carries_set = |model: &Model| model.property_sets_of(id).any(|name| name == set);
         let carried = carries_set(self.model);
+        self.touch(id);
         let old = self.model.set_property(id, set, property, value.clone())?;
         let change = Change::Property {
             id,
@@ -427,6 +454,7 @@ impl<'a> Transaction<'a> {
         set: &str,
         values: impl IntoIterator<Item = (N, AttributeValue)>,
     ) -> Result<(), ModelError> {
+        self.touch(id);
         self.perform(Change::PropertySet {
             id,
             set: set.to_owned(),
@@ -440,7 +468,12 @@ impl<'a> Transaction<'a> {
     /// # Errors
     ///
     /// Fails, changing nothing, as [`Model::detach_property_set`] does.
-    pub fn detach_property_set(&mut self, id: EntityId, set: &str) -> Result<Values, ModelError> {
+    pub fn detach_property_set(
+        &mut self,
+        id: EntityId,
+        set: &str,
+    ) -> Result<Vec<(String, AttributeValue)>, ModelError> {
+        self.touch(id);
         let values = self.model.detach_property_set(id, set)?;
         let change = Change::PropertySet {
             id,
@@ -496,6 +529,7 @@ impl<'a> Transaction<'a> {
         component: EntityId,
         values: impl IntoIterator<Item = (N, AttributeValue)>,
     ) -> Result<(), ModelError> {
+        self.touch(id);
         self.perform(Change::TypeCreated {
             id,
             component,
@@ -513,6 +547,7 @@ impl<'a> Transaction<'a> {
         instance: EntityId,
         type_id: Option<EntityId>,
     ) -> Result<Option<EntityId>, ModelError> {
+        self.touch(instance);
         let old = self.model.assign_type(instance, type_id)?;
         let change = Change::TypeAssigned {
             instance,
