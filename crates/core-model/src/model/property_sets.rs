@@ -2,10 +2,10 @@
 
 use std::collections::HashMap;
 
-use schema::{Attribute, Placement, Presence, PropertySet, ValueType};
+use schema::{Attribute, Placement, PropertySet, ValueType};
 
 use super::{Model, ModelError};
-use crate::store::Table;
+use crate::store::{Table, default_value};
 use crate::units::{Quantity, Unit};
 use crate::{AttributeValue, EntityId, StoreError};
 
@@ -51,6 +51,24 @@ impl PropertyTable {
         self.table.get(row, property).ok().flatten()
     }
 
+    /// Sets or clears a property of the object, adding its row when it gives a value, and
+    /// returns the previous stored value.
+    fn set(
+        &mut self,
+        id: EntityId,
+        property: &str,
+        value: Option<AttributeValue>,
+    ) -> Result<Option<AttributeValue>, ModelError> {
+        match (self.rows.get(&id), value) {
+            (Some(&row), value) => self
+                .table
+                .set(row, property, value)
+                .map_err(|error| self.value_error(error)),
+            (None, Some(value)) => self.insert(id, [(property, value)]).map(|()| None),
+            (None, None) => Ok(None),
+        }
+    }
+
     /// Removes the object's row and returns its values.
     pub(super) fn remove(&mut self, id: EntityId) -> Option<Vec<(String, AttributeValue)>> {
         let row = self.rows.remove(&id)?;
@@ -84,12 +102,12 @@ impl Model {
             return Err(ModelError::PropertySetExists(set.name));
         }
         let name = set.name.clone();
-        let table = PropertyTable::new(&set);
         self.namespace.property_sets.insert(name.clone(), set);
         if let Err(errors) = schema::validate(&self.namespace) {
             self.namespace.property_sets.remove(&name);
             return Err(ModelError::InvalidPropertySet(errors));
         }
+        let table = PropertyTable::new(&self.namespace.property_sets[&name]);
         self.property_sets.insert(name, table);
         Ok(())
     }
@@ -191,15 +209,7 @@ impl Model {
     ) -> Result<Option<AttributeValue>, ModelError> {
         let definition = self.applicable_set(id, set)?;
         instance_property(definition, property)?;
-        let table = self.property_table(set)?;
-        match (table.rows.get(&id), value) {
-            (Some(&row), value) => table
-                .table
-                .set(row, property, value)
-                .map_err(|error| table.value_error(error)),
-            (None, Some(value)) => table.insert(id, [(property, value)]).map(|()| None),
-            (None, None) => Ok(None),
-        }
+        self.property_table(set)?.set(id, property, value)
     }
 
     /// A quantity property, in the dimension of `U` (CORE-09).
@@ -274,7 +284,8 @@ impl Model {
     fn check_quantity<U: Unit>(&self, set: &str, property: &str) -> Result<(), ModelError> {
         let attribute = find_property(self.known_set(set)?, property)?;
         match attribute.value {
-            ValueType::Quantity(kind) if U::DIMENSION.quantity_kind() == Some(kind) => Ok(()),
+            // A quantity kind and a dimension match when they share their SI unit.
+            ValueType::Quantity(kind) if U::SI.symbol() == kind.si_unit() => Ok(()),
             _ => Err(ModelError::QuantityMismatch {
                 property: property.to_owned(),
                 dimension: U::DIMENSION,
@@ -306,11 +317,4 @@ fn instance_property<'a>(
         });
     }
     Ok(attribute)
-}
-
-fn default_value(attribute: &Attribute) -> Option<AttributeValue> {
-    match &attribute.presence {
-        Presence::Default(value) => Some(value.into()),
-        Presence::Required | Presence::Optional => None,
-    }
 }

@@ -53,11 +53,9 @@ impl Table {
                     // On instances, a type_overridable attribute is an optional override: the
                     // type provides its value and default.
                     rule: match (&attribute.presence, attribute.placement) {
-                        (Presence::Required, Placement::Instance) => Rule::Required,
-                        (Presence::Default(value), Placement::Instance) => {
-                            Rule::Default(value.into())
-                        }
-                        _ => Rule::Optional,
+                        (_, Placement::TypeOverridable) => Rule::Optional,
+                        (Presence::Required, _) => Rule::Required,
+                        _ => default_value(attribute).map_or(Rule::Optional, Rule::Default),
                     },
                     column: Column::new(&attribute.value),
                 })
@@ -90,7 +88,7 @@ impl Table {
         row: usize,
         attribute: &str,
     ) -> Result<Option<AttributeValue>, StoreError> {
-        Ok(self.slot(attribute)?.column.get(row))
+        Ok(self.attributes[self.position(attribute)?].column.get(row))
     }
 
     /// Sets, or with `None` clears, the value of `attribute` in `row`, and returns the previous
@@ -183,10 +181,6 @@ impl Table {
                 attribute: attribute.to_owned(),
             })
     }
-
-    fn slot(&self, attribute: &str) -> Result<&Slot, StoreError> {
-        Ok(&self.attributes[self.position(attribute)?])
-    }
 }
 
 impl Slot {
@@ -209,5 +203,13 @@ impl Slot {
             ValueError::Mismatch => StoreError::TypeMismatch(self.name.clone()),
             ValueError::NonFinite => StoreError::NonFinite(self.name.clone()),
         }
+    }
+}
+
+/// The value an attribute or property takes when nothing sets it.
+pub(crate) fn default_value(attribute: &Attribute) -> Option<AttributeValue> {
+    match &attribute.presence {
+        Presence::Default(value) => Some(value.into()),
+        Presence::Required | Presence::Optional => None,
     }
 }

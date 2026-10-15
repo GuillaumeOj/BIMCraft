@@ -9,7 +9,7 @@ use std::collections::hash_map::Entry;
 
 use schema::{Namespace, ValidationError};
 
-pub(crate) use self::table::Table;
+pub(crate) use self::table::{Table, default_value};
 pub use self::value::AttributeValue;
 use crate::EntityId;
 

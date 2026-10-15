@@ -46,8 +46,6 @@ use std::iter::Sum;
 use std::marker::PhantomData;
 use std::ops::{Add, AddAssign, Div, Mul, Neg, Sub, SubAssign};
 
-use schema::QuantityKind;
-
 pub use dms::{AngleFormat, FormattedAngle};
 pub use kinds::{
     AngleUnit, AreaUnit, ForceUnit, LengthUnit, MassUnit, MomentUnit, StressUnit, VolumeUnit,
@@ -105,24 +103,6 @@ impl fmt::Display for Dimension {
             Self::Stress => "stress",
             Self::Mass => "mass",
         })
-    }
-}
-
-impl Dimension {
-    /// The schema's quantity kind measured in this dimension; `None` for bending moments, which
-    /// schema attributes cannot hold yet.
-    #[must_use]
-    pub const fn quantity_kind(self) -> Option<QuantityKind> {
-        match self {
-            Self::Length => Some(QuantityKind::Length),
-            Self::Area => Some(QuantityKind::Area),
-            Self::Volume => Some(QuantityKind::Volume),
-            Self::Angle => Some(QuantityKind::PlaneAngle),
-            Self::Force => Some(QuantityKind::Force),
-            Self::Moment => None,
-            Self::Stress => Some(QuantityKind::Pressure),
-            Self::Mass => Some(QuantityKind::Mass),
-        }
     }
 }
 
@@ -443,23 +423,6 @@ pub(super) mod tests {
         ];
         for (dimension, name) in names {
             assert_eq!(dimension.to_string(), name);
-        }
-    }
-
-    #[test]
-    fn dimensions_map_onto_schema_quantity_kinds() {
-        let kinds = [
-            (Dimension::Length, Some(QuantityKind::Length)),
-            (Dimension::Area, Some(QuantityKind::Area)),
-            (Dimension::Volume, Some(QuantityKind::Volume)),
-            (Dimension::Angle, Some(QuantityKind::PlaneAngle)),
-            (Dimension::Force, Some(QuantityKind::Force)),
-            (Dimension::Moment, None),
-            (Dimension::Stress, Some(QuantityKind::Pressure)),
-            (Dimension::Mass, Some(QuantityKind::Mass)),
-        ];
-        for (dimension, kind) in kinds {
-            assert_eq!(dimension.quantity_kind(), kind, "{dimension}");
         }
     }
 }
