@@ -25,6 +25,8 @@ check() {
 echo "Tools:"
 check rustup  "https://rustup.rs (the toolchain in rust-toolchain.toml is installed automatically)"
 check bun     "$bun_install"
+check cargo-audit "cargo install --locked cargo-audit@$CARGO_AUDIT_VERSION"
+check cargo-cyclonedx "cargo install --locked cargo-cyclonedx@$CARGO_CYCLONEDX_VERSION"
 check cargo-deny "cargo install --locked cargo-deny@$CARGO_DENY_VERSION"
 check cargo-fuzz "cargo install --locked cargo-fuzz@$CARGO_FUZZ_VERSION"
 check cargo-llvm-cov "cargo install --locked cargo-llvm-cov@$CARGO_LLVM_COV_VERSION"

@@ -61,7 +61,8 @@ Formatting and import order are never discussed in review: tools decide. Rust us
 ## Security
 
 - `unsafe` is denied workspace-wide. Modules that genuinely need it (e.g. GPU buffer mapping) are listed below with the reason, and opt in with a local `#[allow(unsafe_code)]`.
-- `cargo deny` checks advisories, licences, duplicate versions and sources. `bun audit` checks UI dependencies.
+- `cargo deny` checks advisories, licences, duplicate versions and sources. `cargo audit --deny warnings` checks the same lockfiles against the RustSec advisory database with the reference tool, so a gap or bug in one auditor does not hide a vulnerability; unmaintained and yanked crates fail too. Both run in the `rust` and `fuzz` sections of `scripts/check-all.sh`. An advisory accepted on purpose goes in both `deny.toml` and `.cargo/audit.toml` (`[advisories] ignore`), with the reason. `bun audit` checks UI dependencies.
+- Every published GitHub release gets a Software Bill of Materials (SBOM): `.github/workflows/release.yml` attaches one CycloneDX file per workspace crate, written by `scripts/sbom.sh <dir>`. The `rust` section of `scripts/check-all.sh` generates it too, so a change that breaks it fails before a release.
 - `gitleaks` scans for secrets at commit time and in CI. CodeQL analyses workflows, Rust and TypeScript.
 - Workflows run with read-only tokens by default, never persist checkout credentials and never use `pull_request_target`.
 

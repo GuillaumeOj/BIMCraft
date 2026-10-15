@@ -1,0 +1,32 @@
+# Attaches a CycloneDX SBOM to every published release (SEC-05).
+# Actions are pinned to commit SHAs; tool versions come from scripts/tool-versions.env (AGENTS.md §4).
+name: Release
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  sbom:
+    name: SBOM
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-rust
+      - uses: taiki-e/install-action@83ac0ad63c0167e6f06796fab0fce28db1bf3db0 # v2.87.22
+        with:
+          tool: cargo-cyclonedx@${{ env.CARGO_CYCLONEDX_VERSION }}
+      - run: scripts/sbom.sh "$RUNNER_TEMP/sbom"
+      - name: Attach the SBOM to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: gh release upload "$TAG" "$RUNNER_TEMP"/sbom/*.cdx.json --clobber

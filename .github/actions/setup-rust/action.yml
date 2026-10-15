@@ -1,4 +1,4 @@
-# Shared by every Rust job in ci.yml: tool versions, the pinned toolchain and the build cache.
+# Shared by every Rust job in ci.yml and release.yml: tool versions, the pinned toolchain and the build cache.
 # Callers check out the repository first, since this action is read from it.
 name: Set up Rust
 description: Load scripts/tool-versions.env, install the pinned Rust toolchain and restore the cache.
