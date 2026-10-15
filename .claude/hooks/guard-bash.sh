@@ -1,8 +1,8 @@
 #!/bin/sh
 # Blocks shell commands that would rewrite or publish beyond a feature branch, or bypass checks,
 # wherever they appear in a command line (permission rules only match the start of a command).
-# Exit code 2 blocks the tool call. Plain pushes of a feature branch and draft pull requests pass
-# here; .claude/settings.json asks the user for each one, and pre-push requires the review stamp.
+# Exit code 2 blocks the tool call. Plain and --force-with-lease pushes of a feature branch and
+# draft pull requests pass here; .claude/settings.json asks the user for each one, and pre-push requires the review stamp.
 # Write files with the Write/Edit tools rather than heredocs: text mentioning these commands at
 # the start of a line or after a shell operator is treated as a command.
 # Line continuations are joined, so the options of one command stay on one line for grep.
@@ -31,7 +31,10 @@ end="${q}([[:space:]]|$)"
 
 if matches "${git_cmd}push([[:space:]]|$)"; then
   push="${git_cmd}push${args}${q}"
-  matches "${push}(-[a-z]*f[a-z]*|--force[^[:space:]]*|\+[^[:space:]]*)${end}" && block "force pushes are reserved to the user"
+  # --force-with-lease (AGENTS.md §3b) refuses to overwrite remote commits not seen locally;
+  # --force, -f and + refspecs overwrite blindly.
+  matches "${push}(-[a-z]*f[a-z]*|--force|\+[^[:space:]]*)${end}" &&
+    block "force pushes other than --force-with-lease are reserved to the user"
   matches "${push}(-[a-z]*d[a-z]*|--delete|--mirror|--all|--tags|--prune|:[^[:space:]]*)${end}" &&
     block "deleting, mirroring or pushing tags is reserved to the user"
   matches "${push}([^[:space:]]*:)?(refs/heads/)?main${end}" && block "pushing main is reserved to the user"

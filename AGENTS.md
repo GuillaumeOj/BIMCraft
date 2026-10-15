@@ -6,7 +6,7 @@ BIMCraft is an open-source BIM authoring tool: a Rust core (native + WebAssembly
 
 ## 1. Golden rules (never break)
 
-1. **Push only with the user's OK.** Committing locally is fine. Push your own feature branch (plain `git push`, never `main`) and open a **draft** pull request (`gh pr create --draft`) only when the user explicitly says so **in the current conversation**, and only once they have stamped `HEAD` (rule 2); every later push needs a new OK. Never force-push, delete remote branches, push tags, merge pull requests or mark them ready for review, publish releases, or create or edit issues, comments, labels and project items unless the user asks. `scripts/push-pr.ts` is the user's tool; run it only with `--dry-run`.
+1. **Push only with the user's OK.** Committing locally is fine. Push your own feature branch (plain `git push`, never `main`) and open a **draft** pull request (`gh pr create --draft`) only when the user explicitly says so **in the current conversation**, and only once they have stamped `HEAD` (rule 2); every later push needs a new OK. Never force-push, except `git push --force-with-lease` of your own feature branch after a rebase (section 3b); never delete remote branches, push tags, merge pull requests or mark them ready for review, publish releases, or create or edit issues, comments, labels and project items unless the user asks. `scripts/push-pr.ts` is the user's tool; run it only with `--dry-run`.
 2. **Review before push.** Before any push, the user must have run a code review and a simplification pass on the changes (Claude Code: `/code-review`, then `/simplify`; other agents: an equivalent review the user asks for). Only then does the user stamp `HEAD` with `scripts/mark-reviewed.sh`, which asks them to confirm at a terminal. The `pre-push` hook rejects any push whose `HEAD` is not stamped; it runs no tests (CI does). Every new commit, a CI fix included, needs a new review (of the new commits) and a new stamp. Never stamp, or try to answer the confirmation, yourself.
 3. **Never bypass checks.** No `--no-verify`, no editing `core.hooksPath`, no disabling lints, lowering coverage thresholds or skipping tests to make a check pass. Fix the cause, or stop and ask the user.
 4. **Exact versions only.** Every dependency, tool and CI action is pinned to an exact version (section 4).
@@ -35,7 +35,7 @@ Every feature or fix is done only when all of these hold. Check them before sayi
 5. Write the user documentation.
 6. Commit locally (`git commit -s`, Conventional Commits, e.g. `feat(geom): add exact orientation predicate`).
 7. Stop. Tell the user the work is ready for review. Wait for the review, the simplification pass, their stamp and an explicit instruction to push (or for them to push with `scripts/push-pr.ts`).
-8. **Track CI** on the pull request: `gh pr checks <number> --watch`, then `gh run view <run-id> --log-failed` for a failed job. Fix each failure at its cause, rerun the targeted check that reproduces it, commit, and go back to step 7. Repeat until CI is green.
+8. **Track CI** on the pull request: `gh pr checks <number> --watch`, then `gh run view <run-id> --log-failed` for a failed job. Fix each failure at its cause, rerun the targeted check that reproduces it, commit, and go back to step 7. Repeat until CI is green. A merge conflict or a branch behind its base (reported by CI, GitHub or Auto-fix) follows section 3b.
 
 ## 3a. Local checks while working
 
@@ -45,6 +45,17 @@ CI runs every check on every pull request, on Linux, macOS and Windows. Locally,
 - **UI**, from `ui/`: `bunx vitest run <files>` (or `bunx vitest related --run <files>`), `bunx biome check <files>`, `bunx tsc --noEmit`.
 - **Before each commit**: `scripts/check-all.sh repo` (seconds).
 - **A full section only when nothing narrower checks the change**: workspace manifests, the toolchain, `clippy.toml`, `deny.toml`, the critical or wasm crate lists or `scripts/check-all.sh` changed (run the sections they affect); a core crate's platform use changed (`wasm`); a fuzz target changed (`fuzz`); the STEP reader or writer, or the IFC corpus manifest changed (`corpus`); or a CI failure cannot be reproduced otherwise. Never run the whole `scripts/check-all.sh` by default.
+
+## 3b. Keeping a branch up to date (Auto-fix included)
+
+Branch protection requires a linear history and branches up to date with `main`, so a feature branch is rebased, never merged into:
+
+1. **Rebase, never merge.** Do not merge `main` into a feature branch, and do not use merge-based sync tools (such as the Claude desktop app's `sync_with_base_branch`). Run `git fetch origin`, then `git rebase origin/<base>`, where `<base>` is the pull request's base branch: `main`, or the branch below in a stack.
+2. **Conflict after a merge on `main`.** Rebase first, then resolve each conflict as the rebase reaches it (`git add`, `git rebase --continue`). Keep the intent of both sides; never resolve by dropping the other side's changes wholesale. If the right resolution is unclear, `git rebase --abort` and ask the user.
+3. **Branch behind its base.** Rebase as in step 1, even when nothing conflicts.
+4. **Check.** Run the targeted checks for the files the rebase touched (section 3a) and `scripts/check-all.sh repo`.
+5. **Restamp.** The rebased `HEAD` is a new commit: stop and ask the user to review it (the conflict resolutions in particular) and run `scripts/mark-reviewed.sh`.
+6. **Force-push with lease.** Once the user has stamped the rebased `HEAD`, push it with `git push --force-with-lease`; that stamp is the OK for this push. Never use `--force`, `-f` or a `+` refspec, which can overwrite commits you have not seen.
 
 ## 4. Dependencies
 
