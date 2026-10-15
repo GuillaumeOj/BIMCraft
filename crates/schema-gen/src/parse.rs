@@ -1,17 +1,14 @@
 use std::collections::BTreeMap;
 
 use schema::{
-    Attribute, Cardinality, Entity, EntityKind, IfcMapping, Item, Location, MAX_LIST_DEPTH,
-    Namespace, Owner, Placement, Presence, PropertySet, Representation, Role, RoleTarget, TypeDef,
-    Value, ValueType,
+    Attribute, Entity, IfcMapping, Item, Location, MAX_LIST_DEPTH, Namespace, Owner, Presence,
+    PropertySet, Representation, Role, TypeDef, Value, ValueType,
 };
 use serde::de::DeserializeOwned;
 use toml::Spanned;
 
-use crate::definition::{
-    AttributeDef, CardinalityDef, EntityFile, KindDef, NamespaceFile, PlacementDef,
-    PropertySetFile, RoleDef,
-};
+use crate::definition::{AttributeDef, EntityFile, NamespaceFile, PropertySetFile, RoleDef};
+use crate::snapshot::parse_target;
 use crate::{Error, ErrorKind};
 
 /// The version of the definition file format this crate reads.
@@ -191,11 +188,7 @@ impl<'a> Builder<'a> {
             .collect();
         let entity = Entity {
             name: name.clone(),
-            kind: match file.entity.kind {
-                KindDef::Element => EntityKind::Element,
-                KindDef::Spatial => EntityKind::Spatial,
-                KindDef::Relationship => EntityKind::Relationship,
-            },
+            kind: file.entity.kind.into(),
             doc: file.entity.doc,
             deprecated: file.entity.deprecated,
             property_sets: file.entity.property_sets,
@@ -302,11 +295,7 @@ impl<'a> Builder<'a> {
             name: definition.name.into_inner(),
             value,
             presence,
-            placement: match definition.on {
-                PlacementDef::Instance => Placement::Instance,
-                PlacementDef::Type => Placement::Type,
-                PlacementDef::TypeOverridable => Placement::TypeOverridable,
-            },
+            placement: definition.on.into(),
             doc: definition.doc,
         })
     }
@@ -317,25 +306,18 @@ impl<'a> Builder<'a> {
         for target in definition.targets {
             let offset = target.span().start;
             let target = target.into_inner();
-            if let Some(kind) = target.strip_prefix("kind:") {
-                if let Some(kind) = EntityKind::ALL.into_iter().find(|k| k.name() == kind) {
-                    targets.push(RoleTarget::Kind(kind));
-                } else {
-                    let message = format!("unknown entity kind \"{kind}\"");
+            match parse_target(&target) {
+                Ok(target) => targets.push(target),
+                Err(message) => {
                     self.definition_error(source, Some(offset), message);
                     valid = false;
                 }
-            } else {
-                targets.push(RoleTarget::Entity(target));
             }
         }
         valid.then(|| Role {
             name: definition.name.into_inner(),
             targets,
-            cardinality: match definition.cardinality {
-                CardinalityDef::One => Cardinality::One,
-                CardinalityDef::Many => Cardinality::Many,
-            },
+            cardinality: definition.cardinality.into(),
             exclusive: definition.exclusive,
         })
     }
@@ -394,7 +376,7 @@ fn locate(
 
 /// Converts a TOML default. Nesting is capped like value types are, so hostile input cannot
 /// recurse deeply.
-fn convert_value(value: toml::Value, depth: usize) -> Result<Value, String> {
+pub(crate) fn convert_value(value: toml::Value, depth: usize) -> Result<Value, String> {
     match value {
         toml::Value::Boolean(value) => Ok(Value::Bool(value)),
         toml::Value::Integer(value) => Ok(Value::Integer(value)),

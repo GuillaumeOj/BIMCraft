@@ -11,11 +11,15 @@
 // ARCH-02: forbid, not deny, so nothing in this crate can opt out. See docs/dev/quality.md.
 #![forbid(clippy::disallowed_methods, clippy::disallowed_types)]
 
+mod migration;
 mod model;
 mod tables;
 mod validate;
 mod value_type;
 
+pub use migration::{
+    DeclaredStep, MAX_STEPS, Migration, MigrationError, Step, StoredAttribute, converts, resolve,
+};
 pub use model::{
     Attribute, Cardinality, Entity, EntityKind, IfcMapping, Namespace, Placement, Presence,
     PropertySet, Representation, Role, RoleTarget, TypeDef, Value,

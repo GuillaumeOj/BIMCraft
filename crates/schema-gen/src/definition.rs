@@ -1,7 +1,8 @@
 //! The definition file format of ADR 0002, as serde structures. Unknown keys are errors, and
 //! names keep their position so later errors can point at the right line.
 
-use serde::Deserialize;
+use schema::{Cardinality, EntityKind, Placement};
+use serde::{Deserialize, Serialize};
 use toml::Spanned;
 
 /// `namespace.toml`.
@@ -47,7 +48,7 @@ pub struct EntitySection {
     pub property_sets: Vec<String>,
 }
 
-#[derive(Clone, Copy, Debug, Deserialize)]
+#[derive(Clone, Copy, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum KindDef {
     Element,
@@ -85,7 +86,7 @@ pub struct AttributeDef {
     pub doc: Option<String>,
 }
 
-#[derive(Clone, Copy, Debug, Default, Deserialize)]
+#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum PlacementDef {
     #[default]
@@ -104,7 +105,7 @@ pub struct RoleDef {
     pub exclusive: bool,
 }
 
-#[derive(Clone, Copy, Debug, Deserialize)]
+#[derive(Clone, Copy, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum CardinalityDef {
     One,
@@ -137,3 +138,29 @@ pub struct PropertySetSection {
     pub name: Spanned<String>,
     pub applies_to: Vec<String>,
 }
+
+/// Converts between a file-format enum and its model enum, both ways, variant by variant;
+/// definition files and snapshots spell them the same.
+macro_rules! same_variants {
+    ($def:ident, $model:ident, [$($variant:ident),+]) => {
+        impl From<$def> for $model {
+            fn from(value: $def) -> Self {
+                match value {
+                    $($def::$variant => Self::$variant,)+
+                }
+            }
+        }
+
+        impl From<$model> for $def {
+            fn from(value: $model) -> Self {
+                match value {
+                    $($model::$variant => Self::$variant,)+
+                }
+            }
+        }
+    };
+}
+
+same_variants!(KindDef, EntityKind, [Element, Spatial, Relationship]);
+same_variants!(PlacementDef, Placement, [Instance, Type, TypeOverridable]);
+same_variants!(CardinalityDef, Cardinality, [One, Many]);

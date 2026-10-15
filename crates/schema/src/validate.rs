@@ -617,7 +617,7 @@ fn check_value_type(
     }
 }
 
-fn value_matches(value: &Value, value_type: &ValueType) -> bool {
+pub(crate) fn value_matches(value: &Value, value_type: &ValueType) -> bool {
     match (value, value_type) {
         (Value::Bool(_), ValueType::Bool)
         | (Value::Integer(_), ValueType::Integer)
@@ -630,7 +630,7 @@ fn value_matches(value: &Value, value_type: &ValueType) -> bool {
     }
 }
 
-fn is_finite(value: &Value) -> bool {
+pub(crate) fn is_finite(value: &Value) -> bool {
     match value {
         Value::Real(number) => number.is_finite(),
         Value::List(items) => items.iter().all(is_finite),
