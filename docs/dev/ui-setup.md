@@ -36,7 +36,7 @@ export default defineConfig({
 
 ## End-to-end tests: Playwright
 
-Dev dependency: `@playwright/test`. Tests live in `ui/e2e/` and cover the main user flows.
+Dev dependencies: `@playwright/test`, and `@types/node` for `process.env` in the config. Tests live in `ui/e2e/` and cover the main user flows. The `@playwright/test` version pins the browser build: install it with `bunx playwright install chromium` (CI adds `--with-deps`).
 
 `ui/playwright.config.ts`:
 
@@ -46,7 +46,7 @@ import { defineConfig, devices } from "@playwright/test";
 export default defineConfig({
   testDir: "e2e",
   forbidOnly: true,
-  retries: process.env.CI ? 1 : 0,
+  retries: process.env["CI"] ? 1 : 0,
   reporter: [["list"], ["html", { open: "never" }]],
   use: { baseURL: "http://localhost:4173", trace: "retain-on-failure" },
   webServer: { command: "bun run build && bun run preview --port 4173", port: 4173 },
@@ -56,4 +56,4 @@ export default defineConfig({
 
 ## TypeScript
 
-`ui/tsconfig.json` extends `./tsconfig.base.json` and adds `include` paths and types (`vite/client`, `@testing-library/jest-dom/vitest`).
+`ui/tsconfig.json` extends `./tsconfig.base.json` and adds `include` paths (`src`, `e2e` and the config files) and types (`node`, `vite/client`, `@testing-library/jest-dom/vitest`).
