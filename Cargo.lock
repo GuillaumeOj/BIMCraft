@@ -184,6 +184,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "core-txn"
+version = "0.0.0"
+dependencies = [
+ "core-model",
+ "proptest",
+ "schema",
+ "serde",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
 name = "criterion"
 version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"

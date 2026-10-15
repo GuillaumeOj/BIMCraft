@@ -1,0 +1,21 @@
+[package]
+name = "core-txn"
+version = "0.0.0"
+description = "Commands, transactions, undo/redo and change events."
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+core-model = { workspace = true }
+serde = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+proptest = { workspace = true }
+schema = { workspace = true }
+serde_json = { workspace = true }
+
+[lints]
+workspace = true

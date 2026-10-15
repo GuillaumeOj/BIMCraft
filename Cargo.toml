@@ -14,6 +14,8 @@ license = "MIT"
 # workspace crates by path.
 # Member crates use `name = { workspace = true }`.
 [workspace.dependencies]
+core-model = { path = "crates/core-model" }
+core-txn = { path = "crates/core-txn" }
 criterion = { version = "=0.8.2", default-features = false }
 express = { path = "crates/express" }
 # Without the default features, which fetch remote and file `$ref`s over HTTP and TLS.
@@ -34,7 +36,9 @@ rusqlite = { version = "=0.40.2", default-features = false, features = [
 schema = { path = "crates/schema" }
 rust-names = { path = "crates/rust-names" }
 serde = { version = "=1.0.229", features = ["derive"] }
-serde_json = "=1.0.151"
+# float_roundtrip: parse every finite f64 back to the exact value it was written from, which
+# replaying serialised commands relies on (CORE-11).
+serde_json = { version = "=1.0.151", features = ["float_roundtrip"] }
 tempfile = "=3.27.0"
 thiserror = "=2.0.21"
 toml = "=1.1.6"
