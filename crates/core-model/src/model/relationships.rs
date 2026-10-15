@@ -251,7 +251,8 @@ impl Model {
             relationship,
             role: index,
         };
-        self.relationships.attach(link, participant, usize::MAX);
+        let end = self.relationships.role(relationship, index).len();
+        self.relationships.attach(link, participant, end);
         Ok(())
     }
 
@@ -325,6 +326,18 @@ impl Model {
                 entity: entity.to_owned(),
             });
         }
+        self.check_exclusive(relationship, role, participant)
+    }
+
+    /// Checks that `participant` does not already play `role` of `relationship` elsewhere, when
+    /// the role is exclusive.
+    pub(super) fn check_exclusive(
+        &self,
+        relationship: &Entity,
+        role: usize,
+        participant: EntityId,
+    ) -> Result<(), ModelError> {
+        let definition = &relationship.roles[role];
         let taken = definition.exclusive
             && self.relationships.links(participant).any(|link| {
                 link.role == role

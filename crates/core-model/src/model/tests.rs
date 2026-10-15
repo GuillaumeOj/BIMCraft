@@ -659,6 +659,27 @@ fn restore_fails_without_change_when_the_model_moved_on() {
 }
 
 #[test]
+fn restore_keeps_exclusive_roles_exclusive() {
+    let mut model = contained();
+    let removal = model.remove(id(STOREY)).unwrap();
+    // The walls the containment held move to the other storey meanwhile.
+    contain(&mut model, 101, OTHER_STOREY, &WALLS[..2]).unwrap();
+    assert_eq!(
+        model.restore(removal),
+        Err(ModelError::ExclusiveRole {
+            relationship: "Containment".into(),
+            role: "elements".into(),
+        })
+    );
+    assert!(!model.contains(id(STOREY)));
+    assert!(!model.contains(id(CONTAINMENT)));
+    assert_eq!(
+        participants(&model, 101, "elements"),
+        ids([WALLS[0], WALLS[1]])
+    );
+}
+
+#[test]
 fn errors_name_entities_and_roles_but_never_ids() {
     let id = id(0xABCD);
     let messages = [

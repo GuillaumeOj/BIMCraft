@@ -208,7 +208,8 @@ impl Model {
     /// # Errors
     ///
     /// Fails, changing nothing, when the model changed since the removal so that an id is taken
-    /// again, or a participant or relationship the removal refers to is gone.
+    /// again, a participant or relationship the removal refers to is gone, or a participant now
+    /// plays an exclusive role it would play again.
     pub fn restore(&mut self, removal: Removal) -> Result<(), ModelError> {
         let restored: BTreeSet<EntityId> = removal.ids().collect();
         let present = |id: &EntityId| restored.contains(id) || self.store.contains(*id);
@@ -224,6 +225,17 @@ impl Model {
                 .find(|id| !present(id))
             {
                 return Err(ModelError::ParticipantNotFound(missing));
+            }
+            // An exclusive role may have been given to another relationship meanwhile.
+            if let (Some(roles), Some(entity)) = (
+                &object.roles,
+                self.namespace.entities.get(&object.entity.entity),
+            ) {
+                for (role, participants) in roles.iter().enumerate() {
+                    for &participant in participants {
+                        self.check_exclusive(entity, role, participant)?;
+                    }
+                }
             }
             if let Some(gone) = object
                 .detached
