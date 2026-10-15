@@ -58,6 +58,7 @@ version = "0.0.0"
 dependencies = [
  "core-model",
  "core-txn",
+ "proptest",
  "schema",
  "serde",
  "serde_json",

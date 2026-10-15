@@ -43,6 +43,9 @@ pub enum ApiError {
         /// that sent them and is never logged.
         detail: String,
     },
+    /// No object has the id asked for.
+    #[error("no object with this id")]
+    NotFound,
     /// The model rejected the command.
     #[error(transparent)]
     Rejected(#[from] CommandError),

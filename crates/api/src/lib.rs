@@ -11,15 +11,28 @@
 mod commands;
 mod descriptor;
 mod error;
+mod queries;
 mod registry;
 mod session;
 mod version;
 
 pub use descriptor::{Descriptor, Kind, Outcome};
 pub use error::{ApiError, RegistryError};
+pub use queries::{DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE};
 pub use registry::Registry;
 pub use session::Session;
 pub use version::Version;
 
 #[cfg(test)]
 mod fixtures;
+
+/// Property-test settings shared by the crate. A fixed seed keeps runs reproducible; with no
+/// persistence, no regression files are written next to the sources.
+#[cfg(test)]
+fn proptest_config() -> proptest::test_runner::Config {
+    proptest::test_runner::Config {
+        rng_seed: proptest::test_runner::RngSeed::Fixed(0x00C0_FFEE),
+        failure_persistence: None,
+        ..proptest::test_runner::Config::default()
+    }
+}

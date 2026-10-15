@@ -4,6 +4,7 @@ use std::collections::BTreeMap;
 
 use core_model::{AttributeValue, Component, EntityId, LibraryRef, Model};
 use core_txn::ModelCommand;
+use proptest::prelude::*;
 use schema::{
     Attribute, Cardinality, Entity, EntityKind, IfcMapping, Namespace, Placement, Presence,
     PropertySet, QuantityKind, Role, RoleTarget, TypeDef, Value, ValueType,
@@ -285,4 +286,85 @@ pub fn snapshot(session: &crate::Session) -> Snapshot {
 /// A session on an empty [`model`].
 pub fn session() -> crate::Session {
     crate::Session::new(model())
+}
+
+/// Every kind of command over a few ids of [`namespace`], so commands often hit existing objects
+/// and each other; many of them fail on a given model. Each kind of object draws from its own
+/// small range of ids, and commands that take any object draw from all of them.
+pub fn model_command() -> impl Strategy<Value = ModelCommand> {
+    let wall = || 0..3u128;
+    let storey = || 3..4u128;
+    let containment = || 4..6u128;
+    let component_id = || 6..7u128;
+    let wall_type = || 7..9u128;
+    let any_id = || 0..9u128;
+    let name = || proptest::option::of("[a-z]{0,3}".prop_map(AttributeValue::Text));
+    let height = proptest::option::of((0..5u8).prop_map(|metres| real(f64::from(metres))));
+    let walls = proptest::collection::vec(wall(), 1..2);
+    prop_oneof![
+        3 => (wall(), name()).prop_map(|(raw, name)| create_named_wall(raw, name)),
+        2 => storey().prop_map(create_storey),
+        1 => (any_id(), name()).prop_map(|(raw, value)| set(raw, "name", value)),
+        1 => (any_id(), height).prop_map(|(raw, value)| set(raw, "height", value)),
+        1 => any_id().prop_map(delete),
+        4 => (containment(), storey(), walls)
+            .prop_map(|(raw, storey, walls)| contain(raw, storey, &walls)),
+        2 => (containment(), wall(), any::<bool>()).prop_map(|(relationship, participant, add)| {
+            let (relationship, role, participant) =
+                (id(relationship), "elements".into(), id(participant));
+            if add {
+                ModelCommand::AddParticipant {
+                    relationship,
+                    role,
+                    participant,
+                }
+            } else {
+                ModelCommand::RemoveParticipant {
+                    relationship,
+                    role,
+                    participant,
+                }
+            }
+        }),
+        1 => (wall(), name()).prop_map(|(raw, value)| ModelCommand::SetProperty {
+            id: id(raw),
+            set: PSET.into(),
+            property: "Reference".into(),
+            value,
+        }),
+        1 => (wall(), any::<bool>()).prop_map(|(raw, external)| ModelCommand::AttachPropertySet {
+            id: id(raw),
+            set: PSET.into(),
+            values: vec![("IsExternal".into(), AttributeValue::Bool(external))],
+        }),
+        1 => wall().prop_map(|raw| ModelCommand::DetachPropertySet {
+            id: id(raw),
+            set: PSET.into(),
+        }),
+        1 => component_id().prop_map(|raw| ModelCommand::CreateComponent {
+            id: id(raw),
+            component: component(),
+        }),
+        1 => component_id().prop_map(|raw| ModelCommand::RemoveComponent { id: id(raw) }),
+        1 => (wall_type(), component_id()).prop_map(|(raw, component)| ModelCommand::CreateType {
+            id: id(raw),
+            component: id(component),
+            values: Vec::new(),
+        }),
+        1 => (wall(), proptest::option::of(wall_type())).prop_map(|(instance, type_id)| {
+            ModelCommand::AssignType {
+                instance: id(instance),
+                type_id: type_id.map(id),
+            }
+        }),
+    ]
+}
+
+/// [`model_command`]s and batches of them.
+pub fn any_command() -> impl Strategy<Value = ModelCommand> {
+    prop_oneof![
+        4 => model_command(),
+        1 => proptest::collection::vec(model_command(), 0..4)
+            .prop_map(|commands| ModelCommand::Batch { commands }),
+    ]
 }

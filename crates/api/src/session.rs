@@ -3,7 +3,7 @@
 use core_model::Model;
 use core_txn::{Document, ModelCommand};
 
-use crate::{Registry, RegistryError, commands};
+use crate::{Registry, RegistryError, commands, queries};
 
 /// One open model and its history: what a client works on through the API.
 #[derive(Clone, Debug)]
@@ -37,7 +37,7 @@ impl Session {
     /// Never in practice: built-in names are valid and distinct, which the tests check.
     pub fn registry() -> Result<Registry<Self>, RegistryError> {
         let mut registry = Registry::new();
-        for descriptor in commands::descriptors() {
+        for descriptor in commands::descriptors().chain(queries::descriptors()) {
             registry.register(descriptor)?;
         }
         Ok(registry)

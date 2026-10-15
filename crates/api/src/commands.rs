@@ -1,10 +1,9 @@
 //! The model commands, undo and redo (API-01, API-05).
 
 use core_txn::{ChangeEvent, ModelCommand, Origin};
-use serde::Deserialize;
 use serde_json::{Map, Value};
 
-use crate::descriptor::decode;
+use crate::descriptor::{NoParams, decode};
 use crate::{ApiError, Descriptor, Outcome, Session, Version};
 
 const V1: Version = Version::new(1, 0, 0);
@@ -78,11 +77,6 @@ const MODEL_COMMANDS: [(&str, &str, &str); 14] = [
         "Runs several commands as one undoable step.",
     ),
 ];
-
-/// The parameters of a call that takes none: an empty object.
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-struct NoParams {}
 
 /// The model commands, then undo and redo.
 pub(crate) fn descriptors() -> impl Iterator<Item = Descriptor<Session>> {

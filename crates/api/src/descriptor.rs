@@ -1,8 +1,8 @@
 //! Descriptors: what the registry knows of one command or query (API-01).
 
 use core_txn::{ChangeEvent, Origin};
-use serde::Serialize;
 use serde::de::DeserializeOwned;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::{ApiError, Version};
@@ -140,6 +140,11 @@ impl<Ctx> Descriptor<Ctx> {
         }
     }
 }
+
+/// The parameters of a call that takes none: an empty object or array.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct NoParams {}
 
 pub(crate) fn decode<I: DeserializeOwned>(params: Value) -> Result<I, ApiError> {
     serde_json::from_value(params).map_err(|error| ApiError::InvalidParams {
