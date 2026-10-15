@@ -5,7 +5,7 @@ use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::{ApiError, Version};
+use crate::{ApiError, Signature, Version};
 
 /// Whether a call may change the model.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -43,16 +43,18 @@ pub struct Descriptor<Ctx> {
     name: &'static str,
     version: Version,
     summary: &'static str,
+    signature: Signature,
     handler: Handler<Ctx>,
 }
 
 impl<Ctx> Descriptor<Ctx> {
-    /// A command named `name`, described in one sentence by `summary`, that runs `handler` with
-    /// the caller's origin.
+    /// A command named `name`, described in one sentence by `summary`, whose parameters and result
+    /// `signature` describes, that runs `handler` with the caller's origin.
     pub fn command<I, O>(
         name: &'static str,
         version: Version,
         summary: &'static str,
+        signature: Signature,
         handler: impl Fn(&mut Ctx, I, &Origin) -> Result<Outcome<O>, ApiError> + 'static,
     ) -> Self
     where
@@ -71,15 +73,18 @@ impl<Ctx> Descriptor<Ctx> {
             name,
             version,
             summary,
+            signature,
             handler: Handler::Command(Box::new(erased)),
         }
     }
 
-    /// A query named `name`, described in one sentence by `summary`, that runs `handler`.
+    /// A query named `name`, described in one sentence by `summary`, whose parameters and result
+    /// `signature` describes, that runs `handler`.
     pub fn query<I, O>(
         name: &'static str,
         version: Version,
         summary: &'static str,
+        signature: Signature,
         handler: impl Fn(&Ctx, I) -> Result<O, ApiError> + 'static,
     ) -> Self
     where
@@ -92,6 +97,7 @@ impl<Ctx> Descriptor<Ctx> {
             name,
             version,
             summary,
+            signature,
             handler: Handler::Query(Box::new(erased)),
         }
     }
@@ -112,6 +118,12 @@ impl<Ctx> Descriptor<Ctx> {
     #[must_use]
     pub fn summary(&self) -> &'static str {
         self.summary
+    }
+
+    /// The JSON Schema of its parameters and result.
+    #[must_use]
+    pub fn signature(&self) -> &Signature {
+        &self.signature
     }
 
     /// Whether it is a command or a query.

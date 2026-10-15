@@ -31,15 +31,22 @@ fn set(ctx: &mut u32, value: u32, _: &Origin) -> Result<Outcome<()>, ApiError> {
 }
 
 const V1: Version = Version::new(1, 0, 0);
+
+fn sig() -> crate::Signature {
+    crate::Signature {
+        params: serde_json::json!({}),
+        result: serde_json::json!({}),
+    }
+}
 const V2: Version = Version::new(2, 0, 0);
 
 fn registry() -> Registry<u32> {
     let mut registry = Registry::new();
     for descriptor in [
-        Descriptor::query("test.which", V1, "Returns 1.", one),
-        Descriptor::query("test.which", V2, "Returns 2.", two),
-        Descriptor::query("test.read", V1, "Reads.", version),
-        Descriptor::command("test.set", V1, "Sets.", set),
+        Descriptor::query("test.which", V1, "Returns 1.", sig(), one),
+        Descriptor::query("test.which", V2, "Returns 2.", sig(), two),
+        Descriptor::query("test.read", V1, "Reads.", sig(), version),
+        Descriptor::command("test.set", V1, "Sets.", sig(), set),
     ] {
         assert_eq!(registry.register(descriptor), Ok(()));
     }
@@ -49,7 +56,7 @@ fn registry() -> Registry<u32> {
 #[test]
 fn the_same_name_and_version_cannot_be_registered_twice() {
     let mut registry = registry();
-    let again = Descriptor::query("test.which", V1, "Returns 1 again.", one);
+    let again = Descriptor::query("test.which", V1, "Returns 1 again.", sig(), one);
     assert_eq!(
         registry.register(again),
         Err(RegistryError::Duplicate {
@@ -147,7 +154,7 @@ fn names_are_dotted_snake_case() {
 #[test]
 fn an_invalid_name_is_not_registered() {
     let mut registry = Registry::new();
-    let descriptor = Descriptor::query("Bad name", V1, "Bad.", one);
+    let descriptor = Descriptor::query("Bad name", V1, "Bad.", sig(), one);
     assert_eq!(
         registry.register(descriptor),
         Err(RegistryError::InvalidName("Bad name"))

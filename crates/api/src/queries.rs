@@ -3,8 +3,10 @@
 use core_model::{AttributeValue, EntityId, ObjectState};
 use core_txn::Origin;
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 
-use crate::{ApiError, Descriptor, Session, Version};
+use crate::schema::{array_of, def, nullable, object};
+use crate::{ApiError, Descriptor, Session, Signature, Version};
 
 const V1: Version = Version::new(1, 0, 0);
 
@@ -16,29 +18,87 @@ pub const MAX_PAGE_SIZE: usize = 1000;
 
 /// The queries, sorted by name.
 pub(crate) fn descriptors() -> [Descriptor<Session>; 4] {
+    let id = || def("EntityId");
+    let text = || json!({ "type": "string" });
+    let boolean = || json!({ "type": "boolean" });
+    let by_id = || object(&[("id", id())], &[]);
+    let values = || array_of(def("NameValue"));
+    let entry = object(
+        &[
+            ("command", text()),
+            ("origin", def("Origin")),
+            ("undone", boolean()),
+        ],
+        &[],
+    );
+    let limit = || json!({ "type": "integer", "minimum": 1, "maximum": MAX_PAGE_SIZE });
+    let index = || json!({ "type": "integer", "minimum": 0 });
+    let history_state = Signature {
+        params: object(
+            &[],
+            &[("start", nullable(index())), ("limit", nullable(limit()))],
+        ),
+        result: object(
+            &[
+                ("can_undo", boolean()),
+                ("can_redo", boolean()),
+                ("entries", array_of(entry)),
+                ("next", nullable(index())),
+            ],
+            &[],
+        ),
+    };
+    let get_object = Signature {
+        params: by_id(),
+        result: object(
+            &[
+                ("id", id()),
+                ("entity", text()),
+                ("attributes", values()),
+                ("type_of", nullable(id())),
+                ("component", nullable(id())),
+            ],
+            &[],
+        ),
+    };
+    let list_objects = Signature {
+        params: object(
+            &[("entity", text())],
+            &[("after", nullable(id())), ("limit", nullable(limit()))],
+        ),
+        result: object(&[("items", array_of(id())), ("next", nullable(id()))], &[]),
+    };
+    let property_sets = Signature {
+        params: by_id(),
+        result: array_of(object(&[("set", text()), ("values", values())], &[])),
+    };
     [
         Descriptor::query(
             "history.state",
             V1,
             "Reads what undo and redo would do.",
+            history_state,
             history,
         ),
         Descriptor::query(
             "model.get_object",
             V1,
             "Reads an object and its attributes.",
-            object,
+            get_object,
+            object_of,
         ),
         Descriptor::query(
             "model.list_objects",
             V1,
             "Lists the objects of an entity.",
+            list_objects,
             list,
         ),
         Descriptor::query(
             "model.property_sets",
             V1,
             "Reads the property sets of an object.",
+            property_sets,
             sets,
         ),
     ]
@@ -68,7 +128,7 @@ fn state(session: &Session, id: EntityId) -> Result<ObjectState, ApiError> {
         .ok_or(ApiError::NotFound)
 }
 
-fn object(session: &Session, ById { id }: ById) -> Result<Object, ApiError> {
+fn object_of(session: &Session, ById { id }: ById) -> Result<Object, ApiError> {
     let state = state(session, id)?;
     Ok(Object {
         id,

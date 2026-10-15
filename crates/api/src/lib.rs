@@ -13,6 +13,7 @@ mod descriptor;
 mod error;
 mod queries;
 mod registry;
+pub mod schema;
 mod session;
 mod version;
 
@@ -20,6 +21,7 @@ pub use descriptor::{Descriptor, Kind, Outcome};
 pub use error::{ApiError, RegistryError};
 pub use queries::{DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE};
 pub use registry::Registry;
+pub use schema::{Signature, protocol_schema};
 pub use session::Session;
 pub use version::Version;
 

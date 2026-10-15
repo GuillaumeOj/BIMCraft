@@ -51,9 +51,16 @@ fn unencodable(_: &Counter, (): ()) -> Result<Unencodable, ApiError> {
 
 const V1: Version = Version::new(1, 0, 0);
 
+fn sig() -> Signature {
+    Signature {
+        params: serde_json::json!({}),
+        result: serde_json::json!({}),
+    }
+}
+
 #[test]
 fn a_command_decodes_its_input_and_encodes_its_output() {
-    let descriptor = Descriptor::command("counter.add", V1, "Adds to the counter.", add);
+    let descriptor = Descriptor::command("counter.add", V1, "Adds to the counter.", sig(), add);
     let mut counter = Counter::default();
     let outcome = descriptor.call(&mut counter, json!({ "by": 3 }), &Origin::Ui);
     assert_eq!(
@@ -72,7 +79,7 @@ fn a_command_decodes_its_input_and_encodes_its_output() {
 
 #[test]
 fn a_query_returns_no_event() {
-    let descriptor = Descriptor::query("counter.read", V1, "Reads the counter.", read);
+    let descriptor = Descriptor::query("counter.read", V1, "Reads the counter.", sig(), read);
     let mut counter = Counter { value: 7 };
     let outcome = descriptor.call(&mut counter, Value::Null, &Origin::Ui);
     assert_eq!(
@@ -87,7 +94,7 @@ fn a_query_returns_no_event() {
 
 #[test]
 fn bad_parameters_are_rejected_before_the_handler_runs() {
-    let descriptor = Descriptor::command("counter.add", V1, "Adds to the counter.", add);
+    let descriptor = Descriptor::command("counter.add", V1, "Adds to the counter.", sig(), add);
     let mut counter = Counter::default();
     for params in [json!({}), json!({ "by": "two" }), json!("by")] {
         let error = descriptor.call(&mut counter, params, &Origin::Ui);
@@ -101,7 +108,7 @@ fn bad_parameters_are_rejected_before_the_handler_runs() {
 
 #[test]
 fn an_invalid_parameters_message_never_quotes_the_parameters() {
-    let descriptor = Descriptor::command("counter.add", V1, "Adds to the counter.", add);
+    let descriptor = Descriptor::command("counter.add", V1, "Adds to the counter.", sig(), add);
     let Err(error) = descriptor.call(
         &mut Counter::default(),
         json!({ "by": "secret" }),
@@ -121,14 +128,14 @@ fn an_invalid_parameters_message_never_quotes_the_parameters() {
 
 #[test]
 fn handler_errors_pass_through() {
-    let descriptor = Descriptor::query("counter.fail", V1, "Fails.", fail);
+    let descriptor = Descriptor::query("counter.fail", V1, "Fails.", sig(), fail);
     let error = descriptor.call(&mut Counter::default(), Value::Null, &Origin::Ui);
     assert_eq!(error, Err(ApiError::UnknownName("inner".to_owned())));
 }
 
 #[test]
 fn a_result_that_cannot_be_encoded_is_an_internal_error() {
-    let descriptor = Descriptor::query("counter.broken", V1, "Breaks.", unencodable);
+    let descriptor = Descriptor::query("counter.broken", V1, "Breaks.", sig(), unencodable);
     let error = descriptor.call(&mut Counter::default(), Value::Null, &Origin::Ui);
     assert_eq!(error, Err(ApiError::Internal));
 }

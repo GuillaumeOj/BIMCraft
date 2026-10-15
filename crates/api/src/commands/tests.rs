@@ -96,6 +96,28 @@ fn bad_payloads_are_typed_errors_and_change_nothing() {
             "model.delete",
             json!({ "id": wall, "command": "create" }),
         ),
+        (
+            "optional field under a wrong name",
+            "model.set",
+            json!({ "id": wall, "attribute": "name", "values": { "Text": "W" } }),
+        ),
+        (
+            "unknown field in a batch",
+            "model.batch",
+            json!({ "commands": [{ "command": "delete", "id": wall, "force": true }] }),
+        ),
+        (
+            "unknown field in a nested batch",
+            "model.batch",
+            json!({ "commands": [{ "command": "batch", "commands": [
+                { "command": "set", "id": wall, "attribute": "name", "values": null },
+            ] }] }),
+        ),
+        (
+            "untagged command in a batch",
+            "model.batch",
+            json!({ "commands": [5, { "id": wall }] }),
+        ),
         ("array", "model.delete", json!([wall])),
         ("string", "model.delete", json!(wall)),
         ("null", "model.delete", Value::Null),
@@ -217,4 +239,20 @@ fn model_errors_keep_their_message() {
     );
     assert_eq!(ApiError::NothingToUndo.to_string(), "nothing to undo");
     assert_eq!(ApiError::NothingToRedo.to_string(), "nothing to redo");
+}
+
+#[test]
+fn a_batch_still_takes_its_commands_with_their_tags() {
+    let mut session = session();
+    let batch = json!({ "commands": [
+        serde_json::to_value(create_wall(1)).unwrap(),
+        { "command": "set", "id": format!("{:032x}", 1), "attribute": "name" },
+    ] });
+    assert!(call(&mut session, "model.batch", batch).is_ok());
+    let unknown = json!({ "commands": [{ "command": "explode" }] });
+    let error = call(&mut session, "model.batch", unknown);
+    assert!(
+        matches!(error, Err(ApiError::InvalidParams { .. })),
+        "{error:?}"
+    );
 }
