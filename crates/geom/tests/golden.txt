@@ -1136,6 +1136,14 @@ extrude.volume[30] 4056809e93b7ea00
 extrude.x[31] 4067eb3607d3a5fd
 extrude.y[31] 40648584749f7068
 extrude.volume[31] 407149180237d28f
+union.volume[0] 4040f1f8b34d3363
+union.volume[1] 404ef35fb3fbafa7
+union.volume[2] 404b628cbc141880
+union.volume[3] 40585713046259b7
+union.volume[4] 403a65a35c4c11d9
+union.volume[5] 40511fe259e7d3b7
+union.volume[6] 404453ee06566d57
+union.volume[7] 402b0d75b6b0b96f
 shear_centre.x[0] 405dbcbf26377a4f
 shear_centre.y[0] c084f7fe4b1fa9f5
 shear_centre.x[1] c0854d5d833b2542

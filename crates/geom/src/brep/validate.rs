@@ -6,12 +6,11 @@
 //! within the tolerance of its plane.
 
 use super::{BrepError, Shell, Solid};
+use crate::LINEAR_TOLERANCE;
 use crate::tolerance::is_model_coordinate;
-use crate::{LINEAR_TOLERANCE, Point3};
+use crate::vector::{Vector, add, coords, dot, edges, newell, scale, sub};
 
 const TOLERANCE_SQUARED: f64 = LINEAR_TOLERANCE * LINEAR_TOLERANCE;
-
-type Vector = [f64; 3];
 
 impl Solid {
     /// Checks every validity rule of the module documentation.
@@ -273,17 +272,6 @@ fn genus(vertices: usize, edges: usize, faces: usize, holes: usize) -> Option<u3
     }
 }
 
-/// The area vector of a ring by Newell's method: exact for planar rings, a best fit otherwise.
-fn newell(ring: &[Vector]) -> Vector {
-    edges(ring).fold([0.0; 3], |[x, y, z], (p, q)| {
-        [
-            x + (p[1] - q[1]) * (p[2] + q[2]),
-            y + (p[2] - q[2]) * (p[0] + q[0]),
-            z + (p[0] - q[0]) * (p[1] + q[1]),
-        ]
-    })
-}
-
 fn longest_edge_squared(ring: &[Vector]) -> f64 {
     edges(ring)
         .map(|(p, q)| {
@@ -291,33 +279,6 @@ fn longest_edge_squared(ring: &[Vector]) -> f64 {
             dot(d, d)
         })
         .fold(0.0, f64::max)
-}
-
-/// The edges of a ring as pairs of consecutive points, closing back to the first.
-fn edges(ring: &[Vector]) -> impl Iterator<Item = (Vector, Vector)> + '_ {
-    ring.iter()
-        .copied()
-        .zip(ring.iter().copied().cycle().skip(1))
-}
-
-const fn coords(p: Point3) -> Vector {
-    [p.x, p.y, p.z]
-}
-
-fn sub(a: Vector, b: Vector) -> Vector {
-    [a[0] - b[0], a[1] - b[1], a[2] - b[2]]
-}
-
-fn add(a: Vector, b: Vector) -> Vector {
-    [a[0] + b[0], a[1] + b[1], a[2] + b[2]]
-}
-
-fn scale(a: Vector, k: f64) -> Vector {
-    [a[0] * k, a[1] * k, a[2] * k]
-}
-
-fn dot(a: Vector, b: Vector) -> f64 {
-    a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
 }
 
 #[cfg(test)]

@@ -279,6 +279,38 @@ fn extrusions(out: &mut Output) {
     }
 }
 
+/// Unions of overlapping extruded circles: the vertices where the faceted sides cross come from
+/// the kernel's arithmetic, so the volume depends on it being identical everywhere.
+fn unions(out: &mut Output) {
+    let mut rng = Rng::for_case("union");
+    let cylinder = |centre: Point2, radius: f64, height: f64| {
+        let start = Point2::new(centre.x + radius, centre.y);
+        let circle = Edge::Arc {
+            start,
+            end: start,
+            centre,
+            direction: ArcDirection::CounterClockwise,
+        };
+        Profile::new(vec![circle], vec![])
+            .ok()
+            .and_then(|profile| Solid::extrude(&profile, Vector3::new(0.0, 0.0, height)).ok())
+    };
+    for i in 0..8 {
+        let centre = Point2::new(rng.uniform(-10.0, 10.0), rng.uniform(-10.0, 10.0));
+        let (r1, r2) = (rng.uniform(0.5, 3.0), rng.uniform(0.5, 3.0));
+        let offset = Point2::new(rng.uniform(-1.0, 1.0), rng.uniform(-1.0, 1.0));
+        let other = Point2::new(centre.x + offset.x * r1, centre.y + offset.y * r1);
+        let union = cylinder(centre, r1, rng.uniform(1.0, 5.0))
+            .zip(cylinder(other, r2, rng.uniform(1.0, 5.0)))
+            .and_then(|(a, b)| a.union(&b).ok().flatten());
+        let Some(union) = union else {
+            let _ = writeln!(out.0, "union[{i}] error");
+            continue;
+        };
+        out.value("union.volume", i, union.volume());
+    }
+}
+
 /// Shear centres of random channels: the mesh spacing comes from `sqrt` and `hypot`, and the
 /// solve sums in a fixed order, so the result must not depend on the target.
 fn shear_centres(out: &mut Output) {
@@ -326,6 +358,7 @@ fn compute() -> String {
     compositions(&mut out);
     predicates(&mut out);
     extrusions(&mut out);
+    unions(&mut out);
     shear_centres(&mut out);
     out.0
 }
