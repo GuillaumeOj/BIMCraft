@@ -15,7 +15,7 @@ use toml::Spanned;
 
 use crate::parse::convert_value;
 use crate::snapshot::parse_snapshot;
-use crate::{Error, ErrorKind, FORMAT, Source, load_dir, parse_sources};
+use crate::{Error, ErrorKind, FORMAT, Source};
 
 /// Largest snapshot accepted, in bytes: a snapshot holds a whole namespace.
 pub const MAX_SNAPSHOT_SIZE: usize = 16 * 1024 * 1024;
@@ -38,6 +38,41 @@ pub fn snapshot_path(version: u32) -> String {
     format!("{SNAPSHOT_DIR}/{version:04}.json")
 }
 
+/// Reads every file of `snapshots/` in `dir`, sorted by path.
+pub(crate) fn load_snapshots(dir: &Path) -> Result<Vec<Source>, Error> {
+    crate::load::load_files(dir, SNAPSHOT_DIR, "json", MAX_SNAPSHOT_SIZE)
+}
+
+/// The snapshots of the versions up to `current` found among `sources`, in version order, each
+/// checked to hold its version. Missing and unexpected files are left to [`check_history`].
+pub(crate) fn released_snapshots(
+    sources: &[Source],
+    current: u32,
+) -> Result<Vec<Namespace>, Vec<Error>> {
+    let mut errors = Vec::new();
+    let snapshots = (1..=current)
+        .filter_map(|version| {
+            released_snapshot(sources, version)?
+                .map_err(|message| errors.push(Error::definition(&snapshot_path(version), message)))
+                .ok()
+        })
+        .collect();
+    if errors.is_empty() {
+        Ok(snapshots)
+    } else {
+        Err(errors)
+    }
+}
+
+/// The snapshot of `version` among `sources`, read and checked, when there is one.
+fn released_snapshot(sources: &[Source], version: u32) -> Option<Result<Namespace, String>> {
+    let path = snapshot_path(version);
+    sources
+        .iter()
+        .find(|source| source.path == path)
+        .map(|source| read_snapshot(source, version))
+}
+
 fn migration_path(version: u32) -> String {
     format!("{MIGRATION_DIR}/{version:04}.toml")
 }
@@ -48,9 +83,8 @@ fn migration_path(version: u32) -> String {
 ///
 /// Returns every [`Error`] found, as [`check_history`] does, plus unreadable files.
 pub fn load_history(dir: &Path) -> Result<History, Vec<Error>> {
-    let namespace = parse_sources(&load_dir(dir).map_err(|error| vec![error])?)?;
-    let snapshots = crate::load::load_files(dir, SNAPSHOT_DIR, "json", MAX_SNAPSHOT_SIZE)
-        .map_err(|error| vec![error])?;
+    let namespace = crate::load_namespace(dir)?;
+    let snapshots = load_snapshots(dir).map_err(|error| vec![error])?;
     let migrations = crate::load::load_files(dir, MIGRATION_DIR, "toml", crate::MAX_FILE_SIZE)
         .map_err(|error| vec![error])?;
     check_history(namespace, &snapshots, &migrations)
@@ -74,18 +108,14 @@ pub fn check_history(
     let mut versions = Vec::new();
     for version in 1..=current {
         let path = snapshot_path(version);
-        let snapshot = snapshots
-            .iter()
-            .find(|source| source.path == path)
-            .ok_or_else(|| {
-                if version == current {
-                    "missing: run `UPDATE_SNAPSHOTS=1 cargo test -p schema-gen` to write it"
-                } else {
-                    "missing: snapshots of released versions are never removed"
-                }
-                .to_owned()
-            })
-            .and_then(|source| read_snapshot(source, version));
+        let snapshot = released_snapshot(snapshots, version).unwrap_or_else(|| {
+            Err(if version == current {
+                "missing: run `UPDATE_SNAPSHOTS=1 cargo test -p schema-gen` to write it"
+            } else {
+                "missing: snapshots of released versions are never removed"
+            }
+            .to_owned())
+        });
         versions.push(
             snapshot
                 .map_err(|message| errors.push(Error::definition(&path, message)))

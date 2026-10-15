@@ -1,7 +1,7 @@
 use schema::{MigrationError, Step};
 
 use super::*;
-use crate::snapshot;
+use crate::{parse_sources, snapshot};
 
 /// A namespace at `version` with one storey entity holding `attributes` (TOML).
 fn namespace(version: u32, attributes: &str) -> Namespace {

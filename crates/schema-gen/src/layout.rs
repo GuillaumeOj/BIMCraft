@@ -7,7 +7,7 @@ use schema::{
     ValueType,
 };
 
-use crate::{Error, ErrorKind};
+use crate::Error;
 
 /// A record of serialized data: an object, its type or a property set.
 pub struct Struct {
@@ -63,12 +63,7 @@ pub fn plan(
     namespace: &Namespace,
     name_ref: fn(&str) -> String,
 ) -> Result<Vec<Struct>, Vec<Error>> {
-    schema::validate(namespace).map_err(|errors| {
-        errors
-            .into_iter()
-            .map(|error| Error::new(ErrorKind::Validation(Box::new(error))))
-            .collect::<Vec<_>>()
-    })?;
+    Error::validate(namespace)?;
     let mut structs = Vec::new();
     for entity in namespace.entities.values() {
         structs.push(instance_struct(entity));

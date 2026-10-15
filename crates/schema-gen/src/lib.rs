@@ -24,6 +24,9 @@
 //! [`generate_ifc_mapping`] gives the table of how each entity maps onto IFC 4.3 (CORE-10); the
 //! core one is published as `docs/dev/ifc-mapping.md`.
 //!
+//! [`generate_reference`] gives its reference documentation as Markdown pages (COM-04); the core
+//! ones are published in the reference book, `docs/reference/schema/`.
+//!
 //! Generation is deterministic: the same definitions always give byte-identical code.
 //!
 //! [`load_history`] checks a namespace's version history (`snapshots/`, `migrations/`) against
@@ -41,6 +44,7 @@ mod json_schema;
 mod layout;
 mod load;
 mod parse;
+mod reference;
 mod rust;
 mod snapshot;
 
@@ -52,6 +56,7 @@ pub use ifc_table::emit_ifc_mapping;
 pub use json_schema::{DRAFT, JsonSchemaOptions, emit_json_schema};
 pub use load::load_dir;
 pub use parse::{FORMAT, MAX_FILE_SIZE, Source, parse_sources};
+pub use reference::{ReferencePages, emit_reference};
 pub use rust::{RustOptions, emit_rust};
 pub use snapshot::{parse_snapshot, snapshot};
 
@@ -75,6 +80,21 @@ pub fn generate_json_schema(
     options: &JsonSchemaOptions,
 ) -> Result<Generated, Vec<Error>> {
     generate(dir, options, emit_json_schema)
+}
+
+/// Reads the namespace and the snapshots of its released versions in `dir`, and generates its
+/// reference documentation (COM-04).
+///
+/// The snapshots only date each item; [`load_history`] checks them against the definitions.
+///
+/// # Errors
+///
+/// Returns every [`Error`] found, as [`generate_rust`] does, plus unreadable snapshots.
+pub fn generate_reference(dir: &Path) -> Result<ReferencePages, Vec<Error>> {
+    let namespace = load_namespace(dir)?;
+    let sources = history::load_snapshots(dir).map_err(|error| vec![error])?;
+    let snapshots = history::released_snapshots(&sources, namespace.version)?;
+    emit_reference(&namespace, &snapshots)
 }
 
 /// Reads the namespace in `dir` and generates its IFC mapping table, as Markdown (CORE-10).
@@ -102,11 +122,15 @@ fn generate<O>(
     options: &O,
     emit: fn(&schema::Namespace, &O) -> Result<String, Vec<Error>>,
 ) -> Result<Generated, Vec<Error>> {
-    let sources = load_dir(dir).map_err(|error| vec![error])?;
-    let namespace = parse_sources(&sources)?;
+    let namespace = load_namespace(dir)?;
     let code = emit(&namespace, options)?;
     Ok(Generated {
         code,
         inputs: vec![dir.to_owned()],
     })
+}
+
+/// Reads and parses the definitions of the namespace in `dir`.
+fn load_namespace(dir: &Path) -> Result<schema::Namespace, Vec<Error>> {
+    parse_sources(&load_dir(dir).map_err(|error| vec![error])?)
 }
