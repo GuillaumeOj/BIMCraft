@@ -96,9 +96,12 @@ check_fuzz() {
     cargo clippy --all-targets --locked --no-deps -- -D warnings
     cargo deny --locked check
     for target in $(cargo fuzz list --fuzz-dir .); do
+      # Booleans of prisms run a few hundred inputs a second: fewer runs keep the job in minutes.
+      runs=200000
+      [ "$target" = extruded_boolean ] && runs=50000
       corpus=$(mktemp -d)
       cargo fuzz run --fuzz-dir . "$target" "$corpus" "seeds/$target" -- \
-        -runs="${FUZZ_RUNS:-200000}" -seed=1 -timeout=10
+        -runs="${FUZZ_RUNS:-$runs}" -seed=1 -timeout=10
       rm -rf "$corpus"
     done
   )
