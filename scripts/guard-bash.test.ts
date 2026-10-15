@@ -80,6 +80,7 @@ describe("guard-bash.sh", () => {
     "git --no-pager push --force-with-lease origin feat",
     "git push --force-with-lease=feat origin feat",
     "git push --force-with-lease --force-if-includes origin feat",
+    "git push --atomic --force-with-lease --force-if-includes origin one two three",
     "gh pr create --draft --title x --body-file pr.md",
     "gh pr checks 12 --watch",
     "gh run view 34 --log-failed",
@@ -89,7 +90,11 @@ describe("guard-bash.sh", () => {
     expect(exitCode(command)).toBe(0);
   });
 
-  test.each(["git push", "git push origin feat:feat", "git push --force-with-lease"])("blocks %s from a checkout of main", (command) => {
+  test.each([
+    "git push",
+    "git push origin feat:feat",
+    "git push --force-with-lease",
+  ])("blocks %s from a checkout of main", (command) => {
     expect(exitCode(command, mainRepo)).toBe(2);
   });
 });
