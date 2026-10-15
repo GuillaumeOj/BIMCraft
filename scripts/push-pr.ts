@@ -325,7 +325,8 @@ export function checkChain(run: Run, branches: string[], current: string, baseRe
 function firstCommit(run: Run, below: string, branch: string): { title: string; body: string } {
   const log = must(run, ["git", "log", "--reverse", "--format=%s%x00%b%x1e", `${below}..${branch}`]);
   const [title = "", body = ""] = (log.split("\x1e")[0] as string).split("\0");
-  return { title, body: body.trim() };
+  // Sign-off and co-author trailers belong to the commit, not to the pull request description.
+  return { title, body: body.replace(/^(signed-off-by|co-authored-by): .*$/gim, "").trim() };
 }
 
 /**

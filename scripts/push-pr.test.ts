@@ -348,9 +348,9 @@ describe("main", () => {
   });
 
   test("defaults the title and description to the first commit", () => {
-    featureBranch("feat: first", "fix: second");
+    featureBranch("feat: first\n\nWhy it matters.\n\nCo-Authored-By: A <a@example.com>\nSigned-off-by: T <t@example.com>", "fix: second");
     expect(ship("--yes")).toBe(0);
-    expect(gh.prs[0]).toMatchObject({ title: "feat: first", body: "" });
+    expect(gh.prs[0]).toMatchObject({ title: "feat: first", body: "Why it matters." });
   });
 
   test("ships a whole stack, each pull request based on the branch below", () => {
