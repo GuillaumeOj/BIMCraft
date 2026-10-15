@@ -2,12 +2,12 @@ use super::tests::{NO_VALUES, STOREY, WALLS, bool, id, model, real, text};
 use super::*;
 
 const PSET: &str = "Pset_WallCommon";
-const COMPONENT: u128 = 500;
-const WALL_TYPE: u128 = 600;
+pub(super) const COMPONENT: u128 = 500;
+pub(super) const WALL_TYPE: u128 = 600;
 const OTHER_TYPE: u128 = 601;
 
 /// A wall component whose types are 0.2 m thick unless they say otherwise.
-fn component() -> Component {
+pub(super) fn component() -> Component {
     Component {
         entity: "Wall".into(),
         library: LibraryRef {

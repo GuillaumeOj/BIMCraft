@@ -33,5 +33,6 @@ Copy [`_template.md`](_template.md) and follow its comments.
 | [0012](0012-relationships.md) | Relationships | Accepted |
 | [0013](0013-property-sets.md) | Property sets | Accepted |
 | [0014](0014-components-types-instances.md) | Components, types and instances | Accepted |
+| [0015](0015-commands-and-transactions.md) | Commands and transactions | Accepted |
 
 One decision predates this folder and stays in the specification: the web UI over an all-Rust UI ([specification §13](../../specifications.md#13-ui-and-rendering), "Decision record").

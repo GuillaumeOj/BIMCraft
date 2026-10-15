@@ -178,6 +178,20 @@ dependencies = [
  "criterion",
  "proptest",
  "schema",
+ "serde",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
+name = "core-txn"
+version = "0.0.0"
+dependencies = [
+ "core-model",
+ "proptest",
+ "schema",
+ "serde",
+ "serde_json",
  "thiserror",
 ]
 

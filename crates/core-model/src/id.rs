@@ -83,6 +83,26 @@ impl fmt::Display for EntityId {
     }
 }
 
+/// Serialised as its 32 hex digits, like [`Display`](fmt::Display): many formats, JSON among
+/// them, cannot hold a 128-bit integer.
+impl serde::Serialize for EntityId {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.collect_str(self)
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for EntityId {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let hex = String::deserialize(deserializer)?;
+        // from_str_radix also accepts a leading sign, which is not part of the format.
+        u128::from_str_radix(&hex, 16)
+            .ok()
+            .filter(|_| hex.len() == 32 && !hex.starts_with('+'))
+            .map(Self)
+            .ok_or_else(|| serde::de::Error::custom("an id has 32 hexadecimal digits"))
+    }
+}
+
 /// Why a string is not a valid IFC `GlobalId`.
 ///
 /// The messages never repeat the input, which may come from a user's model (SEC-03).
@@ -316,6 +336,26 @@ mod tests {
         assert!(generated.into_iter().all(is_version_4));
     }
 
+    #[test]
+    fn id_serialises_as_its_hex_digits() {
+        let id = EntityId::new(0x2a);
+        let json = serde_json::to_string(&id).unwrap();
+        assert_eq!(json, "\"0000000000000000000000000000002a\"");
+        assert_eq!(serde_json::from_str::<EntityId>(&json).unwrap(), id);
+    }
+
+    #[test]
+    fn id_deserialisation_rejects_malformed_input() {
+        for json in [
+            "\"2a\"",
+            "\"+000000000000000000000000000002a\"",
+            "\"g000000000000000000000000000002a\"",
+            "42",
+        ] {
+            assert!(serde_json::from_str::<EntityId>(json).is_err(), "{json}");
+        }
+    }
+
     fn ids(source: &mut impl IdSource, count: usize) -> Vec<EntityId> {
         (0..count).map(|_| source.next_id()).collect()
     }
@@ -327,6 +367,13 @@ mod tests {
         fn decode_inverts_encode(raw in any::<u128>()) {
             let id = EntityId::new(raw);
             prop_assert_eq!(EntityId::from_global_id(&id.to_global_id()), Ok(id));
+        }
+
+        #[test]
+        fn serialisation_round_trips(raw in any::<u128>()) {
+            let id = EntityId::new(raw);
+            let json = serde_json::to_string(&id).unwrap();
+            prop_assert_eq!(serde_json::from_str::<EntityId>(&json).unwrap(), id);
         }
 
         #[test]

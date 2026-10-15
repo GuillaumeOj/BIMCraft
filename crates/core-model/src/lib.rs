@@ -16,7 +16,7 @@ pub mod units;
 #[cfg(any(test, feature = "test-support"))]
 pub use id::SeededIdSource;
 pub use id::{EntityId, GlobalIdError, IdSource};
-pub use model::{Component, LibraryRef, Model, ModelError, Participation, Removal};
+pub use model::{Component, LibraryRef, Model, ModelError, ObjectState, Participation, Removal};
 pub use store::{AttributeValue, RemovedEntity, Store, StoreError};
 
 /// Property-test settings shared by the crate. A fixed seed keeps runs reproducible; with no

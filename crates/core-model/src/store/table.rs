@@ -94,6 +94,19 @@ impl Table {
         &self.name
     }
 
+    /// The ids of the rows, in row order.
+    pub(crate) fn ids(&self) -> &[EntityId] {
+        &self.ids
+    }
+
+    /// The attributes of `row` that have a value, in declaration order.
+    pub(crate) fn values(&self, row: usize) -> Vec<(String, AttributeValue)> {
+        self.attributes
+            .iter()
+            .filter_map(|slot| Some((slot.name.clone(), slot.column.get(row)?)))
+            .collect()
+    }
+
     /// Appends a row with the given values, defaults filled in, and returns its number.
     ///
     /// Fails, adding nothing, when an attribute is unknown or given twice, a required one is

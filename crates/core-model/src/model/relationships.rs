@@ -60,6 +60,11 @@ impl Relationships {
         Some(roles)
     }
 
+    /// The participants of a relationship, role by role; `None` when it is not one.
+    pub(super) fn roles_of(&self, relationship: EntityId) -> Option<&[Vec<EntityId>]> {
+        self.roles.get(&relationship).map(Vec::as_slice)
+    }
+
     /// The participants in one role; empty for an unknown relationship or role.
     pub(super) fn role(&self, relationship: EntityId, role: usize) -> &[EntityId] {
         self.roles
@@ -230,7 +235,8 @@ impl Model {
         })
     }
 
-    /// Adds `participant` at the end of a `many` role of an existing relationship object.
+    /// Adds `participant` at the end of a `many` role of an existing relationship object, and
+    /// returns its position.
     ///
     /// # Errors
     ///
@@ -242,7 +248,24 @@ impl Model {
         relationship: EntityId,
         role: &str,
         participant: EntityId,
-    ) -> Result<(), ModelError> {
+    ) -> Result<usize, ModelError> {
+        self.insert_participant(relationship, role, participant, usize::MAX)
+    }
+
+    /// Adds `participant` to a role of a relationship object at `position`, or last when the
+    /// role has fewer participants, and returns the position it took;
+    /// [`Model::remove_participant`] returns the position to give back here.
+    ///
+    /// # Errors
+    ///
+    /// Fails like [`Model::add_participant`].
+    pub fn insert_participant(
+        &mut self,
+        relationship: EntityId,
+        role: &str,
+        participant: EntityId,
+        position: usize,
+    ) -> Result<usize, ModelError> {
         let (definition, link) = self.locate_role(relationship, role)?;
         if definition.roles[link.role].cardinality == Cardinality::One {
             return Err(ModelError::OneParticipant(role.to_owned()));
@@ -255,12 +278,13 @@ impl Model {
             return Err(ModelError::RepeatedParticipant(participant));
         }
         self.check_participant(definition, link.role, participant)?;
-        let end = self.relationships.role(relationship, link.role).len();
-        self.relationships.attach(link, participant, end);
-        Ok(())
+        let position = position.min(self.relationships.role(relationship, link.role).len());
+        self.relationships.attach(link, participant, position);
+        Ok(position)
     }
 
-    /// Removes `participant` from a role of a relationship object; the participant itself stays.
+    /// Removes `participant` from a role of a relationship object and returns the position it
+    /// held, for [`Model::insert_participant`]; the participant itself stays.
     ///
     /// # Errors
     ///
@@ -272,17 +296,18 @@ impl Model {
         relationship: EntityId,
         role: &str,
         participant: EntityId,
-    ) -> Result<(), ModelError> {
+    ) -> Result<usize, ModelError> {
         let (_, link) = self.locate_role(relationship, role)?;
         let list = self.relationships.role(relationship, link.role);
-        if !list.contains(&participant) {
-            return Err(ModelError::NotParticipant(role.to_owned()));
-        }
+        let position = list
+            .iter()
+            .position(|&other| other == participant)
+            .ok_or_else(|| ModelError::NotParticipant(role.to_owned()))?;
         if list.len() == 1 {
             return Err(ModelError::EmptyRole(role.to_owned()));
         }
         self.relationships.detach(link, participant);
-        Ok(())
+        Ok(position)
     }
 
     /// The entity definition of a stored relationship object and one of its roles.

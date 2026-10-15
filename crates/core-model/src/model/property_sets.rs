@@ -56,12 +56,21 @@ impl PropertyTable {
     fn carries(&self, id: EntityId) -> bool {
         self.instances.carries(id) || self.types.carries(id)
     }
+
+    /// The stored values of the object, when it carries the set.
+    pub(super) fn values(&self, id: EntityId) -> Option<Vec<(String, AttributeValue)>> {
+        self.instances.values(id).or_else(|| self.types.values(id))
+    }
 }
 
 impl Rows {
     /// Whether the object carries the set.
     fn carries(&self, id: EntityId) -> bool {
         self.rows.contains_key(&id)
+    }
+
+    fn values(&self, id: EntityId) -> Option<Vec<(String, AttributeValue)>> {
+        Some(self.table.values(*self.rows.get(&id)?))
     }
 
     /// Adds a row for the object.

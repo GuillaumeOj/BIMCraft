@@ -6,7 +6,7 @@ use crate::EntityId;
 ///
 /// Quantities are plain reals in the SI unit of their kind (CORE-09), and enumeration values are
 /// text, like schema defaults.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum AttributeValue {
     /// A `bool` value.
     Bool(bool),
