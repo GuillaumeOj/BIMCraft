@@ -28,6 +28,7 @@
         "useHookAtTopLevel": "error"
       },
       "style": {
+        "noJsxLiterals": "error",
         "noNonNullAssertion": "error",
         "useConst": "error",
         "useImportType": "error"
@@ -42,7 +43,9 @@
   "overrides": [
     {
       "includes": ["**/*.test.ts", "**/*.test.tsx", "e2e/**"],
-      "linter": { "rules": { "suspicious": { "noConsole": "off" } } }
+      "linter": {
+        "rules": { "style": { "noJsxLiterals": "off" }, "suspicious": { "noConsole": "off" } }
+      }
     }
   ]
 }
