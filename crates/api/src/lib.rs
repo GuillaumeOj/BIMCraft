@@ -8,12 +8,18 @@
 // ARCH-02: forbid, not deny, so nothing in this crate can opt out. See docs/dev/quality.md.
 #![forbid(clippy::disallowed_methods, clippy::disallowed_types)]
 
+mod commands;
 mod descriptor;
 mod error;
 mod registry;
+mod session;
 mod version;
 
 pub use descriptor::{Descriptor, Kind, Outcome};
 pub use error::{ApiError, RegistryError};
 pub use registry::Registry;
+pub use session::Session;
 pub use version::Version;
+
+#[cfg(test)]
+mod fixtures;

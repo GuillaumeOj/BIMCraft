@@ -1,5 +1,7 @@
 //! Errors of the registry and of the calls dispatched through it.
 
+use core_txn::{CommandError, HistoryError};
+
 use crate::Version;
 
 /// Why a descriptor could not be registered.
@@ -20,8 +22,8 @@ pub enum RegistryError {
 }
 
 /// Why a command or query failed. Messages never hold the call's parameters, which may carry
-/// model content (SEC-03).
-#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
+/// model content (SEC-03). A failed call leaves the model and its history unchanged.
+#[derive(Clone, Debug, PartialEq, thiserror::Error)]
 pub enum ApiError {
     /// No command or query has this name.
     #[error("unknown command or query {0:?}")]
@@ -41,7 +43,28 @@ pub enum ApiError {
         /// that sent them and is never logged.
         detail: String,
     },
-    /// The result could not be encoded: a bug in the command or query, not in the call.
-    #[error("the result could not be encoded")]
+    /// The model rejected the command.
+    #[error(transparent)]
+    Rejected(#[from] CommandError),
+    /// Undo was asked with nothing to undo.
+    #[error("nothing to undo")]
+    NothingToUndo,
+    /// Redo was asked with nothing to redo.
+    #[error("nothing to redo")]
+    NothingToRedo,
+    /// A bug in the core, not in the call: a result that cannot be encoded, or a history that no
+    /// longer fits its model.
+    #[error("internal error")]
     Internal,
+}
+
+impl From<HistoryError> for ApiError {
+    fn from(error: HistoryError) -> Self {
+        match error {
+            HistoryError::NothingToUndo => Self::NothingToUndo,
+            HistoryError::NothingToRedo => Self::NothingToRedo,
+            // Only a model changed behind the history's back makes a recorded change fail again.
+            HistoryError::Model(_) => Self::Internal,
+        }
+    }
 }

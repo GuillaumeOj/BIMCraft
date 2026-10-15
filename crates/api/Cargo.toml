@@ -8,10 +8,14 @@ license.workspace = true
 publish = false
 
 [dependencies]
+core-model = { workspace = true }
 core-txn = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
+
+[dev-dependencies]
+schema = { workspace = true }
 
 [lints]
 workspace = true

@@ -56,7 +56,9 @@ checksum = "940b3a0ca603d1eade50a4846a2afffd5ef57a9feac2c0e2ec2e14f9ead76000"
 name = "api"
 version = "0.0.0"
 dependencies = [
+ "core-model",
  "core-txn",
+ "schema",
  "serde",
  "serde_json",
  "thiserror",

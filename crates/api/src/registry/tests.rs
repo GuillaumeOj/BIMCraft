@@ -181,8 +181,5 @@ fn errors_name_what_failed_without_parameters() {
         .to_string(),
         "a.b has no version 2.0.0"
     );
-    assert_eq!(
-        ApiError::Internal.to_string(),
-        "the result could not be encoded"
-    );
+    assert_eq!(ApiError::Internal.to_string(), "internal error");
 }

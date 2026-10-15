@@ -53,7 +53,7 @@ impl<Ctx> Descriptor<Ctx> {
         name: &'static str,
         version: Version,
         summary: &'static str,
-        handler: fn(&mut Ctx, I, &Origin) -> Result<Outcome<O>, ApiError>,
+        handler: impl Fn(&mut Ctx, I, &Origin) -> Result<Outcome<O>, ApiError> + 'static,
     ) -> Self
     where
         Ctx: 'static,
@@ -80,7 +80,7 @@ impl<Ctx> Descriptor<Ctx> {
         name: &'static str,
         version: Version,
         summary: &'static str,
-        handler: fn(&Ctx, I) -> Result<O, ApiError>,
+        handler: impl Fn(&Ctx, I) -> Result<O, ApiError> + 'static,
     ) -> Self
     where
         Ctx: 'static,
@@ -141,7 +141,7 @@ impl<Ctx> Descriptor<Ctx> {
     }
 }
 
-fn decode<I: DeserializeOwned>(params: Value) -> Result<I, ApiError> {
+pub(crate) fn decode<I: DeserializeOwned>(params: Value) -> Result<I, ApiError> {
     serde_json::from_value(params).map_err(|error| ApiError::InvalidParams {
         detail: error.to_string(),
     })
