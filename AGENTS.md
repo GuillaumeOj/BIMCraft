@@ -6,7 +6,7 @@ BIMCraft is an open-source BIM authoring tool: a Rust core (native + WebAssembly
 
 ## 1. Golden rules (never break)
 
-1. **Push only with the user's OK.** Committing locally is fine. Push your own feature branch (plain `git push`, never `main`) and open a **draft** pull request (`gh pr create --draft`) only when the user explicitly says so **in the current conversation**, and only once they have stamped `HEAD` (rule 2); every later push needs a new OK. Never force-push, delete remote branches, push tags, merge pull requests, publish releases, or create or edit issues, comments, labels and project items unless the user asks. `scripts/push-pr.ts` is the user's tool; run it only with `--dry-run`.
+1. **Push only with the user's OK.** Committing locally is fine. Push your own feature branch (plain `git push`, never `main`) and open a **draft** pull request (`gh pr create --draft`) only when the user explicitly says so **in the current conversation**, and only once they have stamped `HEAD` (rule 2); every later push needs a new OK. Never force-push, delete remote branches, push tags, merge pull requests or mark them ready for review, publish releases, or create or edit issues, comments, labels and project items unless the user asks. `scripts/push-pr.ts` is the user's tool; run it only with `--dry-run`.
 2. **Review before push.** Before any push, the user must have run a code review and a simplification pass on the changes (Claude Code: `/code-review`, then `/simplify`; other agents: an equivalent review the user asks for). Only then does the user stamp `HEAD` with `scripts/mark-reviewed.sh`, which asks them to confirm at a terminal. The `pre-push` hook rejects any push whose `HEAD` is not stamped; it runs no tests (CI does). Every new commit, a CI fix included, needs a new review (of the new commits) and a new stamp. Never stamp, or try to answer the confirmation, yourself.
 3. **Never bypass checks.** No `--no-verify`, no editing `core.hooksPath`, no disabling lints, lowering coverage thresholds or skipping tests to make a check pass. Fix the cause, or stop and ask the user.
 4. **Exact versions only.** Every dependency, tool and CI action is pinned to an exact version (section 4).
@@ -42,7 +42,7 @@ Every feature or fix is done only when all of these hold. Check them before sayi
 CI runs every check on every pull request, on Linux, macOS and Windows. Locally, run only what the change can break, with the narrowest command:
 
 - **Rust**: `cargo test -p <crate>`, `cargo clippy -p <crate> --all-targets --all-features -- -D warnings`, `cargo fmt --all --check`; for a critical crate you changed, `cargo llvm-cov -p <crate> --all-features --fail-under-lines 98`. `CHECK_CRATES="<crate> …" scripts/check-all.sh rust` runs the whole Rust section on those crates only.
-- **UI**: `bunx vitest run <files>` (or `bunx vitest related <files>`), `bunx biome check <files>`, `bunx tsc --noEmit`.
+- **UI**, from `ui/`: `bunx vitest run <files>` (or `bunx vitest related --run <files>`), `bunx biome check <files>`, `bunx tsc --noEmit`.
 - **Before each commit**: `scripts/check-all.sh repo` (seconds).
 - **A full section only when nothing narrower checks the change**: workspace manifests, the toolchain, `clippy.toml`, `deny.toml`, the critical or wasm crate lists or `scripts/check-all.sh` changed (run the sections they affect); a core crate's platform use changed (`wasm`); a fuzz target changed (`fuzz`); or a CI failure cannot be reproduced otherwise. Never run the whole `scripts/check-all.sh` by default.
 

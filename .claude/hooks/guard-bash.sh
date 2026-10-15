@@ -5,7 +5,8 @@
 # here; .claude/settings.json asks the user for each one, and pre-push requires the review stamp.
 # Write files with the Write/Edit tools rather than heredocs: text mentioning these commands at
 # the start of a line or after a shell operator is treated as a command.
-command=$(jq -r '.tool_input.command // empty')
+# Line continuations are joined, so the options of one command stay on one line for grep.
+command=$(jq -r '(.tool_input.command // empty) | gsub("\\\\\n"; " ")')
 
 block() {
   echo "Blocked by .claude/hooks/guard-bash.sh: $1 (AGENTS.md §1)." >&2
@@ -23,19 +24,22 @@ matches() { printf '%s\n' "$command" | grep -Eiq "$1"; }
 # Fast path: this runs on every Bash call, and most mention none of the trigger words.
 matches 'push|gh|verify|commit|hookspath|review-stamp' || exit 0
 
-# A push and its arguments up to the next shell operator, then one whole argument.
+# A push and its arguments up to the next shell operator, then one whole, possibly quoted, argument.
 push="${git_cmd}push([[:space:]][^;&|]*)?[[:space:]]"
-end='([[:space:]]|$)'
-matches "${push}(-[a-z]*f[a-z]*|--force[^[:space:]]*|\+[^[:space:]]*)${end}" && block "force pushes are reserved to the user"
-matches "${push}(-[a-z]*d[a-z]*|--delete|--mirror|--all|--tags|--prune|:[^[:space:]]*)${end}" &&
+q="[\"']?"
+end="${q}([[:space:]]|$)"
+matches "${push}${q}(-[a-z]*f[a-z]*|--force[^[:space:]]*|\+[^[:space:]]*)${end}" && block "force pushes are reserved to the user"
+matches "${push}${q}(-[a-z]*d[a-z]*|--delete|--mirror|--all|--tags|--prune|:[^[:space:]]*)${end}" &&
   block "deleting, mirroring or pushing tags is reserved to the user"
-matches "${push}([^[:space:]]*:)?(refs/heads/)?main${end}" && block "pushing main is reserved to the user"
-if matches "${git_cmd}push${end}" && [ "$(git symbolic-ref --quiet --short HEAD 2>/dev/null)" = main ]; then
-  block "pushing main is reserved to the user"
+matches "${push}${q}([^[:space:]]*:)?(refs/heads/)?main${end}" && block "pushing main is reserved to the user"
+# From a checkout of main, any push is refused: without a refspec, or with HEAD, it updates main.
+if matches "${git_cmd}push([[:space:]]|$)" && [ "$(git symbolic-ref --quiet --short HEAD 2>/dev/null)" = main ]; then
+  block "pushing from main is reserved to the user"
 fi
-matches "${at_cmd}gh[[:space:]]+(pr[[:space:]]+merge|release|repo[[:space:]]+create)" &&
-  block "merging and publishing are reserved to the user"
-if matches "${at_cmd}gh[[:space:]]+pr[[:space:]]+create" && ! matches "[[:space:]](--draft|-d)${end}"; then
+matches "${at_cmd}gh[[:space:]]+(pr[[:space:]]+(merge|ready)|release|repo[[:space:]]+create)" &&
+  block "merging, marking pull requests ready and publishing are reserved to the user"
+pr_create="${at_cmd}gh[[:space:]]+pr[[:space:]]+create"
+if matches "${pr_create}" && ! matches "${pr_create}([[:space:]][^;&|]*)?[[:space:]](--draft|-d)${end}"; then
   block "agents open pull requests as drafts (gh pr create --draft)"
 fi
 matches '(^|[[:space:]])--no-verify([[:space:]]|$)' && block "bypassing git hooks is not allowed"
