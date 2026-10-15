@@ -34,6 +34,7 @@ rusqlite = { version = "=0.40.2", default-features = false, features = [
   "ffi-sqlite-wasm-rs",
 ] }
 schema = { path = "crates/schema" }
+schema-gen = { path = "crates/schema-gen" }
 rust-names = { path = "crates/rust-names" }
 serde = { version = "=1.0.229", features = ["derive"] }
 # float_roundtrip: parse every finite f64 back to the exact value it was written from, which

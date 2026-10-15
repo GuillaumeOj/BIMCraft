@@ -353,7 +353,7 @@ An EXPRESS-like language with its own grammar, parser and tools.
 
 - [#16](https://github.com/GuillaumeOj/BIMCraft/issues/16) Generate Rust entity types: parser, canonical model, validator and the Rust emitter.
 - [#17](https://github.com/GuillaumeOj/BIMCraft/issues/17) Generate the API JSON Schema; also publish the JSON Schema of the definition format itself for `taplo` and editors.
-- [#18](https://github.com/GuillaumeOj/BIMCraft/issues/18) Generate the IFC mapping table from the `[ifc]` sections.
+- [#18](https://github.com/GuillaumeOj/BIMCraft/issues/18) Generate the IFC mapping table from the `[ifc]` sections: [ifc-mapping.md](../ifc-mapping.md), with every name checked against the IFC 4.3 schema by `cargo test -p interop-ifc`.
 - [#19](https://github.com/GuillaumeOj/BIMCraft/issues/19) Generate the reference documentation from `doc` fields and the snapshots.
 - [#36](https://github.com/GuillaumeOj/BIMCraft/issues/36) Migration framework, per-version snapshots and the CI migration check.
 - [#142](https://github.com/GuillaumeOj/BIMCraft/issues/142) Generate the Python client and stubs.

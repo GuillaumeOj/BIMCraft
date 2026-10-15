@@ -21,6 +21,9 @@
 //! [`generate_json_schema`] gives the JSON Schema of the same data (API-02); the core one is
 //! published as `schema/core/api.schema.json`.
 //!
+//! [`generate_ifc_mapping`] gives the table of how each entity maps onto IFC 4.3 (CORE-10); the
+//! core one is published as `docs/dev/ifc-mapping.md`.
+//!
 //! Generation is deterministic: the same definitions always give byte-identical code.
 //!
 //! [`load_history`] checks a namespace's version history (`snapshots/`, `migrations/`) against
@@ -33,6 +36,7 @@
 mod definition;
 mod error;
 mod history;
+mod ifc_table;
 mod json_schema;
 mod layout;
 mod load;
@@ -44,6 +48,7 @@ use std::path::{Path, PathBuf};
 
 pub use error::{Error, ErrorKind};
 pub use history::{History, MAX_SNAPSHOT_SIZE, check_history, load_history, snapshot_path};
+pub use ifc_table::emit_ifc_mapping;
 pub use json_schema::{DRAFT, JsonSchemaOptions, emit_json_schema};
 pub use load::load_dir;
 pub use parse::{FORMAT, MAX_FILE_SIZE, Source, parse_sources};
@@ -70,6 +75,16 @@ pub fn generate_json_schema(
     options: &JsonSchemaOptions,
 ) -> Result<Generated, Vec<Error>> {
     generate(dir, options, emit_json_schema)
+}
+
+/// Reads the namespace in `dir` and generates its IFC mapping table, as Markdown (CORE-10).
+///
+/// # Errors
+///
+/// Returns every [`Error`] found, as [`generate_rust`] does; among them, an entity with no
+/// `[ifc]` section.
+pub fn generate_ifc_mapping(dir: &Path) -> Result<Generated, Vec<Error>> {
+    generate(dir, &(), |namespace, ()| Ok(emit_ifc_mapping(namespace)))
 }
 
 /// Reads the namespace in `dir` and generates its Rust types.
