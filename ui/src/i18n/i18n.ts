@@ -52,15 +52,3 @@ function own<T>(record: Readonly<Record<string, T>>, key: string): T | undefined
 /** Translates `key` into `language`, falling back to English. */
 export const translate = (language: Language, key: MessageKey, params?: MessageParams): string =>
   translateWith(CATALOGUES[language], en, key, params);
-
-/** Keys of `reference` absent from `translation` (missing) and keys only in `translation` (extra). */
-export function compareKeys(
-  reference: Messages,
-  translation: Messages,
-): { missing: string[]; extra: string[] } {
-  const notIn = (a: Messages, b: Messages) =>
-    Object.keys(a)
-      .filter((key) => !Object.hasOwn(b, key))
-      .sort();
-  return { missing: notIn(reference, translation), extra: notIn(translation, reference) };
-}

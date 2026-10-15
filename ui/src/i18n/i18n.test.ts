@@ -1,28 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { compareKeys, type Messages, resolveLanguage, translateWith } from "./i18n";
+import { type Messages, resolveLanguage, translateWith } from "./i18n";
 import en from "./messages/en.json";
 import fr from "./messages/fr.json";
 
 describe("message files", () => {
   it("has a French translation for every English key, and no extra key", () => {
-    // A failure lists the keys to translate (missing) or to delete (extra).
-    expect(compareKeys(en, fr)).toEqual({ missing: [], extra: [] });
-  });
-});
-
-describe("compareKeys", () => {
-  it("reports keys missing from or unknown to the translation, sorted", () => {
-    expect(compareKeys({ b: "B", a: "A", c: "C" }, { c: "C", z: "Z" })).toEqual({
-      missing: ["a", "b"],
-      extra: ["z"],
-    });
-  });
-
-  it("does not take inherited properties for translated keys", () => {
-    expect(compareKeys({ constructor: "C", toString: "S" }, {})).toEqual({
-      missing: ["constructor", "toString"],
-      extra: [],
-    });
+    // On failure, the diff shows the keys to translate or to delete.
+    expect(Object.keys(fr).sort()).toEqual(Object.keys(en).sort());
   });
 });
 

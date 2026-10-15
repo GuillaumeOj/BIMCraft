@@ -1,24 +1,12 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { I18nProvider } from "./I18nProvider";
 import { LanguageSelect } from "./LanguageSelect";
 
-beforeEach(() => {
-  vi.spyOn(navigator, "languages", "get").mockReturnValue(["en-US"]);
-});
-
-afterEach(() => {
-  vi.restoreAllMocks();
-  localStorage.clear();
-});
-
+// jsdom reports an English system language (navigator.languages is ["en-US", "en"]).
 function renderSelect() {
-  render(
-    <I18nProvider>
-      <LanguageSelect />
-    </I18nProvider>,
-  );
+  render(<LanguageSelect />, { wrapper: I18nProvider });
   return screen.getByRole("combobox", { name: "Language" });
 }
 
