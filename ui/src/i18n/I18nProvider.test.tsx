@@ -1,24 +1,19 @@
 import { act, render, renderHook, screen } from "@testing-library/react";
-import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { I18nProvider, OVERRIDE_STORAGE_KEY, useI18n } from "./I18nProvider";
-
-const wrapper = ({ children }: { children: ReactNode }) => <I18nProvider>{children}</I18nProvider>;
 
 function setSystemLanguages(languages: string[]) {
   vi.spyOn(navigator, "languages", "get").mockReturnValue(languages);
 }
 
 afterEach(() => {
-  vi.restoreAllMocks();
-  localStorage.clear();
   document.documentElement.lang = "";
 });
 
 describe("I18nProvider", () => {
   it("follows the system language and sets the document language", () => {
     setSystemLanguages(["fr-FR"]);
-    const { result } = renderHook(() => useI18n(), { wrapper });
+    const { result } = renderHook(() => useI18n(), { wrapper: I18nProvider });
     expect(result.current.language).toBe("fr");
     expect(result.current.t("app.name")).toBe("BIMCraft");
     expect(document.documentElement.lang).toBe("fr");
@@ -26,7 +21,7 @@ describe("I18nProvider", () => {
 
   it("applies and remembers a manual override, and clears it", () => {
     setSystemLanguages(["en-US"]);
-    const { result } = renderHook(() => useI18n(), { wrapper });
+    const { result } = renderHook(() => useI18n(), { wrapper: I18nProvider });
     act(() => result.current.setLanguage("fr"));
     expect(result.current.language).toBe("fr");
     expect(localStorage.getItem(OVERRIDE_STORAGE_KEY)).toBe("fr");
@@ -38,9 +33,13 @@ describe("I18nProvider", () => {
   it("starts from a stored override and ignores an unsupported stored value", () => {
     setSystemLanguages(["en-US"]);
     localStorage.setItem(OVERRIDE_STORAGE_KEY, "fr");
-    expect(renderHook(() => useI18n(), { wrapper }).result.current.language).toBe("fr");
+    expect(renderHook(() => useI18n(), { wrapper: I18nProvider }).result.current.language).toBe(
+      "fr",
+    );
     localStorage.setItem(OVERRIDE_STORAGE_KEY, "xx");
-    expect(renderHook(() => useI18n(), { wrapper }).result.current.language).toBe("en");
+    expect(renderHook(() => useI18n(), { wrapper: I18nProvider }).result.current.language).toBe(
+      "en",
+    );
   });
 
   it("keeps working when storage is unavailable", () => {
@@ -51,14 +50,14 @@ describe("I18nProvider", () => {
     vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
       throw new Error("blocked");
     });
-    const { result } = renderHook(() => useI18n(), { wrapper });
+    const { result } = renderHook(() => useI18n(), { wrapper: I18nProvider });
     act(() => result.current.setLanguage("fr"));
     expect(result.current.language).toBe("fr");
   });
 
   it("follows a change of system language when there is no override", () => {
     setSystemLanguages(["en-US"]);
-    const { result } = renderHook(() => useI18n(), { wrapper });
+    const { result } = renderHook(() => useI18n(), { wrapper: I18nProvider });
     setSystemLanguages(["fr-FR"]);
     act(() => {
       window.dispatchEvent(new Event("languagechange"));
@@ -70,7 +69,7 @@ describe("I18nProvider", () => {
     function Name() {
       return <p>{useI18n().t("app.name")}</p>;
     }
-    render(<Name />, { wrapper });
+    render(<Name />, { wrapper: I18nProvider });
     expect(screen.getByText("BIMCraft")).toBeInTheDocument();
   });
 });
