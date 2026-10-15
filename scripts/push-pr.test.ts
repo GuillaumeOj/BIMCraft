@@ -240,7 +240,7 @@ describe("issues", () => {
   });
 
   test("gives the pull request the first milestone and every project of its issues", () => {
-    expect(issueEditArgs(7, view(), [issue(1, null, "A"), issue(2, "M2", "A", "B"), issue(3, "M3")])).toEqual([
+    expect(issueEditArgs(7, view(), [issue(1, null, "A"), issue(2, "M2", "A", "B"), issue(3, "M3")], pr())).toEqual([
       "gh",
       "pr",
       "edit",
@@ -254,8 +254,12 @@ describe("issues", () => {
 
   test("keeps the milestone and projects the pull request already has", () => {
     const own = view({ milestone: { title: "Own" }, projectItems: [{ title: "A" }] });
-    expect(issueEditArgs(7, own, [issue(1, "M", "A")])).toBeUndefined();
-    expect(issueEditArgs(7, view(), [])).toBeUndefined();
+    expect(issueEditArgs(7, own, [issue(1, "M", "A")], pr())).toBeUndefined();
+    expect(issueEditArgs(7, view(), [], pr())).toBeUndefined();
+  });
+
+  test("leaves the milestone and project given on the command line alone", () => {
+    expect(issueEditArgs(7, view(), [issue(1, "M", "A")], pr({ milestone: "Own", project: "P" }))).toBeUndefined();
   });
 
   test("links a pull request to an issue through GraphQL", () => {
@@ -286,6 +290,8 @@ class FakeGitHub {
   prs: FakePr[] = [];
   issues = new Map<number, { milestone?: string; projects: string[] }>();
   signedIn = true;
+  /** False while GitHub has not yet read the closing keywords of a new pull request. */
+  keywordLinks = true;
 
   handle(cmd: string[], input: string | undefined): Result {
     const flag = (name: string): string | undefined => {
@@ -309,9 +315,11 @@ class FakeGitHub {
       return ok(`Creating pull request\n${this.url(number)}\n`);
     }
     if (action === "issue view") {
-      const issue = this.issues.get(Number(cmd[3])) ?? { projects: [] };
+      const issue = this.issues.get(Number(cmd[3]));
+      if (issue === undefined) return { code: 1, stdout: "", stderr: `no issue #${cmd[3]}` };
       return ok(JSON.stringify({ id: `I_${cmd[3]}`, milestone: named(issue.milestone), projectItems: issue.projects.map(named) }));
     }
+    if (action === "repo view") return ok("main\n");
     if (action === "api graphql") {
       const linked = this.prs.find((p) => `PR_${p.number}` === field("prs[]"));
       linked?.links.push(Number(field("issue")?.slice(2)));
@@ -321,7 +329,7 @@ class FakeGitHub {
     if (found === undefined) return { code: 1, stdout: "", stderr: "no such pull request" };
     if (action === "pr view") {
       // GitHub links the issues a pull request closes by itself only when it targets the default branch.
-      const closing = unique([...(found.base === "main" ? closedIssues(found.body) : []), ...found.links]);
+      const closing = unique([...(found.base === "main" && this.keywordLinks ? closedIssues(found.body) : []), ...found.links]);
       return ok(
         JSON.stringify({
           id: `PR_${found.number}`,
@@ -561,7 +569,25 @@ describe("main", () => {
     test("never replace the milestone given on the command line", () => {
       featureBranch("feat: add thing\n\nCloses #1");
       expect(ship("--milestone", "Phase 1", "--project", "Other")).toBe(0);
-      expect(gh.prs[0]).toMatchObject({ milestone: "Phase 1", projects: ["Other", "BIMCraft"] });
+      expect(gh.prs[0]).toMatchObject({ milestone: "Phase 1", projects: ["Other"] });
+    });
+
+    test("never link by hand a pull request into the default branch", () => {
+      featureBranch("feat: add thing\n\nCloses #1");
+      gh.keywordLinks = false;
+      expect(ship()).toBe(0);
+      expect(gh.prs[0]).toMatchObject({ links: [] });
+      expect(links()).toEqual([]);
+    });
+
+    test("finish the stack when an issue cannot be read", () => {
+      stackOfThree();
+      const argv = ["--stack", "--branch", "one", "--body", "Closes #99", "--branch", "two", "--body", "Closes #2"];
+      expect(ship(...argv)).toBe(0);
+      expect(errors.join("\n")).toContain("push-pr: #100: gh issue view 99 --json id,milestone,projectItems failed: no issue #99");
+      expect(gh.prs[1]).toMatchObject({ milestone: "Phase 0", links: [2] });
+      expect(gh.prs[2]?.body).toContain("<!-- push-pr:stack -->");
+      expect(output).toContain(`  ${gh.url(102)}`);
     });
 
     test("change nothing when the description closes no issue", () => {

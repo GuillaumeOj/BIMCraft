@@ -38,9 +38,9 @@ Pull request options (before any --branch: every PR; after --branch <name>: that
 In a stack of several branches, give --title, --body and --body-file per branch.
 An existing open pull request is updated: base fixed, labels/assignees/reviewers added, title and
 description replaced only when given.
-Each pull request takes the milestone and projects of the issues its description closes
-("Closes #123") when it has none, and is linked to those issues: GitHub links them by itself only
-for pull requests into the default branch, not for the upper ones of a stack.
+Each pull request also takes the milestone (unless it has one) and the projects of the issues its
+description closes ("Closes #123"); --milestone and --project replace them. It is linked to those
+issues too: GitHub does that by itself only for pull requests into the default branch.
 
 Examples:
   bun scripts/push-pr.ts --title "feat(geom): add predicates" --body-file pr.md --label geometry --assignee @me
@@ -257,11 +257,16 @@ export function closedIssues(body: string): number[] {
   return unique([...matches].map((match) => match[1] as string)).map(Number);
 }
 
-/** `gh pr edit` giving a pull request the milestone and projects of its issues, or undefined. */
-export function issueEditArgs(number: number, view: PrView, issues: Issue[]): string[] | undefined {
-  const milestone = view.milestone === null ? issues.find((issue) => issue.milestone !== null)?.milestone?.title : undefined;
+/**
+ * `gh pr edit` giving a pull request the milestone and projects of its issues, or undefined. The
+ * milestone and project given on the command line (`given`) win.
+ */
+export function issueEditArgs(number: number, view: PrView, issues: Issue[], given: PrOptions): string[] | undefined {
+  const inherit = given.milestone === undefined && view.milestone === null;
+  const milestone = inherit ? issues.find((issue) => issue.milestone !== null)?.milestone?.title : undefined;
   const has = new Set(view.projectItems.map((item) => item.title));
-  const projects = unique(issues.flatMap((issue) => issue.projectItems.map((item) => item.title))).filter((title) => !has.has(title));
+  const all = given.project === undefined ? issues.flatMap((issue) => issue.projectItems.map((item) => item.title)) : [];
+  const projects = unique(all).filter((title) => !has.has(title));
   const changes = [...optional("--milestone", milestone), ...joined("--add-project", projects)];
   return changes.length > 0 ? ["gh", "pr", "edit", String(number), ...changes] : undefined;
 }
@@ -376,21 +381,6 @@ function openPr(run: Run, branch: string, base: string): Pr | undefined {
   return latest?.state === "OPEN" ? latest : undefined;
 }
 
-/**
- * Gives pull request `number` the milestone and projects of the issues `body` closes, and links it to
- * those GitHub has not linked yet (it links only pull requests into the default branch).
- */
-function linkIssues(run: Run, exec: (cmd: string[]) => string, number: number, view: PrView, body: string): void {
-  const issues = closedIssues(body).map((issue): Issue => ({
-    number: issue,
-    ...JSON.parse(must(run, ["gh", "issue", "view", String(issue), "--json", "id,milestone,projectItems"])),
-  }));
-  const edit = issueEditArgs(number, view, issues);
-  if (edit !== undefined) exec(edit);
-  const linked = new Set(view.closingIssuesReferences.map((issue) => issue.number));
-  for (const issue of issues) if (!linked.has(issue.number)) exec(linkArgs(issue.id, view.id));
-}
-
 function ship(args: Args, run: Run): number {
   const exec = (cmd: string[], options?: RunOptions): string => {
     if (!args.dryRun) return must(run, cmd, options);
@@ -462,7 +452,21 @@ function ship(args: Args, run: Run): number {
   const known = prs.filter((pr): pr is Pr => pr !== undefined);
   const stacked = known.length > 1 && known.length === prs.length;
   const numbers = known.map((pr) => pr.number);
-  for (const pr of known) {
+  const issues = new Map<number, Issue>();
+  const issue = (number: number): Issue => {
+    const found = issues.get(number) ?? {
+      number,
+      ...JSON.parse(must(run, ["gh", "issue", "view", String(number), "--json", "id,milestone,projectItems"])),
+    };
+    issues.set(number, found);
+    return found;
+  };
+  let defaultBranch: string | undefined;
+  const repoDefault = (): string =>
+    (defaultBranch ??= must(run, ["gh", "repo", "view", "--json", "defaultBranchRef", "--jq", ".defaultBranchRef.name"]));
+  plan.forEach((p, i) => {
+    const pr = prs[i];
+    if (pr === undefined) return;
     const fields = "id,body,milestone,projectItems,closingIssuesReferences";
     const view = JSON.parse(must(run, ["gh", "pr", "view", String(pr.number), "--json", fields])) as PrView;
     let body = view.body;
@@ -470,8 +474,19 @@ function ship(args: Args, run: Run): number {
       body = withStackBlock(view.body, stackBlock(numbers, args.base, pr.number));
       if (body !== view.body) exec(["gh", "pr", "edit", String(pr.number), "--body-file", "-"], { input: body });
     }
-    linkIssues(run, exec, pr.number, view, body);
-  }
+    // One issue that cannot be read or linked must not leave the rest of the stack half done.
+    try {
+      const closed = closedIssues(body).map(issue);
+      const edit = issueEditArgs(pr.number, view, closed, p.pr);
+      if (edit !== undefined) exec(edit);
+      // GitHub links the issues itself for a pull request into the default branch.
+      const linked = new Set(view.closingIssuesReferences.map((ref) => ref.number));
+      const unlinked = closed.filter((ref) => !linked.has(ref.number));
+      if (unlinked.length > 0 && p.base !== repoDefault()) for (const ref of unlinked) exec(linkArgs(ref.id, view.id));
+    } catch (error) {
+      console.error(`push-pr: #${pr.number}: ${(error as Error).message}; set its milestone, project and issue links by hand`);
+    }
+  });
   for (const pr of known) console.log(`  ${pr.url}`);
   return 0;
 }
