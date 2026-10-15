@@ -28,9 +28,31 @@ pub fn save_model(
     schema: &Schema<'_>,
     store: &Store,
 ) -> Result<(), PersistError> {
+    save_model_and(conn, schema, store, |_| Ok(()))
+}
+
+/// [`save_model`], running `also` in the same transaction before it commits, so other writes
+/// reach the file together with the model or not at all.
+pub(crate) fn save_model_and(
+    conn: &mut Connection,
+    schema: &Schema<'_>,
+    store: &Store,
+    also: impl FnOnce(&Transaction<'_>) -> Result<(), PersistError>,
+) -> Result<(), PersistError> {
     schema::validate(schema.namespace).map_err(StoreError::InvalidSchema)?;
     let tx = begin(conn)?;
-    let tables = prepare_tables(&tx, schema)?;
+    write_model(&tx, schema, store)?;
+    also(&tx)?;
+    tx.commit()?;
+    Ok(())
+}
+
+fn write_model(
+    tx: &Transaction<'_>,
+    schema: &Schema<'_>,
+    store: &Store,
+) -> Result<(), PersistError> {
+    let tables = prepare_tables(tx, schema)?;
     let mut inserts = Vec::with_capacity(tables.len());
     for table in &tables {
         tx.execute(&table.clear_sql(), [])?;
@@ -59,8 +81,6 @@ pub fn save_model(
         }
         inserts[index].execute(rusqlite::params_from_iter(&row))?;
     }
-    drop(inserts);
-    tx.commit()?;
     Ok(())
 }
 

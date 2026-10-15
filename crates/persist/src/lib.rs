@@ -12,10 +12,14 @@
 //! model and [`save_model`] to write it. Files from earlier versions are migrated inside those
 //! calls (PERS-01): reading migrates in a transaction that is rolled back, so only writing
 //! changes the file.
+//!
+//! Autosave (PERS-02, NFR-06) writes a recovery copy, never the project file: see [`Autosave`]
+//! and [`autosave_model`].
 
 // ARCH-02: forbid, not deny, so nothing in this crate can opt out. See docs/dev/quality.md.
 #![forbid(clippy::disallowed_methods, clippy::disallowed_types)]
 
+mod autosave;
 mod codec;
 mod layout;
 mod migrate;
@@ -23,6 +27,7 @@ mod model;
 #[cfg(test)]
 mod test_support;
 
+pub use autosave::{Autosave, AutosaveInterval, IntervalOutOfRange, autosave_model, autosaved_at};
 use core_model::StoreError;
 pub use model::{open_model, save_model};
 pub use rusqlite::{Connection, Transaction};
@@ -264,12 +269,18 @@ fn run_format_migrations(
 pub fn set_property(conn: &Connection, key: &str, value: &str) -> Result<(), PersistError> {
     let tx = begin(conn)?;
     upgrade_format(&tx)?;
+    write_property(&tx, key, value)?;
+    tx.commit()?;
+    Ok(())
+}
+
+/// Writes one project property inside `tx`, whose file format is already up to date.
+fn write_property(tx: &Transaction<'_>, key: &str, value: &str) -> Result<(), PersistError> {
     tx.execute(
         "INSERT INTO project_property (key, value) VALUES (?1, ?2)
          ON CONFLICT (key) DO UPDATE SET value = excluded.value",
         (key, value),
     )?;
-    tx.commit()?;
     Ok(())
 }
 
