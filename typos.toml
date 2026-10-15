@@ -13,3 +13,5 @@ extend-exclude = [
 LOD = "LOD" # level of detail
 THM = "THM" # thermal requirement family
 ND = "ND" # NoDerivatives, in the CC BY-ND licence name
+# Authors cited in the documentation.
+Gere = "Gere" # James M. Gere, co-author of Timoshenko and Gere

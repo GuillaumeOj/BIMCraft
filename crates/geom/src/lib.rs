@@ -24,21 +24,37 @@
 //! [`Solid::extrude`] builds a solid from a profile and a direction (GEO-02), holes included.
 //! Arcs become chords within [`ARC_CHORD_TOLERANCE`], since faces are planar; failures are an
 //! [`ExtrusionError`].
+//!
+//! A [`LocationLine`] says which line of a [`LayerSet`] a wall is drawn along (ARC-30), and a
+//! [`LocationPoint`] which point of a profile a column or beam sits on (STR-14). Both resolve
+//! into an offset of the section from the element's axis (GEO-13); failures are a
+//! [`LocationError`].
+//!
+//! [`Profile::shear_centre`] computes the shear centre of any profile with finite elements, for
+//! the location point of profile-based members; failures are a [`ShearCentreError`].
 
 // ARCH-02: forbid, not deny, so nothing in this crate can opt out. See docs/dev/quality.md.
 #![forbid(clippy::disallowed_methods, clippy::disallowed_types)]
 
 mod brep;
+mod location;
 mod point;
 mod predicates;
 mod profile;
+mod section;
 mod tolerance;
 
 pub use brep::{BrepError, ExtrusionError, FaceInput, Shell, Solid};
+pub use location::{
+    CardinalPoint, DirectionSense, Face, IfcCardinalPoint, Layer, LayerId, LayerPlacement,
+    LayerSet, LocationError, LocationLine, LocationPoint, MAX_LAYERS, Resolved, SnapInfo,
+    SnapPoint, SnapPosition,
+};
 pub use point::{Point2, Point3, Vector3};
 pub use predicates::{
     MAX_COORDINATE, MIN_COORDINATE, Orientation, PredicateError, incircle, insphere, orient2d,
     orient3d,
 };
 pub use profile::{ArcDirection, Edge, LoopId, MAX_PROFILE_EDGES, Profile, ProfileError};
+pub use section::{MAX_MESH_NODES, ShearCentreError};
 pub use tolerance::{ARC_CHORD_TOLERANCE, LINEAR_TOLERANCE, MODEL_EXTENT};

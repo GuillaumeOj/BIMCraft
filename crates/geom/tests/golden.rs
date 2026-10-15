@@ -279,6 +279,46 @@ fn extrusions(out: &mut Output) {
     }
 }
 
+/// Shear centres of random channels: the mesh spacing comes from `sqrt` and `hypot`, and the
+/// solve sums in a fixed order, so the result must not depend on the target.
+fn shear_centres(out: &mut Output) {
+    let mut rng = Rng::for_case("shear_centre");
+    for i in 0..4 {
+        let corner = rng.point2();
+        let (h, b, t) = (
+            rng.uniform(0.1, 0.5),
+            rng.uniform(0.05, 0.2),
+            rng.uniform(0.005, 0.02),
+        );
+        let points = [
+            (0.0, 0.0),
+            (b, 0.0),
+            (b, t),
+            (t, t),
+            (t, h - t),
+            (b, h - t),
+            (b, h),
+            (0.0, h),
+        ]
+        .map(|(x, y)| Point2::new(corner.x + x, corner.y + y));
+        let edges = (0..points.len())
+            .map(|k| Edge::Line {
+                start: points[k],
+                end: points[(k + 1) % points.len()],
+            })
+            .collect();
+        let shear = Profile::new(edges, vec![])
+            .ok()
+            .and_then(|profile| profile.shear_centre().ok());
+        let Some(shear) = shear else {
+            let _ = writeln!(out.0, "shear_centre[{i}] error");
+            continue;
+        };
+        out.value("shear_centre.x", i, shear.x);
+        out.value("shear_centre.y", i, shear.y);
+    }
+}
+
 fn compute() -> String {
     let mut out = Output::default();
     unary(&mut out);
@@ -286,6 +326,7 @@ fn compute() -> String {
     compositions(&mut out);
     predicates(&mut out);
     extrusions(&mut out);
+    shear_centres(&mut out);
     out.0
 }
 

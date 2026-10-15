@@ -7,9 +7,10 @@ mod validate;
 
 use core::fmt;
 
-use edge::Curve;
+pub(crate) use edge::Curve;
 pub use edge::{ArcDirection, Edge};
 use mass::{Moments, loop_moments};
+pub(crate) use validate::encloses;
 
 use crate::Point2;
 
@@ -210,6 +211,16 @@ impl Profile {
         self.moments.area
     }
 
+    /// The smallest axis-aligned box containing the profile, `[min_x, min_y, max_x, max_y]`,
+    /// arcs included. Holes lie inside the outer loop, so only the outer loop counts.
+    #[must_use]
+    pub fn bounds(&self) -> [f64; 4] {
+        self.outer[1..]
+            .iter()
+            .map(|edge| edge.curve().extent())
+            .fold(self.outer[0].curve().extent(), edge::union)
+    }
+
     /// Centroid (centre of area) of the profile.
     #[must_use]
     pub fn centroid(&self) -> Point2 {
@@ -242,11 +253,10 @@ fn reversed(edges: &[Edge]) -> Vec<Edge> {
 fn check_nesting(outer: &[Curve], holes: &[(LoopId, Vec<Curve>)]) -> Result<(), ProfileError> {
     for (inner, (_, hole)) in holes.iter().enumerate() {
         let vertex = hole[0].start();
-        if !validate::encloses(outer, vertex) {
+        if !encloses(outer, vertex) {
             return Err(ProfileError::HoleOutsideOuter(inner));
         }
-        let enclosing =
-            (0..holes.len()).find(|&j| j != inner && validate::encloses(&holes[j].1, vertex));
+        let enclosing = (0..holes.len()).find(|&j| j != inner && encloses(&holes[j].1, vertex));
         if let Some(outer) = enclosing {
             return Err(ProfileError::NestedHoles { outer, inner });
         }
