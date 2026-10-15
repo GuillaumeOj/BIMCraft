@@ -2,9 +2,6 @@
   "$schema": "https://json.schemastore.org/claude-code-settings.json",
   "permissions": {
     "deny": [
-      "Bash(git push:*)",
-      "Bash(git push)",
-      "Bash(gh pr create:*)",
       "Bash(gh pr merge:*)",
       "Bash(gh release:*)",
       "Bash(gh repo create:*)",
@@ -16,6 +13,9 @@
       "Edit(scripts/mark-reviewed.sh)"
     ],
     "ask": [
+      "Bash(git push:*)",
+      "Bash(git push)",
+      "Bash(gh pr create:*)",
       "Bash(scripts/mark-reviewed.sh:*)",
       "Bash(./scripts/mark-reviewed.sh:*)",
       "Bash(git remote add:*)",
