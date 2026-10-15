@@ -42,6 +42,14 @@ Parsers read hostile input (AGENTS.md §8), so each one has a property test in i
 
 `scripts/check-all.sh fuzz` lints the targets and runs each one for a fixed number of inputs with a fixed seed, so CI stays reproducible; set `FUZZ_RUNS` to change the count. To hunt for bugs, run a target for longer from `fuzz/`, for example `cargo fuzz run --fuzz-dir . schema_definition corpus/schema_definition seeds/schema_definition -- -max_total_time=600`. A crash is saved in `fuzz/artifacts/`: turn it into a regression test in the crate before fixing it.
 
+## IFC sample corpus
+
+IFC 4.3 files must round-trip without loss (INT-03), and the round-trip runs in CI on public sample files (INT-04); passing it is part of the Phase 0 gate. The corpus is the *Simple-Scene* set of buildingSMART's [Sample-Test-Files](https://github.com/buildingSMART/Sample-Test-Files), licensed CC BY 4.0. It is never committed and never contains real customer models (AGENTS.md §8).
+
+`crates/interop-ifc/tests/corpus/manifest.txt` pins the repository revision and the SHA-256 of every file. `scripts/fetch-ifc-corpus.sh` downloads the files into `target/ifc-corpus/` and rejects any file whose checksum differs; files already there and intact are not downloaded again. The test, `crates/interop-ifc/tests/corpus.rs`, reads them from `IFC_CORPUS_DIR` and never touches the network. Each file must read, write and read back to the same values, write the same bytes twice, decode instance by instance into the IFC 4.3 classes, and keep what an import does not map. Without `IFC_CORPUS_DIR` the test does nothing, so a plain `cargo test` stays offline. `scripts/check-all.sh corpus` runs both steps, on Linux in CI.
+
+To add files, list them in the manifest with their checksum (`shasum -a 256`), after checking their licence. To move to a newer revision, update the revision and every checksum together, and wait 14 days after the revision is published, as for dependencies.
+
 ## Benchmarks
 
 Hot paths keep [criterion](https://docs.rs/criterion) benchmarks in their crate's `benches/`: the exact predicates of the geometry kernel (`cargo bench -p geom`) and the attribute tables of the model (`cargo bench -p core-model`). CI compiles them through `clippy --all-targets` but does not run them: timings on shared runners are too noisy to gate on. Run them before and after a change to a hot path and quote the numbers in the pull request. Reference numbers, and the memory measured per object (NFR-08), live in [performance-baselines.md](performance-baselines.md).

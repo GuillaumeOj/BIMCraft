@@ -163,6 +163,19 @@ jobs:
         run: cargo install --locked "cargo-fuzz@$CARGO_FUZZ_VERSION"
       - run: scripts/check-all.sh fuzz
 
+  # The corpus does not depend on the host: Linux is enough.
+  corpus:
+    name: IFC sample corpus
+    needs: detect
+    if: needs.detect.outputs.rust == 'true'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-rust
+      - run: scripts/check-all.sh corpus
+
   ui:
     name: UI
     needs: detect

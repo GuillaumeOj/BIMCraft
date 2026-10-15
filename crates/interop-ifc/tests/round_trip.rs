@@ -1,27 +1,13 @@
 //! Writes the sample files back and checks that nothing is lost and the output is deterministic.
 
-use interop_ifc::step::{Instance, Limits, Record, StepError, StepReader, StepWriter, WriteError};
+mod common;
+
+use common::{read, write};
 
 const CORPUS: [(&str, &str); 2] = [
     ("wall.ifc", include_str!("fixtures/wall.ifc")),
     ("edge-cases.ifc", include_str!("fixtures/edge-cases.ifc")),
 ];
-
-type File = (Vec<Record>, Vec<Instance>);
-
-fn read(input: &[u8]) -> Result<File, StepError> {
-    let reader = StepReader::new(input, Limits::default())?;
-    let header = reader.header().to_vec();
-    Ok((header, reader.collect::<Result<_, _>>()?))
-}
-
-fn write((header, instances): &File) -> Result<Vec<u8>, WriteError> {
-    let mut writer = StepWriter::new(Vec::new(), header)?;
-    for instance in instances {
-        writer.write_instance(instance)?;
-    }
-    writer.finish()
-}
 
 /// Reading the output back yields the file read, and writing that again yields the same bytes.
 #[test]
