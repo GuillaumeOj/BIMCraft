@@ -175,6 +175,7 @@ Every element holds several representations, computed on demand from the same pa
 | GEO-10 | Meshes from imports MUST be usable as-is when no solid can be rebuilt. | MVP |
 | GEO-11 | Joins between elements (walls, slabs, beams, columns) MUST be resolved at L, T and X junctions, layer by layer for layered elements following their layer priority (MAT-03). Users MUST be able to allow or disallow each join, choose its style (butt, mitre, square-off) and which element runs through, and override layer priorities. | MVP |
 | GEO-12 | A component editor MUST let users author parametric components (CORE-02) of any discipline (profiles, parameters, constraints, LOD representations) without code. | V1 |
+| GEO-13 | The kernel MUST resolve a location line (ARC-30) or a location point (STR-14) into an offset of the element's section relative to its axis. The result MUST be deterministic (ENG-04) and stay within the tolerance policy (GEO-03). | MVP |
 
 **Acceptance target.** A test corpus of at least 1,000 boolean cases, including degenerate ones (coplanar faces, touching edges, near-zero volumes), runs in CI and MUST pass before each release.
 
@@ -224,6 +225,7 @@ Architecture covers the architect's whole job from feasibility to construction d
 - ARC-02 (MVP): openings MUST void their host automatically and follow it when moved.
 - ARC-03 (MVP): grids and levels MUST be first-class objects (IfcGrid, IfcBuildingStorey); elements are hosted on levels and snap to grids.
 - ARC-04 (MVP): layered walls and slabs (MAT-03) MUST join cleanly at junctions (GEO-11), with their layers shown in plans and sections.
+- ARC-30 (MVP): a wall type MUST have a location line, the line its walls are drawn along. It MUST be one of: the exterior or interior face, or any layer face; the centre of any layer, including the core centre; or a custom offset in mm from a face of a chosen layer. The default is the core centre. Changing the location line MUST keep placed walls where they are; it only changes how new walls are drawn and flipped. Changing layer thicknesses MUST keep placed walls on their location line. Flipping a wall MUST mirror its layers about its location line. The choice MUST follow its layer when layers are reordered; when its layer is removed, it MUST fall back to the core centre and tell the user.
 - ARC-05 (V1): ceilings and railings.
 - ARC-06 (V1): wall sweeps and reveals, stacked walls and custom wall profiles.
 - ARC-07 (V1): complex roofs: slope per footprint edge, hips, valleys, dormers, and walls attached to the roof above.
@@ -283,6 +285,7 @@ Architecture covers the architect's whole job from feasibility to construction d
 - STR-11 (Later): fire resistance checks per EN 1992-1-2, EN 1993-1-2 and EN 1995-1-2.
 - STR-12 (Later): precast elements with joints; prestressing tendons.
 - STR-13 (MVP): steel connections, with their fabrication data (DSTV/NC1).
+- STR-14 (MVP): columns, beams and other profile-based elements MUST have a location point on their section (also called the cardinal point). It MUST be one of the 9 points of the profile's bounding box (top, middle or bottom, combined with left, centre or right), the centroid, or the shear centre for profiles where it differs from the centroid, plus an optional offset in mm along the section's y and z axes. A column defaults to the centroid; a beam defaults to the top centre, so that its top face sits at the level.
 
 **8.4 MEP**
 
@@ -404,6 +407,7 @@ IFC 4.3 is the primary exchange format and MUST round-trip without loss for ever
 - INT-07 (MVP): components MUST export to IFC as type objects with shared geometry (representation maps), each carrying its library reference (component ID and version) and its parameter values in a property set; instances export as occurrences with their overridden values, plus their own geometry when an override touches a parameter the component declares geometric.
 - INT-08 (MVP): on IFC import, a type carrying a library reference MUST be rebuilt as parametric through the normal type-creation command when that component version is available; otherwise, or when the command rejects its values, it stays static. A rebuilt type replaces the geometry stored in the file. The import report (INT-02) MUST list static types, version mismatches and rejected values.
 - INT-09 (V1): a component library MUST be exportable as an IFC project library (IfcProjectLibrary) of static types for other tools.
+- INT-10 (MVP): location lines (ARC-30) and points (STR-14) MUST map to IFC. Walls and slabs use IfcMaterialLayerSetUsage (OffsetFromReferenceLine, DirectionSense, LayerSetDirection). Columns and beams use IfcMaterialProfileSetUsage (CardinalPoint 1–9 for the bounding-box points, 10 for the centroid, 15 for the shear centre, and ReferenceExtent where it applies). Custom offsets MUST round-trip through the IFC offset values without loss. On import, the cardinal points BIMCraft does not support (11–14 and 16–19) map to the nearest supported point, and the import report (INT-02) lists them.
 
 **RVT position.** The .rvt format is closed, undocumented and changes with each Revit version. Native reading is a non-goal; the only planned route is the Revit add-in. The add-in writes the BIMCraft native format directly, so no information is lost through an intermediate IFC step.
 
