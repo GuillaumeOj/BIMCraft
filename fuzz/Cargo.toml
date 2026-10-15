@@ -19,6 +19,8 @@ express = { path = "../crates/express" }
 geom = { path = "../crates/geom" }
 interop-ifc = { path = "../crates/interop-ifc" }
 libfuzzer-sys = "=0.4.13"
+# Already in the lockfile through geom: turns the fuzzed boxes the way the kernel would (ENG-04).
+libm = "=0.2.16"
 persist = { path = "../crates/persist" }
 schema = { path = "../crates/schema" }
 schema-gen = { path = "../crates/schema-gen" }
@@ -28,6 +30,13 @@ schema-gen = { path = "../crates/schema-gen" }
 [lints.clippy]
 disallowed_methods = "allow"
 disallowed_types = "allow"
+
+[[bin]]
+name = "boolean"
+path = "fuzz_targets/boolean.rs"
+test = false
+doc = false
+bench = false
 
 [[bin]]
 name = "express_schema"

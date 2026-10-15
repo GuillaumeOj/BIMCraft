@@ -25,6 +25,11 @@
 //! Arcs become chords within [`ARC_CHORD_TOLERANCE`], since faces are planar; failures are an
 //! [`ExtrusionError`].
 //!
+//! [`Solid::union`] combines two solids, [`Solid::difference`] cuts one out of another, for
+//! openings and voids, and [`Solid::intersection`] keeps what they share (GEO-03). Where they meet is decided with the exact
+//! predicates; vertices, faces and gaps within [`LINEAR_TOLERANCE`] merge, as the tolerance
+//! policy prescribes. The result is checked like any solid; failures are a [`BooleanError`].
+//!
 //! A [`LocationLine`] says which line of a [`LayerSet`] a wall is drawn along (ARC-30), and a
 //! [`LocationPoint`] which point of a profile a column or beam sits on (STR-14). Both resolve
 //! into an offset of the section from the element's axis (GEO-13); failures are a
@@ -36,6 +41,7 @@
 // ARCH-02: forbid, not deny, so nothing in this crate can opt out. See docs/dev/quality.md.
 #![forbid(clippy::disallowed_methods, clippy::disallowed_types)]
 
+mod boolean;
 mod brep;
 mod location;
 mod point;
@@ -43,7 +49,9 @@ mod predicates;
 mod profile;
 mod section;
 mod tolerance;
+mod vector;
 
+pub use boolean::BooleanError;
 pub use brep::{BrepError, ExtrusionError, FaceInput, Shell, Solid};
 pub use location::{
     CardinalPoint, DirectionSense, Face, IfcCardinalPoint, Layer, LayerId, LayerPlacement,

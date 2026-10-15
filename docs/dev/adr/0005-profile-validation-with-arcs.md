@@ -14,7 +14,7 @@ ADR 0001 makes every decision on stored coordinates exact, with orient2d and ori
 
 ### Arcs
 
-An arc is stored as its start, end, centre and turning direction (counterclockwise or clockwise). The radius is the distance from centre to start; the end must be at the same distance within `LINEAR_TOLERANCE`, otherwise the arc is rejected. An arc whose end equals its start is a full circle, so a round hole is one edge. Arcs with a radius below the tolerance, or with distinct ends at the same angle, are rejected as degenerate.
+An arc is stored as its start, end, centre and turning direction (counterclockwise or clockwise). The radius is the distance from centre to start; the end must be at the same distance within `LINEAR_TOLERANCE`, otherwise the arc is rejected. An arc whose end equals its start is a full circle, so a round hole is one edge. Arcs with a radius within the tolerance, or with distinct ends at the same angle, are rejected as degenerate.
 
 ### Validity
 
@@ -26,7 +26,7 @@ A profile is an outer loop and any number of holes. It is valid when:
 - no line has zero length;
 - no two edges meet, except consecutive edges at their common point:
   - **two lines**: decided exactly with orient2d, as ADR 0001 requires. Consecutive lines are rejected only when the second goes back along the first;
-  - **a pair involving an arc**: decided in floating point and **rejected when the edges come closer than `LINEAR_TOLERANCE`**. The distance is the minimum over the points where it can be smallest (ends, crossings, points along common normals). For consecutive edges, points within the tolerance of their common point are ignored, so a line tangent to an arc is valid;
+  - **a pair involving an arc**: decided in floating point and **rejected when the edges come within `LINEAR_TOLERANCE`**, read as ADR 0001 reads it everywhere: at most the tolerance, up to rounding, so edges exactly 1 µm apart are rejected. The distance is the minimum over the points where it can be smallest (ends, crossings, points along common normals). For consecutive edges, points within the tolerance of their common point are ignored, so a line tangent to an arc is valid;
 - every hole lies inside the outer loop and outside the other holes.
 
 The arc rule fails safe: an edge that comes within 1 µm of another is reported as an intersection, never accepted as a sliver. Since loops are then at least 1 µm apart wherever an arc is involved, and exactly disjoint otherwise, testing one vertex per hole decides nesting reliably in floating point.
@@ -38,7 +38,7 @@ Errors identify the loop and the edges by position and never carry coordinates (
 ## Consequences
 
 - `LINEAR_TOLERANCE` is now also read by profile validation, for arcs only, besides the merge pass and the B-rep validity checks named in ADR 0001.
-- Two arcs, or an arc and a line, at less than 1 µm from each other cannot be part of the same profile. No construction use needs that.
+- Two arcs, or an arc and a line, at 1 µm or less from each other cannot be part of the same profile. No construction use needs that.
 - Straight-edged profiles keep the exact semantics of ADR 0001: two lines 1 nm apart are valid.
 - Larger profiles (above 4,096 edges) need a spatial index in the pairwise check before the limit can be raised.
 

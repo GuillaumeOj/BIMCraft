@@ -2,7 +2,7 @@
 
 - Status: Accepted
 - Requirements: GEO-03, GEO-07 (also CORE-09, ENG-04)
-- Issues: [#48](https://github.com/GuillaumeOj/BIMCraft/issues/48)
+- Issues: [#48](https://github.com/GuillaumeOj/BIMCraft/issues/48); amended for features one to a few tolerances wide, [#55](https://github.com/GuillaumeOj/BIMCraft/issues/55)
 
 ## Context
 
@@ -35,7 +35,13 @@ A predicate result is a sign. It is never compared against an epsilon, and no co
 - 1 µm is far below construction precision (about 0.1 mm) and below anything a drawing shows, so users never see it.
 - There is **no angular tolerance**. Deviations are always measured as distances: a face is planar if all its vertices lie within the tolerance of its plane; two planes are coincident over a face if the face's vertices lie within the tolerance of the other plane.
 
-`LINEAR_TOLERANCE` is read only by the merge pass below and by the B-rep validity checks, which apply the distance rules above (planar faces, no edge or face narrower than the tolerance).
+`LINEAR_TOLERANCE` is read only by the merge pass below and by the B-rep validity checks, which apply the distance rules above (planar faces, no edge, face or shell within the tolerance).
+
+### Exactly one tolerance
+
+**Within the tolerance** means a distance of at most `LINEAR_TOLERANCE` plus a fixed rounding allowance of 1 nm. Every test reads it the same way: two vertices merge, a vertex lies on a plane, two faces are coplanar, and the validity checks find an edge too short, a face too narrow, a shell too thin (on average) or a face not planar. So a feature exactly 1 µm wide is within the tolerance: a 1 µm gap closes, a 1 µm overlap is empty, a 1 µm edge merges.
+
+The allowance is what makes this hold. A feature typed as 1 µm is computed as 1 µm give or take the rounding of its coordinates, so it falls on either side of a bare 1 µm bound depending on where it sits, and two tests computing the same distance differently could disagree: a face judged coplanar with a neighbour whose vertices do not merge with it leaves a face bent or open. 1 nm is hundreds of times the rounding of coordinates within the model extent, and a thousandth of the tolerance.
 
 ### Constructed geometry
 
@@ -45,13 +51,13 @@ Intersection points are computed in `f64` and rounded once. Each constructed ver
 
 Every boolean ends with the same deterministic clean-up:
 
-1. **Coincident faces.** Faces that coincide within the tolerance with opposite orientation cancel: both are removed. Between two lumps facing each other across a gap or overlap thinner than the tolerance, the lumps fuse into one; on opposite sides of one lump, a solid thinner than the tolerance (near-zero volume) vanishes.
-2. **Vertices.** Within each lump, vertices closer than `LINEAR_TOLERANCE` are grouped with a union–find.
+1. **Coincident faces.** Faces of the two operands that are coplanar within the tolerance are first put onto one plane, before they are intersected: the face whose plane comes later in a fixed order (offset along the normal, then the normal) has its vertices projected onto the other's plane. The order depends only on the planes, so swapping the operands gives the same result. Vertices move by at most the tolerance; a corner lying within the tolerance of the planes around a corner of the other operand lands on that corner. Otherwise the faces around them would have to bend to join the two planes, and a face a few tolerances wide would not be flat. Faces that coincide with opposite orientation then cancel: both are removed. Between two lumps facing each other across a gap or overlap no thicker than the tolerance, the lumps fuse into one; on opposite sides of one lump, a lump or a void no thicker than the tolerance on average (near-zero volume, measured as the validity checks do) vanishes.
+2. **Vertices.** Within each lump, vertices within `LINEAR_TOLERANCE` of each other are grouped with a union–find.
    - Edges whose endpoints fall in the same group disappear; edges that now share both endpoints merge.
    - Lumps that only touch along edges or at points keep their own vertices, so no non-manifold edge or vertex is created.
    - Each group is replaced by one representative: among its input vertices if it has any, otherwise among all its vertices, the one with the smallest coordinates (compared by x, then y, then z). The choice depends only on positions, so swapping the operands of a boolean gives the same result. Positions are never averaged, so repeated operations cannot make geometry drift.
    - If a group's bounding box is wider than `10 × LINEAR_TOLERANCE` (a chain of close points), the operation fails with a typed error instead of moving geometry silently.
-3. **Faces.** Adjacent faces with compatible orientation merge into one face when they are coplanar: always if they keep the same input plane, otherwise if they are coplanar within the tolerance.
+3. **Faces.** Adjacent faces with compatible orientation merge into one face when they are coplanar: always if they keep the same input plane, otherwise if they are coplanar within the tolerance, taken as one face and against the plane of one of them. A face a few tolerances wide, square to its neighbour, is within the tolerance of a plane fitted to both, but not of the neighbour's plane: it stays.
 4. **Slivers.** Faces narrower than the tolerance everywhere are removed. Booleans are **regularised**: the result is the closure of the interior, so lower-dimensional pieces (shared faces, edges or points) are dropped.
 
 Candidate pairs are never found by comparing everything with everything: vertices go through a spatial hash with cells one tolerance wide, and faces are bucketed by the input plane they keep.
@@ -67,11 +73,13 @@ Each case below becomes a case of the boolean corpus (#55) with its expected vol
 | Coplanar faces | Union of two cubes sharing a face | One 2 × 1 × 1 m box: 8 vertices, 6 faces. The shared face disappears and the side faces merge. |
 | Flush cutter | Box minus a cutter whose top is flush with the box top | No zero-thickness skin above the cut. |
 | Near-coplanar, inside tolerance | Union of two cubes, the second shifted 0.5 µm away from the first | Same as coplanar faces: the gap is below the tolerance and closes. |
+| Near-coplanar, at the tolerance | Same, shifted exactly 1 µm away | Same as coplanar faces: the gap is within the tolerance and closes. |
 | Near-coplanar, outside tolerance | Same, shifted 2 µm away | Two separate lumps; the 2 µm gap is real and kept. |
 | Touching edges | Two cubes sharing only an edge | Union: two separate lumps, no non-manifold edge. Intersection: empty. |
 | Touching vertices | Two cubes sharing only a corner | Union: two separate lumps. Intersection: empty. |
 | Near-zero volume | Box minus a cutter that leaves a 0.1 µm skin | The skin is removed. |
-| Near-zero overlap | Intersection of two cubes overlapping by 0.5 µm | Empty. |
+| Near-zero overlap | Intersection of two cubes overlapping by 0.5 µm, or by exactly 1 µm | Empty. |
+| Features a few tolerances wide | Boxes on a 0.5 m grid, the second's corners moved by up to 4 µm in steps of 0.5 µm, each way | Union, difference and intersection are valid. Features wider than 1 µm stay; corners within the tolerance of each other's planes meet; an overlap no thicker than 1 µm on average, such as a stick 2 µm square, vanishes. |
 | Micro-edge | A cut that would create a 0.3 µm edge | The edge's endpoints merge; no edge shorter than 1 µm remains. |
 
 ## Consequences

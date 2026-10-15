@@ -279,6 +279,62 @@ fn extrusions(out: &mut Output) {
     }
 }
 
+/// Unions, differences and intersections of overlapping extruded circles: the vertices where the faceted sides
+/// cross come from the kernel's arithmetic, so the volumes depend on it being identical
+/// everywhere.
+fn booleans(out: &mut Output) {
+    let mut rng = Rng::for_case("union");
+    let cylinder = |centre: Point2, radius: f64, height: f64| {
+        let start = Point2::new(centre.x + radius, centre.y);
+        let circle = Edge::Arc {
+            start,
+            end: start,
+            centre,
+            direction: ArcDirection::CounterClockwise,
+        };
+        Profile::new(vec![circle], vec![])
+            .ok()
+            .and_then(|profile| Solid::extrude(&profile, Vector3::new(0.0, 0.0, height)).ok())
+    };
+    for i in 0..8 {
+        let centre = Point2::new(rng.uniform(-10.0, 10.0), rng.uniform(-10.0, 10.0));
+        let (r1, r2) = (rng.uniform(0.5, 3.0), rng.uniform(0.5, 3.0));
+        let offset = Point2::new(rng.uniform(-1.0, 1.0), rng.uniform(-1.0, 1.0));
+        let other = Point2::new(centre.x + offset.x * r1, centre.y + offset.y * r1);
+        let pair = cylinder(centre, r1, rng.uniform(1.0, 5.0)).zip(cylinder(
+            other,
+            r2,
+            rng.uniform(1.0, 5.0),
+        ));
+        let Some((a, b)) = pair else {
+            let _ = writeln!(out.0, "cylinders[{i}] error");
+            continue;
+        };
+        match a.union(&b) {
+            Ok(Some(union)) => out.value("union.volume", i, union.volume()),
+            _ => {
+                let _ = writeln!(out.0, "union[{i}] error");
+            }
+        }
+        match a.difference(&b) {
+            Ok(cut) => out.value("difference.volume", i, cut.map_or(0.0, |cut| cut.volume())),
+            Err(_) => {
+                let _ = writeln!(out.0, "difference[{i}] error");
+            }
+        }
+        match a.intersection(&b) {
+            Ok(shared) => out.value(
+                "intersection.volume",
+                i,
+                shared.map_or(0.0, |shared| shared.volume()),
+            ),
+            Err(_) => {
+                let _ = writeln!(out.0, "intersection[{i}] error");
+            }
+        }
+    }
+}
+
 /// Shear centres of random channels: the mesh spacing comes from `sqrt` and `hypot`, and the
 /// solve sums in a fixed order, so the result must not depend on the target.
 fn shear_centres(out: &mut Output) {
@@ -326,6 +382,7 @@ fn compute() -> String {
     compositions(&mut out);
     predicates(&mut out);
     extrusions(&mut out);
+    booleans(&mut out);
     shear_centres(&mut out);
     out.0
 }

@@ -13,7 +13,8 @@
 //! Validation checks topology, the Euler–Poincaré formula, planarity, orientation and the
 //! tolerance rules of `docs/dev/adr/0001-geometry-tolerance-policy.md`. It does not check that
 //! faces avoid each other, that holes lie inside their face, or that voids lie inside an outer
-//! shell: those are geometric intersection questions for the booleans (#52 to #55).
+//! shell: those are geometric intersection questions, which the booleans answer when they build
+//! their result.
 
 mod build;
 mod error;
@@ -22,6 +23,7 @@ mod validate;
 
 pub use error::BrepError;
 pub use extrude::ExtrusionError;
+pub(crate) use validate::enclosed_volume;
 
 use crate::Point3;
 

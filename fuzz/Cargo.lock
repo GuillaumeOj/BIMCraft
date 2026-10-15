@@ -17,6 +17,7 @@ dependencies = [
  "geom",
  "interop-ifc",
  "libfuzzer-sys",
+ "libm",
  "persist",
  "schema",
  "schema-gen",

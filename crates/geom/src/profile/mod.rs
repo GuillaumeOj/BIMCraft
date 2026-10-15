@@ -89,7 +89,7 @@ pub enum ProfileError {
         /// The edge.
         edge: usize,
     },
-    /// An arc has a radius below the tolerance, or distinct ends at the same angle.
+    /// An arc has a radius within the tolerance, or distinct ends at the same angle.
     #[error("edge {edge} of {loop_id} is a degenerate arc")]
     DegenerateArc {
         /// The loop.
@@ -97,7 +97,7 @@ pub enum ProfileError {
         /// The edge.
         edge: usize,
     },
-    /// Two edges of a loop cross, touch or overlap, or come closer than the tolerance when one
+    /// Two edges of a loop cross, touch or overlap, or come within the tolerance when one
     /// of them is an arc.
     #[error("edges {first} and {second} of {loop_id} intersect")]
     SelfIntersecting {
@@ -108,7 +108,7 @@ pub enum ProfileError {
         /// The second edge.
         second: usize,
     },
-    /// Two loops cross, touch, or come closer than the tolerance where arcs are involved.
+    /// Two loops cross, touch, or come within the tolerance where arcs are involved.
     #[error("{first} and {second} intersect")]
     LoopsIntersect {
         /// The first loop.

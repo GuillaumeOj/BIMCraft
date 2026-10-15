@@ -37,7 +37,7 @@ impl Solid {
     /// # Errors
     ///
     /// [`ExtrusionError`] when the direction is not finite or not upward, when faceting the arcs
-    /// gives an invalid profile, or when the result is not a valid solid, for instance thinner
+    /// gives an invalid profile, or when the result is not a valid solid, for instance no thicker
     /// than [`LINEAR_TOLERANCE`](crate::LINEAR_TOLERANCE) or outside the model extent.
     pub fn extrude(profile: &Profile, direction: Vector3) -> Result<Self, ExtrusionError> {
         if ![direction.x, direction.y, direction.z]
