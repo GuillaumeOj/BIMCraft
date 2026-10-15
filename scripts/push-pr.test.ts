@@ -4,10 +4,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { gitEnv, git as gitIn } from "./check-pinned-deps";
 import {
+  closedIssues,
   createArgs,
   editArgs,
   effective,
   emptyPr,
+  linkArgs,
   main,
   makeRun,
   type PrOptions,
@@ -15,6 +17,8 @@ import {
   type Result,
   type Run,
   stackBlock,
+  unique,
+  withIssues,
   withStackBlock,
 } from "./push-pr";
 
@@ -63,7 +67,7 @@ describe("parseArgs", () => {
     expect(args).toMatchObject({ stack: true, base: "dev", remote: "up", force: true, noPr: true, dryRun: true });
     expect(args.global).toEqual(pr({ labels: ["a", "b", "c"], assignees: ["@me"], draft: true }));
     expect(args.branches.get("one")).toEqual(
-      pr({ title: "One", body: "Body", reviewers: ["x", "y"], milestone: "M1", project: "P" }),
+      pr({ title: "One", body: "Body", reviewers: ["x", "y"], milestone: "M1", projects: ["P"] }),
     );
     expect(args.branches.get("two")).toEqual(pr({ labels: ["d"] }));
   });
@@ -106,7 +110,7 @@ describe("effective", () => {
   });
 
   test("branch options override scalars and extend lists", () => {
-    expect(effective(global, pr({ title: "B", bodyFile: "b.md", labels: ["a", "b"], reviewers: ["r"], project: "P" }))).toEqual(
+    expect(effective(global, pr({ title: "B", bodyFile: "b.md", labels: ["a", "b"], reviewers: ["r"], projects: ["P"] }))).toEqual(
       pr({
         title: "B",
         body: undefined,
@@ -115,7 +119,7 @@ describe("effective", () => {
         assignees: ["@me"],
         reviewers: ["r"],
         milestone: "M",
-        project: "P",
+        projects: ["P"],
         draft: true,
       }),
     );
@@ -153,7 +157,7 @@ describe("gh arguments", () => {
       assignees: ["@me"],
       reviewers: ["r"],
       milestone: "M",
-      project: "P",
+      projects: ["P"],
       draft: true,
     });
     expect(createArgs({ branch: "b", base: "main", below: "origin/main", pr: options }, fallback).slice(7)).toEqual([
@@ -178,7 +182,7 @@ describe("gh arguments", () => {
   test("edit only what changes", () => {
     const existing = { number: 7, url: "u", baseRefName: "main" };
     expect(editArgs({ branch: "b", base: "main", below: "origin/main", pr: pr() }, existing)).toBeUndefined();
-    expect(editArgs({ branch: "b", base: "a", below: "a", pr: pr({ body: "B", labels: ["x"], project: "P" }) }, existing)).toEqual([
+    expect(editArgs({ branch: "b", base: "a", below: "a", pr: pr({ body: "B", labels: ["x"], projects: ["P"] }) }, existing)).toEqual([
       "gh",
       "pr",
       "edit",
@@ -211,35 +215,128 @@ describe("stack navigation", () => {
   });
 });
 
+describe("issues", () => {
+  test("finds the issues a description closes", () => {
+    expect(closedIssues("Closes #12. fixes #3, Resolved: #40\nRESOLVES #12 and fixed #5")).toEqual([12, 3, 40, 5]);
+  });
+
+  test("ignores mentions and the template placeholder", () => {
+    expect(closedIssues("Closes #\nSee #7, closes#8, encloses #9, #10")).toEqual([]);
+  });
+
+  const issue = (number: number, milestone: string | null, ...projects: string[]) => ({
+    number,
+    id: `I_${number}`,
+    milestone: milestone === null ? null : { title: milestone },
+    projectItems: projects.map((title) => ({ title })),
+  });
+  const open = (milestone: string | null, ...projects: string[]) => ({
+    number: 7,
+    url: "u",
+    baseRefName: "main",
+    body: "",
+    ...issue(7, milestone, ...projects),
+  });
+
+  test("give the pull request the first milestone and every project of its issues", () => {
+    expect(withIssues(pr(), [issue(1, null, "A"), issue(2, "M2", "A", "B"), issue(3, "M3")])).toEqual(
+      pr({ milestone: "M2", projects: ["A", "B"] }),
+    );
+    expect(withIssues(pr(), [])).toEqual(pr());
+  });
+
+  test("never replace what the pull request already has", () => {
+    expect(withIssues(pr(), [issue(1, "M", "A", "B")], open("Own", "A"))).toEqual(pr({ projects: ["B"] }));
+  });
+
+  test("never replace the milestone and projects given on the command line", () => {
+    const given = pr({ milestone: "Own", projects: ["P"] });
+    expect(withIssues(given, [issue(1, "M", "A")], open("Old"))).toEqual(given);
+  });
+
+  test("link a pull request to an issue through GraphQL", () => {
+    expect(linkArgs("I_1", "PR_2").slice(-4)).toEqual(["-f", "issue=I_1", "-f", "prs[]=PR_2"]);
+  });
+});
+
+type FakePr = {
+  number: number;
+  head: string;
+  base: string;
+  title: string;
+  body: string;
+  state: string;
+  args: string[];
+  milestone?: string;
+  projects: string[];
+  /** Issues linked by hand (the Development field). */
+  links: number[];
+};
+
 /** In-memory GitHub answering the `gh` calls push-pr makes. */
 class FakeGitHub {
-  prs: { number: number; head: string; base: string; title: string; body: string; state: string; args: string[] }[] = [];
+  prs: FakePr[] = [];
+  issues = new Map<number, { milestone?: string; projects: string[] }>();
   signedIn = true;
+  /** False while GitHub has not yet read the closing keywords of a new pull request. */
+  keywordLinks = true;
 
   handle(cmd: string[], input: string | undefined): Result {
     const flag = (name: string): string | undefined => {
       const i = cmd.indexOf(name);
       return i === -1 ? undefined : cmd[i + 1];
     };
+    const field = (name: string): string | undefined =>
+      cmd.find((arg) => arg.startsWith(`${name}=`))?.slice(name.length + 1);
     const action = cmd.slice(1, 3).join(" ");
     if (action === "auth status") return { code: this.signedIn ? 0 : 1, stdout: "", stderr: "" };
     if (action === "pr list") {
       const latest = this.prs.filter((p) => p.head === flag("--head")).slice(-1);
-      return ok(JSON.stringify(latest.map((p) => ({ number: p.number, url: this.url(p.number), baseRefName: p.base, state: p.state }))));
+      return ok(
+        JSON.stringify(
+          latest.map((p) => ({
+            number: p.number,
+            url: this.url(p.number),
+            baseRefName: p.base,
+            state: p.state,
+            body: p.body,
+            ...planning(p.milestone, p.projects),
+          })),
+        ),
+      );
     }
     if (action === "pr create") {
       const number = 100 + this.prs.length;
       const body = flag("--body-file") === undefined ? (flag("--body") as string) : `file:${flag("--body-file")}`;
       const [head, base, title] = [flag("--head"), flag("--base"), flag("--title")] as string[];
-      this.prs.push({ number, head, base, title, body, state: "OPEN", args: cmd } as FakeGitHub["prs"][number]);
+      const projects = flag("--project")?.split(",") ?? [];
+      this.prs.push({ number, head, base, title, body, state: "OPEN", args: cmd, milestone: flag("--milestone"), projects, links: [] });
       return ok(`Creating pull request\n${this.url(number)}\n`);
+    }
+    if (action === "issue view") {
+      const issue = this.issues.get(Number(cmd[3]));
+      if (issue === undefined) return { code: 1, stdout: "", stderr: `no issue #${cmd[3]}` };
+      return ok(JSON.stringify({ number: Number(cmd[3]), id: `I_${cmd[3]}`, ...planning(issue.milestone, issue.projects) }));
+    }
+    if (action === "repo view") return ok("main\n");
+    if (action === "api graphql") {
+      const linked = this.prs.find((p) => `PR_${p.number}` === field("prs[]"));
+      linked?.links.push(Number(field("issue")?.slice(2)));
+      return linked === undefined ? { code: 1, stdout: "", stderr: "no such node" } : ok();
     }
     const found = this.prs.find((p) => p.number === Number(cmd[3]));
     if (found === undefined) return { code: 1, stdout: "", stderr: "no such pull request" };
-    if (action === "pr view") return ok(JSON.stringify({ body: found.body }));
+    if (action === "pr view") {
+      // GitHub links the issues a pull request closes by itself only when it targets the default branch.
+      const closing = unique([...(found.base === "main" && this.keywordLinks ? closedIssues(found.body) : []), ...found.links]);
+      const closingIssuesReferences = closing.map((number) => ({ number }));
+      return ok(JSON.stringify({ id: `PR_${found.number}`, body: found.body, closingIssuesReferences }));
+    }
     found.base = flag("--base") ?? found.base;
     found.title = flag("--title") ?? found.title;
     found.body = flag("--body-file") === "-" ? (input as string) : (flag("--body") ?? found.body);
+    found.milestone = flag("--milestone") ?? found.milestone;
+    found.projects = unique([...found.projects, ...(flag("--add-project")?.split(",") ?? [])]);
     found.args.push(...cmd);
     return ok();
   }
@@ -248,6 +345,11 @@ class FakeGitHub {
     return `https://github.com/owner/repo/pull/${number}`;
   }
 }
+
+const planning = (milestone: string | undefined, projects: string[]) => ({
+  milestone: milestone === undefined ? null : { title: milestone },
+  projectItems: projects.map((title) => ({ title })),
+});
 
 describe("main", () => {
   let dir: string;
@@ -280,6 +382,8 @@ describe("main", () => {
     return makeRun(dir, gitEnv())(cmd, { ...options, inherit: false });
   };
   const ship = (...argv: string[]): number => main(argv, run);
+  const ran = (command: string): string[][] => calls.filter((cmd) => cmd.slice(0, 3).join(" ") === command);
+  const wouldRun = (command: string): string[] => output.filter((line) => line.startsWith(`would run: ${command}`));
   const stamp = (): string => {
     try {
       return readFileSync(stampFile(), "utf8").trim();
@@ -417,7 +521,7 @@ describe("main", () => {
     expect(remoteBranches()).toEqual(["main"]);
     expect(gh.prs).toHaveLength(0);
     expect(output).toContain("would run: git push --atomic -u origin one two three");
-    expect(output.some((line) => line.startsWith("would run: gh pr create --head two --base one"))).toBe(true);
+    expect(wouldRun("gh pr create --head two --base one")).toHaveLength(1);
   });
 
   test("--dry-run on an open stack shows the navigation edits", () => {
@@ -425,7 +529,87 @@ describe("main", () => {
     expect(ship("--stack")).toBe(0);
     for (const p of gh.prs) p.body = "";
     expect(ship("--stack", "--dry-run")).toBe(0);
-    expect(output.filter((line) => line.startsWith("would run: gh pr edit"))).toHaveLength(3);
+    expect(wouldRun("gh pr edit")).toHaveLength(3);
+  });
+
+  describe("issues closed by the pull requests", () => {
+    beforeEach(() => {
+      gh.issues.set(1, { milestone: "Phase 0", projects: ["BIMCraft"] });
+      gh.issues.set(2, { milestone: "Phase 0", projects: ["BIMCraft"] });
+      gh.issues.set(3, { projects: [] });
+    });
+
+    test("give a stack their milestone and project, and link the upper pull requests", () => {
+      stackOfThree();
+      const argv = ["--stack", "--branch", "one", "--body", "Closes #1", "--branch", "two", "--body", "Fixes #2"];
+      expect(ship(...argv, "--branch", "three", "--body", "Closes #3")).toBe(0);
+      expect(gh.prs.map((p) => [p.milestone, p.projects, p.links])).toEqual([
+        ["Phase 0", ["BIMCraft"], []],
+        ["Phase 0", ["BIMCraft"], [2]],
+        [undefined, [], [3]],
+      ]);
+      calls = [];
+      expect(ship("--stack")).toBe(0);
+      expect(ran("gh api graphql")).toEqual([]);
+      expect(ran("gh pr edit")).toEqual([]);
+    });
+
+    test("give a single pull request into main its milestone and project; GitHub links it", () => {
+      featureBranch("feat: add thing\n\nCloses #1");
+      expect(ship()).toBe(0);
+      expect(gh.prs[0]).toMatchObject({ milestone: "Phase 0", projects: ["BIMCraft"], links: [] });
+      expect(ran("gh api graphql")).toEqual([]);
+    });
+
+    test("never replace the milestone given on the command line", () => {
+      featureBranch("feat: add thing\n\nCloses #1");
+      expect(ship("--milestone", "Phase 1", "--project", "Other")).toBe(0);
+      expect(gh.prs[0]).toMatchObject({ milestone: "Phase 1", projects: ["Other"] });
+    });
+
+    test("never link by hand a pull request into the default branch", () => {
+      featureBranch("feat: add thing\n\nCloses #1");
+      gh.keywordLinks = false;
+      expect(ship()).toBe(0);
+      expect(gh.prs[0]).toMatchObject({ links: [] });
+      expect(ran("gh api graphql")).toEqual([]);
+    });
+
+    test("show in --dry-run the milestone and project a new pull request gets", () => {
+      featureBranch("feat: add thing\n\nCloses #1");
+      expect(ship("--dry-run")).toBe(0);
+      expect(wouldRun("gh pr create")[0]).toEndWith("--milestone 'Phase 0' --project BIMCraft");
+    });
+
+    test("stop before stamping when an issue cannot be read", () => {
+      stackOfThree();
+      expect(ship("--stack", "--branch", "two", "--body", "Closes #99")).toBe(1);
+      expect(errors.join("\n")).toContain("gh issue view 99 --json number,id,milestone,projectItems failed: no issue #99");
+      expect(stamp()).toBe("");
+      expect(remoteBranches()).toEqual(["main"]);
+    });
+
+    test("change nothing when the description closes no issue", () => {
+      featureBranch("feat: add thing\n\nCloses #");
+      expect(ship()).toBe(0);
+      expect(ran("gh issue view")).toEqual([]);
+      expect(gh.prs[0]).toMatchObject({ milestone: undefined, projects: [] });
+    });
+
+    test("are only shown by --dry-run", () => {
+      stackOfThree();
+      expect(ship("--stack")).toBe(0);
+      for (const p of gh.prs) p.body = `Closes #${p.number - 99}\n\n${p.body}`;
+      calls = [];
+      expect(ship("--stack", "--dry-run")).toBe(0);
+      expect(gh.prs.map((p) => [p.milestone, p.links])).toEqual([
+        [undefined, []],
+        [undefined, []],
+        [undefined, []],
+      ]);
+      expect(wouldRun("gh pr edit").filter((line) => line.includes("--milestone"))).toHaveLength(2);
+      expect(wouldRun("gh api graphql")).toHaveLength(2);
+    });
   });
 
   test("passes the no-user-docs label to the commit checks", () => {
