@@ -56,4 +56,4 @@ export default defineConfig({
 
 ## TypeScript
 
-`ui/tsconfig.json` extends `./tsconfig.base.json` and adds `include` paths (`src`, `e2e` and the config files) and types (`node`, `vite/client`, `@testing-library/jest-dom/vitest`).
+`ui/tsconfig.json` extends `./tsconfig.base.json` and adds `include` paths (`src`, `e2e` and the config files) and types (`node`, `vite/client`, `@testing-library/jest-dom/vitest`). `ui/tsconfig.app.json` checks the application code alone (`src` without tests) with browser types only, so Node globals such as `process` cannot reach code that runs in the window; `bun run build` and `scripts/check-all.sh ui` run both.
