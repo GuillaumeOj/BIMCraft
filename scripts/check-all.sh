@@ -84,7 +84,7 @@ check_wasm() {
 # Bounded and seeded, so a run is reproducible and fits in CI; longer runs: docs/dev/quality.md.
 check_fuzz() {
   has_fuzz || { step "Fuzzing: no fuzz targets yet, skipped"; return; }
-  step "Fuzzing: parsers survive hostile input (ENG-02)"
+  step "Fuzzing: parsers and the geometry kernel survive hostile input (ENG-02)"
   require cargo-fuzz; require cargo-deny; require cargo-audit
   # From the root, where .cargo/audit.toml lives.
   cargo audit --deny warnings --file fuzz/Cargo.lock

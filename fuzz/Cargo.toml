@@ -1,4 +1,5 @@
-# Fuzz targets for the parsers (ENG-02), run with cargo-fuzz on the nightly in rust-toolchain.toml.
+# Fuzz targets for the parsers and the geometry kernel (ENG-02), run with cargo-fuzz on the nightly
+# in rust-toolchain.toml.
 # A workspace of its own: libFuzzer needs nightly sanitizers, and the main workspace stays stable.
 # How to run: docs/dev/quality.md.
 
@@ -15,6 +16,7 @@ cargo-fuzz = true
 [dependencies]
 core-model = { path = "../crates/core-model" }
 express = { path = "../crates/express" }
+geom = { path = "../crates/geom" }
 interop-ifc = { path = "../crates/interop-ifc" }
 libfuzzer-sys = "=0.4.13"
 schema-gen = { path = "../crates/schema-gen" }
@@ -28,6 +30,13 @@ disallowed_types = "allow"
 [[bin]]
 name = "express_schema"
 path = "fuzz_targets/express_schema.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "location"
+path = "fuzz_targets/location.rs"
 test = false
 doc = false
 bench = false

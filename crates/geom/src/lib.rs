@@ -24,17 +24,26 @@
 //! [`Solid::extrude`] builds a solid from a profile and a direction (GEO-02), holes included.
 //! Arcs become chords within [`ARC_CHORD_TOLERANCE`], since faces are planar; failures are an
 //! [`ExtrusionError`].
+//!
+//! A [`LocationLine`] says which line of a [`LayerSet`] a wall is drawn along (ARC-30). It
+//! resolves into an offset of the section from the wall's axis (GEO-13); failures are a
+//! [`LocationError`].
 
 // ARCH-02: forbid, not deny, so nothing in this crate can opt out. See docs/dev/quality.md.
 #![forbid(clippy::disallowed_methods, clippy::disallowed_types)]
 
 mod brep;
+mod location;
 mod point;
 mod predicates;
 mod profile;
 mod tolerance;
 
 pub use brep::{BrepError, ExtrusionError, FaceInput, Shell, Solid};
+pub use location::{
+    DirectionSense, Face, Layer, LayerId, LayerPlacement, LayerSet, LocationError, LocationLine,
+    MAX_LAYERS, Resolved, SnapInfo, SnapPoint, SnapPosition,
+};
 pub use point::{Point2, Point3, Vector3};
 pub use predicates::{
     MAX_COORDINATE, MIN_COORDINATE, Orientation, PredicateError, incircle, insphere, orient2d,
