@@ -1,15 +1,20 @@
 [package]
 name = "persist"
 version = "0.0.0"
-description = "Project files as SQLite databases: schema version and transactional setup."
+description = "Project files as SQLite databases: versions, the model's objects and transactions."
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 publish = false
 
 [dependencies]
+core-model = { workspace = true }
 rusqlite = { workspace = true }
+schema = { workspace = true }
 thiserror = { workspace = true }
+
+[dev-dependencies]
+proptest = { workspace = true }
 
 [lints]
 workspace = true

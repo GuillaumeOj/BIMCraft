@@ -12,6 +12,7 @@
 #![forbid(clippy::disallowed_methods, clippy::disallowed_types)]
 
 mod model;
+mod tables;
 mod validate;
 mod value_type;
 
@@ -19,6 +20,7 @@ pub use model::{
     Attribute, Cardinality, Entity, EntityKind, IfcMapping, Namespace, Placement, Presence,
     PropertySet, Representation, Role, RoleTarget, TypeDef, Value,
 };
+pub use tables::{Side, StoredTable, stored_tables};
 pub use validate::{
     Item, Location, MAX_DOC_LEN, MAX_ENTITIES, MAX_ITEMS, MAX_NAME_LEN, MAX_PROPERTY_SETS, Owner,
     ValidationError, ValidationErrorKind, validate,

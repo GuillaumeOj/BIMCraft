@@ -3,16 +3,31 @@
 //! This crate never opens a file: the host opens the [`Connection`] on its own storage (a path on
 //! desktop, the browser's OPFS through a `SQLite` VFS) and hands it in, so the crate stays free of
 //! file system access (ARCH-02) and builds for `wasm32-unknown-unknown` (ARCH-01). It owns what
-//! is inside the file: the schema version (PERS-01), migrations and transactions. The binding
-//! choice is recorded in `docs/dev/adr/0006-sqlite-binding.md`.
+//! is inside the file: the file format and schema versions (PERS-01), the model's objects,
+//! migrations and transactions. The binding choice is recorded in
+//! `docs/dev/adr/0006-sqlite-binding.md`, the file layout in
+//! `docs/dev/adr/0016-project-file-layout.md`.
+//!
+//! A host calls [`open_project`] on every connection first, then [`open_model`] to read the
+//! model and [`save_model`] to write it.
 
 // ARCH-02: forbid, not deny, so nothing in this crate can opt out. See docs/dev/quality.md.
 #![forbid(clippy::disallowed_methods, clippy::disallowed_types)]
 
-pub use rusqlite::Connection;
-use rusqlite::{OptionalExtension, Transaction};
+mod codec;
+mod layout;
+mod model;
+#[cfg(test)]
+mod test_support;
 
-/// Schema version written by this build; [`open_project`] refuses files with a higher one.
+use core_model::StoreError;
+pub use model::{open_model, save_model};
+pub use rusqlite::Connection;
+use rusqlite::{ErrorCode, OptionalExtension, Transaction};
+
+/// File format version written by this build: the layout of the tables the file keeps about
+/// itself. [`open_project`] refuses files with a higher one. The model's own tables follow the
+/// schema version of their namespace instead.
 const SCHEMA_VERSION: u32 = 1;
 
 /// Marks a database as a `BIMCraft` project in the file header ("BIMC" in ASCII), so other
@@ -35,9 +50,39 @@ pub enum PersistError {
         /// Highest schema version this build reads.
         supported: u32,
     },
+    /// The file holds a schema namespace in a version newer than this build knows.
+    #[error(
+        "the project uses version {found} of the \"{namespace}\" schema; this version reads up to {supported}"
+    )]
+    NewerSchema {
+        /// The namespace, `core` or `plugin:<plugin-id>`.
+        namespace: String,
+        /// Version stored in the file.
+        found: u32,
+        /// Version this build knows.
+        supported: u32,
+    },
+    /// The file is damaged: `SQLite` found it malformed, or its tables or values do not have
+    /// the shape this build writes.
+    #[error("the project file is damaged")]
+    Corrupt,
+    /// The objects in the file break the rules of the schema, or the schema itself is invalid.
+    #[error("the project does not fit the schema")]
+    Model(#[from] StoreError),
     /// `SQLite` reported an error; the source keeps its code for diagnostics.
     #[error("the project database failed")]
-    Database(#[from] rusqlite::Error),
+    Database(#[source] rusqlite::Error),
+}
+
+impl From<rusqlite::Error> for PersistError {
+    /// Keeps the two `SQLite` failures a user can act on apart from the others.
+    fn from(error: rusqlite::Error) -> Self {
+        match error.sqlite_error_code() {
+            Some(ErrorCode::NotADatabase) => Self::NotAProject,
+            Some(ErrorCode::DatabaseCorrupt) => Self::Corrupt,
+            _ => Self::Database(error),
+        }
+    }
 }
 
 /// Prepares a database for use as a project file.
@@ -127,7 +172,8 @@ fn is_empty(tx: &Transaction<'_>) -> Result<bool, PersistError> {
 /// Creates the current schema in an empty database.
 fn create_schema(tx: &Transaction<'_>) -> Result<(), PersistError> {
     tx.execute_batch(
-        "CREATE TABLE project_property (key TEXT PRIMARY KEY NOT NULL, value TEXT NOT NULL) STRICT;",
+        "CREATE TABLE project_property (key TEXT PRIMARY KEY NOT NULL, value TEXT NOT NULL) STRICT;
+         CREATE TABLE schema_namespace (name TEXT PRIMARY KEY NOT NULL, version INTEGER NOT NULL) STRICT;",
     )?;
     tx.pragma_update(None, "application_id", APPLICATION_ID)?;
     tx.pragma_update(None, "user_version", SCHEMA_VERSION)?;
