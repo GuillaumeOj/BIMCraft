@@ -33,7 +33,7 @@ Pull requests with unsigned commits cannot be merged. To sign off commits you al
 3. Fork the repository and create a branch from `main` (e.g. `feat/ifc-step-parser` or `docs/spec-georef`).
 4. Keep each pull request focused on one change, and reference the issue and any requirement IDs it implements.
 5. Meet the [Definition of Done](AGENTS.md#2-definition-of-done): tests and coverage, e2e for main flows, end-user documentation in `docs/user/`.
-6. Run `scripts/check-all.sh`, get the changes reviewed and simplified, then stamp, push and open the pull request in one go with `bun scripts/push-pr.ts` (or stamp with `scripts/mark-reviewed.sh` and push by hand). Stamping asks you to confirm the reviews at a terminal, and the `pre-push` hook refuses unreviewed commits.
+6. Run the checks for what you changed ([AGENTS.md §3a](AGENTS.md#3a-local-checks-while-working); CI runs everything), get the changes reviewed and simplified, then stamp, push and open the pull request in one go with `bun scripts/push-pr.ts` (or stamp with `scripts/mark-reviewed.sh` and push by hand). Stamping asks you to confirm the reviews at a terminal, and the `pre-push` hook refuses unreviewed commits.
 
    ```sh
    # One branch
@@ -45,10 +45,11 @@ Pull requests with unsigned commits cannot be merged. To sign off commits you al
    ```
 
    Options before any `--branch` apply to every pull request. After a rebase, add `--force`; existing pull requests are updated, not duplicated. `--dry-run` shows what would happen, `--help` lists every option.
+7. CI is the gate: fix failures until every check on the pull request is green (`gh pr checks <number> --watch`).
 
 ### Using a coding agent
 
-Agents are welcome. [AGENTS.md](AGENTS.md) is the rulebook every agent must follow (Claude Code reads it through `CLAUDE.md`). In short: agents never push; you push after running a code review and a simplification pass (in Claude Code: `/code-review`, then `/simplify`; the `ship` skill guides you). You stay responsible for every line you submit.
+Agents are welcome. [AGENTS.md](AGENTS.md) is the rulebook every agent must follow (Claude Code reads it through `CLAUDE.md`). In short: you run a code review and a simplification pass (in Claude Code: `/code-review`, then `/simplify`; the `ship` skill guides you) and stamp the result; then you push, or tell the agent to push its branch and open a draft pull request. The agent then tracks CI and proposes fixes, each reviewed and stamped by you before it is pushed. You stay responsible for every line you submit.
 
 ## Commit messages
 

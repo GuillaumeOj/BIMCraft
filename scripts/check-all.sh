@@ -2,8 +2,8 @@
 # Runs the project checks (AGENTS.md §9). CI calls the same sections, so local and remote never drift.
 # Usage: scripts/check-all.sh [section...]   sections: repo rust coverage wasm fuzz ui e2e docs (default: all)
 # A section is skipped only when the code it checks does not exist yet.
-# CHECK_CRATES="a b" limits the Rust sections to those crates (set by .githooks/pre-push from
-# scripts/affected.ts); unset, they cover the whole workspace, as in CI.
+# CHECK_CRATES="a b" limits the Rust sections to those crates, for a quick local run on the crates
+# you changed (AGENTS.md §3a); unset, they cover the whole workspace, as in CI.
 set -eu
 
 root=$(git rev-parse --show-toplevel)
@@ -65,7 +65,7 @@ check_coverage() {
 check_wasm() {
   has_rust || { step "wasm32: no crates yet, skipped"; return; }
   step "wasm32: core crates build for the browser (ARCH-01)"
-  # The LLVM lookup runs only once a wasm crate is in scope, so scoped pre-push runs need no LLVM.
+  # The LLVM lookup runs only once a wasm crate is in scope, so runs scoped by CHECK_CRATES need no LLVM.
   toolchain=
   for crate in $(existing_crates scripts/wasm-crates.txt); do
     in_scope "$crate" || continue
