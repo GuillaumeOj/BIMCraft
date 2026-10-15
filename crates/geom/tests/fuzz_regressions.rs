@@ -1,7 +1,7 @@
 //! Inputs the fuzz targets of `fuzz/` once broke (ENG-02), decoded into plain tests. Each one
 //! names the seed file that keeps replaying it in the fuzz run.
 
-use geom::{ArcDirection, Edge, LoopId, Point2, Profile, ProfileError};
+use geom::{ArcDirection, Edge, LoopId, Point2, Profile, ProfileError, Solid, Vector3};
 
 /// A point given in quarter metres, scaled by `2^exponent`.
 fn grid(x: f64, y: f64, exponent: i32) -> Point2 {
@@ -101,4 +101,46 @@ fn arcs_leaving_their_common_end_together_meet() {
     };
     assert_eq!(Profile::new(cusp, vec![]), crossing(1, 2));
     assert_eq!(Profile::new(reversed, vec![]), crossing(1, 2));
+}
+
+/// `fuzz/seeds/extruded_boolean/micro-triangle-beside-an-edge`: two slanted prisms over arcs
+/// turned into chords, a quarter of the grid size. Near (3.6, 0.24, 0) their cuts leave three
+/// vertices a few micrometres apart, one of them 2.4 µm beside an edge: a triangle a few
+/// tolerances wide whose sides were not all shared, so every operation failed with an open edge.
+#[test]
+fn a_triangle_a_few_tolerances_wide_beside_an_edge_closes() {
+    let prism = |edges, (x, y, z): (f64, f64, f64)| {
+        let profile = Profile::new(edges, vec![]).unwrap();
+        Solid::extrude(&profile, Vector3::new(x / 4.0, y / 4.0, z / 4.0)).unwrap()
+    };
+    let (a0, a1) = (grid(50.0, 41.0, -2), grid(65.0, -95.0, -2));
+    let a = prism(
+        vec![
+            Edge::Line { start: a0, end: a1 },
+            arc(a1, a0, 3.875, ArcDirection::CounterClockwise),
+        ],
+        (90.0, 90.0, 84.0),
+    );
+    let (b0, b1) = (grid(45.0, 41.0, -2), grid(-1.0, -1.0, -2));
+    let b = prism(
+        vec![
+            arc(b0, b1, 0.125, ArcDirection::Clockwise),
+            arc(b1, b0, 3.875, ArcDirection::CounterClockwise),
+        ],
+        (90.0, 45.0, 57.0),
+    );
+    let (va, vb) = (a.volume(), b.volume());
+    let slack = 1e-6 * (va + vb);
+    let union = a.union(&b).unwrap().unwrap();
+    assert_eq!(union.validate(), Ok(()));
+    assert!(union.volume() <= va + vb + slack && union.volume() >= va.max(vb) - slack);
+    let cut = a.difference(&b).unwrap().unwrap();
+    assert_eq!(cut.validate(), Ok(()));
+    assert!(cut.volume() <= va + slack && cut.volume() >= va - vb - slack);
+    let shared = a.intersection(&b).unwrap().unwrap();
+    assert_eq!(shared.validate(), Ok(()));
+    assert!(shared.volume() <= va.min(vb) + slack);
+    // Inclusion–exclusion: the three results account for the same volume.
+    assert!((union.volume() - (cut.volume() + vb)).abs() <= slack);
+    assert!((va - (cut.volume() + shared.volume())).abs() <= slack);
 }

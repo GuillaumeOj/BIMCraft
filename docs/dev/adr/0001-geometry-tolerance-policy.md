@@ -47,6 +47,8 @@ The allowance is what makes this hold. A feature typed as 1 µm is computed as 1
 
 Intersection points are computed in `f64` and rounded once. Each constructed vertex, edge and face records the input entities that generated it (for example "edge 12 of A crossing face 3 of B"). Later decisions about a constructed entity use exact predicates on its generators where possible, and its rounded coordinates only where they cannot. A face keeps the plane of the input face it comes from; its vertices lie within the tolerance of that plane.
 
+An edge crosses a plane where its ends lie on either side, beyond the tolerance; an end within the tolerance lies on the plane. An edge running along the plane at a shallow angle is the exception: if it crosses the plane farther than the tolerance from an end within the tolerance, that end takes the side it actually lies on and the crossing is kept. The decision depends only on the vertex, its edges and the plane, so every face around the vertex is cut the same way; otherwise one face's cut could stop at the vertex while its neighbour's runs on to the crossing, leaving the sliver between them open.
+
 ### Merge pass
 
 Every boolean ends with the same deterministic clean-up:
@@ -57,7 +59,7 @@ Every boolean ends with the same deterministic clean-up:
    - Lumps that only touch along edges or at points keep their own vertices, so no non-manifold edge or vertex is created.
    - Each group is replaced by one representative: among its input vertices if it has any, otherwise among all its vertices, the one with the smallest coordinates (compared by x, then y, then z). The choice depends only on positions, so swapping the operands of a boolean gives the same result. Positions are never averaged, so repeated operations cannot make geometry drift.
    - If a group's bounding box is wider than `10 × LINEAR_TOLERANCE` (a chain of close points), the operation fails with a typed error instead of moving geometry silently.
-3. **Faces.** Adjacent faces with compatible orientation merge into one face when they are coplanar: always if they keep the same input plane, otherwise if they are coplanar within the tolerance, taken as one face and against the plane of one of them. A face a few tolerances wide, square to its neighbour, is within the tolerance of a plane fitted to both, but not of the neighbour's plane: it stays.
+3. **Faces.** Adjacent faces with compatible orientation merge into one face when they are coplanar: always if they keep the same input plane, otherwise if they are coplanar within the tolerance, taken as one face and against the plane of one of them. A face a few tolerances wide, square to its neighbour, is within the tolerance of a plane fitted to both, but not of the neighbour's plane: it stays. Faces already merged are tested as a group, so a face a few tolerances wide lying within the tolerance of two neighbours that are not coplanar joins one of them at most, never both into one bent face.
 4. **Slivers.** Faces narrower than the tolerance everywhere are removed. Booleans are **regularised**: the result is the closure of the interior, so lower-dimensional pieces (shared faces, edges or points) are dropped.
 
 Candidate pairs are never found by comparing everything with everything: vertices go through a spatial hash with cells one tolerance wide, and faces are bucketed by the input plane they keep.

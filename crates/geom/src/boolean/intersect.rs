@@ -7,7 +7,8 @@
 use std::collections::BTreeMap;
 
 use super::face::{PlanarFace, Pool, meeting_direction};
-use crate::vector::{add, dot, edges, scale, sub};
+use crate::tolerance::WITHIN_TOLERANCE;
+use crate::vector::{add, dot, edges, length, scale, sub};
 
 /// The segments to insert into each face, as vertex pairs of the pool.
 pub(super) type Segments = Vec<Vec<(usize, usize)>>;
@@ -17,11 +18,21 @@ pub(super) type Segments = Vec<Vec<(usize, usize)>>;
 pub(super) fn segments(faces: &[PlanarFace], split: usize, pool: &mut Pool) -> Segments {
     let mut out = vec![Vec::new(); faces.len()];
     let mut crossings = BTreeMap::new();
+    let mut neighbours = vec![Vec::new(); pool.len()];
+    for (u, v) in faces
+        .iter()
+        .flat_map(|face| &face.rings)
+        .flat_map(|ring| edges(ring))
+    {
+        neighbours[u].push(v);
+        neighbours[v].push(u);
+    }
     for (f, g) in candidate_pairs(faces, split) {
         let mut pair = Pair {
             faces,
             pool: &mut *pool,
             crossings: &mut crossings,
+            neighbours: &neighbours,
         };
         for segment in pair.meet(f, g) {
             out[f].push(segment);
@@ -44,7 +55,7 @@ pub(super) fn candidate_pairs(faces: &[PlanarFace], split: usize) -> Vec<(usize,
     });
     let mut pairs = Vec::new();
     for f in 0..split {
-        let reach = faces[f].max_x() + crate::tolerance::WITHIN_TOLERANCE;
+        let reach = faces[f].max_x() + WITHIN_TOLERANCE;
         let end = second.partition_point(|&g| faces[g].min_x() <= reach);
         pairs.extend(
             second[..end]
@@ -64,6 +75,8 @@ struct Pair<'a> {
     faces: &'a [PlanarFace],
     pool: &'a mut Pool,
     crossings: &'a mut Crossings,
+    /// The vertices joined to each vertex by an edge of its operand.
+    neighbours: &'a [Vec<usize>],
 }
 
 impl Pair<'_> {
@@ -89,6 +102,8 @@ impl Pair<'_> {
         let Some(direction) = meeting_direction(one, other) else {
             return Vec::new();
         };
+        let sides_a = self.settled(one, sides_a, other);
+        let sides_b = self.settled(other, sides_b, one);
         let mut points = self.on_plane(first, &sides_a, second);
         points.extend(self.on_plane(second, &sides_b, first));
         let pool = &*self.pool;
@@ -114,6 +129,41 @@ impl Pair<'_> {
             .iter()
             .map(|ring| ring.iter().map(|&v| plane.side(self.pool.get(v))).collect())
             .collect()
+    }
+
+    /// The sides of [`Self::sides`], with each vertex within the tolerance of the plane put on
+    /// the side it actually lies on if one of its edges crosses the plane farther than the
+    /// tolerance from it. Such an edge runs along the plane at a shallow angle, and the cuts of
+    /// the faces along it must agree: a face whose cut stopped at the vertex would leave the
+    /// sliver between the vertex and the crossing open, while a neighbouring face's cut runs on
+    /// to the crossing. The test depends only on the vertex, its edges and the plane, so every
+    /// face around the vertex agrees.
+    fn settled(
+        &self,
+        face: &PlanarFace,
+        mut sides: Vec<Vec<i8>>,
+        plane: &PlanarFace,
+    ) -> Vec<Vec<i8>> {
+        for (ring, sides) in face.rings.iter().zip(&mut sides) {
+            for (&v, side) in ring.iter().zip(sides.iter_mut()) {
+                if *side != 0 {
+                    continue;
+                }
+                let p = self.pool.get(v);
+                let d = plane.distance(p);
+                let crosses_far = self.neighbours[v].iter().any(|&w| {
+                    let q = self.pool.get(w);
+                    let e = plane.distance(q);
+                    plane.side(q) != 0
+                        && d * e < 0.0
+                        && d / (d - e) * length(sub(q, p)) > WITHIN_TOLERANCE
+                });
+                if crosses_far {
+                    *side = if d > 0.0 { 1 } else { -1 };
+                }
+            }
+        }
+        sides
     }
 
     /// The points where the boundary of face `f` meets the plane of face `g`: its vertices on

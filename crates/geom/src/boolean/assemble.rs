@@ -216,31 +216,39 @@ fn merge_coplanar(
     pool: &Pool,
 ) -> Faces {
     let half_edges = HalfEdges::new(faces);
-    // Whether the two faces, taken as one, are planar within the tolerance: the test the solid's
-    // checks will apply to the merged face. It is not enough on its own: a face a few
+    // Whether two groups of faces, taken as one, are planar within the tolerance: the test the
+    // solid's checks will apply to the merged face. It is not enough on its own: a face a few
     // tolerances wide, square to its neighbour, would pass, its width split on either side of
-    // the plane fitted to both. So the vertices of both must also lie within the tolerance of
-    // one face's plane; requiring both planes would reject a small face tilted by a rounding
-    // error next to a large one.
-    let flat_together = |f: usize, g: usize| {
-        let both: Vec<Vec<usize>> = faces[f].iter().chain(&faces[g]).cloned().collect();
+    // the plane fitted to both. So their vertices must also lie within the tolerance of one
+    // face's plane; requiring every face's plane would reject a small face tilted by a rounding
+    // error next to a large one. Groups are tested whole, not face by face: a face a few
+    // tolerances wide may lie within the tolerance of two neighbours that are not coplanar,
+    // and would otherwise join them into one bent face.
+    let flat_together = |groups: [&[usize]; 2]| {
+        let members = || groups.into_iter().flatten().copied();
+        let both: Vec<Vec<usize>> = members().flat_map(|f| faces[f].iter().cloned()).collect();
         let near = |(normal, centre): (Vector, Vector)| {
             both.iter()
                 .flatten()
                 .all(|&v| dot(normal, sub(pool.get(v), centre)).abs() <= WITHIN_TOLERANCE)
         };
-        near(plane(&both, pool)) && (near(planes[f]) || near(planes[g]))
+        near(plane(&both, pool)) && members().any(|f| near(planes[f]))
     };
     let mut group: Vec<usize> = (0..faces.len()).collect();
+    let mut members: Vec<Vec<usize>> = (0..faces.len()).map(|f| vec![f]).collect();
     for (h, &twin) in twins.iter().enumerate() {
         let (f, g) = (half_edges.face(h), half_edges.face(twin));
+        let (rf, rg) = (find(&mut group, f), find(&mut group, g));
         // Faces sharing several edges are tested once: later edges find them merged.
         if f < g
-            && find(&mut group, f) != find(&mut group, g)
+            && rf != rg
             && dot(planes[f].0, planes[g].0) > 0.0
-            && flat_together(f, g)
+            && flat_together([&members[rf], &members[rg]])
         {
-            union(&mut group, f, g);
+            union(&mut group, rf, rg);
+            let (root, other) = (rf.min(rg), rf.max(rg));
+            let moved = std::mem::take(&mut members[other]);
+            members[root].extend(moved);
         }
     }
     let mut size = vec![0_usize; faces.len()];
