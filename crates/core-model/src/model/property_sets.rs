@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use schema::{Attribute, Placement, PropertySet, ValueType};
 
 use super::types::Object;
-use super::{Model, ModelError};
+use super::{Model, ModelError, find_attribute};
 use crate::store::{Side, Table, default_value};
 use crate::units::{Quantity, Unit};
 use crate::{AttributeValue, EntityId, StoreError};
@@ -218,8 +218,8 @@ impl Model {
     ///
     /// # Errors
     ///
-    /// Fails when the object, set or property is unknown, or the set does not apply to the
-    /// object's entity.
+    /// Fails when the object, set or property is unknown, the set does not apply to the
+    /// object's entity, or the object is a type and the property is set on each instance.
     pub fn property(
         &self,
         id: EntityId,
@@ -228,6 +228,9 @@ impl Model {
     ) -> Result<Option<AttributeValue>, ModelError> {
         let (definition, object) = self.applicable_set(id, set)?;
         let attribute = find_property(definition, property)?;
+        if object.is_type() {
+            object.check_placement(set, attribute)?;
+        }
         let table = self.property_sets.get(set);
         let stored = |id, is_type| table.and_then(|table| table.side(is_type).get(id, property));
         let own = match (object, attribute.placement) {
@@ -354,13 +357,10 @@ impl Model {
 }
 
 fn find_property<'a>(set: &'a PropertySet, property: &str) -> Result<&'a Attribute, ModelError> {
-    set.properties
-        .iter()
-        .find(|attribute| attribute.name == property)
-        .ok_or_else(|| ModelError::UnknownProperty {
-            set: set.name.clone(),
-            property: property.to_owned(),
-        })
+    find_attribute(&set.properties, property).ok_or_else(|| ModelError::UnknownProperty {
+        set: set.name.clone(),
+        property: property.to_owned(),
+    })
 }
 
 /// A property the object can hold a value for (CORE-02).

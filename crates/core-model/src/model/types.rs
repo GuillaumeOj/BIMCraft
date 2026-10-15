@@ -4,7 +4,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use schema::{Attribute, Entity, Namespace, Placement};
 
-use super::{Model, ModelError};
+use super::{Model, ModelError, find_attribute};
 use crate::store::{Side, Table};
 use crate::{AttributeValue, EntityId, StoreError};
 
@@ -311,14 +311,21 @@ impl Model {
     /// The instances of a type whose value of `attribute` comes from the type: those without
     /// an override. A change of the type's value changes theirs, so derived data that reads it
     /// is stale (CORE-08).
+    ///
+    /// # Errors
+    ///
+    /// Fails when no object has this id or it holds no such attribute.
     pub fn inheriting_instances(
         &self,
         type_id: EntityId,
         attribute: &str,
-    ) -> impl Iterator<Item = EntityId> {
-        self.types.instances(type_id).filter(move |&instance| {
-            matches!(self.store.get(instance, attribute), Ok(None) | Err(_))
-        })
+    ) -> Result<impl Iterator<Item = EntityId>, ModelError> {
+        self.store.get(type_id, attribute)?;
+        let overridable = find_attribute(&self.object(type_id)?.entity().attributes, attribute)
+            .is_some_and(|definition| definition.placement == Placement::TypeOverridable);
+        Ok(self.types.instances(type_id).filter(move |&instance| {
+            !overridable || matches!(self.store.get(instance, attribute), Ok(None))
+        }))
     }
 
     /// What the object with this id is, and its entity's definition.

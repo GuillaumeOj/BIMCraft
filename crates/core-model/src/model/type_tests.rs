@@ -254,12 +254,14 @@ fn changing_a_type_value_updates_every_non_overridden_instance() {
     assert_eq!(
         model
             .inheriting_instances(id(WALL_TYPE), "height")
+            .unwrap()
             .collect::<Vec<_>>(),
         [id(first), id(third)]
     );
     assert_eq!(
         model
             .inheriting_instances(id(WALL_TYPE), "thickness")
+            .unwrap()
             .count(),
         3
     );
@@ -323,7 +325,13 @@ fn instances_inherit_type_properties() {
         model.property(first, PSET, "LoadBearing"),
         Ok(Some(bool(false)))
     );
-    assert_eq!(model.property(id(WALL_TYPE), PSET, "Reference"), Ok(None));
+    assert_eq!(
+        model.property(id(WALL_TYPE), PSET, "Reference"),
+        Err(ModelError::NotOnType {
+            owner: PSET.into(),
+            name: "Reference".into(),
+        })
+    );
 
     model
         .set_property(id(WALL_TYPE), PSET, "FireRating", Some(text("REI 90")))
@@ -521,6 +529,10 @@ fn type_errors_name_entities_but_never_ids() {
             "no component with this id",
         ),
         (ModelError::ComponentInUse, "the component still has types"),
+        (
+            ModelError::InstanceRetyped(id(0xABCD)),
+            "an instance of the type was given another type",
+        ),
     ];
     for (error, message) in messages {
         assert_eq!(error.to_string(), message);
@@ -538,4 +550,59 @@ fn unknown_attributes_are_rejected_on_both_sides() {
         assert_eq!(model.set(id(object), "colour", Some(text("red"))), unknown);
         assert_eq!(model.get(id(object), "colour"), unknown);
     }
+}
+
+#[test]
+fn inheriting_instances_needs_an_attribute_the_type_holds() {
+    let model = typed();
+    for attribute in ["colour", "name"] {
+        assert!(matches!(
+            model.inheriting_instances(id(WALL_TYPE), attribute),
+            Err(ModelError::Store(StoreError::UnknownAttribute { .. }))
+        ));
+    }
+    assert!(matches!(
+        model.inheriting_instances(id(999), "height"),
+        Err(ModelError::Store(StoreError::NotFound(_)))
+    ));
+}
+
+#[test]
+fn types_do_not_read_instance_properties() {
+    let model = typed();
+    assert_eq!(
+        model.property(id(WALL_TYPE), PSET, "LoadBearing"),
+        Err(ModelError::NotOnType {
+            owner: PSET.into(),
+            name: "LoadBearing".into(),
+        })
+    );
+}
+
+#[test]
+fn restore_fails_when_the_model_moved_on_around_types() {
+    // An id taken by a component since the removal.
+    let mut model = typed();
+    let removal = model.remove(id(WALLS[0])).unwrap();
+    model.create_component(id(WALLS[0]), component()).unwrap();
+    assert_eq!(
+        model.restore(removal),
+        Err(ModelError::Store(StoreError::DuplicateId(id(WALLS[0]))))
+    );
+
+    // An instance of the removed type given another type since.
+    let mut model = typed();
+    let removal = model.remove(id(WALL_TYPE)).unwrap();
+    model
+        .insert(id(OTHER_TYPE), "WallType", [("thickness", real(0.1))])
+        .unwrap();
+    model
+        .assign_type(id(WALLS[1]), Some(id(OTHER_TYPE)))
+        .unwrap();
+    assert_eq!(
+        model.restore(removal),
+        Err(ModelError::InstanceRetyped(id(WALLS[1])))
+    );
+    assert!(!model.contains(id(WALL_TYPE)));
+    assert_eq!(model.type_of(id(WALLS[1])), Some(id(OTHER_TYPE)));
 }

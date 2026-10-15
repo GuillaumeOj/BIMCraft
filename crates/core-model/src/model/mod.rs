@@ -301,15 +301,14 @@ impl Model {
     /// # Errors
     ///
     /// Fails, changing nothing, when the model changed since the removal so that an id is taken
-    /// again, a participant or relationship the removal refers to is gone, or a participant now
-    /// plays an exclusive role it would play again.
+    /// again, a participant, relationship, type or component the removal refers to is gone, a
+    /// participant now plays an exclusive role it would play again, or an instance of a removed
+    /// type was given another type.
     pub fn restore(&mut self, removal: Removal) -> Result<(), ModelError> {
         let restored: BTreeSet<EntityId> = removal.ids().collect();
         let present = |id: &EntityId| restored.contains(id) || self.store.contains(*id);
         for object in &removal.objects {
-            if self.store.contains(object.id) {
-                return Err(StoreError::DuplicateId(object.id).into());
-            }
+            self.check_free(object.id)?;
             if let Some(&missing) = object
                 .roles
                 .iter()
@@ -333,6 +332,13 @@ impl Model {
             let mut linked = object.type_of.iter().chain(&object.instances);
             if let Some(&gone) = linked.find(|id| !present(id)) {
                 return Err(StoreError::NotFound(gone).into());
+            }
+            if let Some(&retyped) = object
+                .instances
+                .iter()
+                .find(|&&instance| self.types.type_of(instance).is_some())
+            {
+                return Err(ModelError::InstanceRetyped(retyped));
             }
             if let Some(component) = object.component.filter(|&id| !self.types.has_component(id)) {
                 return Err(ModelError::ComponentNotFound(component));

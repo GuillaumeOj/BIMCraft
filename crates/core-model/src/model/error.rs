@@ -144,6 +144,9 @@ pub enum ModelError {
     /// No component has this id.
     #[error("no component with this id")]
     ComponentNotFound(EntityId),
+    /// An instance of a removed type was given another type before the removal was restored.
+    #[error("an instance of the type was given another type")]
+    InstanceRetyped(EntityId),
     /// Types made from the component still exist.
     #[error("the component still has types")]
     ComponentInUse,
