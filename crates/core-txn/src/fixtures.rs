@@ -9,7 +9,7 @@ use schema::{
     PropertySet, QuantityKind, Role, RoleTarget, TypeDef, Value, ValueType,
 };
 
-use crate::ModelCommand;
+use crate::{CommandError, ModelCommand, Transaction};
 
 fn attribute(name: &str, value: ValueType, presence: Presence, placement: Placement) -> Attribute {
     Attribute {
@@ -299,4 +299,76 @@ pub fn model_command() -> impl Strategy<Value = ModelCommand> {
             }
         }),
     ]
+}
+
+/// One command of each kind, in an order that applies to an empty model.
+pub fn one_of_each() -> Vec<ModelCommand> {
+    vec![
+        create_storey(1),
+        create_wall(2),
+        create_wall(3),
+        set(2, "name", Some(text("W2"))),
+        contain(10, 1, &[2]),
+        ModelCommand::AddParticipant {
+            relationship: id(10),
+            role: "elements".into(),
+            participant: id(3),
+        },
+        ModelCommand::RemoveParticipant {
+            relationship: id(10),
+            role: "elements".into(),
+            participant: id(2),
+        },
+        ModelCommand::AttachPropertySet {
+            id: id(2),
+            set: PSET.into(),
+            values: vec![("Reference".into(), text("R2"))],
+        },
+        ModelCommand::SetProperty {
+            id: id(3),
+            set: PSET.into(),
+            property: "Reference".into(),
+            value: Some(text("R3")),
+        },
+        ModelCommand::DetachPropertySet {
+            id: id(2),
+            set: PSET.into(),
+        },
+        ModelCommand::CreateComponent {
+            id: id(20),
+            component: component(),
+        },
+        ModelCommand::CreateType {
+            id: id(21),
+            component: id(20),
+            values: vec![("thickness".into(), real(0.3))],
+        },
+        ModelCommand::AssignType {
+            instance: id(2),
+            type_id: Some(id(21)),
+        },
+        delete(21),
+        ModelCommand::RemoveComponent { id: id(20) },
+        batch([create_wall(4), delete(4)]),
+    ]
+}
+
+/// [`model_command`]s and batches of them.
+pub fn any_command() -> impl Strategy<Value = ModelCommand> {
+    prop_oneof![
+        4 => model_command(),
+        1 => proptest::collection::vec(model_command(), 0..4)
+            .prop_map(|commands| ModelCommand::Batch { commands }),
+    ]
+}
+
+/// Runs a command as one transaction, for tests that only need the outcome.
+pub trait Run {
+    fn run(&self, model: &mut Model) -> Result<(), CommandError>;
+}
+
+impl Run for ModelCommand {
+    fn run(&self, model: &mut Model) -> Result<(), CommandError> {
+        Transaction::run(model, self).map(drop)
+    }
 }

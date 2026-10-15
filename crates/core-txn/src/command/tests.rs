@@ -3,64 +3,12 @@ use proptest::prelude::*;
 
 use super::*;
 use crate::fixtures::{
-    PSET, any_value, batch, component, contain, create_storey, create_wall, delete, id, model,
-    model_command, real, set, text,
+    PSET, Run, any_value, contain, create_wall, delete, id, model, model_command, one_of_each, set,
+    text,
 };
 
 fn round_trip(command: &ModelCommand) -> ModelCommand {
     serde_json::from_str(&serde_json::to_string(command).unwrap()).unwrap()
-}
-
-/// One command of each kind, in an order that applies to an empty model.
-fn one_of_each() -> Vec<ModelCommand> {
-    vec![
-        create_storey(1),
-        create_wall(2),
-        create_wall(3),
-        set(2, "name", Some(text("W2"))),
-        contain(10, 1, &[2]),
-        ModelCommand::AddParticipant {
-            relationship: id(10),
-            role: "elements".into(),
-            participant: id(3),
-        },
-        ModelCommand::RemoveParticipant {
-            relationship: id(10),
-            role: "elements".into(),
-            participant: id(2),
-        },
-        ModelCommand::AttachPropertySet {
-            id: id(2),
-            set: PSET.into(),
-            values: vec![("Reference".into(), text("R2"))],
-        },
-        ModelCommand::SetProperty {
-            id: id(3),
-            set: PSET.into(),
-            property: "Reference".into(),
-            value: Some(text("R3")),
-        },
-        ModelCommand::DetachPropertySet {
-            id: id(2),
-            set: PSET.into(),
-        },
-        ModelCommand::CreateComponent {
-            id: id(20),
-            component: component(),
-        },
-        ModelCommand::CreateType {
-            id: id(21),
-            component: id(20),
-            values: vec![("thickness".into(), real(0.3))],
-        },
-        ModelCommand::AssignType {
-            instance: id(2),
-            type_id: Some(id(21)),
-        },
-        delete(21),
-        ModelCommand::RemoveComponent { id: id(20) },
-        batch([create_wall(4), delete(4)]),
-    ]
 }
 
 #[test]
@@ -128,7 +76,7 @@ fn commands_have_stable_names() {
 fn commands_edit_the_model() {
     let mut model = model();
     for command in one_of_each() {
-        command.apply(&mut model).unwrap();
+        command.run(&mut model).unwrap();
     }
     assert_eq!(model.get(id(2), "name"), Ok(Some(text("W2"))));
     assert_eq!(model.participants(id(10), "elements"), Ok(&[id(3)][..]));
@@ -145,17 +93,17 @@ fn commands_edit_the_model() {
 #[test]
 fn commands_that_do_not_fit_the_model_fail() {
     let mut model = model();
-    create_wall(1).apply(&mut model).unwrap();
+    create_wall(1).run(&mut model).unwrap();
     assert_eq!(
-        create_wall(1).apply(&mut model),
+        create_wall(1).run(&mut model),
         Err(CommandError::Model(StoreError::DuplicateId(id(1)).into()))
     );
     assert_eq!(
-        delete(2).apply(&mut model),
+        delete(2).run(&mut model),
         Err(CommandError::Model(StoreError::NotFound(id(2)).into()))
     );
     assert_eq!(
-        contain(10, 5, &[1]).apply(&mut model),
+        contain(10, 5, &[1]).run(&mut model),
         Err(CommandError::Model(ModelError::ParticipantNotFound(id(5))))
     );
 }
@@ -212,7 +160,7 @@ proptest! {
         let mut model = model();
         let mut log = Vec::new();
         for command in commands {
-            if command.apply(&mut model).is_ok() {
+            if command.run(&mut model).is_ok() {
                 log.push(command);
             }
         }

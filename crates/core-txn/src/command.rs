@@ -4,6 +4,9 @@ use core_model::{AttributeValue, Component, EntityId, Model, ModelError};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
+use crate::Transaction;
+use crate::transaction::borrowed;
+
 /// One change to a model, described as data.
 ///
 /// A command carries everything it needs, new ids included, so applying the same command to
@@ -15,12 +18,13 @@ pub trait Command: Serialize + DeserializeOwned {
     /// values from the model.
     fn name(&self) -> &'static str;
 
-    /// Applies the command to `model`.
+    /// Applies the command through `transaction`, which records every change so that a failure
+    /// rolls the whole command back and the history can undo and redo it (CORE-06).
     ///
     /// # Errors
     ///
     /// Returns a [`CommandError`] when the command does not fit the model.
-    fn apply(&self, model: &mut Model) -> Result<(), CommandError>;
+    fn apply(&self, transaction: &mut Transaction<'_>) -> Result<(), CommandError>;
 }
 
 /// Why a command could not be applied.
@@ -144,20 +148,13 @@ pub enum ModelCommand {
         /// The type, or `None` to leave the instance untyped.
         type_id: Option<EntityId>,
     },
-    /// Applies several commands, in order, as one.
+    /// Applies several commands, in order, as one: if one fails, none applies.
     ///
     /// Batches nest; deserialisers bound the depth (`serde_json` stops at 128 levels).
     Batch {
         /// The commands.
         commands: Vec<ModelCommand>,
     },
-}
-
-/// Attribute or property values as a model method takes them, without copying their names.
-fn borrowed(values: &[(String, AttributeValue)]) -> impl Iterator<Item = (&str, AttributeValue)> {
-    values
-        .iter()
-        .map(|(name, value)| (name.as_str(), value.clone()))
 }
 
 impl Command for ModelCommand {
@@ -180,33 +177,35 @@ impl Command for ModelCommand {
         }
     }
 
-    fn apply(&self, model: &mut Model) -> Result<(), CommandError> {
+    fn apply(&self, transaction: &mut Transaction<'_>) -> Result<(), CommandError> {
         let applied = match self {
-            Self::Create { id, entity, values } => model.insert(*id, entity, borrowed(values)),
+            Self::Create { id, entity, values } => {
+                transaction.insert(*id, entity, borrowed(values))
+            }
             Self::Set {
                 id,
                 attribute,
                 value,
-            } => model.set(*id, attribute, value.clone()).map(drop),
-            Self::Delete { id } => model.remove(*id).map(drop),
+            } => transaction.set(*id, attribute, value.clone()).map(drop),
+            Self::Delete { id } => transaction.remove(*id).map(drop),
             Self::Relate {
                 id,
                 entity,
                 roles,
                 values,
-            } => model.relate(*id, entity, roles.clone(), borrowed(values)),
+            } => transaction.relate(*id, entity, roles.clone(), borrowed(values)),
             Self::AddParticipant {
                 relationship,
                 role,
                 participant,
-            } => model
+            } => transaction
                 .add_participant(*relationship, role, *participant)
                 .map(drop),
             Self::RemoveParticipant {
                 relationship,
                 role,
                 participant,
-            } => model
+            } => transaction
                 .remove_participant(*relationship, role, *participant)
                 .map(drop),
             Self::SetProperty {
@@ -214,27 +213,31 @@ impl Command for ModelCommand {
                 set,
                 property,
                 value,
-            } => model
+            } => transaction
                 .set_property(*id, set, property, value.clone())
                 .map(drop),
             Self::AttachPropertySet { id, set, values } => {
-                model.attach_property_set(*id, set, borrowed(values))
+                transaction.attach_property_set(*id, set, borrowed(values))
             }
-            Self::DetachPropertySet { id, set } => model.detach_property_set(*id, set).map(drop),
+            Self::DetachPropertySet { id, set } => {
+                transaction.detach_property_set(*id, set).map(drop)
+            }
             Self::CreateComponent { id, component } => {
-                model.create_component(*id, component.clone())
+                transaction.create_component(*id, component.clone())
             }
-            Self::RemoveComponent { id } => model.remove_component(*id).map(drop),
+            Self::RemoveComponent { id } => transaction.remove_component(*id).map(drop),
             Self::CreateType {
                 id,
                 component,
                 values,
-            } => model.create_type(*id, *component, borrowed(values)),
+            } => transaction.create_type(*id, *component, borrowed(values)),
             Self::AssignType { instance, type_id } => {
-                model.assign_type(*instance, *type_id).map(drop)
+                transaction.assign_type(*instance, *type_id).map(drop)
             }
             Self::Batch { commands } => {
-                return commands.iter().try_for_each(|command| command.apply(model));
+                return commands
+                    .iter()
+                    .try_for_each(|command| command.apply(transaction));
             }
         };
         Ok(applied?)
@@ -252,13 +255,14 @@ pub struct ReplayError {
     pub source: CommandError,
 }
 
-/// Applies a recorded log of commands to `model`, in order. Replaying the log of every command
-/// applied to a model, on an empty model of the same schema, rebuilds that model.
+/// Applies a recorded log of commands to `model`, in order, each as one transaction. Replaying
+/// the log of every command applied to a model, on an empty model of the same schema, rebuilds
+/// that model.
 ///
 /// # Errors
 ///
 /// Stops at the first command that fails and returns its position. The commands before it stay
-/// applied.
+/// applied; the failing one changes nothing.
 pub fn replay<'a, C: Command + 'a>(
     model: &mut Model,
     log: impl IntoIterator<Item = &'a C>,
@@ -266,8 +270,8 @@ pub fn replay<'a, C: Command + 'a>(
     log.into_iter()
         .enumerate()
         .try_for_each(|(index, command)| {
-            command
-                .apply(model)
+            Transaction::run(model, command)
+                .map(drop)
                 .map_err(|source| ReplayError { index, source })
         })
 }
