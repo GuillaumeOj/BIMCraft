@@ -4,7 +4,7 @@ Apply this when creating `ui/package.json`. Install every package with an exact 
 
 ## Unit tests: Vitest
 
-Dev dependencies: `vitest`, `@vitest/coverage-v8`, `@testing-library/react`, `@testing-library/user-event`, `jsdom`.
+Dev dependencies: `vitest`, `@vitest/coverage-v8`, `@testing-library/react`, `@testing-library/user-event`, `@testing-library/jest-dom`, `jsdom`. `src/test-setup.ts` registers the jest-dom matchers and unmounts rendered components after each test.
 
 `ui/vitest.config.ts`:
 
@@ -15,10 +15,11 @@ export default defineConfig({
   test: {
     environment: "jsdom",
     include: ["src/**/*.test.{ts,tsx}"],
+    setupFiles: ["src/test-setup.ts"],
     coverage: {
       provider: "v8",
       include: ["src/**/*.{ts,tsx}"],
-      exclude: ["src/**/*.test.{ts,tsx}", "src/main.tsx"],
+      exclude: ["src/**/*.test.{ts,tsx}", "src/main.tsx", "src/test-setup.ts"],
       reporter: ["text", "lcov"],
       // AGENTS.md §5: 90 % overall, 98 % for critical areas.
       thresholds: {
@@ -55,4 +56,4 @@ export default defineConfig({
 
 ## TypeScript
 
-`ui/tsconfig.json` extends `./tsconfig.base.json` and adds `include` paths and types (`vitest/globals` if used).
+`ui/tsconfig.json` extends `./tsconfig.base.json` and adds `include` paths and types (`vite/client`, `@testing-library/jest-dom/vitest`).
