@@ -81,6 +81,7 @@ export type Args = {
 export type Planned = { branch: string; base: string; pr: PrOptions };
 
 export type Pr = { number: number; url: string; baseRefName: string };
+type FoundPr = Pr & { state: "OPEN" | "CLOSED" | "MERGED" };
 
 export type Result = { code: number; stdout: string; stderr: string };
 export type RunOptions = { input?: string; env?: Record<string, string>; inherit?: boolean };
@@ -304,12 +305,28 @@ const isAncestor = (run: Run, ancestor: string, of: string): boolean =>
 const ahead = (run: Run, base: string, branch: string): number =>
   Number(must(run, ["git", "rev-list", "--count", `${base}..${branch}`]));
 
+/** Local branches contained in HEAD but not in `baseRef`, as `[sha, name]`. */
+function unmergedBranches(run: Run, baseRef: string): [string, string][] {
+  const refs = must(run, [
+    "git",
+    "for-each-ref",
+    "--merged",
+    "HEAD",
+    "--no-merged",
+    baseRef,
+    "--format=%(objectname) %(refname:short)",
+    "refs/heads",
+  ]);
+  return refs
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => line.split(" ", 2) as [string, string]);
+}
+
 /** Local branches between `baseRef` and HEAD, bottom first. */
 export function detectStack(run: Run, baseRef: string): string[] {
-  const merged = must(run, ["git", "for-each-ref", "--merged", "HEAD", "--format=%(refname:short)", "refs/heads"]);
   const byDepth = new Map<number, string>();
-  for (const branch of merged.split("\n").filter(Boolean)) {
-    if (isAncestor(run, branch, baseRef)) continue;
+  for (const [, branch] of unmergedBranches(run, baseRef)) {
     const depth = ahead(run, baseRef, branch);
     const other = byDepth.get(depth);
     if (other !== undefined) throw new Error(`cannot order ${other} and ${branch} in the stack; list it with --only`);
@@ -322,6 +339,9 @@ export function detectStack(run: Run, baseRef: string): string[] {
 export function checkChain(run: Run, branches: string[], current: string, baseRef: string): void {
   if (branches.at(-1) !== current) throw new Error(`the top of the stack must be the checked-out branch, ${current}`);
   branches.forEach((branch, i) => {
+    if (run(["git", "rev-parse", "--verify", "--quiet", `refs/heads/${branch}`]).code !== 0) {
+      throw new Error(`there is no local branch ${branch}`);
+    }
     const below = i === 0 ? baseRef : (branches[i - 1] as string);
     if (!isAncestor(run, below, branch)) throw new Error(`${branch} is not built on ${below}`);
     if (ahead(run, below, branch) === 0) throw new Error(`${branch} has no commits of its own on top of ${below}`);
@@ -337,9 +357,17 @@ function firstCommit(run: Run, below: string, branch: string): { title: string; 
   };
 }
 
-function openPr(run: Run, branch: string): Pr | undefined {
-  const json = must(run, ["gh", "pr", "list", "--head", branch, "--state", "open", "--json", "number,url,baseRefName", "--limit", "1"]);
-  return (JSON.parse(json) as Pr[])[0];
+/**
+ * The open pull request of `branch`, if any. Refuses a branch whose latest pull request was merged:
+ * a squash merge leaves it outside the base, and shipping it would open a duplicate.
+ */
+function openPr(run: Run, branch: string, base: string): Pr | undefined {
+  const json = must(run, ["gh", "pr", "list", "--head", branch, "--state", "all", "--json", "number,url,baseRefName,state", "--limit", "1"]);
+  const latest = (JSON.parse(json) as FoundPr[])[0];
+  if (latest?.state === "MERGED") {
+    throw new Error(`${branch} was already merged in #${latest.number}; rebase the branches above it onto ${base} and delete it`);
+  }
+  return latest?.state === "OPEN" ? { number: latest.number, url: latest.url, baseRefName: latest.baseRefName } : undefined;
 }
 
 function ship(args: Args, { run, ask }: Deps): number {
@@ -359,6 +387,14 @@ function ship(args: Args, { run, ask }: Deps): number {
   const baseRef = `${args.remote}/${args.base}`;
   const branches = args.only.length > 0 ? args.only : args.stack ? detectStack(run, baseRef) : [current];
   checkChain(run, branches, current, baseRef);
+  if (!args.stack) {
+    const head = must(run, ["git", "rev-parse", "HEAD"]);
+    const parents = unmergedBranches(run, baseRef).filter(([sha]) => sha !== head);
+    if (parents.length > 0) {
+      const names = parents.map(([, name]) => name).join(", ");
+      throw new Error(`${current} is built on ${names}, not yet in ${baseRef}; use --stack, or --base <branch>`);
+    }
+  }
   for (const branch of args.branches.keys()) {
     if (!branches.includes(branch)) throw new Error(`--branch ${branch} is not in the stack: ${branches.join(", ")}`);
   }
@@ -372,6 +408,7 @@ function ship(args: Args, { run, ask }: Deps): number {
     pr: effective(args.global, args.branches.get(branch)),
   }));
   const below = (i: number): string => (i === 0 ? baseRef : (plan[i]?.base as string));
+  const existing = args.noPr ? [] : plan.map((p) => openPr(run, p.branch, args.base));
 
   plan.forEach((p, i) => {
     const env = { NO_USER_DOCS: p.pr.labels.includes("no-user-docs") ? "true" : "false" };
@@ -401,11 +438,11 @@ function ship(args: Args, { run, ask }: Deps): number {
   if (args.noPr) return 0;
 
   const prs = plan.map((p, i): Pr | undefined => {
-    const existing = openPr(run, p.branch);
-    if (existing !== undefined) {
-      const edit = editArgs(p, existing);
+    const open = existing[i];
+    if (open !== undefined) {
+      const edit = editArgs(p, open);
       if (edit !== undefined) exec(edit);
-      return existing;
+      return open;
     }
     const url = exec(createArgs(p, firstCommit(run, below(i), p.branch))).split("\n").at(-1) as string;
     const number = Number(/\/pull\/(\d+)/.exec(url)?.[1]);

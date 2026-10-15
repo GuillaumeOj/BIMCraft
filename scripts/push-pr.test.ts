@@ -219,7 +219,7 @@ describe("stack navigation", () => {
 
 /** In-memory GitHub answering the `gh` calls push-pr makes. */
 class FakeGitHub {
-  prs: { number: number; head: string; base: string; title: string; body: string; args: string[] }[] = [];
+  prs: { number: number; head: string; base: string; title: string; body: string; state: string; args: string[] }[] = [];
   signedIn = true;
 
   handle(cmd: string[], input: string | undefined): Result {
@@ -230,13 +230,14 @@ class FakeGitHub {
     const action = cmd.slice(1, 3).join(" ");
     if (action === "auth status") return { code: this.signedIn ? 0 : 1, stdout: "", stderr: "" };
     if (action === "pr list") {
-      const found = this.prs.filter((p) => p.head === flag("--head"));
-      return ok(JSON.stringify(found.map((p) => ({ number: p.number, url: this.url(p.number), baseRefName: p.base }))));
+      const latest = this.prs.filter((p) => p.head === flag("--head")).slice(-1);
+      return ok(JSON.stringify(latest.map((p) => ({ number: p.number, url: this.url(p.number), baseRefName: p.base, state: p.state }))));
     }
     if (action === "pr create") {
       const number = 100 + this.prs.length;
       const body = flag("--body-file") === undefined ? (flag("--body") as string) : `file:${flag("--body-file")}`;
-      this.prs.push({ number, head: flag("--head") as string, base: flag("--base") as string, title: flag("--title") as string, body, args: cmd });
+      const [head, base, title] = [flag("--head"), flag("--base"), flag("--title")] as string[];
+      this.prs.push({ number, head, base, title, body, state: "OPEN", args: cmd } as FakeGitHub["prs"][number]);
       return ok(`Creating pull request\n${this.url(number)}\n`);
     }
     const found = this.prs.find((p) => p.number === Number(cmd[3]));
@@ -383,6 +384,15 @@ describe("main", () => {
     ]);
   });
 
+  test("opens a new pull request when the previous one was closed", () => {
+    git("checkout", "-q", "-b", "feature");
+    commit("feat: add thing");
+    expect(ship()).toBe(0);
+    (gh.prs[0] as { state: string }).state = "CLOSED";
+    expect(ship()).toBe(0);
+    expect(gh.prs.map((p) => p.head)).toEqual(["feature", "feature"]);
+  });
+
   test("--no-pr stamps and pushes only", () => {
     git("checkout", "-q", "-b", "feature");
     commit("feat: add thing");
@@ -505,5 +515,28 @@ describe("main", () => {
     });
 
     test("bad arguments", () => refuses("unknown option --nope", "--nope"));
+
+    test("a stacked branch shipped alone onto main", () => {
+      stackOfThree();
+      git("branch", "copy");
+      refuses("three is built on one, two, not yet in origin/main; use --stack, or --base <branch>");
+    });
+
+    test("a missing branch in --only", () => {
+      stackOfThree();
+      refuses("there is no local branch tow", "--only", "one,tow,three");
+    });
+
+    test("a branch whose pull request was already merged, before stamping", () => {
+      stackOfThree();
+      expect(ship("--stack")).toBe(0);
+      (gh.prs[0] as { state: string }).state = "MERGED";
+      const stamped = stamp();
+      commit("feat: more");
+      expect(ship("--stack")).toBe(1);
+      expect(errors.join("\n")).toContain("one was already merged in #100; rebase the branches above it onto main and delete it");
+      expect(stamp()).toBe(stamped);
+      expect(gh.prs).toHaveLength(3);
+    });
   });
 });

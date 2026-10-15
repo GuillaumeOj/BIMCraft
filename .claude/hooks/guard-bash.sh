@@ -32,7 +32,8 @@ matches "${git_cmd}commit([[:space:]][^;&|]*)?[[:space:]]-[a-z]*n" && block "byp
 matches "${git_cmd}config[^;&|]*(--unset[^;&|]*core\.hooksPath|core\.hooksPath[[:space:]]+[^-;&|[:space:]])" &&
   block "changing the git hooks path is not allowed"
 matches 'core\.hooksPath=' && block "changing the git hooks path is not allowed"
-matches "${at_cmd}(bun[[:space:]]+(run[[:space:]]+)?([^[:space:]]*/)?)?push-pr\.ts" &&
+# Run directly or through an interpreter, with any flags (bun --bun …, bash -c "bun …").
+matches "${at_cmd}((bun|bunx|node|deno|sh|bash|zsh)([[:space:]]+[^[:space:];&|]+)*[[:space:]]+)?([^[:space:]]*/)?push-pr\.ts" &&
   block "scripts/push-pr.ts stamps and pushes, which is reserved to the user"
 matches 'bimcraft-review-stamp' && block "only scripts/mark-reviewed.sh may touch the review stamp"
 exit 0

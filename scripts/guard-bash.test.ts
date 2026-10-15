@@ -32,6 +32,8 @@ describe("guard-bash.sh", () => {
     "bun scripts/push-pr.ts --yes",
     "bun run ./scripts/push-pr.ts --stack",
     "cd .. && scripts/push-pr.ts",
+    "bun --bun scripts/push-pr.ts",
+    "sh -c 'bun scripts/push-pr.ts --yes'",
   ])("blocks %s", (command) => {
     expect(exitCode(command)).toBe(2);
   });
