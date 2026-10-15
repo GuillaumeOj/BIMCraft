@@ -1,0 +1,9 @@
+language js
+
+// UI-04: user-visible attributes must come from the translation files, like JSX text
+// (style/noJsxLiterals only checks text between tags). Matches a string value, written
+// directly or as a string expression: aria-label="Close", title={"Close"}, alt={`Close`}.
+JsxAttribute() as $attribute where {
+  $attribute <: r"(?s)^(?:aria-label|aria-description|aria-placeholder|aria-roledescription|aria-valuetext|alt|placeholder|title)\s*=\s*\{?\s*[\"'`].*",
+  register_diagnostic(span=$attribute, message="Hard-coded user-visible text: use t() from useI18n (UI-04).")
+}

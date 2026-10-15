@@ -16,6 +16,7 @@
     "enabled": true,
     "actions": { "source": { "organizeImports": "on", "useSortedKeys": "off" } }
   },
+  "plugins": ["./lint/no-literal-text-attributes.grit"],
   "linter": {
     "enabled": true,
     "rules": {
