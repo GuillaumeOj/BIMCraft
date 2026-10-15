@@ -4,7 +4,7 @@ BIMCraft is available in English and French. By default it uses the language of 
 
 ## Steps
 
-1. At the top of the window, open the **Language** list.
+1. In the title bar at the top of the window, open the **Language** list.
 2. Choose **English** or **Français**.
 
 **Result:** every label and message switches to the chosen language at once. BIMCraft remembers your choice the next time you open it.

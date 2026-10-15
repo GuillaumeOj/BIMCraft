@@ -6,6 +6,8 @@ extend-exclude = [
   "crates/geom/tests/golden.txt",
   # Vendored unchanged from buildingSMART.
   "crates/interop-ifc/schema/*.exp",
+  # French interface strings (UI-04); typos checks English only.
+  "ui/src/i18n/messages/fr.json",
 ]
 
 [default.extend-words]

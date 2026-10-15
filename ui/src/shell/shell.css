@@ -1,0 +1,173 @@
+/* Layout and sizes from the "Workspace — plan view" board of the Penpot design (1440 × 900). */
+.shell {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  height: 100%;
+}
+
+.skip-link {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 10;
+  padding: 6px 12px;
+  border-radius: 6px;
+  color: var(--bc-on-verdigris);
+  background: var(--bc-verdigris);
+  transform: translateY(-200%);
+}
+
+.skip-link:focus {
+  transform: none;
+}
+
+.title-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 52px;
+  padding: 0 10px;
+  background: var(--bc-surface);
+  border-bottom: 1px solid var(--bc-line);
+}
+
+.app-tile {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--bc-on-verdigris);
+  background: var(--bc-verdigris);
+}
+
+.app-name {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.open-views {
+  flex: 1;
+  display: flex;
+  gap: 4px;
+  padding-left: 8px;
+}
+
+.empty {
+  margin: 0;
+  padding: 8px 14px;
+  color: var(--bc-muted);
+}
+
+.open-views .empty {
+  padding: 0;
+}
+
+.ghost-button {
+  display: inline-flex;
+  align-items: center;
+  font: inherit;
+  color: var(--bc-ink-2);
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+
+.ghost-button:hover {
+  background: var(--bc-hover);
+}
+
+.ghost-button[aria-pressed="true"] {
+  color: var(--bc-ink);
+  background: var(--bc-raised);
+  border-color: var(--bc-line);
+}
+
+.workspace {
+  position: relative;
+  min-height: 0;
+}
+
+.viewport {
+  position: absolute;
+  inset: 0;
+  background: var(--bc-paper);
+}
+
+.panel {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  padding: 0 6px 8px;
+  background: var(--bc-surface);
+  border: 1px solid var(--bc-line);
+  border-radius: 12px;
+  box-shadow: var(--bc-shadow);
+  overflow: auto;
+}
+
+.panel-left {
+  top: 11px;
+  bottom: 96px;
+  left: 12px;
+  width: 252px;
+}
+
+.panel-right {
+  top: 11px;
+  bottom: 96px;
+  right: 12px;
+  width: 296px;
+}
+
+.panel-console {
+  left: 276px;
+  right: 320px;
+  bottom: 100px;
+  height: 330px;
+}
+
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  min-height: 40px;
+  margin: 0;
+  padding: 0 6px 0 14px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.panel-header h2 {
+  margin: 0;
+  font-size: inherit;
+}
+
+.panel-header[role="tablist"] {
+  justify-content: flex-start;
+  padding-left: 8px;
+}
+
+.panel-tab {
+  font: inherit;
+  font-weight: 400;
+  color: var(--bc-ink-2);
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  padding: 5px 12px;
+  cursor: pointer;
+}
+
+.panel-tab[aria-selected="true"] {
+  font-weight: 600;
+  color: var(--bc-ink);
+  background: var(--bc-raised);
+  border-color: var(--bc-line);
+}
