@@ -77,8 +77,11 @@ export type Args = {
   branches: Map<string, PrOptions>;
 };
 
-/** A branch to push, the branch its pull request merges into, and that request's options. */
-export type Planned = { branch: string; base: string; pr: PrOptions };
+/**
+ * A branch to push, the branch its pull request merges into, the ref its own commits start from
+ * (`base`, or its remote copy for the bottom branch) and that request's options.
+ */
+export type Planned = { branch: string; base: string; below: string; pr: PrOptions };
 
 export type Pr = { number: number; url: string; baseRefName: string };
 type FoundPr = Pr & { state: "OPEN" | "CLOSED" | "MERGED" };
@@ -88,7 +91,28 @@ export type RunOptions = { input?: string; env?: Record<string, string>; inherit
 export type Run = (cmd: string[], options?: RunOptions) => Result;
 export type Deps = { run: Run; ask: (question: string) => string | null };
 
-const emptyPr = (): PrOptions => ({ labels: [], assignees: [], reviewers: [], draft: false });
+export const emptyPr = (): PrOptions => ({ labels: [], assignees: [], reviewers: [], draft: false });
+
+// Options that only set a field, by kind.
+const FLAGS = {
+  "-h": "help",
+  "--help": "help",
+  "--stack": "stack",
+  "--force": "force",
+  "--no-pr": "noPr",
+  "--yes": "yes",
+  "--dry-run": "dryRun",
+} as const;
+const LISTS = { "--label": "labels", "--assignee": "assignees", "--reviewer": "reviewers" } as const;
+const TEXTS = {
+  "--title": "title",
+  "--body": "body",
+  "--body-file": "bodyFile",
+  "--milestone": "milestone",
+  "--project": "project",
+} as const;
+const lookup = <T extends object>(table: T, key: string): T[keyof T] | undefined =>
+  Object.hasOwn(table, key) ? table[key as keyof T] : undefined;
 const list = (value: string): string[] =>
   value
     .split(",")
@@ -125,73 +149,24 @@ export function parseArgs(argv: string[]): Args {
       if (inline !== undefined) throw new Error(`${name} takes no value`);
       return true;
     };
-    switch (name) {
-      case "-h":
-      case "--help":
-        args.help = flag();
-        break;
-      case "--stack":
-        args.stack = flag();
-        break;
-      case "--only":
-        args.only = list(value());
-        args.stack = true;
-        break;
-      case "--base":
-        args.base = value();
-        break;
-      case "--remote":
-        args.remote = value();
-        break;
-      case "--force":
-        args.force = flag();
-        break;
-      case "--no-pr":
-        args.noPr = flag();
-        break;
-      case "--yes":
-        args.yes = flag();
-        break;
-      case "--dry-run":
-        args.dryRun = flag();
-        break;
-      case "--branch": {
-        const branch = value();
-        if (args.branches.has(branch)) throw new Error(`--branch ${branch} is given twice`);
-        scope = emptyPr();
-        args.branches.set(branch, scope);
-        break;
-      }
-      case "--title":
-        scope.title = value();
-        break;
-      case "--body":
-        scope.body = value();
-        break;
-      case "--body-file":
-        scope.bodyFile = value();
-        break;
-      case "--label":
-        scope.labels.push(...list(value()));
-        break;
-      case "--assignee":
-        scope.assignees.push(...list(value()));
-        break;
-      case "--reviewer":
-        scope.reviewers.push(...list(value()));
-        break;
-      case "--milestone":
-        scope.milestone = value();
-        break;
-      case "--project":
-        scope.project = value();
-        break;
-      case "--draft":
-        scope.draft = flag();
-        break;
-      default:
-        throw new Error(`unknown option ${arg} (see --help)`);
-    }
+    const flagName = lookup(FLAGS, name);
+    const listName = lookup(LISTS, name);
+    const textName = lookup(TEXTS, name);
+    if (flagName !== undefined) args[flagName] = flag();
+    else if (listName !== undefined) scope[listName].push(...list(value()));
+    else if (textName !== undefined) scope[textName] = value();
+    else if (name === "--draft") scope.draft = flag();
+    else if (name === "--base") args.base = value();
+    else if (name === "--remote") args.remote = value();
+    else if (name === "--only") {
+      args.only = list(value());
+      args.stack = true;
+    } else if (name === "--branch") {
+      const branch = value();
+      if (args.branches.has(branch)) throw new Error(`--branch ${branch} is given twice`);
+      scope = emptyPr();
+      args.branches.set(branch, scope);
+    } else throw new Error(`unknown option ${arg} (see --help)`);
   }
   for (const options of [args.global, ...args.branches.values()]) {
     if (options.body !== undefined && options.bodyFile !== undefined) {
@@ -305,8 +280,12 @@ const isAncestor = (run: Run, ancestor: string, of: string): boolean =>
 const ahead = (run: Run, base: string, branch: string): number =>
   Number(must(run, ["git", "rev-list", "--count", `${base}..${branch}`]));
 
-/** Local branches contained in HEAD but not in `baseRef`, as `[sha, name]`. */
-function unmergedBranches(run: Run, baseRef: string): [string, string][] {
+/**
+ * Local branches between `baseRef` and HEAD, bottom first. Other branches pointing at HEAD (a backup
+ * copy, say) are left out.
+ */
+export function detectStack(run: Run, baseRef: string, current: string): string[] {
+  const head = must(run, ["git", "rev-parse", "HEAD"]);
   const refs = must(run, [
     "git",
     "for-each-ref",
@@ -317,16 +296,9 @@ function unmergedBranches(run: Run, baseRef: string): [string, string][] {
     "--format=%(objectname) %(refname:short)",
     "refs/heads",
   ]);
-  return refs
-    .split("\n")
-    .filter(Boolean)
-    .map((line) => line.split(" ", 2) as [string, string]);
-}
-
-/** Local branches between `baseRef` and HEAD, bottom first. */
-export function detectStack(run: Run, baseRef: string): string[] {
   const byDepth = new Map<number, string>();
-  for (const [, branch] of unmergedBranches(run, baseRef)) {
+  for (const [sha, branch] of refs.split("\n").filter(Boolean).map((line) => line.split(" ", 2) as [string, string])) {
+    if (sha === head && branch !== current) continue;
     const depth = ahead(run, baseRef, branch);
     const other = byDepth.get(depth);
     if (other !== undefined) throw new Error(`cannot order ${other} and ${branch} in the stack; list it with --only`);
@@ -337,12 +309,13 @@ export function detectStack(run: Run, baseRef: string): string[] {
 
 /** Checks that `branches` form a chain from `baseRef` to the checked-out branch, each adding commits. */
 export function checkChain(run: Run, branches: string[], current: string, baseRef: string): void {
+  if (branches.length === 0) throw new Error(`${current} has no commits of its own on top of ${baseRef}`);
   if (branches.at(-1) !== current) throw new Error(`the top of the stack must be the checked-out branch, ${current}`);
   branches.forEach((branch, i) => {
     if (run(["git", "rev-parse", "--verify", "--quiet", `refs/heads/${branch}`]).code !== 0) {
       throw new Error(`there is no local branch ${branch}`);
     }
-    const below = i === 0 ? baseRef : (branches[i - 1] as string);
+    const below = branches[i - 1] ?? baseRef;
     if (!isAncestor(run, below, branch)) throw new Error(`${branch} is not built on ${below}`);
     if (ahead(run, below, branch) === 0) throw new Error(`${branch} has no commits of its own on top of ${below}`);
   });
@@ -350,11 +323,9 @@ export function checkChain(run: Run, branches: string[], current: string, baseRe
 
 /** Subject and body of the first commit `branch` adds on top of `below`. */
 function firstCommit(run: Run, below: string, branch: string): { title: string; body: string } {
-  const sha = must(run, ["git", "rev-list", "--reverse", `${below}..${branch}`]).split("\n")[0] as string;
-  return {
-    title: must(run, ["git", "log", "-1", "--format=%s", sha]),
-    body: must(run, ["git", "log", "-1", "--format=%b", sha]),
-  };
+  const log = must(run, ["git", "log", "--reverse", "--format=%s%x00%b%x1e", `${below}..${branch}`]);
+  const [title = "", body = ""] = (log.split("\x1e")[0] as string).split("\0");
+  return { title, body: body.trim() };
 }
 
 /**
@@ -367,7 +338,7 @@ function openPr(run: Run, branch: string, base: string): Pr | undefined {
   if (latest?.state === "MERGED") {
     throw new Error(`${branch} was already merged in #${latest.number}; rebase the branches above it onto ${base} and delete it`);
   }
-  return latest?.state === "OPEN" ? { number: latest.number, url: latest.url, baseRefName: latest.baseRefName } : undefined;
+  return latest?.state === "OPEN" ? latest : undefined;
 }
 
 function ship(args: Args, { run, ask }: Deps): number {
@@ -385,16 +356,12 @@ function ship(args: Args, { run, ask }: Deps): number {
 
   must(run, ["git", "fetch", "--quiet", args.remote, args.base]);
   const baseRef = `${args.remote}/${args.base}`;
-  const branches = args.only.length > 0 ? args.only : args.stack ? detectStack(run, baseRef) : [current];
-  checkChain(run, branches, current, baseRef);
-  if (!args.stack) {
-    const head = must(run, ["git", "rev-parse", "HEAD"]);
-    const parents = unmergedBranches(run, baseRef).filter(([sha]) => sha !== head);
-    if (parents.length > 0) {
-      const names = parents.map(([, name]) => name).join(", ");
-      throw new Error(`${current} is built on ${names}, not yet in ${baseRef}; use --stack, or --base <branch>`);
-    }
+  const branches = args.only.length > 0 ? args.only : detectStack(run, baseRef, current);
+  if (!args.stack && branches.length > 1) {
+    const parents = branches.slice(0, -1).join(", ");
+    throw new Error(`${current} is built on ${parents}, not yet in ${baseRef}; use --stack, or --base <branch>`);
   }
+  checkChain(run, branches, current, baseRef);
   for (const branch of args.branches.keys()) {
     if (!branches.includes(branch)) throw new Error(`--branch ${branch} is not in the stack: ${branches.join(", ")}`);
   }
@@ -404,18 +371,18 @@ function ship(args: Args, { run, ask }: Deps): number {
   }
   const plan: Planned[] = branches.map((branch, i) => ({
     branch,
-    base: i === 0 ? args.base : (branches[i - 1] as string),
+    base: branches[i - 1] ?? args.base,
+    below: branches[i - 1] ?? baseRef,
     pr: effective(args.global, args.branches.get(branch)),
   }));
-  const below = (i: number): string => (i === 0 ? baseRef : (plan[i]?.base as string));
   const existing = args.noPr ? [] : plan.map((p) => openPr(run, p.branch, args.base));
 
-  plan.forEach((p, i) => {
+  for (const p of plan) {
     const env = { NO_USER_DOCS: p.pr.labels.includes("no-user-docs") ? "true" : "false" };
-    if (run([join(SCRIPTS, "check-pr.sh"), below(i), p.branch], { env, inherit: true }).code !== 0) {
+    if (run([join(SCRIPTS, "check-pr.sh"), p.below, p.branch], { env, inherit: true }).code !== 0) {
       throw new Error(`commit checks failed for ${p.branch}`);
     }
-  });
+  }
 
   console.log(`push-pr: shipping to ${args.remote}:`);
   for (const p of plan) {
@@ -444,7 +411,7 @@ function ship(args: Args, { run, ask }: Deps): number {
       if (edit !== undefined) exec(edit);
       return open;
     }
-    const url = exec(createArgs(p, firstCommit(run, below(i), p.branch))).split("\n").at(-1) as string;
+    const url = exec(createArgs(p, firstCommit(run, p.below, p.branch))).split("\n").at(-1) as string;
     const number = Number(/\/pull\/(\d+)/.exec(url)?.[1]);
     return Number.isNaN(number) ? undefined : { number, url, baseRefName: p.base };
   });

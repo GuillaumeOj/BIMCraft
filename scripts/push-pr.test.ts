@@ -1,12 +1,13 @@
-import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, mock, spyOn, test } from "bun:test";
+import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { gitEnv } from "./check-pinned-deps";
+import { gitEnv, git as gitIn } from "./check-pinned-deps";
 import {
   createArgs,
   editArgs,
   effective,
+  emptyPr,
   main,
   makeRun,
   type PrOptions,
@@ -18,13 +19,7 @@ import {
 } from "./push-pr";
 
 const ok = (stdout = ""): Result => ({ code: 0, stdout, stderr: "" });
-const pr = (overrides: Partial<PrOptions> = {}): PrOptions => ({
-  labels: [],
-  assignees: [],
-  reviewers: [],
-  draft: false,
-  ...overrides,
-});
+const pr = (overrides: Partial<PrOptions> = {}): PrOptions => ({ ...emptyPr(), ...overrides });
 
 describe("parseArgs", () => {
   test("defaults", () => {
@@ -136,7 +131,7 @@ describe("gh arguments", () => {
   const fallback = { title: "feat: first", body: "first body" };
 
   test("create with defaults", () => {
-    expect(createArgs({ branch: "b", base: "a", pr: pr() }, fallback)).toEqual([
+    expect(createArgs({ branch: "b", base: "a", below: "a", pr: pr() }, fallback)).toEqual([
       "gh",
       "pr",
       "create",
@@ -162,7 +157,7 @@ describe("gh arguments", () => {
       project: "P",
       draft: true,
     });
-    expect(createArgs({ branch: "b", base: "main", pr: options }, fallback).slice(7)).toEqual([
+    expect(createArgs({ branch: "b", base: "main", below: "origin/main", pr: options }, fallback).slice(7)).toEqual([
       "--title",
       "T",
       "--body-file",
@@ -183,8 +178,8 @@ describe("gh arguments", () => {
 
   test("edit only what changes", () => {
     const existing = { number: 7, url: "u", baseRefName: "main" };
-    expect(editArgs({ branch: "b", base: "main", pr: pr() }, existing)).toBeUndefined();
-    expect(editArgs({ branch: "b", base: "a", pr: pr({ body: "B", labels: ["x"], project: "P" }) }, existing)).toEqual([
+    expect(editArgs({ branch: "b", base: "main", below: "origin/main", pr: pr() }, existing)).toBeUndefined();
+    expect(editArgs({ branch: "b", base: "a", below: "a", pr: pr({ body: "B", labels: ["x"], project: "P" }) }, existing)).toEqual([
       "gh",
       "pr",
       "edit",
@@ -265,7 +260,9 @@ describe("main", () => {
   let errors: string[];
   let answer: string | null;
 
-  const git = (...args: string[]): string => makeRun(dir, gitEnv())(["git", ...args]).stdout.trim();
+  let template: string;
+
+  const git = (...args: string[]): string => gitIn(dir, ...args).trim();
   const commit = (message: string): void => {
     writeFileSync(join(dir, `${message.replace(/\W/g, "_")}.txt`), message);
     git("add", "-A");
@@ -286,19 +283,28 @@ describe("main", () => {
     }
   };
   const remoteBranches = (): string[] =>
-    makeRun(remote, gitEnv())(["git", "for-each-ref", "--format=%(refname:short)", "refs/heads"]).stdout.split("\n").filter(Boolean);
+    gitIn(remote, "for-each-ref", "--format=%(refname:short)", "refs/heads").split("\n").filter(Boolean);
+
+  // One repository with a pushed main, copied for each test (the remote URL is relative).
+  beforeAll(() => {
+    template = mkdtempSync(join(tmpdir(), "push-pr-"));
+    gitIn(template, "init", "-q", "--bare", "remote.git");
+    gitIn(template, "init", "-q", "-b", "main", "work");
+    dir = join(template, "work");
+    git("config", "user.name", "Test");
+    git("config", "user.email", "test@example.com");
+    git("remote", "add", "origin", "../remote.git");
+    commit("chore: initial");
+    git("push", "-q", "origin", "main");
+  });
+
+  afterAll(() => rmSync(template, { recursive: true, force: true }));
 
   beforeEach(() => {
     const root = mkdtempSync(join(tmpdir(), "push-pr-"));
+    cpSync(template, root, { recursive: true });
     remote = join(root, "remote.git");
     dir = join(root, "work");
-    makeRun(root, gitEnv())(["git", "init", "-q", "--bare", remote]);
-    makeRun(root, gitEnv())(["git", "init", "-q", "-b", "main", dir]);
-    git("config", "user.name", "Test");
-    git("config", "user.email", "test@example.com");
-    git("remote", "add", "origin", remote);
-    commit("chore: initial");
-    git("push", "-q", "origin", "main");
     gh = new FakeGitHub();
     calls = [];
     checkPrFails = false;
@@ -311,10 +317,13 @@ describe("main", () => {
 
   afterEach(() => {
     rmSync(join(dir, ".."), { recursive: true, force: true });
-    (console.log as unknown as { mockRestore(): void }).mockRestore();
-    (console.error as unknown as { mockRestore(): void }).mockRestore();
+    mock.restore();
   });
 
+  const featureBranch = (...messages: string[]): void => {
+    git("checkout", "-q", "-b", "feature");
+    for (const message of messages) commit(message);
+  };
   const stackOfThree = (): void => {
     for (const branch of ["one", "two", "three"]) {
       git("checkout", "-q", "-b", branch);
@@ -328,8 +337,7 @@ describe("main", () => {
   });
 
   test("ships a single branch: stamp, push, pull request", () => {
-    git("checkout", "-q", "-b", "feature");
-    commit("feat: add thing");
+    featureBranch("feat: add thing");
     expect(ship("--title", "Add thing", "--body", "Why", "--label", "geometry", "--assignee", "@me")).toBe(0);
     expect(stamp()).toBe(git("rev-parse", "HEAD"));
     expect(remoteBranches()).toContain("feature");
@@ -340,9 +348,7 @@ describe("main", () => {
   });
 
   test("defaults the title and description to the first commit", () => {
-    git("checkout", "-q", "-b", "feature");
-    commit("feat: first");
-    commit("fix: second");
+    featureBranch("feat: first", "fix: second");
     expect(ship("--yes")).toBe(0);
     expect(gh.prs[0]).toMatchObject({ title: "feat: first", body: "" });
   });
@@ -385,8 +391,7 @@ describe("main", () => {
   });
 
   test("opens a new pull request when the previous one was closed", () => {
-    git("checkout", "-q", "-b", "feature");
-    commit("feat: add thing");
+    featureBranch("feat: add thing");
     expect(ship()).toBe(0);
     (gh.prs[0] as { state: string }).state = "CLOSED";
     expect(ship()).toBe(0);
@@ -394,8 +399,7 @@ describe("main", () => {
   });
 
   test("--no-pr stamps and pushes only", () => {
-    git("checkout", "-q", "-b", "feature");
-    commit("feat: add thing");
+    featureBranch("feat: add thing");
     expect(ship("--no-pr")).toBe(0);
     expect(remoteBranches()).toContain("feature");
     expect(calls.some((cmd) => cmd[0] === "gh")).toBe(false);
@@ -420,8 +424,7 @@ describe("main", () => {
   });
 
   test("passes the no-user-docs label to the commit checks", () => {
-    git("checkout", "-q", "-b", "feature");
-    commit("chore: tooling");
+    featureBranch("chore: tooling");
     let env: Record<string, string> | undefined;
     const spy: Run = (cmd, options = {}) => {
       if (cmd[0]?.endsWith("check-pr.sh")) env = options.env;
@@ -432,8 +435,7 @@ describe("main", () => {
   });
 
   test("asks before stamping and stops on anything but yes", () => {
-    git("checkout", "-q", "-b", "feature");
-    commit("feat: add thing");
+    featureBranch("feat: add thing");
     answer = "n";
     expect(ship()).toBe(1);
     answer = null;
@@ -452,7 +454,7 @@ describe("main", () => {
     };
 
     test("a dirty tree", () => {
-      git("checkout", "-q", "-b", "feature");
+      featureBranch();
       writeFileSync(join(dir, "dirty.txt"), "x");
       refuses("working tree is not clean");
     });
@@ -465,16 +467,15 @@ describe("main", () => {
     });
 
     test("when gh is signed out", () => {
-      git("checkout", "-q", "-b", "feature");
-      commit("feat: add thing");
+      featureBranch("feat: add thing");
       gh.signedIn = false;
       refuses("gh is not signed in");
     });
 
     test("a branch without commits", () => {
-      git("checkout", "-q", "-b", "feature");
+      featureBranch();
       refuses("feature has no commits of its own on top of origin/main");
-      refuses("the top of the stack must be the checked-out branch", "--stack");
+      refuses("feature has no commits of its own on top of origin/main", "--stack");
     });
 
     test("branches that are not a chain", () => {
@@ -485,7 +486,7 @@ describe("main", () => {
 
     test("a stack it cannot order", () => {
       stackOfThree();
-      git("branch", "twin");
+      git("branch", "twin", "two");
       refuses("cannot order", "--stack");
     });
 
@@ -500,15 +501,13 @@ describe("main", () => {
     });
 
     test("failing commit checks", () => {
-      git("checkout", "-q", "-b", "feature");
-      commit("feat: add thing");
+      featureBranch("feat: add thing");
       checkPrFails = true;
       refuses("commit checks failed for feature");
     });
 
     test("a failed push", () => {
-      git("checkout", "-q", "-b", "feature");
-      commit("feat: add thing");
+      featureBranch("feat: add thing");
       git("remote", "set-url", "--push", "origin", join(dir, "missing.git"));
       expect(ship()).toBe(1);
       expect(errors.join("\n")).toContain("git push --atomic -u origin feature failed");
