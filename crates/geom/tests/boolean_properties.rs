@@ -1,5 +1,5 @@
-//! Property-based tests of the booleans on random pairs of boxes (GEO-03, ENG-02): union and
-//! difference.
+//! Property-based tests of the booleans on random pairs of boxes (GEO-03, ENG-02): union,
+//! difference and intersection.
 //!
 //! Boxes on a coarse grid share faces, edges and corners often, which exercises the degenerate
 //! cases; boxes at random coordinates, and pairs turned together to any angle, exercise the
@@ -176,6 +176,23 @@ proptest! {
     #![proptest_config(config())]
 
     #[test]
+    fn intersection_is_the_overlap(case in cases()) {
+        let (a, b) = (cuboid(case.a, case.turn)?, cuboid(case.b, case.turn)?);
+        let shared = checked(a.intersection(&b))?;
+        prop_assert!((volume_of(shared.as_ref()) - overlap(case.a, case.b)).abs() <= 1e-4);
+        let shared_back = checked(b.intersection(&a))?;
+        prop_assert!((volume_of(shared.as_ref()) - volume_of(shared_back.as_ref())).abs() <= 1e-4);
+        // The cut and the overlap together make up the first box.
+        let cut = checked(a.difference(&b))?;
+        let whole = volume_of(cut.as_ref()) + volume_of(shared.as_ref());
+        prop_assert!((whole - volume(case.a)).abs() <= 1e-4);
+    }
+}
+
+proptest! {
+    #![proptest_config(config())]
+
+    #[test]
     fn booleans_of_boxes_turned_apart_are_valid(
         a in free_box(),
         b in free_box(),
@@ -187,8 +204,10 @@ proptest! {
         let backward = volume_of(checked(b_solid.union(&a_solid))?.as_ref());
         prop_assert!(forward <= volume(a) + volume(b) + 1e-9 && forward + 1e-9 >= volume(a).max(volume(b)));
         prop_assert!((forward - backward).abs() <= 1e-9 * forward);
-        // What the cut removes is what the union adds back.
+        // What the cut removes is what the union adds back, and inclusion–exclusion holds.
         let cut = volume_of(checked(a_solid.difference(&b_solid))?.as_ref());
         prop_assert!((cut - (forward - volume(b))).abs() <= 1e-9 * forward);
+        let shared = volume_of(checked(a_solid.intersection(&b_solid))?.as_ref());
+        prop_assert!((forward + shared - volume(a) - volume(b)).abs() <= 1e-9 * forward);
     }
 }

@@ -2,8 +2,9 @@
 //! grid, so faces, edges and corners of the two boxes coincide often, and both boxes are turned
 //! together by any of 256 × 256 angles, so the coincidences are not axis-aligned. Nothing may
 //! panic; an operation may fail with a typed error, but any solid it returns must be valid, a
-//! union holds at least the larger box and at most both, and a difference at most the first box
-//! and at least what the second cannot remove from it.
+//! union holds at least the larger box and at most both, a difference at most the first box
+//! and at least what the second cannot remove from it, and an intersection at most the smaller
+//! box.
 
 #![no_main]
 
@@ -77,5 +78,12 @@ fuzz_target!(|input: Input| {
             cut.volume()
         });
         assert!(volume <= va + 1e-6 && volume >= va - vb - 1e-6);
+    }
+    if let Ok(result) = a.intersection(&b) {
+        let volume = result.map_or(0.0, |shared| {
+            assert_eq!(shared.validate(), Ok(()));
+            shared.volume()
+        });
+        assert!(volume <= va.min(vb) + 1e-6);
     }
 });

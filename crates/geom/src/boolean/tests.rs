@@ -445,3 +445,79 @@ fn putting_back_a_flush_cut_restores_the_slab() {
     assert_eq!((whole.vertices().len(), whole.face_count()), (8, 6));
     assert_close(whole.volume(), 1.125);
 }
+
+fn intersection(a: &Solid, b: &Solid) -> Option<Solid> {
+    let result = a.intersection(b).unwrap();
+    if let Some(solid) = &result {
+        solid.validate().unwrap();
+    }
+    result
+}
+
+#[test]
+fn overlapping_boxes_share_their_overlap() {
+    // Hand calculation (ENG-03): two 2 m cubes overlapping in a 1 m cube.
+    let result = intersection(&cuboid([0.0; 3], [2.0; 3]), &cuboid([1.0; 3], [3.0; 3])).unwrap();
+    assert_eq!(summary(&result), ((8, 12, 6), vec![CUBIC_METRE]));
+}
+
+#[test]
+fn a_box_inside_another_is_the_intersection() {
+    let inner = cuboid([1.0; 3], [2.0; 3]);
+    let outer = cuboid([0.0; 3], [3.0; 3]);
+    assert_eq!(
+        summary(&intersection(&outer, &inner).unwrap()),
+        summary(&inner)
+    );
+    assert_eq!(
+        summary(&intersection(&inner, &outer).unwrap()),
+        summary(&inner)
+    );
+    assert_eq!(
+        summary(&intersection(&inner, &inner).unwrap()),
+        summary(&inner)
+    );
+}
+
+#[test]
+fn boxes_sharing_a_face_plane_keep_it_once() {
+    // Both boxes stand on z = 0: the overlap's bottom is that shared plane.
+    let result = intersection(
+        &cuboid([0.0; 3], [2.0, 2.0, 1.0]),
+        &cuboid([1.0, 1.0, 0.0], [3.0, 3.0, 2.0]),
+    )
+    .unwrap();
+    assert_eq!(summary(&result), ((8, 12, 6), vec![CUBIC_METRE]));
+}
+
+#[test]
+fn touching_boxes_have_no_intersection() {
+    // ADR 0001: touching faces, edges and corners give nothing.
+    for other in [
+        cuboid([1.0, 0.0, 0.0], [2.0, 1.0, 1.0]),
+        cuboid([1.0, 1.0, 0.0], [2.0, 2.0, 1.0]),
+        cuboid([1.0; 3], [2.0; 3]),
+        cuboid([2.0; 3], [3.0; 3]),
+    ] {
+        assert!(intersection(&unit_cube(), &other).is_none());
+    }
+}
+
+#[test]
+fn an_overlap_thinner_than_the_tolerance_is_empty() {
+    // ADR 0001: cubes overlapping by 0.5 µm.
+    let overlap = 0.5 * LINEAR_TOLERANCE;
+    let other = cuboid([1.0 - overlap, 0.0, 0.0], [2.0, 1.0, 1.0]);
+    assert!(intersection(&unit_cube(), &other).is_none());
+}
+
+#[test]
+fn turned_boxes_share_their_overlap() {
+    let turn = (2.3, 0.4);
+    let result = intersection(
+        &turned([0.0; 3], [2.0; 3], turn),
+        &turned([1.0; 3], [3.0; 3], turn),
+    )
+    .unwrap();
+    assert_close(result.volume(), 1.0);
+}

@@ -41,6 +41,7 @@ use crate::{Point2, Solid};
 enum Operation {
     Union,
     Difference,
+    Intersection,
 }
 
 /// Which operand a face comes from.
@@ -65,6 +66,11 @@ impl Operation {
                 Operand::First => class == Class::Outside || class == Class::OnOpposite,
                 Operand::Second => class == Class::Inside,
             },
+            // Faces back to back bound nothing both solids hold, so solids that only touch
+            // leave nothing.
+            Self::Intersection => {
+                class == Class::Inside || (class == Class::OnSame && operand == Operand::First)
+            }
         }
     }
 
@@ -102,6 +108,19 @@ impl Solid {
     /// result is not a valid solid.
     pub fn difference(&self, cutter: &Self) -> Result<Option<Self>, BooleanError> {
         run(self, cutter, Operation::Difference)
+    }
+
+    /// The intersection of two solids: every point in both of them.
+    ///
+    /// Solids that only touch along a face, an edge or a point, or that overlap by less than
+    /// [`crate::LINEAR_TOLERANCE`], have no intersection: `None`.
+    ///
+    /// # Errors
+    ///
+    /// Returns a [`BooleanError`] if near-coincident vertices cannot be merged safely, or if the
+    /// result is not a valid solid.
+    pub fn intersection(&self, other: &Self) -> Result<Option<Self>, BooleanError> {
+        run(self, other, Operation::Intersection)
     }
 }
 

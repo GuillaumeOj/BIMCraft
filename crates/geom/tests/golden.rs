@@ -279,7 +279,7 @@ fn extrusions(out: &mut Output) {
     }
 }
 
-/// Unions and differences of overlapping extruded circles: the vertices where the faceted sides
+/// Unions, differences and intersections of overlapping extruded circles: the vertices where the faceted sides
 /// cross come from the kernel's arithmetic, so the volumes depend on it being identical
 /// everywhere.
 fn booleans(out: &mut Output) {
@@ -320,6 +320,16 @@ fn booleans(out: &mut Output) {
             Ok(cut) => out.value("difference.volume", i, cut.map_or(0.0, |cut| cut.volume())),
             Err(_) => {
                 let _ = writeln!(out.0, "difference[{i}] error");
+            }
+        }
+        match a.intersection(&b) {
+            Ok(shared) => out.value(
+                "intersection.volume",
+                i,
+                shared.map_or(0.0, |shared| shared.volume()),
+            ),
+            Err(_) => {
+                let _ = writeln!(out.0, "intersection[{i}] error");
             }
         }
     }
