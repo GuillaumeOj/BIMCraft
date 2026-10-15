@@ -4,7 +4,7 @@
 // Only the user can ship: the stamp asks them to confirm the review at a terminal. Run with --help for
 // the options.
 
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 const USAGE = `Usage: bun scripts/push-pr.ts [options] [--branch <name> [pr options]]...
@@ -32,7 +32,7 @@ Pull request options (before any --branch: every PR; after --branch <name>: that
   --assignee a,b        assignees, @me for yourself (repeatable)
   --reviewer a,b        reviewers (repeatable)
   --milestone <name>    milestone
-  --project <title>     project
+  --project a,b         projects, by title (repeatable)
   --draft               open as a draft
 
 In a stack of several branches, give --title, --body and --body-file per branch.
@@ -61,7 +61,7 @@ export type PrOptions = {
   assignees: string[];
   reviewers: string[];
   milestone?: string;
-  project?: string;
+  projects: string[];
   draft: boolean;
 };
 
@@ -87,25 +87,21 @@ export type Args = {
 export type Planned = { branch: string; base: string; below: string; pr: PrOptions };
 
 export type Pr = { number: number; url: string; baseRefName: string };
-type FoundPr = Pr & { state: "OPEN" | "CLOSED" | "MERGED" };
-
-type Named = { title: string };
-/** What `gh pr view` tells of a pull request's issue metadata. */
-export type PrView = {
-  id: string;
-  body: string;
-  milestone: Named | null;
-  projectItems: Named[];
-  closingIssuesReferences: { number: number }[];
-};
-/** What `gh issue view` tells of an issue the pull request closes. */
-export type Issue = { number: number; id: string; milestone: Named | null; projectItems: Named[] };
+type Titled = { title: string };
+/** Milestone and projects of an issue or pull request, as `gh` gives them. */
+type Planning = { milestone: Titled | null; projectItems: Titled[] };
+/** An open pull request. */
+export type OpenPr = Pr & Planning & { body: string };
+type FoundPr = OpenPr & { state: "OPEN" | "CLOSED" | "MERGED" };
+/** An issue a pull request closes. */
+export type Issue = Planning & { number: number; id: string };
+type PrView = { id: string; body: string; closingIssuesReferences: { number: number }[] };
 
 export type Result = { code: number; stdout: string; stderr: string };
 export type RunOptions = { input?: string; env?: Record<string, string>; inherit?: boolean };
 export type Run = (cmd: string[], options?: RunOptions) => Result;
 
-export const emptyPr = (): PrOptions => ({ labels: [], assignees: [], reviewers: [], draft: false });
+export const emptyPr = (): PrOptions => ({ labels: [], assignees: [], reviewers: [], projects: [], draft: false });
 
 // Options that only set a field, by kind.
 const FLAGS = {
@@ -116,13 +112,12 @@ const FLAGS = {
   "--no-pr": "noPr",
   "--dry-run": "dryRun",
 } as const;
-const LISTS = { "--label": "labels", "--assignee": "assignees", "--reviewer": "reviewers" } as const;
+const LISTS = { "--label": "labels", "--assignee": "assignees", "--reviewer": "reviewers", "--project": "projects" } as const;
 const TEXTS = {
   "--title": "title",
   "--body": "body",
   "--body-file": "bodyFile",
   "--milestone": "milestone",
-  "--project": "project",
 } as const;
 const lookup = <T extends object>(table: T, key: string): T[keyof T] | undefined =>
   Object.hasOwn(table, key) ? table[key as keyof T] : undefined;
@@ -131,7 +126,7 @@ const list = (value: string): string[] =>
     .split(",")
     .map((item) => item.trim())
     .filter(Boolean);
-const unique = (items: string[]): string[] => [...new Set(items)];
+export const unique = <T>(items: T[]): T[] => [...new Set(items)];
 
 export function parseArgs(argv: string[]): Args {
   const args: Args = {
@@ -203,7 +198,7 @@ export function effective(global: PrOptions, own: PrOptions | undefined): PrOpti
     assignees: unique([...global.assignees, ...own.assignees]),
     reviewers: unique([...global.reviewers, ...own.reviewers]),
     milestone: own.milestone ?? global.milestone,
-    project: own.project ?? global.project,
+    projects: unique([...global.projects, ...own.projects]),
     draft: global.draft || own.draft,
   };
 }
@@ -229,7 +224,7 @@ export function createArgs(planned: Planned, fallback: { title: string; body: st
     ...joined("--assignee", pr.assignees),
     ...joined("--reviewer", pr.reviewers),
     ...optional("--milestone", pr.milestone),
-    ...optional("--project", pr.project),
+    ...joined("--project", pr.projects),
     ...(pr.draft ? ["--draft"] : []),
   ];
 }
@@ -246,7 +241,7 @@ export function editArgs(planned: Planned, existing: Pr): string[] | undefined {
     ...joined("--add-assignee", pr.assignees),
     ...joined("--add-reviewer", pr.reviewers),
     ...optional("--milestone", pr.milestone),
-    ...optional("--add-project", pr.project),
+    ...joined("--add-project", pr.projects),
   ];
   return changes.length > 0 ? ["gh", "pr", "edit", String(existing.number), ...changes] : undefined;
 }
@@ -254,21 +249,22 @@ export function editArgs(planned: Planned, existing: Pr): string[] | undefined {
 /** The issues a pull request description closes with a GitHub closing keyword, in order. */
 export function closedIssues(body: string): number[] {
   const matches = body.matchAll(/\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?):?\s+#(\d+)\b/gi);
-  return unique([...matches].map((match) => match[1] as string)).map(Number);
+  return unique([...matches].map((match) => Number(match[1])));
 }
 
 /**
- * `gh pr edit` giving a pull request the milestone and projects of its issues, or undefined. The
- * milestone and project given on the command line (`given`) win.
+ * `pr` with the milestone and projects of the issues it closes as defaults. The command line wins, and
+ * an open pull request keeps the milestone and projects it already has.
  */
-export function issueEditArgs(number: number, view: PrView, issues: Issue[], given: PrOptions): string[] | undefined {
-  const inherit = given.milestone === undefined && view.milestone === null;
-  const milestone = inherit ? issues.find((issue) => issue.milestone !== null)?.milestone?.title : undefined;
-  const has = new Set(view.projectItems.map((item) => item.title));
-  const all = given.project === undefined ? issues.flatMap((issue) => issue.projectItems.map((item) => item.title)) : [];
-  const projects = unique(all).filter((title) => !has.has(title));
-  const changes = [...optional("--milestone", milestone), ...joined("--add-project", projects)];
-  return changes.length > 0 ? ["gh", "pr", "edit", String(number), ...changes] : undefined;
+export function withIssues(pr: PrOptions, issues: Issue[], open?: OpenPr): PrOptions {
+  const fromIssue = issues.map((issue) => issue.milestone?.title).find((title) => title !== undefined);
+  const has = new Set(open?.projectItems.map((item) => item.title));
+  const fromIssues = unique(issues.flatMap((issue) => issue.projectItems.map((item) => item.title)));
+  return {
+    ...pr,
+    milestone: pr.milestone ?? (open?.milestone ? undefined : fromIssue),
+    projects: pr.projects.length > 0 ? pr.projects : fromIssues.filter((title) => !has.has(title)),
+  };
 }
 
 /** `gh api graphql` linking a pull request to an issue it closes, as the sidebar's Development field does. */
@@ -313,6 +309,9 @@ function must(run: Run, cmd: string[], options?: RunOptions): string {
   if (result.code !== 0) throw new Error(`${cmd.map(quote).join(" ")} failed${result.stderr ? `: ${result.stderr.trim()}` : ""}`);
   return result.stdout.trim();
 }
+
+/** Runs a `gh … --json` command and parses its output. */
+const ghJson = <T>(run: Run, cmd: string[]): T => JSON.parse(must(run, cmd)) as T;
 
 const isAncestor = (run: Run, ancestor: string, of: string): boolean =>
   run(["git", "merge-base", "--is-ancestor", ancestor, of]).code === 0;
@@ -360,6 +359,12 @@ export function checkChain(run: Run, branches: string[], current: string, baseRe
   });
 }
 
+/** The description the pull request of `p` gets, before its stack navigation. */
+function description(run: Run, p: Planned, open: OpenPr | undefined): string {
+  if (p.pr.bodyFile !== undefined) return readFileSync(p.pr.bodyFile, "utf8");
+  return p.pr.body ?? open?.body ?? firstCommit(run, p.below, p.branch).body;
+}
+
 /** Subject and body of the first commit `branch` adds on top of `below`. */
 function firstCommit(run: Run, below: string, branch: string): { title: string; body: string } {
   const log = must(run, ["git", "log", "--reverse", "--format=%s%x00%b%x1e", `${below}..${branch}`]);
@@ -372,9 +377,9 @@ function firstCommit(run: Run, below: string, branch: string): { title: string; 
  * The open pull request of `branch`, if any. Refuses a branch whose latest pull request was merged:
  * a squash merge leaves it outside the base, and shipping it would open a duplicate.
  */
-function openPr(run: Run, branch: string, base: string): Pr | undefined {
-  const json = must(run, ["gh", "pr", "list", "--head", branch, "--state", "all", "--json", "number,url,baseRefName,state", "--limit", "1"]);
-  const latest = (JSON.parse(json) as FoundPr[])[0];
+function openPr(run: Run, branch: string, base: string): OpenPr | undefined {
+  const fields = "number,url,baseRefName,state,body,milestone,projectItems";
+  const latest = ghJson<FoundPr[]>(run, ["gh", "pr", "list", "--head", branch, "--state", "all", "--json", fields, "--limit", "1"])[0];
   if (latest?.state === "MERGED") {
     throw new Error(`${branch} was already merged in #${latest.number}; rebase the branches above it onto ${base} and delete it`);
   }
@@ -416,6 +421,20 @@ function ship(args: Args, run: Run): number {
     pr: effective(args.global, args.branches.get(branch)),
   }));
   const existing = args.noPr ? [] : plan.map((p) => openPr(run, p.branch, args.base));
+  // Read before anything is pushed, so that a description closing an unknown issue stops the ship.
+  const closes = plan.map((p, i) =>
+    args.noPr
+      ? []
+      : closedIssues(description(run, p, existing[i])).map((number) =>
+          ghJson<Issue>(run, ["gh", "issue", "view", String(number), "--json", "number,id,milestone,projectItems"]),
+        ),
+  );
+  plan.forEach((p, i) => {
+    p.pr = withIssues(p.pr, closes[i] ?? [], existing[i]);
+  });
+  const defaultBranch = closes.some((issues) => issues.length > 0)
+    ? must(run, ["gh", "repo", "view", "--json", "defaultBranchRef", "--jq", ".defaultBranchRef.name"])
+    : args.base;
 
   for (const p of plan) {
     const env = { NO_USER_DOCS: p.pr.labels.includes("no-user-docs") ? "true" : "false" };
@@ -452,40 +471,18 @@ function ship(args: Args, run: Run): number {
   const known = prs.filter((pr): pr is Pr => pr !== undefined);
   const stacked = known.length > 1 && known.length === prs.length;
   const numbers = known.map((pr) => pr.number);
-  const issues = new Map<number, Issue>();
-  const issue = (number: number): Issue => {
-    const found = issues.get(number) ?? {
-      number,
-      ...JSON.parse(must(run, ["gh", "issue", "view", String(number), "--json", "id,milestone,projectItems"])),
-    };
-    issues.set(number, found);
-    return found;
-  };
-  let defaultBranch: string | undefined;
-  const repoDefault = (): string =>
-    (defaultBranch ??= must(run, ["gh", "repo", "view", "--json", "defaultBranchRef", "--jq", ".defaultBranchRef.name"]));
   plan.forEach((p, i) => {
     const pr = prs[i];
-    if (pr === undefined) return;
-    const fields = "id,body,milestone,projectItems,closingIssuesReferences";
-    const view = JSON.parse(must(run, ["gh", "pr", "view", String(pr.number), "--json", fields])) as PrView;
-    let body = view.body;
-    if (stacked) {
-      body = withStackBlock(view.body, stackBlock(numbers, args.base, pr.number));
-      if (body !== view.body) exec(["gh", "pr", "edit", String(pr.number), "--body-file", "-"], { input: body });
-    }
-    // One issue that cannot be read or linked must not leave the rest of the stack half done.
-    try {
-      const closed = closedIssues(body).map(issue);
-      const edit = issueEditArgs(pr.number, view, closed, p.pr);
-      if (edit !== undefined) exec(edit);
-      // GitHub links the issues itself for a pull request into the default branch.
-      const linked = new Set(view.closingIssuesReferences.map((ref) => ref.number));
-      const unlinked = closed.filter((ref) => !linked.has(ref.number));
-      if (unlinked.length > 0 && p.base !== repoDefault()) for (const ref of unlinked) exec(linkArgs(ref.id, view.id));
-    } catch (error) {
-      console.error(`push-pr: #${pr.number}: ${(error as Error).message}; set its milestone, project and issue links by hand`);
-    }
+    const issues = closes[i] ?? [];
+    // GitHub links the issues itself for a pull request into the default branch.
+    const link = p.base !== defaultBranch && issues.length > 0;
+    if (pr === undefined || !(stacked || link)) return;
+    const fields = "id,body,closingIssuesReferences";
+    const view = ghJson<PrView>(run, ["gh", "pr", "view", String(pr.number), "--json", fields]);
+    const body = stacked ? withStackBlock(view.body, stackBlock(numbers, args.base, pr.number)) : view.body;
+    if (body !== view.body) exec(["gh", "pr", "edit", String(pr.number), "--body-file", "-"], { input: body });
+    const linked = new Set(view.closingIssuesReferences.map((issue) => issue.number));
+    for (const issue of issues) if (link && !linked.has(issue.number)) exec(linkArgs(issue.id, view.id));
   });
   for (const pr of known) console.log(`  ${pr.url}`);
   return 0;
