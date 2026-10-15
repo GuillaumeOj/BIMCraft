@@ -178,19 +178,23 @@ impl Model {
             if !self.store.contains(next) {
                 continue;
             }
-            let mut detached = Vec::new();
-            for link in self.relationships.links(next).collect::<Vec<_>>() {
-                if let Some(position) = self.relationships.detach(link, next) {
-                    detached.push(Detached { link, position });
-                }
-                if self
-                    .relationships
-                    .role(link.relationship, link.role)
-                    .is_empty()
-                {
-                    pending.push(link.relationship);
-                }
-            }
+            let detached: Vec<Detached> = self
+                .relationships
+                .detach_all(next)
+                .into_iter()
+                .map(|(link, position)| Detached { link, position })
+                .collect();
+            pending.extend(
+                detached
+                    .iter()
+                    .map(|detached| detached.link)
+                    .filter(|link| {
+                        self.relationships
+                            .role(link.relationship, link.role)
+                            .is_empty()
+                    })
+                    .map(|link| link.relationship),
+            );
             let roles = self.relationships.take(next);
             let entity = self.store.remove(next)?;
             objects.push(RemovedObject {

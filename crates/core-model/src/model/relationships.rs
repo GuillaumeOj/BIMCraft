@@ -97,10 +97,26 @@ impl Relationships {
 
     /// Removes a participant from a role and returns where it was.
     pub(super) fn detach(&mut self, link: Link, participant: EntityId) -> Option<usize> {
+        let position = self.leave_role(link, participant)?;
+        self.unlink(participant, link);
+        Some(position)
+    }
+
+    /// Takes an object out of every role it plays, and returns each role with the position the
+    /// object held in it.
+    pub(super) fn detach_all(&mut self, participant: EntityId) -> Vec<(Link, usize)> {
+        let links = self.links.remove(&participant).unwrap_or_default();
+        links
+            .into_iter()
+            .filter_map(|link| Some((link, self.leave_role(link, participant)?)))
+            .collect()
+    }
+
+    /// Removes a participant from the role's list only, and returns where it was.
+    fn leave_role(&mut self, link: Link, participant: EntityId) -> Option<usize> {
         let list = self.roles.get_mut(&link.relationship)?.get_mut(link.role)?;
         let position = list.iter().position(|&other| other == participant)?;
         list.remove(position);
-        self.unlink(participant, link);
         Some(position)
     }
 
@@ -204,8 +220,8 @@ impl Model {
         relationship: EntityId,
         role: &str,
     ) -> Result<&[EntityId], ModelError> {
-        let (_, index) = self.locate_role(relationship, role)?;
-        Ok(self.relationships.role(relationship, index))
+        let (_, link) = self.locate_role(relationship, role)?;
+        Ok(self.relationships.role(relationship, link.role))
     }
 
     /// Every role the object with this id plays, sorted by relationship id then role; nothing
@@ -235,8 +251,8 @@ impl Model {
         role: &str,
         participant: EntityId,
     ) -> Result<(), ModelError> {
-        let (definition, index) = self.locate_role(relationship, role)?;
-        if definition.roles[index].cardinality == Cardinality::One {
+        let (definition, link) = self.locate_role(relationship, role)?;
+        if definition.roles[link.role].cardinality == Cardinality::One {
             return Err(ModelError::OneParticipant(role.to_owned()));
         }
         if self
@@ -246,12 +262,8 @@ impl Model {
         {
             return Err(ModelError::RepeatedParticipant(participant));
         }
-        self.check_participant(definition, index, participant)?;
-        let link = Link {
-            relationship,
-            role: index,
-        };
-        let end = self.relationships.role(relationship, index).len();
+        self.check_participant(definition, link.role, participant)?;
+        let end = self.relationships.role(relationship, link.role).len();
         self.relationships.attach(link, participant, end);
         Ok(())
     }
@@ -269,34 +281,31 @@ impl Model {
         role: &str,
         participant: EntityId,
     ) -> Result<(), ModelError> {
-        let (_, index) = self.locate_role(relationship, role)?;
-        let list = self.relationships.role(relationship, index);
+        let (_, link) = self.locate_role(relationship, role)?;
+        let list = self.relationships.role(relationship, link.role);
         if !list.contains(&participant) {
             return Err(ModelError::NotParticipant(role.to_owned()));
         }
         if list.len() == 1 {
             return Err(ModelError::EmptyRole(role.to_owned()));
         }
-        let link = Link {
-            relationship,
-            role: index,
-        };
         self.relationships.detach(link, participant);
         Ok(())
     }
 
-    /// The entity definition of a stored relationship object and the index of one of its roles.
+    /// The entity definition of a stored relationship object and one of its roles.
     fn locate_role(
         &self,
         relationship: EntityId,
         role: &str,
-    ) -> Result<(&Entity, usize), ModelError> {
+    ) -> Result<(&Entity, Link), ModelError> {
         let entity = self
             .store
             .entity_of(relationship)
             .ok_or(StoreError::NotFound(relationship))?;
         let definition = relationship_entity(&self.namespace, entity)?;
-        Ok((definition, role_index(definition, role)?))
+        let role = role_index(definition, role)?;
+        Ok((definition, Link { relationship, role }))
     }
 
     /// Checks that `participant` exists and may play role `role` of `relationship`.
