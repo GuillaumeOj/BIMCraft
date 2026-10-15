@@ -5,6 +5,7 @@
 # Getting started
 
 - [Install BIMCraft](getting-started.md)
+- [Change the interface language](change-the-interface-language.md)
 
 # Projects
 
