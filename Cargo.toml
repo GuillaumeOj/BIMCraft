@@ -14,6 +14,7 @@ license = "MIT"
 # workspace crates by path.
 # Member crates use `name = { workspace = true }`.
 [workspace.dependencies]
+api = { path = "crates/api" }
 core-model = { path = "crates/core-model" }
 core-txn = { path = "crates/core-txn" }
 criterion = { version = "=0.8.2", default-features = false }

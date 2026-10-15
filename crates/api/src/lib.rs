@@ -9,6 +9,8 @@
 #![forbid(clippy::disallowed_methods, clippy::disallowed_types)]
 
 mod commands;
+#[cfg(feature = "conformance")]
+pub mod conformance;
 mod descriptor;
 mod error;
 pub mod jsonrpc;
@@ -16,6 +18,7 @@ mod queries;
 mod registry;
 pub mod schema;
 mod session;
+mod transport;
 mod version;
 
 pub use descriptor::{Descriptor, Kind, Outcome};
@@ -24,6 +27,7 @@ pub use queries::{DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE};
 pub use registry::Registry;
 pub use schema::{Signature, protocol_schema};
 pub use session::Session;
+pub use transport::{InProcess, Transport, TransportError};
 pub use version::Version;
 
 #[cfg(test)]

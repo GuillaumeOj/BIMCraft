@@ -14,7 +14,7 @@ publish = false
 cargo-fuzz = true
 
 [dependencies]
-api = { path = "../crates/api" }
+api = { path = "../crates/api", features = ["conformance"] }
 core-model = { path = "../crates/core-model" }
 core-txn = { path = "../crates/core-txn" }
 express = { path = "../crates/express" }

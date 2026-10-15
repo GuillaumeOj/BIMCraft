@@ -52,3 +52,20 @@ Clients send JSON-RPC 2.0 messages (API-03) to an `api::jsonrpc::Server`, which 
 | -32003 | No object with this id. |
 
 Error messages never hold model content (SEC-03). The `jsonrpc` fuzz target (`fuzz/`) feeds arbitrary bytes to the server.
+
+## Transports
+
+A transport carries messages between a client and a server (API-04). The client's end implements `api::Transport`: `send` takes one message and returns the response, or `None` for notifications, and `notifications` takes the `model.changed` notifications received since the last call. Calls are blocking and carry text, so the trait builds for `wasm32-unknown-unknown` too; an asynchronous transport adapts to it in its tests.
+
+`api::InProcess` is the transport to a server in the same process, for tests, the browser build and the desktop host. Each transport sets the `Origin` of its client.
+
+### The conformance suite
+
+Every transport must pass `api::conformance::run`, behind the `conformance` feature. It covers commands and their notifications, queries, every error class, the size and depth limits, undo and redo, batches and notification-only requests. Each case runs on a fresh server on `conformance::namespace()`, which the suite hands to the function that connects a client:
+
+```rust
+// In the transport's tests, with `api = { workspace = true, features = ["conformance"] }`.
+assert_eq!(api::conformance::run(|server| my_transport::connect(server)), Ok(()));
+```
+
+`run` returns the failed cases, each with its reason, rather than panicking at the first one.

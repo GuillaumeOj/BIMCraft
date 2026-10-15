@@ -10,14 +10,25 @@ publish = false
 [dependencies]
 core-model = { workspace = true }
 core-txn = { workspace = true }
+schema = { workspace = true, optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
+
+[features]
+# The transport conformance suite, for the tests of every transport (API-04).
+conformance = ["dep:schema"]
 
 [dev-dependencies]
 jsonschema = { workspace = true }
 proptest = { workspace = true }
 schema = { workspace = true }
+# For tests/conformance.rs.
+core-txn = { workspace = true }
+
+[[test]]
+name = "conformance"
+required-features = ["conformance"]
 
 [lints]
 workspace = true
