@@ -17,6 +17,13 @@ pub(crate) fn record(name: &str, parameters: Vec<Parameter>) -> Record {
     }
 }
 
+pub(crate) fn simple(id: u64, name: &str, parameters: Vec<Parameter>) -> Instance {
+    Instance {
+        id,
+        body: InstanceBody::Simple(record(name, parameters)),
+    }
+}
+
 pub(super) fn text(value: &str) -> Parameter {
     Parameter::String(value.to_owned())
 }
@@ -76,7 +83,7 @@ pub(super) fn header() -> impl Strategy<Value = Vec<Record>> {
 }
 
 /// Instances with distinct names, simple or complex, in any order.
-pub(super) fn instances(count: Range<usize>) -> impl Strategy<Value = Vec<Instance>> {
+pub(crate) fn instances(count: Range<usize>) -> impl Strategy<Value = Vec<Instance>> {
     let body = prop_oneof![
         any_record(keyword()).prop_map(InstanceBody::Simple),
         vec(any_record(keyword()), 1..4).prop_map(InstanceBody::Complex),

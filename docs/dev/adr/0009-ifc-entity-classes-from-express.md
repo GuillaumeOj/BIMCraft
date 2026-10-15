@@ -24,7 +24,7 @@ The schema is published by buildingSMART as `IFC4X3_ADD2.exp` (IFC 4.3.2.0, ISO 
    - for each entity that can be instantiated, a struct with its non-derived attributes and `from_record`; abstract entities are marker types for `Ref<T>`, a typed but unresolved instance reference;
    - `Entity`, with one boxed variant per entity and `from_record`/`from_instance`, which find the decoder by binary search on the STEP name;
    - tests that decode a sample of every entity, defined type, select member and enumeration item.
-4. **Decoding only, with a hand-written runtime.** `interop_ifc::ifc::decode` holds what does not depend on the schema: the `Decode` trait, decoders for simple values and aggregates, the attribute reader and the errors. Decoding checks value kinds, `$` and `*`, aggregate sizes, enumeration items and select members. It does not evaluate `WHERE` rules, check `UNIQUE`, or resolve references. Encoding belongs to the STEP writer (#42). Complex instances (several records in one instance) are reported as `ComplexInstance` until #43 preserves them.
+4. **Decoding only, with a hand-written runtime.** `interop_ifc::ifc::decode` holds what does not depend on the schema: the `Decode` trait, decoders for simple values and aggregates, the attribute reader and the errors. Decoding checks value kinds, `$` and `*`, aggregate sizes, enumeration items and select members. It does not evaluate `WHERE` rules, check `UNIQUE`, or resolve references. Encoding belongs to the STEP writer (#42). Complex instances (several records in one instance) are reported as `ComplexInstance`; the model maps none, so `interop_ifc::preserve` keeps them as read and writes them back on export (#43, INT-03).
 
 ## Consequences
 
