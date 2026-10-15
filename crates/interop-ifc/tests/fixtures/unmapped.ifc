@@ -1,0 +1,25 @@
+ISO-10303-21;
+HEADER;
+/* Written for the preservation tests; not taken from a real project. Walls and the storey are
+   what the tests map; property sets, relationships, materials, a complex instance and a
+   user-defined record are what they keep. */
+FILE_DESCRIPTION(('ViewDefinition [ReferenceView]'),'2;1');
+FILE_NAME('unmapped.ifc','2026-10-15T09:00:00',('Author'),('Office'),'','BIMCraft','');
+FILE_SCHEMA(('IFC4X3_ADD2'));
+ENDSEC;
+DATA;
+#1=IFCPROJECT('0YvctVUKr0kugbFTf53O9L',$,'Project',$,$,$,$,$,$);
+#2=IFCBUILDINGSTOREY('1hOSvn6df7F8_7GcBWlRXQ',$,'Level 1',$,$,$,$,$,.ELEMENT.,0.);
+#3=IFCWALL('2O2Fr$t4X7Zf8NOew3FLOH',$,'Wall \X2\00E9\X0\',$,$,$,$,$,.STANDARD.);
+#4=IFCWALL('3cUkl32yn9qRSPvBJVyWYp',$,'Wall B',$,$,$,$,$,.STANDARD.);
+#5=IFCRELCONTAINEDINSPATIALSTRUCTURE('0Tz0Vp$Xr1VBpsJJVkVxZ5',$,$,$,(#3,#4),#2);
+#6=IFCPROPERTYSINGLEVALUE('Width',$,IFCLENGTHMEASURE(0.2),$);
+#7=IFCPROPERTYSINGLEVALUE('AcousticRating',$,IFCLABEL('Rw 52 dB'),$);
+#8=IFCPROPERTYSET('1a9yk5FMf0Lh6sWbUa4SXk',$,'Pset_WallCommon',$,(#6,#7));
+#9=IFCRELDEFINESBYPROPERTIES('2fNGqfyL5DHB6Dw5HTx8xH',$,$,$,(#3,#4),#8);
+#10=IFCMATERIAL('Concrete C30/37',$,$);
+#11=IFCRELASSOCIATESMATERIAL('3vB2YO$MX4xv5uCqZZG05x',$,$,$,(#3),#10);
+#12=(IFCREPRESENTATIONITEM()IFCGEOMETRICREPRESENTATIONITEM()IFCCURVE());
+#13=!ACME_TAG(#3,'Inspected',1.5E-3);
+ENDSEC;
+END-ISO-10303-21;

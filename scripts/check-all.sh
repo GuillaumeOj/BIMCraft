@@ -1,6 +1,6 @@
 #!/bin/sh
 # Runs the project checks (AGENTS.md §9). CI calls the same sections, so local and remote never drift.
-# Usage: scripts/check-all.sh [section...]   sections: repo rust coverage wasm fuzz ui e2e docs (default: all)
+# Usage: scripts/check-all.sh [section...]   sections: repo rust coverage wasm fuzz corpus ui e2e docs (default: all)
 # A section is skipped only when the code it checks does not exist yet.
 # CHECK_CRATES="a b" limits the Rust sections to those crates, for a quick local run on the crates
 # you changed (AGENTS.md §3a); unset, they cover the whole workspace, as in CI.
@@ -104,6 +104,15 @@ check_fuzz() {
   )
 }
 
+check_corpus() {
+  [ -f crates/interop-ifc/tests/corpus/manifest.txt ] || { step "IFC corpus: no manifest yet, skipped"; return; }
+  step "IFC corpus: public samples round-trip (INT-04, Phase 0 gate)"
+  require curl; require shasum
+  # The fetch is the only step that uses the network; the test reads the files it checked.
+  scripts/fetch-ifc-corpus.sh "$root/target/ifc-corpus"
+  IFC_CORPUS_DIR="$root/target/ifc-corpus" cargo test --package interop-ifc --test corpus --locked
+}
+
 check_ui() {
   has_ui || { step "UI: no package.json yet, skipped"; return; }
   step "UI: lint, format, imports, types, unit tests + coverage, audit"
@@ -130,10 +139,10 @@ check_docs() {
   mdbook build docs/user
 }
 
-sections=${*:-repo rust coverage wasm fuzz ui e2e docs}
+sections=${*:-repo rust coverage wasm fuzz corpus ui e2e docs}
 for section in $sections; do
   case "$section" in
-    repo|rust|coverage|wasm|fuzz|ui|e2e|docs) "check_$section" ;;
+    repo|rust|coverage|wasm|fuzz|corpus|ui|e2e|docs) "check_$section" ;;
     *) echo "check-all: unknown section '$section'" >&2; exit 2 ;;
   esac
 done

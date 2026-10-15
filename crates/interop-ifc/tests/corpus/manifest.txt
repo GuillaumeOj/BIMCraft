@@ -1,0 +1,16 @@
+# Public IFC sample corpus for the round-trip test (INT-04), fetched by scripts/fetch-ifc-corpus.sh.
+# Source: buildingSMART International, Sample-Test-Files, at a pinned commit (2026-09-04).
+# Licence: CC BY 4.0, (C) buildingSMART International Ltd. (LICENSE at the root of the repository).
+# Each line below the directives: the SHA-256 of a file, two spaces, its path in the repository.
+repository buildingSMART/Sample-Test-Files
+revision 80d976a9b193a26a8e928c3e79bff67af1de68a8
+96e7103812b15b65eb1fd7802d36b9962833485dce5ead4f440bbf529530881d  IFC 4.3.2.0 (IFC 4.3 ADD2)/Simple-Scene/Building-Architecture.ifc
+22891586f153793d098811caec8a510cd404f6c2f1979fb329eeeebc3f475642  IFC 4.3.2.0 (IFC 4.3 ADD2)/Simple-Scene/Building-Hvac.ifc
+93253acebf6c2d9bfeb1300c3c8d2fdf663ea24746e5cddb8392aaf50f9a0ca8  IFC 4.3.2.0 (IFC 4.3 ADD2)/Simple-Scene/Building-Landscaping.ifc
+db64895488aad4eab082c8292f5632145b0fc864c0642d4fe667404882bacf27  IFC 4.3.2.0 (IFC 4.3 ADD2)/Simple-Scene/Building-Structural.ifc
+97e84cb93e07bfbedbc1bdc57aef161f4998e09accd77175dd0561af2ab4ffab  IFC 4.3.2.0 (IFC 4.3 ADD2)/Simple-Scene/Infra-Bridge.ifc
+39eebb4612c303e5db5adbab54cdf31ab5f04e02b1887ee49953257fa903a544  IFC 4.3.2.0 (IFC 4.3 ADD2)/Simple-Scene/Infra-Electrical.ifc
+378f25564c4fc969225370e322e8ec0d16ce52239e68dd5572e4681879e33fca  IFC 4.3.2.0 (IFC 4.3 ADD2)/Simple-Scene/Infra-Landscaping.ifc
+a6ac7a0f4c80c91f04a1a66b73899be064f9c3992b2e886c92f0e3145c0ca50f  IFC 4.3.2.0 (IFC 4.3 ADD2)/Simple-Scene/Infra-Plumbing.ifc
+c9073051e17796b8b59f96cf268207f4011c08eedeaa791774480c33e9defbb3  IFC 4.3.2.0 (IFC 4.3 ADD2)/Simple-Scene/Infra-Rail.ifc
+a3cb29433d7176bd31ff7535a596b5d7cd4eb7f2fb0eb6eee451612063c1f167  IFC 4.3.2.0 (IFC 4.3 ADD2)/Simple-Scene/Infra-Road.ifc

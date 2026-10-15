@@ -335,17 +335,10 @@ mod tests {
     use proptest::prelude::*;
 
     use super::*;
-    use crate::step::test_support::{END_PART, header, instances, record, text, typed};
+    use crate::step::test_support::{END_PART, header, instances, record, simple, text, typed};
     use crate::step::{Limits, StepReader};
 
     const START: &str = "ISO-10303-21;\nHEADER;\nENDSEC;\nDATA;\n";
-
-    fn simple(id: u64, name: &str, parameters: Vec<Parameter>) -> Instance {
-        Instance {
-            id,
-            body: InstanceBody::Simple(record(name, parameters)),
-        }
-    }
 
     fn write(header: &[Record], instances: &[Instance]) -> Result<String, WriteError> {
         let mut writer = StepWriter::new(Vec::new(), header)?;

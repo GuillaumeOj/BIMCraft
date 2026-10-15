@@ -44,7 +44,7 @@ CI runs every check on every pull request, on Linux, macOS and Windows. Locally,
 - **Rust**: `cargo test -p <crate>`, `cargo clippy -p <crate> --all-targets --all-features -- -D warnings`, `cargo fmt --all --check`; for a critical crate you changed, `cargo llvm-cov -p <crate> --all-features --fail-under-lines 98`. `CHECK_CRATES="<crate> …" scripts/check-all.sh rust` runs the whole Rust section on those crates only.
 - **UI**, from `ui/`: `bunx vitest run <files>` (or `bunx vitest related --run <files>`), `bunx biome check <files>`, `bunx tsc --noEmit`.
 - **Before each commit**: `scripts/check-all.sh repo` (seconds).
-- **A full section only when nothing narrower checks the change**: workspace manifests, the toolchain, `clippy.toml`, `deny.toml`, the critical or wasm crate lists or `scripts/check-all.sh` changed (run the sections they affect); a core crate's platform use changed (`wasm`); a fuzz target changed (`fuzz`); or a CI failure cannot be reproduced otherwise. Never run the whole `scripts/check-all.sh` by default.
+- **A full section only when nothing narrower checks the change**: workspace manifests, the toolchain, `clippy.toml`, `deny.toml`, the critical or wasm crate lists or `scripts/check-all.sh` changed (run the sections they affect); a core crate's platform use changed (`wasm`); a fuzz target changed (`fuzz`); the STEP reader or writer, or the IFC corpus manifest changed (`corpus`); or a CI failure cannot be reproduced otherwise. Never run the whole `scripts/check-all.sh` by default.
 
 ## 4. Dependencies
 
@@ -117,13 +117,14 @@ Users are architects and engineers, not developers. For every user-facing featur
 | Check | Command |
 | --- | --- |
 | One-time setup (hooks + tool check) | `scripts/setup.sh` |
-| Everything CI runs that applies (rarely needed locally, section 3a) | `scripts/check-all.sh` (or one section: `repo rust coverage wasm fuzz ui e2e docs`; `CHECK_CRATES="a b"` limits the Rust sections) |
+| Everything CI runs that applies (rarely needed locally, section 3a) | `scripts/check-all.sh` (or one section: `repo rust coverage wasm fuzz corpus ui e2e docs`; `CHECK_CRATES="a b"` limits the Rust sections) |
 | Commit messages + user-docs rule for a branch | `scripts/check-pr.sh main` |
 | Rust format | `cargo fmt --all --check` |
 | Rust lint | `cargo clippy --workspace --all-targets --all-features -- -D warnings` |
 | Rust tests + coverage | `cargo llvm-cov --workspace --fail-under-lines 90` |
 | Dependency audit | `cargo deny check` |
 | Fuzz targets (bounded, seeded run) | `scripts/check-all.sh fuzz` (details: [quality.md](docs/dev/quality.md#fuzzing)) |
+| IFC round-trip on the public sample corpus | `scripts/check-all.sh corpus` (details: [quality.md](docs/dev/quality.md#ifc-sample-corpus)) |
 | TOML format | `taplo fmt --check` |
 | Spelling | `typos` |
 | Pinned versions | `bun scripts/check-pinned-deps.ts` |

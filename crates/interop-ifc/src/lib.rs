@@ -2,7 +2,8 @@
 //!
 //! The [`step`] module reads ISO 10303-21 (STEP Part 21) files, the text encoding of IFC, as a
 //! stream of instances with bounded memory, so a hostile file cannot exhaust memory or crash the
-//! importer, and writes them back deterministically.
+//! importer, and writes them back deterministically. The [`preserve`] module keeps the instances
+//! the model does not map and gives them back on export (INT-03).
 //!
 //! This crate builds for native targets and `wasm32-unknown-unknown` (ARCH-01) and never touches
 //! the platform directly (ARCH-02): it reads from any [`std::io::BufRead`], such as the bytes a
@@ -12,6 +13,7 @@
 #![forbid(clippy::disallowed_methods, clippy::disallowed_types)]
 
 pub mod ifc;
+pub mod preserve;
 pub mod step;
 
 /// Property-test settings shared by the crate. A fixed seed keeps runs reproducible; with no

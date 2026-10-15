@@ -14,7 +14,10 @@ thiserror = { workspace = true }
 express = { workspace = true }
 
 [dev-dependencies]
+express = { workspace = true }
 proptest = { workspace = true }
+schema = { workspace = true }
+schema-gen = { workspace = true }
 
 [lints]
 workspace = true
