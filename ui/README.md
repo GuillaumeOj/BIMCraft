@@ -15,7 +15,7 @@ Run them from `ui/` after `bun install`:
 | Unit tests with coverage | `bunx vitest run --coverage` |
 | End-to-end tests (first run: `bunx playwright install chromium`) | `bunx playwright test` |
 | Lint, format and imports | `bunx biome ci .` |
-| Type check | `bunx tsc --noEmit` |
+| Type check (all code, then the app without Node types) | `bun run typecheck` |
 
 ## Configuration
 

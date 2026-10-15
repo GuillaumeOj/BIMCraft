@@ -149,9 +149,8 @@ check_ui() {
     cd ui
     bun install --frozen-lockfile
     bunx biome ci .
-    bunx tsc --noEmit
-    # The app code again without Node types: it runs in the browser (tsconfig.app.json).
-    bunx tsc --noEmit -p tsconfig.app.json
+    # Everything, then the app code alone without Node types (it runs in the browser).
+    bun run typecheck
     bunx vitest run --coverage
     bun audit
   )
