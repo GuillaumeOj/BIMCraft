@@ -7,7 +7,7 @@ pub(crate) fn p(x: f64, y: f64) -> Point2 {
     Point2::new(x, y)
 }
 
-pub(super) fn line(start: Point2, end: Point2) -> Edge {
+pub(crate) fn line(start: Point2, end: Point2) -> Edge {
     Edge::Line { start, end }
 }
 
@@ -41,7 +41,7 @@ pub(crate) fn rectangle(x0: f64, y0: f64, x1: f64, y1: f64) -> Vec<Edge> {
     polygon(&[(x0, y0), (x1, y0), (x1, y1), (x0, y1)])
 }
 
-pub(super) fn ccw(start: Point2, end: Point2, centre: Point2) -> Edge {
+pub(crate) fn ccw(start: Point2, end: Point2, centre: Point2) -> Edge {
     Edge::Arc {
         start,
         end,

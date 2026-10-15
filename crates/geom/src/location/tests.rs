@@ -1,7 +1,9 @@
-//! Location lines against the worked example of the design (Penpot board 3.3).
+//! Location lines and points against the worked example of the design (Penpot board 3.3) and
+//! hand-calculated sections (ENG-03).
 
 use super::*;
-use crate::MODEL_EXTENT;
+use crate::profile::tests::{ccw, line, mm_profile};
+use crate::{MODEL_EXTENT, Point2, Profile, ShearCentreError};
 
 const MM: f64 = 1e-3;
 
@@ -329,7 +331,244 @@ fn error_messages_carry_no_dimensions() {
         "layer 2 has an invalid thickness"
     );
     assert_eq!(
+        LocationError::UnknownCardinalPoint(0).to_string(),
+        "0 is not an IFC cardinal point"
+    );
+    assert_eq!(
         LocationError::TooManyLayers.to_string(),
         format!("the layer set has more than {MAX_LAYERS} layers")
     );
+}
+
+// Profiles, in metres. Hand calculations are in millimetres in the comments.
+
+fn assert_point(got: Point2, x_mm: f64, y_mm: f64) {
+    assert!(
+        (got.x - x_mm * MM).abs() < 1e-12 && (got.y - y_mm * MM).abs() < 1e-12,
+        "{got:?} != ({x_mm}, {y_mm}) mm"
+    );
+}
+
+const ALL: [CardinalPoint; 11] = [
+    CardinalPoint::BottomLeft,
+    CardinalPoint::BottomCentre,
+    CardinalPoint::BottomRight,
+    CardinalPoint::MiddleLeft,
+    CardinalPoint::MiddleCentre,
+    CardinalPoint::MiddleRight,
+    CardinalPoint::TopLeft,
+    CardinalPoint::TopCentre,
+    CardinalPoint::TopRight,
+    CardinalPoint::Centroid,
+    CardinalPoint::ShearCentre,
+];
+
+#[test]
+fn rectangle_cardinal_points() {
+    // 300 × 500 rectangle with its bottom-left corner at the origin: centroid (150, 250).
+    let rect = mm_profile(&[(0.0, 0.0), (300.0, 0.0), (300.0, 500.0), (0.0, 500.0)]);
+    let expected = [
+        (0.0, 0.0),
+        (150.0, 0.0),
+        (300.0, 0.0),
+        (0.0, 250.0),
+        (150.0, 250.0),
+        (300.0, 250.0),
+        (0.0, 500.0),
+        (150.0, 500.0),
+        (300.0, 500.0),
+        (150.0, 250.0),
+    ];
+    for (cardinal, (x, y)) in ALL.into_iter().zip(expected) {
+        let point = LocationPoint::at(cardinal)
+            .point_on(&rect, None)
+            .expect("resolves");
+        assert_point(point, x, y);
+    }
+}
+
+/// Symmetric I-section: b = 200, h = 400, flanges 20 thick, web 10 thick, centred on the origin.
+fn i_section() -> Profile {
+    mm_profile(&[
+        (-100.0, -200.0),
+        (100.0, -200.0),
+        (100.0, -180.0),
+        (5.0, -180.0),
+        (5.0, 180.0),
+        (100.0, 180.0),
+        (100.0, 200.0),
+        (-100.0, 200.0),
+        (-100.0, 180.0),
+        (-5.0, 180.0),
+        (-5.0, -180.0),
+        (-100.0, -180.0),
+    ])
+}
+
+#[test]
+fn i_section_cardinal_points() {
+    let section = i_section();
+    // Area = 2 × 200 × 20 + 360 × 10 = 11 600 mm²; symmetric, so the centroid is the origin.
+    assert!((section.area() - 11_600.0 * MM * MM).abs() < 1e-12);
+    let expected = [
+        (-100.0, -200.0),
+        (0.0, -200.0),
+        (100.0, -200.0),
+        (-100.0, 0.0),
+        (0.0, 0.0),
+        (100.0, 0.0),
+        (-100.0, 200.0),
+        (0.0, 200.0),
+        (100.0, 200.0),
+        (0.0, 0.0),
+    ];
+    for (cardinal, (x, y)) in ALL.into_iter().zip(expected) {
+        let point = LocationPoint::at(cardinal)
+            .point_on(&section, None)
+            .expect("resolves");
+        assert_point(point, x, y);
+    }
+}
+
+#[test]
+fn t_section_centroid_and_beam_default() {
+    // Flange 200 × 20 on top of a 10 × 180 web, bottom of the web at y = 0.
+    // A = 4000 + 1800 = 5800 mm²; ȳ = (4000 × 190 + 1800 × 90) / 5800 = 922 000 / 5800.
+    let tee = mm_profile(&[
+        (-5.0, 0.0),
+        (5.0, 0.0),
+        (5.0, 180.0),
+        (100.0, 180.0),
+        (100.0, 200.0),
+        (-100.0, 200.0),
+        (-100.0, 180.0),
+        (-5.0, 180.0),
+    ]);
+    let column = LocationPoint::column()
+        .point_on(&tee, None)
+        .expect("resolves");
+    assert_point(column, 0.0, 922_000.0 / 5800.0);
+    // A beam hangs from its top centre: the section moves down by 200 mm.
+    let translation = LocationPoint::beam().resolve(&tee, None).expect("resolves");
+    assert_point(translation, 0.0, -200.0);
+}
+
+#[test]
+fn offsets_and_the_shear_centre() {
+    let section = i_section();
+    let point = LocationPoint {
+        cardinal: CardinalPoint::BottomLeft,
+        offset_y: 50.0 * MM,
+        offset_z: -30.0 * MM,
+    };
+    // The bottom-left corner (−100, −200) lands at (50, −30) from the axis.
+    assert_point(
+        point.resolve(&section, None).expect("resolves"),
+        150.0,
+        170.0,
+    );
+    // Doubly symmetric: the computed shear centre is the centroid, to the solver's accuracy.
+    let at_shear = LocationPoint::at(CardinalPoint::ShearCentre);
+    let translation = at_shear.resolve(&section, None).expect("resolves");
+    assert!(
+        translation.x.abs() < 0.1 * MM && translation.y.abs() < 0.1 * MM,
+        "{translation:?}"
+    );
+    // A 10 m strip 1 µm thick needs a mesh beyond the node budget.
+    let sliver = mm_profile(&[(0.0, 0.0), (10_000.0, 0.0), (10_000.0, 0.001), (0.0, 0.001)]);
+    assert_eq!(
+        at_shear.resolve(&sliver, None),
+        Err(LocationError::ShearCentreUnavailable(
+            ShearCentreError::MeshTooLarge
+        ))
+    );
+    // A known shear centre, from a catalogue or computed earlier, is used as given.
+    let known = Point2::new(-30.0 * MM, 12.0 * MM);
+    assert_point(
+        at_shear.resolve(&sliver, Some(known)).expect("resolves"),
+        30.0,
+        -12.0,
+    );
+    // The centroid ignores it.
+    assert_point(
+        LocationPoint::column()
+            .resolve(&section, Some(known))
+            .expect("resolves"),
+        0.0,
+        0.0,
+    );
+    for bad in [f64::NAN, 2.0 * MODEL_EXTENT] {
+        let point = LocationPoint {
+            offset_y: bad,
+            ..LocationPoint::column()
+        };
+        assert_eq!(
+            point.resolve(&section, None),
+            Err(LocationError::InvalidOffset)
+        );
+        let point = LocationPoint {
+            offset_z: bad,
+            ..LocationPoint::column()
+        };
+        assert_eq!(
+            point.resolve(&section, None),
+            Err(LocationError::InvalidOffset)
+        );
+    }
+}
+
+#[test]
+fn cardinal_points_on_arcs_use_the_tight_bounds() {
+    // A half disc of radius 100 above the x axis: its bounds are (−100, 0)–(100, 100), not the
+    // whole circle's, so a beam hangs from y = 100 and the middle row is at y = 50.
+    let r = 100.0 * MM;
+    let (left, right) = (Point2::new(-r, 0.0), Point2::new(r, 0.0));
+    let half_disc = Profile::new(
+        vec![line(left, right), ccw(right, left, Point2::new(0.0, 0.0))],
+        vec![],
+    )
+    .expect("valid profile");
+    let at = |cardinal| {
+        LocationPoint::at(cardinal)
+            .point_on(&half_disc, None)
+            .expect("resolves")
+    };
+    assert_point(at(CardinalPoint::TopCentre), 0.0, 100.0);
+    assert_point(at(CardinalPoint::MiddleCentre), 0.0, 50.0);
+    assert_point(at(CardinalPoint::BottomLeft), -100.0, 0.0);
+}
+
+#[test]
+fn ifc_cardinal_point_codes() {
+    for point in ALL {
+        let read = CardinalPoint::from_ifc_code(point.ifc_code()).expect("known code");
+        assert_eq!(read, IfcCardinalPoint { point, exact: true });
+    }
+    assert_eq!(CardinalPoint::Centroid.ifc_code(), 10);
+    assert_eq!(CardinalPoint::ShearCentre.ifc_code(), 15);
+    let nearest = [
+        (11, CardinalPoint::BottomCentre),
+        (12, CardinalPoint::MiddleLeft),
+        (13, CardinalPoint::MiddleRight),
+        (14, CardinalPoint::TopCentre),
+        (16, CardinalPoint::BottomCentre),
+        (17, CardinalPoint::MiddleLeft),
+        (18, CardinalPoint::MiddleRight),
+        (19, CardinalPoint::TopCentre),
+    ];
+    for (code, point) in nearest {
+        assert_eq!(
+            CardinalPoint::from_ifc_code(code),
+            Ok(IfcCardinalPoint {
+                point,
+                exact: false
+            })
+        );
+    }
+    for code in [0, 20, 255] {
+        assert_eq!(
+            CardinalPoint::from_ifc_code(code),
+            Err(LocationError::UnknownCardinalPoint(code))
+        );
+    }
 }

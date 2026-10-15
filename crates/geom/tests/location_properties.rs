@@ -1,10 +1,12 @@
-//! Properties of location lines (ARC-30, GEO-13, ENG-02): resolved locations stay within the
-//! section, flips are involutions, reordering keeps a choice on its layer, and the IFC mapping
-//! round-trips.
+//! Properties of location lines and points (ARC-30, STR-14, GEO-13, ENG-02): resolved locations
+//! stay within the section, flips are involutions, reordering keeps a choice on its layer, and
+//! the IFC mappings round-trip.
+
+use core::f64::consts::TAU;
 
 use geom::{
-    DirectionSense, Face, LINEAR_TOLERANCE, Layer, LayerId, LayerPlacement, LayerSet, LocationLine,
-    SnapPoint, SnapPosition,
+    CardinalPoint, DirectionSense, Edge, Face, LINEAR_TOLERANCE, Layer, LayerId, LayerPlacement,
+    LayerSet, LocationLine, LocationPoint, Point2, Profile, SnapPoint, SnapPosition,
 };
 use proptest::prelude::*;
 use proptest::test_runner::RngSeed;
@@ -57,6 +59,54 @@ fn sense() -> impl Strategy<Value = DirectionSense> {
         Just(DirectionSense::Positive),
         Just(DirectionSense::Negative)
     ]
+}
+
+fn cardinal() -> impl Strategy<Value = CardinalPoint> {
+    prop_oneof![
+        Just(CardinalPoint::BottomLeft),
+        Just(CardinalPoint::BottomCentre),
+        Just(CardinalPoint::BottomRight),
+        Just(CardinalPoint::MiddleLeft),
+        Just(CardinalPoint::MiddleCentre),
+        Just(CardinalPoint::MiddleRight),
+        Just(CardinalPoint::TopLeft),
+        Just(CardinalPoint::TopCentre),
+        Just(CardinalPoint::TopRight),
+        Just(CardinalPoint::Centroid),
+    ]
+}
+
+/// Vertices of a convex polygon: points of a circle at increasing angles.
+fn convex_polygon() -> impl Strategy<Value = Vec<Point2>> {
+    (
+        prop::collection::vec(0.05..1.0f64, 3..16),
+        0.01..10.0f64,
+        -1e2..1e2f64,
+        -1e2..1e2f64,
+    )
+        .prop_map(|(steps, radius, cx, cy)| {
+            let total: f64 = steps.iter().sum();
+            let mut angle = 0.0;
+            steps
+                .iter()
+                .map(|step| {
+                    angle += step / total * TAU;
+                    Point2::new(
+                        libm::cos(angle).mul_add(radius, cx),
+                        libm::sin(angle).mul_add(radius, cy),
+                    )
+                })
+                .collect()
+        })
+}
+
+fn polygon(points: &[Point2]) -> Vec<Edge> {
+    (0..points.len())
+        .map(|i| Edge::Line {
+            start: points[i],
+            end: points[(i + 1) % points.len()],
+        })
+        .collect()
 }
 
 fn config() -> ProptestConfig {
@@ -123,5 +173,24 @@ proptest! {
         if matches!(back, LocationLine::Custom { .. }) {
             prop_assert_eq!(again.to_bits(), distance.to_bits());
         }
+    }
+
+    #[test]
+    fn ifc_cardinal_codes_round_trip(cardinal in cardinal()) {
+        let read = CardinalPoint::from_ifc_code(cardinal.ifc_code()).expect("known code");
+        prop_assert_eq!(read.point, cardinal);
+        prop_assert!(read.exact);
+    }
+
+    #[test]
+    fn cardinal_points_lie_within_the_section_bounds(points in convex_polygon(), cardinal in cardinal()) {
+        let profile = Profile::new(polygon(&points), vec![]).expect("convex polygons are valid");
+        let [min_x, min_y, max_x, max_y] = profile.bounds();
+        prop_assert_eq!(min_x.to_bits(), points.iter().map(|p| p.x).fold(f64::INFINITY, f64::min).to_bits());
+        prop_assert_eq!(max_y.to_bits(), points.iter().map(|p| p.y).fold(f64::NEG_INFINITY, f64::max).to_bits());
+        let point = LocationPoint::at(cardinal).point_on(&profile, None).expect("resolves");
+        prop_assert!((min_x..=max_x).contains(&point.x) && (min_y..=max_y).contains(&point.y));
+        let translation = LocationPoint::at(cardinal).resolve(&profile, None).expect("resolves");
+        prop_assert_eq!((translation.x, translation.y), (-point.x, -point.y));
     }
 }

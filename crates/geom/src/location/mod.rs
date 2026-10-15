@@ -1,15 +1,19 @@
-//! Location lines of layered sections (ARC-30, GEO-13).
+//! Location lines of layered sections and location points of profiles (ARC-30, STR-14, GEO-13).
 //!
 //! Conventions and the IFC mapping are in `docs/dev/adr/0010-location-lines.md`.
 
 mod layers;
+mod point;
 
 pub use layers::{
     DirectionSense, Face, Layer, LayerId, LayerPlacement, LayerSet, LocationLine, MAX_LAYERS,
     Resolved, SnapInfo, SnapPoint, SnapPosition,
 };
+pub use point::{CardinalPoint, IfcCardinalPoint, LocationPoint};
 
-/// Why a location line could not be resolved. Layers are identified by their position
+use crate::ShearCentreError;
+
+/// Why a location line or point could not be resolved. Layers are identified by their position
 /// in the input (from 0); dimensions are model content and are not carried (SEC-03).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, thiserror::Error)]
 pub enum LocationError {
@@ -37,6 +41,12 @@ pub enum LocationError {
     /// The location falls outside the section.
     #[error("the location falls outside the section")]
     OffsetOutsideSection,
+    /// The shear centre was asked for but could not be computed for this profile.
+    #[error("the shear centre of this profile could not be computed")]
+    ShearCentreUnavailable(#[source] ShearCentreError),
+    /// An IFC cardinal point code outside 1–19.
+    #[error("{0} is not an IFC cardinal point")]
+    UnknownCardinalPoint(u8),
 }
 
 #[cfg(test)]
