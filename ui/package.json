@@ -6,7 +6,8 @@
   "packageManager": "bun@1.4.2",
   "scripts": {
     "dev": "vite",
-    "build": "tsc --noEmit -p tsconfig.app.json && vite build",
+    "build": "bun run typecheck && vite build",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.app.json",
     "preview": "vite preview",
     "test": "vitest run"
   },
