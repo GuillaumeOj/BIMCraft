@@ -1,9 +1,13 @@
 //! Property-based tests of extrusion (GEO-02, ENG-02): random convex polygons, rectangles with a
-//! hole and circles, extruded along random upward directions anywhere in the model extent.
+//! hole and circles, extruded along random upward directions anywhere in the model extent, and
+//! arbitrary loops and directions, which must give a valid solid or a typed error.
 
 use std::f64::consts::TAU;
 
-use geom::{ARC_CHORD_TOLERANCE, ArcDirection, Edge, Point2, Profile, Solid, Vector3};
+use geom::{
+    ARC_CHORD_TOLERANCE, ArcDirection, Edge, ExtrusionError, MODEL_EXTENT, Point2, Profile, Solid,
+    Vector3,
+};
 use proptest::prelude::*;
 use proptest::test_runner::RngSeed;
 
@@ -119,6 +123,43 @@ fn directions() -> impl Strategy<Value = Vector3> {
     (-50.0..50.0_f64, -50.0..50.0_f64, 1e-2..50.0_f64).prop_map(|(x, y, z)| Vector3::new(x, y, z))
 }
 
+/// Anything, including non-finite and out-of-range values.
+fn any_coordinate() -> impl Strategy<Value = f64> {
+    prop_oneof![
+        (-4..4_i32).prop_map(f64::from),
+        -2.0 * MODEL_EXTENT..2.0 * MODEL_EXTENT,
+        Just(f64::NAN),
+        Just(f64::INFINITY),
+        Just(1e-40),
+    ]
+}
+
+/// Closed loops of arbitrary lines and arcs: each edge starts where the previous one ends.
+fn any_loop() -> impl Strategy<Value = Vec<Edge>> {
+    let point = || (any_coordinate(), any_coordinate()).prop_map(|(x, y)| Point2::new(x, y));
+    prop::collection::vec((point(), point(), any::<Option<bool>>()), 1..8).prop_map(|raw| {
+        (0..raw.len())
+            .map(|i| {
+                let (start, centre, arc) = raw[i];
+                let end = raw[(i + 1) % raw.len()].0;
+                match arc {
+                    None => Edge::Line { start, end },
+                    Some(ccw) => Edge::Arc {
+                        start,
+                        end,
+                        centre,
+                        direction: if ccw {
+                            ArcDirection::CounterClockwise
+                        } else {
+                            ArcDirection::Clockwise
+                        },
+                    },
+                }
+            })
+            .collect()
+    })
+}
+
 fn config() -> ProptestConfig {
     ProptestConfig {
         cases: 500,
@@ -158,5 +199,29 @@ proptest! {
             solid.volume()
         );
         prop_assert_eq!(solid.validate(), Ok(()));
+    }
+}
+
+proptest! {
+    #![proptest_config(config())]
+
+    #[test]
+    fn arbitrary_input_gives_a_valid_solid_or_an_error(
+        outer in any_loop(),
+        holes in prop::collection::vec(any_loop(), 0..3),
+        direction in prop::array::uniform3(any_coordinate()),
+    ) {
+        let Ok(profile) = Profile::new(outer, holes) else {
+            return Ok(());
+        };
+        let [x, y, z] = direction;
+        match Solid::extrude(&profile, Vector3::new(x, y, z)) {
+            Ok(solid) => {
+                prop_assert_eq!(solid.validate(), Ok(()));
+                prop_assert!(solid.volume() > 0.0);
+            }
+            Err(ExtrusionError::NotUpward) => prop_assert!(z <= 0.0),
+            Err(_) => {}
+        }
     }
 }

@@ -1,5 +1,5 @@
-//! Property-based tests of the booleans on random pairs of boxes (GEO-03, ENG-02): union,
-//! difference and intersection.
+//! Property-based tests of the booleans on random pairs of boxes and of extruded profiles
+//! (GEO-03, ENG-02): union, difference and intersection.
 //!
 //! Boxes on a coarse grid share faces, edges and corners often, which exercises the degenerate
 //! cases; boxes at random coordinates, and pairs turned together to any angle, exercise the
@@ -7,9 +7,10 @@
 //! common rotation leaves unchanged. Grid boxes moved by up to half the tolerance check that
 //! near-coincident faces, edges and corners still merge (ADR 0001), and grid boxes moved by up to
 //! four tolerances check features between one and a few tolerances wide; boxes turned
-//! independently check the general position, where only bounds on the volume are known.
+//! independently check the general position, where only bounds on the volume are known. Prisms
+//! over polygons with a hole, extruded upward or slanted, check faces that are not boxes'.
 
-use geom::{FaceInput, Point3, Solid};
+use geom::{Edge, FaceInput, Point2, Point3, Profile, Solid, Vector3};
 use proptest::prelude::*;
 use proptest::test_runner::RngSeed;
 
@@ -126,6 +127,81 @@ fn cases() -> impl Strategy<Value = Case> {
         (free_box(), free_box(), turn.clone()).prop_map(|(a, b, turn)| Case { a, b, turn }),
         (grid_box(), nudged_box(), turn).prop_map(|(a, b, turn)| Case { a, b, turn }),
     ]
+}
+
+/// A prism over a polygon with corners at 1/16 turns around a centre on a 0.5 m grid, maybe
+/// with a square hole, extruded along a slanted or upright direction on the same grid, so
+/// prisms share planes and edges often.
+#[derive(Clone, Debug)]
+struct Prism {
+    corners: Vec<u32>,
+    centre: (i8, i8),
+    radius: u8,
+    holed: bool,
+    direction: (i8, i8, i8),
+}
+
+impl Prism {
+    fn solid(&self) -> Option<Solid> {
+        let half = |v: i8| f64::from(v) / 2.0;
+        let (cx, cy) = (half(self.centre.0), half(self.centre.1));
+        let radius = f64::from(self.radius) / 2.0;
+        let corners: Vec<Point2> = self
+            .corners
+            .iter()
+            .map(|&k| {
+                let angle = std::f64::consts::TAU * f64::from(k) / 16.0;
+                Point2::new(
+                    cx + radius * libm::cos(angle),
+                    cy + radius * libm::sin(angle),
+                )
+            })
+            .collect();
+        let side = radius / 4.0;
+        let hole = [(-side, -side), (side, -side), (side, side), (-side, side)]
+            .map(|(x, y)| Point2::new(cx + x, cy + y));
+        let holes = if self.holed {
+            vec![polygon(&hole)]
+        } else {
+            Vec::new()
+        };
+        let profile = Profile::new(polygon(&corners), holes).ok()?;
+        let (dx, dy, dz) = self.direction;
+        Solid::extrude(&profile, Vector3::new(half(dx), half(dy), half(dz))).ok()
+    }
+}
+
+fn prism() -> impl Strategy<Value = (Prism, Solid)> {
+    (
+        prop::sample::subsequence((0..16).collect::<Vec<u32>>(), 3..=8),
+        (-4_i8..4, -4_i8..4),
+        2_u8..6,
+        any::<bool>(),
+        (-2_i8..=2, -2_i8..=2, 1_i8..6),
+    )
+        .prop_filter_map(
+            "a valid prism",
+            |(corners, centre, radius, holed, direction)| {
+                let prism = Prism {
+                    corners,
+                    centre,
+                    radius,
+                    holed,
+                    direction,
+                };
+                let solid = prism.solid()?;
+                Some((prism, solid))
+            },
+        )
+}
+
+fn polygon(points: &[Point2]) -> Vec<Edge> {
+    (0..points.len())
+        .map(|i| Edge::Line {
+            start: points[i],
+            end: points[(i + 1) % points.len()],
+        })
+        .collect()
 }
 
 fn config() -> ProptestConfig {
@@ -254,5 +330,37 @@ proptest! {
         let counts = |s: Option<&Solid>| s.map(|s| (s.vertices().len(), s.edge_count(), s.face_count(), s.shells().len()));
         prop_assert_eq!(counts(joined.as_ref()), counts(backward.as_ref()));
         prop_assert!((volume_of(joined.as_ref()) - volume_of(backward.as_ref())).abs() <= 1e-9 * volume_of(joined.as_ref()).max(1.0));
+    }
+}
+
+proptest! {
+    #![proptest_config(config())]
+
+    #[test]
+    fn booleans_of_prisms_are_valid_and_add_up((_, a) in prism(), (_, b) in prism()) {
+        // The engine still rejects a few of these pairs with a typed error; whatever it returns
+        // must be valid and its volumes must add up.
+        let volume = |result: Result<Option<Solid>, geom::BooleanError>| {
+            result.ok().map(|solid| {
+                solid.as_ref().map_or(Ok(0.0), |solid| solid.validate().map(|()| solid.volume()))
+            })
+        };
+        let (va, vb) = (a.volume(), b.volume());
+        let union = volume(a.union(&b)).transpose()?;
+        let cut = volume(a.difference(&b)).transpose()?;
+        let shared = volume(a.intersection(&b)).transpose()?;
+        if let Some(union) = union {
+            prop_assert!(union <= va + vb + 1e-9 && union + 1e-9 >= va.max(vb));
+        }
+        if let Some(shared) = shared {
+            prop_assert!(shared <= va.min(vb) + 1e-9);
+        }
+        // Merging moves vertices by less than the tolerance; elsewhere the volumes are exact.
+        if let (Some(union), Some(shared)) = (union, shared) {
+            prop_assert!((union + shared - va - vb).abs() <= 1e-4);
+        }
+        if let (Some(cut), Some(shared)) = (cut, shared) {
+            prop_assert!((cut + shared - va).abs() <= 1e-4);
+        }
     }
 }
