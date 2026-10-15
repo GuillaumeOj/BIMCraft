@@ -33,7 +33,18 @@ Pull requests with unsigned commits cannot be merged. To sign off commits you al
 3. Fork the repository and create a branch from `main` (e.g. `feat/ifc-step-parser` or `docs/spec-georef`).
 4. Keep each pull request focused on one change, and reference the issue and any requirement IDs it implements.
 5. Meet the [Definition of Done](AGENTS.md#2-definition-of-done): tests and coverage, e2e for main flows, end-user documentation in `docs/user/`.
-6. Run `scripts/check-all.sh`, get the changes reviewed and simplified, stamp them with `scripts/mark-reviewed.sh`, then push and open the pull request. The `pre-push` hook refuses unreviewed commits.
+6. Run `scripts/check-all.sh`, get the changes reviewed and simplified, then stamp, push and open the pull request in one go with `bun scripts/push-pr.ts` (or stamp with `scripts/mark-reviewed.sh` and push by hand). The `pre-push` hook refuses unreviewed commits.
+
+   ```sh
+   # One branch
+   bun scripts/push-pr.ts --title "feat(geom): add predicates" --body-file pr.md --label geometry --assignee @me
+   # A stack of branches (each PR is based on the branch below it), from the top branch
+   bun scripts/push-pr.ts --stack --assignee @me \
+     --branch geom-predicates --title "feat(geom): add predicates" --body-file predicates.md \
+     --branch geom-offsets --title "feat(geom): add offsets" --body "Builds on the predicates."
+   ```
+
+   Options before any `--branch` apply to every pull request. After a rebase, add `--force`; existing pull requests are updated, not duplicated. `--dry-run` shows what would happen, `--help` lists every option.
 
 ### Using a coding agent
 

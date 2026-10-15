@@ -125,6 +125,7 @@ Users are architects and engineers, not developers. For every user-facing featur
 | UI e2e | `cd ui && bunx playwright test` |
 | User guide build | `mdbook build docs/user` |
 | Stamp HEAD as reviewed (user-approved only) | `scripts/mark-reviewed.sh` |
+| Stamp, push and open the PR, or a whole stack of PRs (user only) | `bun scripts/push-pr.ts --help` |
 
 ## 10. Where things live
 

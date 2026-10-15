@@ -20,6 +20,7 @@ Coding agents produce plausible code fast; the cost of a bad change on `main` is
 - Agents may commit locally but never push: `.claude/settings.json` denies `git push`, PR creation and hook bypasses; `.claude/hooks/guard-bash.sh` catches them anywhere in a command line.
 - The `pre-push` hook refuses any `HEAD` not stamped by `scripts/mark-reviewed.sh`. The stamp is the commit SHA, stored in `.git/bimcraft-review-stamp` (never committed), so any new commit invalidates it.
 - The stamp is written only after the user has run a code review (correctness) and a simplification pass (reuse, clarity). In Claude Code these are `/code-review` and `/simplify`; the `ship` skill walks through the steps.
+- `scripts/push-pr.ts` chains the commit checks (`scripts/check-pr.sh`), the stamp, the push and the pull request, and is reserved to the user like `git push`. For a stack of branches it stamps the top one and pushes them all in one atomic push: the hook checks `HEAD`, and the review of the top covers every commit below it. Each pull request is based on the branch below and lists the stack in its description.
 
 ## Pre-push checks follow the changes
 
