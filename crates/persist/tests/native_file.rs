@@ -6,7 +6,7 @@ use std::path::PathBuf;
 
 use core_model::{AttributeValue, EntityId, Store};
 use persist::{
-    Connection, PersistError, open_model, open_project, property, save_model, set_property,
+    Connection, PersistError, Schema, open_model, open_project, property, save_model, set_property,
 };
 use schema::{
     Attribute, Entity, EntityKind, IfcMapping, Namespace, Placement, Presence, ValueType,
@@ -92,7 +92,7 @@ fn save_spaces(file: &TempFile, count: u128) -> Result<Store, Box<dyn std::error
     }
     let mut conn = Connection::open(&file.0)?;
     open_project(&mut conn)?;
-    save_model(&mut conn, &namespace, &store)?;
+    save_model(&mut conn, &Schema::new(&namespace), &store)?;
     conn.close().map_err(|(_, error)| error)?;
     Ok(store)
 }
@@ -104,7 +104,7 @@ fn a_model_survives_closing_and_reopening() {
 
     let mut conn = Connection::open(&file.0).unwrap();
     open_project(&mut conn).unwrap();
-    let reopened = open_model(&mut conn, &namespace()).unwrap();
+    let reopened = open_model(&mut conn, &Schema::new(&namespace())).unwrap();
     assert_eq!(reopened.len(), store.len());
     for raw in 0..3 {
         let id = EntityId::new(raw);
@@ -130,7 +130,7 @@ fn a_truncated_file_is_damaged() {
 
     let mut conn = Connection::open(&file.0).unwrap();
     let error = open_project(&mut conn)
-        .and_then(|()| open_model(&mut conn, &namespace()).map(drop))
+        .and_then(|()| open_model(&mut conn, &Schema::new(&namespace())).map(drop))
         .unwrap_err();
     assert!(matches!(error, PersistError::Corrupt), "{error:?}");
 }

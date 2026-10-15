@@ -2,7 +2,7 @@
 
 - Status: Accepted
 - Requirements: PERS-01, PERS-02 (also CORE-05, CORE-12, ARCH-01, ARCH-02, SEC-03)
-- Issues: [#35](https://github.com/GuillaumeOj/BIMCraft/issues/35) (epic: SQLite project files)
+- Issues: [#35](https://github.com/GuillaumeOj/BIMCraft/issues/35), [#36](https://github.com/GuillaumeOj/BIMCraft/issues/36) (epic: SQLite project files)
 
 ## Context
 
@@ -12,7 +12,7 @@
 
 ### Two kinds of version
 
-- **File format version**, in `PRAGMA user_version`: the layout of the tables the file keeps about itself (`project_property`, `schema_namespace`). `open_project` refuses a newer one.
+- **File format version**, in `PRAGMA user_version`: the layout of the tables the file keeps about itself (`project_property`, `schema_namespace`). `open_project` refuses a newer one; an older one is brought up to date by a chain of format migrations.
 - **Schema version of each namespace**, one row per namespace in `schema_namespace (name, version)`, as [ADR 0002](0002-schema-definition-format.md) requires. It governs the entity tables of that namespace. `open_model` and `save_model` refuse a newer one.
 
 `PRAGMA application_id` marks the database as a BIMCraft project, as before.
@@ -39,9 +39,18 @@ Identifiers are always quoted in SQL, although schema names are already validate
 
 ### Saving and opening
 
-- `save_model` writes the whole model in **one transaction**: it creates the namespace's tables the first time, empties them, inserts every object and records the namespace version. SQLite's rollback journal makes the transaction atomic, so an interrupted save leaves the previous content (PERS-02).
-- `open_model` reads every table back through `Store::insert`, which checks every value against the schema. It runs in a transaction that is never committed, so opening never changes the file, even for a namespace the file did not hold yet.
-- Before reading or writing, the columns of each table (`pragma_table_info`: name, declared type, primary key) must match the namespace exactly.
+- `save_model` writes the whole model in **one transaction**: it migrates a file from an earlier version, creates the namespace's tables the first time, empties them, inserts every object and records the namespace version. SQLite's rollback journal makes the transaction atomic, so an interrupted save leaves the previous content (PERS-02).
+- `open_model` reads every table back through `Store::insert`, which checks every value against the schema. It runs in a transaction that is never committed, so opening never changes the file, even when it migrates it or the file did not hold the namespace yet.
+- Before reading or writing, the columns of each table (`pragma_table_info`: name, declared type, primary key) must match the namespace exactly. Statements name their columns, so the order of columns in a table does not matter: migrations append the columns they add.
+
+### Migrations
+
+Both versions migrate inside the transaction that reads or writes the file, so a file is rewritten in the newer version only when it is saved ([ADR 0002](0002-schema-definition-format.md#versioning-and-migrations)).
+
+- **File format**: `FORMAT_MIGRATIONS[i]` turns format `i + 1` into `i + 2`.
+- **Schema**: the host passes a `Schema`: the current namespace, the resolved migration to each later version (`schema_gen::History`), and the functions its `custom` steps name. A resolved migration lists every change explicitly, so no older schema is needed at run time. Each step becomes table changes: `ALTER TABLE … RENAME` for renames, `CREATE TABLE` or `ADD COLUMN` (filled with the default) for additions, `DROP TABLE` or `DROP COLUMN` for removals, a rewritten column for value changes, `UPDATE … WHERE … IS NULL` for `set_value`, and a call for `custom`.
+- A step that does not fit the file (a missing table or column) means the file does not hold the version it claims: `Corrupt`. A missing migration or custom function is reported as such.
+- Committed fixtures of every file format version and of every version of a sample namespace are opened by the tests; `docs/dev/schema-versions.md` explains how to add a version.
 
 ### Hostile files
 
@@ -50,7 +59,7 @@ Nothing read from a file is trusted. `SQLITE_NOTADB` is `NotAProject`; `SQLITE_C
 ## Consequences
 
 - The file mirrors the in-memory layout: reading one attribute of many objects is one column scan, and loading part of a model (CORE-12) can select tables and rows.
-- A schema change changes the tables, so migrations ([#36](https://github.com/GuillaumeOj/BIMCraft/issues/36)) alter tables (`RENAME`, `ADD COLUMN`, `DROP COLUMN`) as well as rows.
+- A schema change changes the tables, so migrations alter tables (`RENAME`, `ADD COLUMN`, `DROP COLUMN`) as well as rows.
 - Saving rewrites every row. Incremental saves from transaction change events (CORE-07) can replace this later without changing the layout.
 - SQLite stores a `REAL` with no fractional part as an integer on disk, so `-0.0` in a real column reads back as `0.0`. The two compare equal and no building quantity depends on the sign of zero. Values inside list blobs keep their exact bits.
 - Plugin namespaces get tables of their own, prefixed by their namespace, without touching the core's.

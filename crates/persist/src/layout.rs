@@ -1,7 +1,7 @@
 //! The tables of a namespace: one `STRICT` table per entity and one per type, one column per
 //! attribute their objects store, like the store's tables (ADR 0016).
 
-use schema::{Namespace, ValueType};
+use schema::{Namespace, StoredAttribute, ValueType};
 
 /// The table that holds the objects of one entity or one type.
 #[derive(Debug)]
@@ -23,29 +23,51 @@ pub(crate) struct Column<'a> {
     pub value_type: &'a ValueType,
 }
 
+impl<'a> From<&'a StoredAttribute> for Column<'a> {
+    fn from(attribute: &'a StoredAttribute) -> Self {
+        Self {
+            name: &attribute.name,
+            value_type: &attribute.value,
+        }
+    }
+}
+
 /// The tables of `namespace` as [`schema::stored_tables`] lays them out, sorted by name like
 /// the store sorts its own.
 pub(crate) fn tables(namespace: &Namespace) -> Vec<EntityTable<'_>> {
     let mut tables: Vec<_> = schema::stored_tables(namespace)
         .into_iter()
-        .map(|table| EntityTable {
-            entity: table.name,
-            name: format!("{}/{}", namespace.name, table.name),
-            columns: table
+        .map(|table| {
+            let columns = table
                 .attributes
                 .into_iter()
                 .map(|attribute| Column {
                     name: &attribute.name,
                     value_type: &attribute.value,
                 })
-                .collect(),
+                .collect();
+            EntityTable::new(&namespace.name, table.name, columns)
         })
         .collect();
     tables.sort_by(|a, b| a.entity.cmp(b.entity));
     tables
 }
 
-impl EntityTable<'_> {
+/// Unquoted name of the table of `entity` in `namespace`: `<namespace>/<Entity>`.
+pub(crate) fn table_name(namespace: &str, entity: &str) -> String {
+    format!("{namespace}/{entity}")
+}
+
+impl<'a> EntityTable<'a> {
+    /// The table of `entity` in `namespace` with these columns.
+    pub fn new(namespace: &str, entity: &'a str, columns: Vec<Column<'a>>) -> Self {
+        Self {
+            entity,
+            name: table_name(namespace, entity),
+            columns,
+        }
+    }
+
     /// `CREATE TABLE` statement of the table.
     pub fn create_sql(&self) -> String {
         let columns: Vec<_> =
@@ -61,18 +83,27 @@ impl EntityTable<'_> {
         )
     }
 
-    /// `INSERT` statement taking the id then every column, in order.
+    /// `INSERT` statement taking the id then every column, in order. Columns are named, so
+    /// their order in the file does not matter: migrations append the columns they add.
     pub fn insert_sql(&self) -> String {
         let placeholders = ", ?".repeat(self.columns.len());
-        format!("INSERT INTO {} VALUES (?{placeholders})", quote(&self.name))
+        format!(
+            "INSERT INTO {} ({}) VALUES (?{placeholders})",
+            quote(&self.name),
+            self.column_list()
+        )
+    }
+
+    fn column_list(&self) -> String {
+        let columns: Vec<_> = std::iter::once("id".to_owned())
+            .chain(self.columns.iter().map(|column| quote(column.name)))
+            .collect();
+        columns.join(", ")
     }
 
     /// `SELECT` statement reading the id then every column, in order.
     pub fn select_sql(&self) -> String {
-        let columns: Vec<_> = std::iter::once("id".to_owned())
-            .chain(self.columns.iter().map(|column| quote(column.name)))
-            .collect();
-        format!("SELECT {} FROM {}", columns.join(", "), quote(&self.name))
+        format!("SELECT {} FROM {}", self.column_list(), quote(&self.name))
     }
 
     /// `DELETE` statement emptying the table.
@@ -80,10 +111,10 @@ impl EntityTable<'_> {
         format!("DELETE FROM {}", quote(&self.name))
     }
 
-    /// What `pragma_table_info` reports for the table: name, declared type and primary key
-    /// position of each column.
+    /// What `pragma_table_info` reports for the table, sorted by column name: name, declared
+    /// type and primary key position of each column.
     pub fn expected_columns(&self) -> Vec<(String, String, i64)> {
-        std::iter::once(("id".to_owned(), "BLOB".to_owned(), 1))
+        let mut columns: Vec<_> = std::iter::once(("id".to_owned(), "BLOB".to_owned(), 1))
             .chain(self.columns.iter().map(|column| {
                 (
                     column.name.to_owned(),
@@ -91,12 +122,14 @@ impl EntityTable<'_> {
                     0,
                 )
             }))
-            .collect()
+            .collect();
+        columns.sort();
+        columns
     }
 }
 
 /// The `STRICT` column type holding values of `value_type`.
-fn sql_type(value_type: &ValueType) -> &'static str {
+pub(crate) fn sql_type(value_type: &ValueType) -> &'static str {
     match value_type {
         ValueType::Bool | ValueType::Integer => "INTEGER",
         ValueType::Real | ValueType::Quantity(_) => "REAL",
@@ -107,7 +140,7 @@ fn sql_type(value_type: &ValueType) -> &'static str {
 
 /// Quotes an SQL identifier. Schema names are validated ASCII, but quoting keeps a hostile name
 /// from ever becoming SQL.
-fn quote(identifier: &str) -> String {
+pub(crate) fn quote(identifier: &str) -> String {
     format!("\"{}\"", identifier.replace('"', "\"\""))
 }
 
@@ -159,7 +192,7 @@ mod tests {
         );
         assert_eq!(
             storey.insert_sql(),
-            "INSERT INTO \"core/Storey\" VALUES (?, ?)"
+            "INSERT INTO \"core/Storey\" (id, \"elevation\") VALUES (?, ?)"
         );
         assert_eq!(
             storey.select_sql(),

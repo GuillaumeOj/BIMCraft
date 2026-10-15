@@ -9,7 +9,7 @@ use std::collections::BTreeMap;
 
 use core_model::Store;
 use libfuzzer_sys::fuzz_target;
-use persist::{Connection, open_model, open_project, save_model};
+use persist::{Connection, Schema, open_model, open_project, save_model};
 use schema::{
     Attribute, Entity, EntityKind, IfcMapping, Namespace, Placement, Presence, QuantityKind,
     ValueType,
@@ -69,7 +69,7 @@ fn project(namespace: &Namespace) -> Connection {
     let mut conn = Connection::open_in_memory().expect("in-memory database");
     open_project(&mut conn).expect("new project");
     let store = Store::new(namespace).expect("valid namespace");
-    save_model(&mut conn, namespace, &store).expect("empty model");
+    save_model(&mut conn, &Schema::new(namespace), &store).expect("empty model");
     conn
 }
 
@@ -91,6 +91,6 @@ fuzz_target!(|columns: [Vec<u8>; 5]| {
             (id, name, bounds, labels, heights),
         )
         .expect("store the bytes");
-        let _ = open_model(conn, namespace);
+        let _ = open_model(conn, &Schema::new(namespace));
     });
 });

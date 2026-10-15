@@ -2,33 +2,35 @@
 
 use core_model::{Store, StoreError};
 use rusqlite::types::Value;
-use rusqlite::{OptionalExtension, Transaction};
-use schema::Namespace;
+use rusqlite::{OptionalExtension, Statement, Transaction};
 
 use crate::layout::{self, EntityTable};
-use crate::{Connection, PersistError, codec};
+use crate::migrate::migrate;
+use crate::{Connection, PersistError, Schema, codec, upgrade_format};
 
 /// Writes every object of `store` into the project, replacing the objects saved before, and
-/// records the schema version of `namespace`, the namespace `store` was created with.
+/// records the schema version of `schema.namespace`, the namespace `store` was created with.
 ///
-/// Everything runs in one transaction, so an interrupted save leaves the previous content
-/// (PERS-02).
+/// A file from an earlier version is migrated first (PERS-01). Everything runs in one
+/// transaction, so an interrupted save leaves the previous content (PERS-02).
 ///
 /// # Errors
 ///
 /// [`PersistError::NewerSchema`] when the file holds this namespace in a newer version,
 /// [`PersistError::Corrupt`] when its tables do not match the namespace,
 /// [`PersistError::Model`] when the namespace is invalid or `store` holds an entity or
-/// attribute it does not declare, and [`PersistError::Database`] when `SQLite` fails, for
-/// instance on a database not prepared by [`open_project`](crate::open_project).
+/// attribute it does not declare, the errors of a migration
+/// ([`PersistError::MissingMigration`], [`PersistError::UnknownCustomStep`]),
+/// [`PersistError::NotAProject`] for a database not prepared by
+/// [`open_project`](crate::open_project), and [`PersistError::Database`] when `SQLite` fails.
 pub fn save_model(
     conn: &mut Connection,
-    namespace: &Namespace,
+    schema: &Schema<'_>,
     store: &Store,
 ) -> Result<(), PersistError> {
-    schema::validate(namespace).map_err(StoreError::InvalidSchema)?;
+    schema::validate(schema.namespace).map_err(StoreError::InvalidSchema)?;
     let tx = conn.transaction()?;
-    let tables = prepare_tables(&tx, namespace)?;
+    let tables = prepare_tables(&tx, schema)?;
     let mut inserts = Vec::with_capacity(tables.len());
     for table in &tables {
         tx.execute(&table.clear_sql(), [])?;
@@ -62,22 +64,26 @@ pub fn save_model(
     Ok(())
 }
 
-/// Reads the objects of `namespace` saved in the project into a new store.
+/// Reads the objects of `schema.namespace` saved in the project into a new store.
 ///
-/// A project that never saved this namespace gives an empty store. The file is left unchanged.
+/// A project that never saved this namespace gives an empty store. A file from an earlier
+/// version is migrated in memory (PERS-01): the file itself is left unchanged until the next
+/// save.
 ///
 /// # Errors
 ///
 /// [`PersistError::NewerSchema`] when the file holds this namespace in a newer version,
 /// [`PersistError::Corrupt`] when its tables or values are malformed, [`PersistError::Model`]
 /// when the namespace is invalid or the objects break its rules (a missing required value, a
-/// duplicate id…), and [`PersistError::Database`] when `SQLite` fails.
-pub fn open_model(conn: &mut Connection, namespace: &Namespace) -> Result<Store, PersistError> {
-    let mut store = Store::new(namespace)?;
-    // Never committed: tables `prepare_tables` creates for a new namespace are rolled back.
+/// duplicate id…), the errors of a migration, and [`PersistError::Database`] when `SQLite`
+/// fails.
+pub fn open_model(conn: &mut Connection, schema: &Schema<'_>) -> Result<Store, PersistError> {
+    let mut store = Store::new(schema.namespace)?;
+    // Never committed: migrations, and tables `prepare_tables` creates for a new namespace, are
+    // rolled back.
     let tx = conn.transaction()?;
     let mut values = Vec::new();
-    for table in prepare_tables(&tx, namespace)? {
+    for table in prepare_tables(&tx, schema)? {
         let mut select = tx.prepare(&table.select_sql())?;
         let mut rows = select.query([])?;
         while let Some(row) = rows.next()? {
@@ -93,12 +99,15 @@ pub fn open_model(conn: &mut Connection, namespace: &Namespace) -> Result<Store,
     Ok(store)
 }
 
-/// Makes the file's entity tables match `namespace`: creates them when the file never held the
-/// namespace, checks them when it holds the same version.
+/// Makes the file's tables match `schema`: brings the file format up to date, then creates the
+/// entity tables when the file never held the namespace, or migrates them from an earlier
+/// version, and checks them.
 fn prepare_tables<'a>(
     tx: &Transaction<'_>,
-    namespace: &'a Namespace,
+    schema: &Schema<'a>,
 ) -> Result<Vec<EntityTable<'a>>, PersistError> {
+    upgrade_format(tx)?;
+    let namespace = schema.namespace;
     let tables = layout::tables(namespace);
     match stored_version(tx, &namespace.name)? {
         None => {
@@ -110,11 +119,6 @@ fn prepare_tables<'a>(
                 (&namespace.name, namespace.version),
             )?;
         }
-        Some(found) if found == namespace.version => {
-            for table in &tables {
-                check_columns(tx, table)?;
-            }
-        }
         Some(found) if found > namespace.version => {
             return Err(PersistError::NewerSchema {
                 namespace: namespace.name.clone(),
@@ -122,8 +126,16 @@ fn prepare_tables<'a>(
                 supported: namespace.version,
             });
         }
-        // Older versions need migrations, which no namespace has yet.
-        Some(_) => return Err(PersistError::Corrupt),
+        Some(found) => {
+            if found < namespace.version {
+                migrate(tx, schema, found)?;
+            }
+            let mut info =
+                tx.prepare("SELECT name, type, pk FROM pragma_table_info(?1) ORDER BY name")?;
+            for table in &tables {
+                check_columns(&mut info, table)?;
+            }
+        }
     }
     Ok(tables)
 }
@@ -142,8 +154,8 @@ fn stored_version(tx: &Transaction<'_>, namespace: &str) -> Result<Option<u32>, 
         .transpose()
 }
 
-fn check_columns(tx: &Transaction<'_>, table: &EntityTable<'_>) -> Result<(), PersistError> {
-    let mut info = tx.prepare("SELECT name, type, pk FROM pragma_table_info(?1) ORDER BY cid")?;
+/// Checks the columns of `table` with `info`, the prepared `pragma_table_info` query.
+fn check_columns(info: &mut Statement<'_>, table: &EntityTable<'_>) -> Result<(), PersistError> {
     let found = info
         .query_map([&table.name], |row| {
             Ok((row.get(0)?, row.get(1)?, row.get(2)?))
@@ -162,8 +174,8 @@ mod tests {
     use proptest::prelude::*;
 
     use super::*;
-    use crate::open_project;
     use crate::test_support::{entity, namespace, object, sorted_objects, store_strategy};
+    use crate::{Schema, open_project};
 
     fn new_project() -> Connection {
         let mut conn = Connection::open_in_memory().unwrap();
@@ -173,7 +185,7 @@ mod tests {
 
     fn saved(store: &Store) -> Connection {
         let mut conn = new_project();
-        save_model(&mut conn, &namespace(), store).unwrap();
+        save_model(&mut conn, &Schema::new(&namespace()), store).unwrap();
         conn
     }
 
@@ -199,7 +211,7 @@ mod tests {
     #[test]
     fn a_project_without_a_model_opens_empty_and_unchanged() {
         let mut conn = new_project();
-        let store = open_model(&mut conn, &namespace()).unwrap();
+        let store = open_model(&mut conn, &Schema::new(&namespace())).unwrap();
         assert!(store.is_empty());
         assert_eq!(table_count(&conn), 0);
     }
@@ -212,8 +224,8 @@ mod tests {
         wall(&mut store, 11);
         let mut conn = saved(&store);
         store.remove(EntityId::new(10)).unwrap();
-        save_model(&mut conn, &namespace, &store).unwrap();
-        let reopened = open_model(&mut conn, &namespace).unwrap();
+        save_model(&mut conn, &Schema::new(&namespace), &store).unwrap();
+        let reopened = open_model(&mut conn, &Schema::new(&namespace)).unwrap();
         assert_eq!(sorted_objects(&reopened), sorted_objects(&store));
         assert_eq!(table_count(&conn), 3);
     }
@@ -236,7 +248,7 @@ mod tests {
         let mut conn = saved(&Store::new(&namespace()).unwrap());
         conn.execute("UPDATE schema_namespace SET version = version + 1", [])
             .unwrap();
-        let error = open_model(&mut conn, &namespace()).unwrap_err();
+        let error = open_model(&mut conn, &Schema::new(&namespace())).unwrap_err();
         assert!(matches!(
             &error,
             PersistError::NewerSchema { namespace, found: 2, supported: 1 } if namespace == "core"
@@ -245,15 +257,30 @@ mod tests {
             error.to_string(),
             "the project uses version 2 of the \"core\" schema; this version reads up to 1"
         );
-        let error = save_model(&mut conn, &namespace(), &Store::new(&namespace()).unwrap());
+        let error = save_model(
+            &mut conn,
+            &Schema::new(&namespace()),
+            &Store::new(&namespace()).unwrap(),
+        );
         assert!(matches!(error, Err(PersistError::NewerSchema { .. })));
+    }
+
+    #[test]
+    fn older_versions_without_migrations_are_refused() {
+        let mut conn = saved(&Store::new(&namespace()).unwrap());
+        conn.execute("UPDATE schema_namespace SET version = 0", [])
+            .unwrap();
+        let error = open_model(&mut conn, &Schema::new(&namespace())).unwrap_err();
+        assert!(matches!(
+            error,
+            PersistError::MissingMigration { version: 1, .. }
+        ));
     }
 
     #[test]
     fn malformed_files_are_corrupt() {
         let table = "\"core/Wall\"";
         let cases = [
-            "UPDATE schema_namespace SET version = 0".to_owned(),
             "UPDATE schema_namespace SET version = -1".to_owned(),
             format!("DROP TABLE {table}"),
             format!("ALTER TABLE {table} ADD COLUMN extra TEXT"),
@@ -268,7 +295,7 @@ mod tests {
         for sql in cases {
             let mut conn = saved(&store);
             conn.execute_batch(&sql).unwrap();
-            let error = open_model(&mut conn, &namespace).unwrap_err();
+            let error = open_model(&mut conn, &Schema::new(&namespace)).unwrap_err();
             assert!(matches!(error, PersistError::Corrupt), "{sql}: {error:?}");
             assert_eq!(error.to_string(), "the project file is damaged");
         }
@@ -286,7 +313,7 @@ mod tests {
         ] {
             let mut conn = saved(&store);
             conn.execute_batch(sql).unwrap();
-            let error = open_model(&mut conn, &namespace).unwrap_err();
+            let error = open_model(&mut conn, &Schema::new(&namespace)).unwrap_err();
             assert!(matches!(error, PersistError::Model(_)), "{sql}: {error:?}");
         }
     }
@@ -302,7 +329,7 @@ mod tests {
             .insert(EntityId::new(1), "Door", Vec::<(&str, _)>::new())
             .unwrap();
         let mut conn = new_project();
-        let error = save_model(&mut conn, &namespace(), &store).unwrap_err();
+        let error = save_model(&mut conn, &Schema::new(&namespace()), &store).unwrap_err();
         assert!(matches!(
             error,
             PersistError::Model(StoreError::UnknownEntity(entity)) if entity == "Door"
@@ -317,7 +344,7 @@ mod tests {
             .retain(|attribute| attribute.name != "name");
         let mut store = Store::new(&namespace()).unwrap();
         store.insert(EntityId::new(10), "Wall", object()).unwrap();
-        let error = save_model(&mut conn, &smaller, &store).unwrap_err();
+        let error = save_model(&mut conn, &Schema::new(&smaller), &store).unwrap_err();
         assert!(matches!(
             error,
             PersistError::Model(StoreError::UnknownAttribute { attribute, .. }) if attribute == "name"
@@ -332,8 +359,8 @@ mod tests {
         let store = Store::new(&namespace()).unwrap();
         let mut conn = new_project();
         for error in [
-            save_model(&mut conn, &invalid, &store).unwrap_err(),
-            open_model(&mut conn, &invalid).unwrap_err(),
+            save_model(&mut conn, &Schema::new(&invalid), &store).unwrap_err(),
+            open_model(&mut conn, &Schema::new(&invalid)).unwrap_err(),
         ] {
             assert!(matches!(
                 error,
@@ -353,7 +380,7 @@ mod tests {
             .insert(EntityId::new(8), "WallType", [("layers", layers)])
             .unwrap();
         let mut conn = saved(&store);
-        let reopened = open_model(&mut conn, &namespace).unwrap();
+        let reopened = open_model(&mut conn, &Schema::new(&namespace)).unwrap();
         assert_eq!(sorted_objects(&reopened), sorted_objects(&store));
     }
 
@@ -364,7 +391,7 @@ mod tests {
         #[test]
         fn save_then_open_gives_the_same_model(store in store_strategy()) {
             let mut conn = saved(&store);
-            let reopened = open_model(&mut conn, &namespace()).unwrap();
+            let reopened = open_model(&mut conn, &Schema::new(&namespace())).unwrap();
             prop_assert_eq!(sorted_objects(&reopened), sorted_objects(&store));
         }
     }
