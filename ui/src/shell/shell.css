@@ -66,26 +66,32 @@
   padding: 0;
 }
 
-.ghost-button {
-  display: inline-flex;
-  align-items: center;
+/* Quiet buttons: the title-bar buttons and the panel tabs. */
+.ghost-button,
+.panel-tab {
   font: inherit;
   color: var(--bc-ink-2);
   background: none;
   border: 1px solid transparent;
+  cursor: pointer;
+}
+
+.ghost-button[aria-pressed="true"],
+.panel-tab[aria-selected="true"] {
+  color: var(--bc-ink);
+  background: var(--bc-raised);
+  border-color: var(--bc-line);
+}
+
+.ghost-button {
+  display: inline-flex;
+  align-items: center;
   border-radius: 6px;
   padding: 4px 10px;
-  cursor: pointer;
 }
 
 .ghost-button:hover {
   background: var(--bc-hover);
-}
-
-.ghost-button[aria-pressed="true"] {
-  color: var(--bc-ink);
-  background: var(--bc-raised);
-  border-color: var(--bc-line);
 }
 
 .workspace {
@@ -93,14 +99,17 @@
   min-height: 0;
 }
 
+/* Under the floating panels, whatever their order in the document. */
 .viewport {
   position: absolute;
   inset: 0;
+  z-index: 0;
   background: var(--bc-paper);
 }
 
 .panel {
   position: absolute;
+  z-index: 1;
   display: flex;
   flex-direction: column;
   padding: 0 6px 8px;
@@ -111,16 +120,18 @@
   overflow: auto;
 }
 
-.panel-left {
+.panel-left,
+.panel-right {
   top: 11px;
   bottom: 96px;
+}
+
+.panel-left {
   left: 12px;
   width: 252px;
 }
 
 .panel-right {
-  top: 11px;
-  bottom: 96px;
   right: 12px;
   width: 296px;
 }
@@ -155,19 +166,11 @@
 }
 
 .panel-tab {
-  font: inherit;
   font-weight: 400;
-  color: var(--bc-ink-2);
-  background: none;
-  border: 1px solid transparent;
   border-radius: 8px;
   padding: 5px 12px;
-  cursor: pointer;
 }
 
 .panel-tab[aria-selected="true"] {
   font-weight: 600;
-  color: var(--bc-ink);
-  background: var(--bc-raised);
-  border-color: var(--bc-line);
 }

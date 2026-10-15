@@ -1,10 +1,10 @@
-// @vitest-environment node
 import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { contrastRatio, parseThemes } from "./contrast";
 
 // Read from disk: Vitest replaces CSS imports, even ?raw ones, with empty modules.
-const themeCss = readFileSync(new URL("./theme.css", import.meta.url), "utf8");
+const themeCss = readFileSync(join(import.meta.dirname, "theme.css"), "utf8");
 
 // Text and the surface it sits on, by token name (WCAG 2.2 AA: 4.5:1 for text).
 const TEXT_PAIRS = [
@@ -15,8 +15,14 @@ const TEXT_PAIRS = [
   ["ink-2", "raised"],
   ["muted", "surface"],
   ["muted", "raised"],
-  ["verdigris-ink", "verdigris-tint"],
+  ["ink-2", "hover"],
   ["on-verdigris", "verdigris"],
+] as const;
+
+// Interface parts against their surroundings (WCAG 2.2 AA: 3:1): the focus outline.
+const NON_TEXT_PAIRS = [
+  ["verdigris", "surface"],
+  ["verdigris", "paper"],
 ] as const;
 
 describe("contrastRatio", () => {
@@ -69,5 +75,16 @@ describe("theme tokens", () => {
       expect(surface).toBeDefined();
       expect(contrastRatio(foreground ?? "", surface ?? "")).toBeGreaterThanOrEqual(4.5);
     });
+
+    it.each(NON_TEXT_PAIRS)(
+      `${theme}: %s against %s meets WCAG AA for interface parts`,
+      (part, background) => {
+        const colour = themes[theme][part];
+        const surface = themes[theme][background];
+        expect(colour).toBeDefined();
+        expect(surface).toBeDefined();
+        expect(contrastRatio(colour ?? "", surface ?? "")).toBeGreaterThanOrEqual(3);
+      },
+    );
   }
 });

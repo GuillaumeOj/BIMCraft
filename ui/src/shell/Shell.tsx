@@ -1,24 +1,21 @@
 import { type KeyboardEvent, useCallback, useEffect, useId, useRef, useState } from "react";
 import { useI18n } from "../i18n/I18nProvider";
-import type { MessageKey } from "../i18n/i18n";
 import { LanguageSelect } from "../i18n/LanguageSelect";
 import "./shell.css";
 
 const RIGHT_PANELS = ["properties", "history"] as const;
 type RightPanel = (typeof RIGHT_PANELS)[number];
 
-const EMPTY_TEXT: Record<RightPanel, MessageKey> = {
-  properties: "panel.propertiesEmpty",
-  history: "panel.historyEmpty",
-};
-
-/** The region F6 (or Shift+F6 when `backwards`) moves to from the one holding focus. */
-function nextRegion(regions: HTMLElement[], backwards: boolean): HTMLElement | undefined {
-  const live = regions.filter((region) => region.isConnected);
-  const current = live.findIndex((region) => region.contains(document.activeElement));
-  if (current === -1) return backwards ? live.at(-1) : live[0];
+/**
+ * The region F6 (or Shift+F6 when `backwards`) moves to from the one holding focus. Regions are
+ * the elements marked `data-region`, in document order.
+ */
+function nextRegion(backwards: boolean): HTMLElement | undefined {
+  const regions = [...document.querySelectorAll<HTMLElement>("[data-region]")];
+  const current = regions.findIndex((region) => region.contains(document.activeElement));
+  if (current === -1) return backwards ? regions.at(-1) : regions[0];
   const step = backwards ? -1 : 1;
-  return live[(current + step + live.length) % live.length];
+  return regions[(current + step + regions.length) % regions.length];
 }
 
 // Ignores auto-repeat so that holding the keys does not toggle the console back and forth.
@@ -35,17 +32,11 @@ export function Shell() {
   const ids = useId();
   const [rightPanel, setRightPanel] = useState<RightPanel>("properties");
   const [consoleOpen, setConsoleOpen] = useState(false);
-  const regions = useRef<HTMLElement[]>([]);
   const viewport = useRef<HTMLElement>(null);
   const tabs = useRef<Partial<Record<RightPanel, HTMLButtonElement | null>>>({});
 
-  const register = (index: number) => (element: HTMLElement | null) => {
-    if (element !== null) regions.current[index] = element;
-  };
-
   // The console takes focus when it opens and hands it to the viewport when it closes.
   const consoleRef = useCallback((element: HTMLElement) => {
-    regions.current[4] = element;
     element.focus();
     return () => viewport.current?.focus();
   }, []);
@@ -57,7 +48,7 @@ export function Shell() {
         setConsoleOpen((open) => !open);
       } else if (event.key === "F6") {
         event.preventDefault();
-        nextRegion(regions.current, event.shiftKey)?.focus();
+        nextRegion(event.shiftKey)?.focus();
       }
     };
     window.addEventListener("keydown", onKeyDown);
@@ -99,7 +90,7 @@ export function Shell() {
       >
         {t("shell.skipToViewport")}
       </a>
-      <header className="title-bar" ref={register(0)} tabIndex={-1}>
+      <header className="title-bar" data-region tabIndex={-1}>
         <span className="app-tile" aria-hidden="true">
           {t("app.monogram")}
         </span>
@@ -119,20 +110,10 @@ export function Shell() {
         <LanguageSelect />
       </header>
       <div className="workspace">
-        <main
-          id={`${ids}-viewport`}
-          className="viewport"
-          aria-label={t("shell.viewport")}
-          ref={(element) => {
-            viewport.current = element;
-            register(2)(element);
-          }}
-          tabIndex={-1}
-        />
         <section
           className="panel panel-left"
           aria-labelledby={`${ids}-project`}
-          ref={register(1)}
+          data-region
           tabIndex={-1}
         >
           <h2 className="panel-header" id={`${ids}-project`}>
@@ -140,10 +121,19 @@ export function Shell() {
           </h2>
           <p className="empty">{t("panel.projectEmpty")}</p>
         </section>
+        {/* After Project so that the DOM order is the visual and F6 order. */}
+        <main
+          id={`${ids}-viewport`}
+          className="viewport"
+          aria-label={t("shell.viewport")}
+          ref={viewport}
+          data-region
+          tabIndex={-1}
+        />
         <section
           className="panel panel-right"
           aria-labelledby={tabId(rightPanel)}
-          ref={register(3)}
+          data-region
           tabIndex={-1}
         >
           <div className="panel-header" role="tablist">
@@ -168,7 +158,7 @@ export function Shell() {
             ))}
           </div>
           <div id={`${ids}-tabpanel`} role="tabpanel" aria-labelledby={tabId(rightPanel)}>
-            <p className="empty">{t(EMPTY_TEXT[rightPanel])}</p>
+            <p className="empty">{t(`panel.${rightPanel}Empty`)}</p>
           </div>
         </section>
         {consoleOpen && (
@@ -176,6 +166,7 @@ export function Shell() {
             className="panel panel-console"
             aria-labelledby={`${ids}-console`}
             ref={consoleRef}
+            data-region
             tabIndex={-1}
           >
             <div className="panel-header">
