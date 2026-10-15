@@ -38,6 +38,9 @@ Pull request options (before any --branch: every PR; after --branch <name>: that
 In a stack of several branches, give --title, --body and --body-file per branch.
 An existing open pull request is updated: base fixed, labels/assignees/reviewers added, title and
 description replaced only when given.
+Each pull request takes the milestone and projects of the issues its description closes
+("Closes #123") when it has none, and is linked to those issues: GitHub links them by itself only
+for pull requests into the default branch, not for the upper ones of a stack.
 
 Examples:
   bun scripts/push-pr.ts --title "feat(geom): add predicates" --body-file pr.md --label geometry --assignee @me
@@ -85,6 +88,18 @@ export type Planned = { branch: string; base: string; below: string; pr: PrOptio
 
 export type Pr = { number: number; url: string; baseRefName: string };
 type FoundPr = Pr & { state: "OPEN" | "CLOSED" | "MERGED" };
+
+type Named = { title: string };
+/** What `gh pr view` tells of a pull request's issue metadata. */
+export type PrView = {
+  id: string;
+  body: string;
+  milestone: Named | null;
+  projectItems: Named[];
+  closingIssuesReferences: { number: number }[];
+};
+/** What `gh issue view` tells of an issue the pull request closes. */
+export type Issue = { number: number; id: string; milestone: Named | null; projectItems: Named[] };
 
 export type Result = { code: number; stdout: string; stderr: string };
 export type RunOptions = { input?: string; env?: Record<string, string>; inherit?: boolean };
@@ -236,6 +251,28 @@ export function editArgs(planned: Planned, existing: Pr): string[] | undefined {
   return changes.length > 0 ? ["gh", "pr", "edit", String(existing.number), ...changes] : undefined;
 }
 
+/** The issues a pull request description closes with a GitHub closing keyword, in order. */
+export function closedIssues(body: string): number[] {
+  const matches = body.matchAll(/\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?):?\s+#(\d+)\b/gi);
+  return unique([...matches].map((match) => match[1] as string)).map(Number);
+}
+
+/** `gh pr edit` giving a pull request the milestone and projects of its issues, or undefined. */
+export function issueEditArgs(number: number, view: PrView, issues: Issue[]): string[] | undefined {
+  const milestone = view.milestone === null ? issues.find((issue) => issue.milestone !== null)?.milestone?.title : undefined;
+  const has = new Set(view.projectItems.map((item) => item.title));
+  const projects = unique(issues.flatMap((issue) => issue.projectItems.map((item) => item.title))).filter((title) => !has.has(title));
+  const changes = [...optional("--milestone", milestone), ...joined("--add-project", projects)];
+  return changes.length > 0 ? ["gh", "pr", "edit", String(number), ...changes] : undefined;
+}
+
+/** `gh api graphql` linking a pull request to an issue it closes, as the sidebar's Development field does. */
+export function linkArgs(issueId: string, prId: string): string[] {
+  const query =
+    "mutation($issue: ID!, $prs: [ID!]!) { addCloseIssueReferences(input: {issueId: $issue, pullRequestIds: $prs}) { clientMutationId } }";
+  return ["gh", "api", "graphql", "-f", `query=${query}`, "-f", `issue=${issueId}`, "-f", `prs[]=${prId}`];
+}
+
 /** The stack navigation shown in each pull request of a stack, top first. */
 export function stackBlock(numbers: number[], base: string, current: number): string {
   const lines = [...numbers].reverse().map((n) => (n === current ? `- **#${n} ← this pull request**` : `- #${n}`));
@@ -339,6 +376,21 @@ function openPr(run: Run, branch: string, base: string): Pr | undefined {
   return latest?.state === "OPEN" ? latest : undefined;
 }
 
+/**
+ * Gives pull request `number` the milestone and projects of the issues `body` closes, and links it to
+ * those GitHub has not linked yet (it links only pull requests into the default branch).
+ */
+function linkIssues(run: Run, exec: (cmd: string[]) => string, number: number, view: PrView, body: string): void {
+  const issues = closedIssues(body).map((issue): Issue => ({
+    number: issue,
+    ...JSON.parse(must(run, ["gh", "issue", "view", String(issue), "--json", "id,milestone,projectItems"])),
+  }));
+  const edit = issueEditArgs(number, view, issues);
+  if (edit !== undefined) exec(edit);
+  const linked = new Set(view.closingIssuesReferences.map((issue) => issue.number));
+  for (const issue of issues) if (!linked.has(issue.number)) exec(linkArgs(issue.id, view.id));
+}
+
 function ship(args: Args, run: Run): number {
   const exec = (cmd: string[], options?: RunOptions): string => {
     if (!args.dryRun) return must(run, cmd, options);
@@ -408,13 +460,17 @@ function ship(args: Args, run: Run): number {
   });
 
   const known = prs.filter((pr): pr is Pr => pr !== undefined);
-  if (known.length > 1 && known.length === prs.length) {
-    const numbers = known.map((pr) => pr.number);
-    for (const pr of known) {
-      const body = JSON.parse(must(run, ["gh", "pr", "view", String(pr.number), "--json", "body"])).body as string;
-      const next = withStackBlock(body, stackBlock(numbers, args.base, pr.number));
-      if (next !== body) exec(["gh", "pr", "edit", String(pr.number), "--body-file", "-"], { input: next });
+  const stacked = known.length > 1 && known.length === prs.length;
+  const numbers = known.map((pr) => pr.number);
+  for (const pr of known) {
+    const fields = "id,body,milestone,projectItems,closingIssuesReferences";
+    const view = JSON.parse(must(run, ["gh", "pr", "view", String(pr.number), "--json", fields])) as PrView;
+    let body = view.body;
+    if (stacked) {
+      body = withStackBlock(view.body, stackBlock(numbers, args.base, pr.number));
+      if (body !== view.body) exec(["gh", "pr", "edit", String(pr.number), "--body-file", "-"], { input: body });
     }
+    linkIssues(run, exec, pr.number, view, body);
   }
   for (const pr of known) console.log(`  ${pr.url}`);
   return 0;

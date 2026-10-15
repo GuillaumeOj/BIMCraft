@@ -4,13 +4,17 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { gitEnv, git as gitIn } from "./check-pinned-deps";
 import {
+  closedIssues,
   createArgs,
   editArgs,
   effective,
   emptyPr,
+  issueEditArgs,
+  linkArgs,
   main,
   makeRun,
   type PrOptions,
+  type PrView,
   parseArgs,
   type Result,
   type Run,
@@ -211,9 +215,76 @@ describe("stack navigation", () => {
   });
 });
 
+describe("issues", () => {
+  test("finds the issues a description closes", () => {
+    expect(closedIssues("Closes #12. fixes #3, Resolved: #40\nRESOLVES #12 and fixed #5")).toEqual([12, 3, 40, 5]);
+  });
+
+  test("ignores mentions and the template placeholder", () => {
+    expect(closedIssues("Closes #\nSee #7, closes#8, encloses #9, #10")).toEqual([]);
+  });
+
+  const view = (overrides: Partial<PrView> = {}): PrView => ({
+    id: "PR_1",
+    body: "",
+    milestone: null,
+    projectItems: [],
+    closingIssuesReferences: [],
+    ...overrides,
+  });
+  const issue = (number: number, milestone: string | null, ...projects: string[]) => ({
+    number,
+    id: `I_${number}`,
+    milestone: milestone === null ? null : { title: milestone },
+    projectItems: projects.map((title) => ({ title })),
+  });
+
+  test("gives the pull request the first milestone and every project of its issues", () => {
+    expect(issueEditArgs(7, view(), [issue(1, null, "A"), issue(2, "M2", "A", "B"), issue(3, "M3")])).toEqual([
+      "gh",
+      "pr",
+      "edit",
+      "7",
+      "--milestone",
+      "M2",
+      "--add-project",
+      "A,B",
+    ]);
+  });
+
+  test("keeps the milestone and projects the pull request already has", () => {
+    const own = view({ milestone: { title: "Own" }, projectItems: [{ title: "A" }] });
+    expect(issueEditArgs(7, own, [issue(1, "M", "A")])).toBeUndefined();
+    expect(issueEditArgs(7, view(), [])).toBeUndefined();
+  });
+
+  test("links a pull request to an issue through GraphQL", () => {
+    const args = linkArgs("I_1", "PR_2");
+    expect(args.slice(0, 3)).toEqual(["gh", "api", "graphql"]);
+    expect(args).toContain("issue=I_1");
+    expect(args).toContain("prs[]=PR_2");
+    expect(args.find((arg) => arg.startsWith("query="))).toContain("addCloseIssueReferences");
+  });
+});
+
+type FakePr = {
+  number: number;
+  head: string;
+  base: string;
+  title: string;
+  body: string;
+  state: string;
+  args: string[];
+  milestone?: string;
+  projects: string[];
+  /** Issues linked by hand (the Development field). */
+  links: number[];
+};
+
 /** In-memory GitHub answering the `gh` calls push-pr makes. */
 class FakeGitHub {
-  prs: { number: number; head: string; base: string; title: string; body: string; state: string; args: string[] }[] = [];
+  prs: FakePr[] = [];
+  issues = new Map<number, { milestone?: string; projects: string[] }>();
   signedIn = true;
 
   handle(cmd: string[], input: string | undefined): Result {
@@ -221,6 +292,8 @@ class FakeGitHub {
       const i = cmd.indexOf(name);
       return i === -1 ? undefined : cmd[i + 1];
     };
+    const field = (name: string): string | undefined =>
+      cmd.find((arg) => arg.startsWith(`${name}=`))?.slice(name.length + 1);
     const action = cmd.slice(1, 3).join(" ");
     if (action === "auth status") return { code: this.signedIn ? 0 : 1, stdout: "", stderr: "" };
     if (action === "pr list") {
@@ -231,15 +304,39 @@ class FakeGitHub {
       const number = 100 + this.prs.length;
       const body = flag("--body-file") === undefined ? (flag("--body") as string) : `file:${flag("--body-file")}`;
       const [head, base, title] = [flag("--head"), flag("--base"), flag("--title")] as string[];
-      this.prs.push({ number, head, base, title, body, state: "OPEN", args: cmd } as FakeGitHub["prs"][number]);
+      const projects = flag("--project") === undefined ? [] : [flag("--project") as string];
+      this.prs.push({ number, head, base, title, body, state: "OPEN", args: cmd, milestone: flag("--milestone"), projects, links: [] });
       return ok(`Creating pull request\n${this.url(number)}\n`);
+    }
+    if (action === "issue view") {
+      const issue = this.issues.get(Number(cmd[3])) ?? { projects: [] };
+      return ok(JSON.stringify({ id: `I_${cmd[3]}`, milestone: named(issue.milestone), projectItems: issue.projects.map(named) }));
+    }
+    if (action === "api graphql") {
+      const linked = this.prs.find((p) => `PR_${p.number}` === field("prs[]"));
+      linked?.links.push(Number(field("issue")?.slice(2)));
+      return linked === undefined ? { code: 1, stdout: "", stderr: "no such node" } : ok();
     }
     const found = this.prs.find((p) => p.number === Number(cmd[3]));
     if (found === undefined) return { code: 1, stdout: "", stderr: "no such pull request" };
-    if (action === "pr view") return ok(JSON.stringify({ body: found.body }));
+    if (action === "pr view") {
+      // GitHub links the issues a pull request closes by itself only when it targets the default branch.
+      const closing = unique([...(found.base === "main" ? closedIssues(found.body) : []), ...found.links]);
+      return ok(
+        JSON.stringify({
+          id: `PR_${found.number}`,
+          body: found.body,
+          milestone: named(found.milestone),
+          projectItems: found.projects.map(named),
+          closingIssuesReferences: closing.map((number) => ({ number })),
+        }),
+      );
+    }
     found.base = flag("--base") ?? found.base;
     found.title = flag("--title") ?? found.title;
     found.body = flag("--body-file") === "-" ? (input as string) : (flag("--body") ?? found.body);
+    found.milestone = flag("--milestone") ?? found.milestone;
+    found.projects = unique([...found.projects, ...(flag("--add-project")?.split(",") ?? [])]);
     found.args.push(...cmd);
     return ok();
   }
@@ -248,6 +345,9 @@ class FakeGitHub {
     return `https://github.com/owner/repo/pull/${number}`;
   }
 }
+
+const named = (title: string | undefined): { title: string } | null => (title === undefined ? null : { title });
+const unique = <T>(items: T[]): T[] => [...new Set(items)];
 
 describe("main", () => {
   let dir: string;
@@ -426,6 +526,65 @@ describe("main", () => {
     for (const p of gh.prs) p.body = "";
     expect(ship("--stack", "--dry-run")).toBe(0);
     expect(output.filter((line) => line.startsWith("would run: gh pr edit"))).toHaveLength(3);
+  });
+
+  describe("issues closed by the pull requests", () => {
+    beforeEach(() => {
+      gh.issues.set(1, { milestone: "Phase 0", projects: ["BIMCraft"] });
+      gh.issues.set(2, { milestone: "Phase 0", projects: ["BIMCraft"] });
+      gh.issues.set(3, { projects: [] });
+    });
+    const links = (): string[][] => calls.filter((cmd) => cmd.slice(0, 3).join(" ") === "gh api graphql");
+
+    test("give a stack their milestone and project, and link the upper pull requests", () => {
+      stackOfThree();
+      const argv = ["--stack", "--branch", "one", "--body", "Closes #1", "--branch", "two", "--body", "Fixes #2"];
+      expect(ship(...argv, "--branch", "three", "--body", "Closes #3")).toBe(0);
+      expect(gh.prs.map((p) => [p.milestone, p.projects, p.links])).toEqual([
+        ["Phase 0", ["BIMCraft"], []],
+        ["Phase 0", ["BIMCraft"], [2]],
+        [undefined, [], [3]],
+      ]);
+      calls = [];
+      expect(ship("--stack")).toBe(0);
+      expect(links()).toEqual([]);
+      expect(calls.filter((cmd) => cmd.slice(0, 3).join(" ") === "gh pr edit")).toEqual([]);
+    });
+
+    test("give a single pull request into main its milestone and project; GitHub links it", () => {
+      featureBranch("feat: add thing\n\nCloses #1");
+      expect(ship()).toBe(0);
+      expect(gh.prs[0]).toMatchObject({ milestone: "Phase 0", projects: ["BIMCraft"], links: [] });
+      expect(links()).toEqual([]);
+    });
+
+    test("never replace the milestone given on the command line", () => {
+      featureBranch("feat: add thing\n\nCloses #1");
+      expect(ship("--milestone", "Phase 1", "--project", "Other")).toBe(0);
+      expect(gh.prs[0]).toMatchObject({ milestone: "Phase 1", projects: ["Other", "BIMCraft"] });
+    });
+
+    test("change nothing when the description closes no issue", () => {
+      featureBranch("feat: add thing\n\nCloses #");
+      expect(ship()).toBe(0);
+      expect(calls.some((cmd) => cmd.slice(0, 3).join(" ") === "gh issue view")).toBe(false);
+      expect(gh.prs[0]).toMatchObject({ milestone: undefined, projects: [] });
+    });
+
+    test("are only shown by --dry-run", () => {
+      stackOfThree();
+      expect(ship("--stack")).toBe(0);
+      for (const p of gh.prs) p.body = `Closes #${p.number - 99}\n\n${p.body}`;
+      calls = [];
+      expect(ship("--stack", "--dry-run")).toBe(0);
+      expect(gh.prs.map((p) => [p.milestone, p.links])).toEqual([
+        [undefined, []],
+        [undefined, []],
+        [undefined, []],
+      ]);
+      expect(output.filter((line) => line.startsWith("would run: gh pr edit") && line.includes("--milestone"))).toHaveLength(2);
+      expect(output.filter((line) => line.startsWith("would run: gh api graphql"))).toHaveLength(2);
+    });
   });
 
   test("passes the no-user-docs label to the commit checks", () => {

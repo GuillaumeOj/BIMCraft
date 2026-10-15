@@ -7,7 +7,7 @@ BIMCraft tracks work in GitHub Issues and plans it on a single GitHub Project bo
 - **One issue, one outcome.** An issue describes a user-visible result or a well-bounded technical task, small enough for one pull request. Larger work is a parent issue with sub-issues.
 - **Link the specification.** When a requirement applies, give its ID in the issue form's requirement field and in the pull request template.
 - **The board is the plan, issues are the truth.** Discussion, decisions and acceptance criteria live in the issue; the board only holds planning fields. Decisions that later work builds on are also recorded as [architecture decision records](adr/README.md).
-- **Pull requests close issues.** Write `Closes #123` in the pull request; merging it closes the issue and the board moves it to *Done*.
+- **Pull requests close issues.** Write `Closes #123` in the pull request; merging it closes the issue and the board moves it to *Done*. GitHub reads `Closes #123` only in a pull request into `main`; for the upper pull requests of a stack, `scripts/push-pr.ts` links the issue itself. It also gives every pull request the milestone and project of the issue it closes.
 
 ## Labels
 
@@ -55,7 +55,7 @@ Discipline is not a field: the `area:` labels already carry it. Milestone, label
 Enable these built-in workflows (project → ⋯ → Workflows):
 
 - **Item added to project** → set Status to `Triage`.
-- **Auto-add to project** → filter `is:issue is:open` on the repository, so every new issue lands in Triage. Pull requests stay off the board: the issue they close carries the status.
+- **Auto-add to project** → filter `is:issue is:open` on the repository, so every new issue lands in Triage. Pull requests are not auto-added: `scripts/push-pr.ts` adds each one to the project of the issue it closes, and that issue carries the status.
 - **Item closed** → set Status to `Done`.
 - **Pull request linked to issue** → set Status to `In Review`.
 - **Auto-archive items** → `is:closed updated:<@today-30d`.
