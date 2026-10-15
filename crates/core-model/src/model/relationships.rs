@@ -174,9 +174,7 @@ impl Model {
         values: impl IntoIterator<Item = (N, AttributeValue)>,
     ) -> Result<(), ModelError> {
         let definition = relationship_entity(&self.namespace, entity)?;
-        if self.store.contains(id) {
-            return Err(StoreError::DuplicateId(id).into());
-        }
+        self.check_free(id)?;
         let mut given = vec![None; definition.roles.len()];
         for (name, participants) in roles {
             let role = role_index(definition, name.as_ref())?;

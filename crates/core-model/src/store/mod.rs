@@ -9,23 +9,24 @@ use std::collections::hash_map::Entry;
 
 use schema::{Namespace, ValidationError};
 
-pub(crate) use self::table::{Table, default_value};
+pub(crate) use self::table::{Side, Table, default_value};
 pub use self::value::AttributeValue;
 use crate::EntityId;
 
-/// Every object of a model, one table per entity of the schema and one typed column per
-/// attribute, addressed by [`EntityId`] (CORE-05).
+/// Every object of a model, one table per entity of the schema and one per type, with one typed
+/// column per attribute, addressed by [`EntityId`] (CORE-05).
 ///
-/// Tables are dense: deleting an object moves the last row of its table into its place. A table
-/// holds the attributes set on instances, `instance` and `type_overridable` ones (CORE-02);
-/// `type` attributes belong to the type object.
+/// Tables are dense: deleting an object moves the last row of its table into its place. An
+/// entity's table holds the attributes set on instances, `instance` and `type_overridable` ones;
+/// an override there is optional, as the type provides the value. A type's table, named after
+/// the type (such as `WallType`), holds `type` and `type_overridable` attributes (CORE-02).
 ///
 /// The store checks values against the schema but not references: a `ref:` value may name an
 /// object that does not exist (yet), and keeping references consistent is the job of
 /// relationships and transactions.
 #[derive(Clone, Debug)]
 pub struct Store {
-    /// Sorted by entity name, as the namespace lists them.
+    /// Sorted by entity or type name.
     tables: Vec<Table>,
     index: HashMap<EntityId, Location>,
 }
@@ -94,11 +95,19 @@ impl Store {
     /// [`schema::validate`].
     pub fn new(namespace: &Namespace) -> Result<Self, StoreError> {
         schema::validate(namespace).map_err(StoreError::InvalidSchema)?;
-        let tables = namespace
+        let mut tables: Vec<Table> = namespace
             .entities
             .values()
-            .map(|entity| Table::instances(&entity.name, &entity.attributes))
+            .flat_map(|entity| {
+                let instances = Table::new(&entity.name, &entity.attributes, Side::Instance);
+                let types = entity
+                    .type_def
+                    .iter()
+                    .map(|type_def| Table::new(&type_def.name, &entity.attributes, Side::Type));
+                std::iter::once(instances).chain(types)
+            })
             .collect();
+        tables.sort_by(|a, b| a.name().cmp(b.name()));
         Ok(Self {
             tables,
             index: HashMap::new(),

@@ -119,4 +119,32 @@ pub enum ModelError {
         /// The requested dimension.
         dimension: Dimension,
     },
+    /// The entity has no type (CORE-02).
+    #[error("entity \"{0}\" has no type")]
+    NoType(String),
+    /// The object is a type object where an instance is expected.
+    #[error("the object is a type, not an instance")]
+    NotAnInstance,
+    /// The object is not a type of the instance's entity.
+    #[error("a \"{type_entity}\" cannot be the type of a \"{entity}\"")]
+    WrongType {
+        /// The instance's entity.
+        entity: String,
+        /// The entity of the object given as type.
+        type_entity: String,
+    },
+    /// The value is set on each instance and type objects do not hold it (CORE-02).
+    #[error("\"{name}\" of \"{owner}\" is set on each instance, not on the type")]
+    NotOnType {
+        /// The entity or property set.
+        owner: String,
+        /// The attribute or property.
+        name: String,
+    },
+    /// No component has this id.
+    #[error("no component with this id")]
+    ComponentNotFound(EntityId),
+    /// Types made from the component still exist.
+    #[error("the component still has types")]
+    ComponentInUse,
 }

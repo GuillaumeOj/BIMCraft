@@ -24,6 +24,38 @@ struct Slot {
     column: Column,
 }
 
+/// Which objects a table holds, which decides its columns and rules (CORE-02).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Side {
+    /// Instances: `instance` and `type_overridable` attributes. An instance's
+    /// `type_overridable` value is an optional override, as its type provides the value.
+    Instance,
+    /// Type objects: `type` and `type_overridable` attributes, required and defaulted as
+    /// declared.
+    Type,
+    /// Component defaults for the types made from it: the type's columns, every one optional.
+    Component,
+}
+
+impl Side {
+    fn holds(self, placement: Placement) -> bool {
+        match self {
+            Self::Instance => placement != Placement::Type,
+            Self::Type | Self::Component => placement != Placement::Instance,
+        }
+    }
+
+    fn rule(self, attribute: &Attribute) -> Rule {
+        match (self, &attribute.presence, attribute.placement) {
+            (Self::Component, _, _) | (Self::Instance, _, Placement::TypeOverridable) => {
+                Rule::Optional
+            }
+            (_, Presence::Required, _) => Rule::Required,
+            _ => default_value(attribute).map_or(Rule::Optional, Rule::Default),
+        }
+    }
+}
+
 /// What happens when a row has no value for an attribute.
 #[derive(Clone, Debug)]
 enum Rule {
@@ -36,27 +68,21 @@ enum Rule {
 }
 
 impl Table {
-    /// An empty table named `name` holding the instance side of `attributes`: `instance` and
-    /// `type_overridable` ones (CORE-02). `type` attributes belong to the type object.
-    pub(crate) fn instances<'a>(
+    /// An empty table named `name` holding the attributes, or properties, set on `side`.
+    pub(crate) fn new<'a>(
         name: &str,
         attributes: impl IntoIterator<Item = &'a Attribute>,
+        side: Side,
     ) -> Self {
         Self {
             name: name.to_owned(),
             ids: Vec::new(),
             attributes: attributes
                 .into_iter()
-                .filter(|attribute| attribute.placement != Placement::Type)
+                .filter(|attribute| side.holds(attribute.placement))
                 .map(|attribute| Slot {
                     name: attribute.name.clone(),
-                    // On instances, a type_overridable attribute is an optional override: the
-                    // type provides its value and default.
-                    rule: match (&attribute.presence, attribute.placement) {
-                        (_, Placement::TypeOverridable) => Rule::Optional,
-                        (Presence::Required, _) => Rule::Required,
-                        _ => default_value(attribute).map_or(Rule::Optional, Rule::Default),
-                    },
+                    rule: side.rule(attribute),
                     column: Column::new(&attribute.value),
                 })
                 .collect(),

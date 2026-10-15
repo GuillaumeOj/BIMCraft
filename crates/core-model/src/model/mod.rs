@@ -1,21 +1,26 @@
-//! The model: stored objects, the relationships between them (CORE-03, ADR 0012) and their
-//! property sets (CORE-04, ADR 0013).
+//! The model: stored objects, the relationships between them (CORE-03, ADR 0012), their
+//! property sets (CORE-04, ADR 0013), and components, types and instances (CORE-02, ADR 0014).
 
 mod error;
 mod property_sets;
 mod relationships;
+mod types;
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use schema::{EntityKind, Namespace};
+use schema::{Attribute, EntityKind, Namespace, Placement};
 
 pub use self::error::ModelError;
 use self::property_sets::PropertyTable;
 pub use self::relationships::Participation;
 use self::relationships::{Link, Relationships};
+use self::types::Types;
+pub use self::types::{Component, LibraryRef};
+use crate::store::default_value;
 use crate::{AttributeValue, EntityId, RemovedEntity, Store, StoreError};
 
-/// Every object of a model, the relationships between them and their property sets.
+/// Every object of a model, the relationships between them, their property sets, and the
+/// components and types they are made from.
 ///
 /// A model owns the attribute tables of a namespace ([`Store`]) and keeps every
 /// cross-object rule in one place.
@@ -39,6 +44,19 @@ use crate::{AttributeValue, EntityId, RemovedEntity, Store, StoreError};
 /// validation, same storage and same checks on every value. An object carries a set it applies
 /// to once it has a value for it; reading a property it has no value for gives the default.
 ///
+/// # Components, types and instances
+///
+/// The three are separate (CORE-02). A [`Component`] is a reusable definition, such as a hinged
+/// door; a type is an object made from it with [`Model::create_type`], such as a 90 × 215 cm
+/// door, stored in the table named after the entity's type (`DoorType`); an instance is an object
+/// of the entity, linked to a type with [`Model::assign_type`].
+///
+/// Attributes and properties say where their value is set: `instance` ones on each instance,
+/// `type` ones on the type only, and `type_overridable` ones on the type with an optional override
+/// on each instance. [`Model::get`] and [`Model::property`] read an instance's own value, else
+/// its type's, else the default, so a change on the type reaches every instance that does not
+/// override it. Setting a `type` value on an instance fails with [`ModelError::NotOverridable`].
+///
 /// # Deleting objects
 ///
 /// [`Model::remove`] follows one rule, mirroring IFC, where a relationship cannot exist without
@@ -49,7 +67,9 @@ use crate::{AttributeValue, EntityId, RemovedEntity, Store, StoreError};
 ///    relate it;
 /// 3. no other object is deleted: removing a storey deletes its containment relationship but not
 ///    the walls it contained, and removing a relationship deletes only that relationship;
-/// 4. the property values of every deleted object go with it.
+/// 4. the property values of every deleted object go with it;
+/// 5. deleting a type leaves its instances untyped. A component is removed with
+///    [`Model::remove_component`], once no type is made from it.
 ///
 /// The returned [`Removal`] lists what was deleted and [`Model::restore`] puts it back exactly,
 /// participants in their former positions.
@@ -60,6 +80,7 @@ pub struct Model {
     relationships: Relationships,
     /// Values of every property set, built-in and custom, by name.
     property_sets: BTreeMap<String, PropertyTable>,
+    types: Types,
 }
 
 /// What [`Model::remove`] deleted; [`Model::restore`] puts it back.
@@ -79,6 +100,12 @@ struct RemovedObject {
     detached: Vec<Detached>,
     /// The property sets it carried, with their values.
     properties: Vec<(String, Vec<(String, AttributeValue)>)>,
+    /// The type of an instance.
+    type_of: Option<EntityId>,
+    /// The instances of a type.
+    instances: Vec<EntityId>,
+    /// The component a type was made from.
+    component: Option<EntityId>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -110,6 +137,7 @@ impl Model {
                 .values()
                 .map(|set| (set.name.clone(), PropertyTable::new(set)))
                 .collect(),
+            types: Types::new(namespace),
         })
     }
 
@@ -137,12 +165,13 @@ impl Model {
         self.store.entity_of(id)
     }
 
-    /// Stores a new object that is not a relationship; see [`Store::insert`].
+    /// Stores a new object that is not a relationship, or a type object with no component under
+    /// the type's name; see [`Store::insert`].
     ///
     /// # Errors
     ///
-    /// Fails, storing nothing, when the entity is a relationship (use [`Model::relate`]) or the
-    /// attribute tables reject the object.
+    /// Fails, storing nothing, when the id is taken, the entity is a relationship (use
+    /// [`Model::relate`]) or the attribute tables reject the object.
     pub fn insert<N: AsRef<str>>(
         &mut self,
         id: EntityId,
@@ -157,29 +186,56 @@ impl Model {
         {
             return Err(ModelError::RelationshipEntity(entity.to_owned()));
         }
+        self.check_free(id)?;
         Ok(self.store.insert(id, entity, values)?)
     }
 
-    /// The value of an attribute; see [`Store::get`].
+    /// The value of an attribute of the object with this id: its own value, else, for an
+    /// instance and an attribute set on the type, its type's value, else the default.
     ///
     /// # Errors
     ///
-    /// Fails when no object has this id or its entity has no such instance attribute.
+    /// Fails when no object has this id or its entity has no such attribute on that object.
     pub fn get(&self, id: EntityId, attribute: &str) -> Result<Option<AttributeValue>, ModelError> {
-        Ok(self.store.get(id, attribute)?)
+        let object = self.object(id)?;
+        let definition = find_attribute(&object.entity().attributes, attribute);
+        let Some(definition) = definition
+            .filter(|definition| !object.is_type() && definition.placement != Placement::Instance)
+        else {
+            return Ok(self.store.get(id, attribute)?);
+        };
+        let own = match definition.placement {
+            Placement::TypeOverridable => self.store.get(id, attribute)?,
+            Placement::Instance | Placement::Type => None,
+        };
+        Ok(own.or_else(|| {
+            self.inherit(id, definition, |type_id| {
+                self.store.get(type_id, attribute).ok().flatten()
+            })
+        }))
     }
 
-    /// Sets or clears an attribute and returns the previous value; see [`Store::set`].
+    /// Sets, or with `None` clears, an attribute of the object with this id and returns its
+    /// previous stored value. On a type, the change reaches every instance that does not
+    /// override it; on an instance, a `type_overridable` value is an override, and clearing it
+    /// brings back the type's value.
     ///
     /// # Errors
     ///
-    /// Fails, changing nothing, when the attribute tables reject the change.
+    /// Fails, changing nothing, when the attribute is set on the type and the object is an
+    /// instance, is set on instances and the object is a type, or the attribute tables reject
+    /// the change.
     pub fn set(
         &mut self,
         id: EntityId,
         attribute: &str,
         value: Option<AttributeValue>,
     ) -> Result<Option<AttributeValue>, ModelError> {
+        let object = self.object(id)?;
+        let entity = object.entity();
+        if let Some(definition) = find_attribute(&entity.attributes, attribute) {
+            object.check_placement(&entity.name, definition)?;
+        }
         Ok(self.store.set(id, attribute, value)?)
     }
 
@@ -218,6 +274,8 @@ impl Model {
                     .map(|link| link.relationship),
             );
             let roles = self.relationships.take(next);
+            let type_of = self.types.unassign(next);
+            let (instances, component) = self.types.release(next);
             let properties = self
                 .property_sets
                 .iter_mut()
@@ -230,6 +288,9 @@ impl Model {
                 roles,
                 detached,
                 properties,
+                type_of,
+                instances,
+                component,
             });
         }
         Ok(Removal { objects })
@@ -269,6 +330,13 @@ impl Model {
                     }
                 }
             }
+            let mut linked = object.type_of.iter().chain(&object.instances);
+            if let Some(&gone) = linked.find(|id| !present(id)) {
+                return Err(StoreError::NotFound(gone).into());
+            }
+            if let Some(component) = object.component.filter(|&id| !self.types.has_component(id)) {
+                return Err(ModelError::ComponentNotFound(component));
+            }
             if let Some(gone) = object
                 .detached
                 .iter()
@@ -287,15 +355,33 @@ impl Model {
                 self.relationships
                     .attach(detached.link, object.id, detached.position);
             }
+            let is_type = self.object(object.id)?.is_type();
             for (set, values) in object.properties {
-                self.property_table(&set)?.insert(object.id, values)?;
+                self.property_table(&set)?
+                    .side_mut(is_type)
+                    .insert(object.id, values)?;
+            }
+            if let Some(type_id) = object.type_of {
+                self.types.assign(object.id, type_id);
+            }
+            for instance in object.instances {
+                self.types.assign(instance, object.id);
+            }
+            if let Some(component) = object.component {
+                self.types.link_component(object.id, component);
             }
         }
         Ok(())
     }
 }
 
+fn find_attribute<'a>(attributes: &'a [Attribute], name: &str) -> Option<&'a Attribute> {
+    attributes.iter().find(|attribute| attribute.name == name)
+}
+
 #[cfg(test)]
 mod property_set_tests;
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod type_tests;

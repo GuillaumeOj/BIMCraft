@@ -4,29 +4,68 @@ use std::collections::HashMap;
 
 use schema::{Attribute, Placement, PropertySet, ValueType};
 
+use super::types::Object;
 use super::{Model, ModelError};
-use crate::store::{Table, default_value};
+use crate::store::{Side, Table, default_value};
 use crate::units::{Quantity, Unit};
 use crate::{AttributeValue, EntityId, StoreError};
 
-/// The values of one property set, one row per object that carries it.
+/// The values of one property set, built-in or custom alike: one table for instances and one
+/// for type objects, as each holds different properties (CORE-02).
 #[derive(Clone, Debug)]
 pub(super) struct PropertyTable {
+    instances: Rows,
+    types: Rows,
+}
+
+/// One side of a property set, one row per object that carries it.
+#[derive(Clone, Debug)]
+pub(super) struct Rows {
     table: Table,
     rows: HashMap<EntityId, usize>,
 }
 
 impl PropertyTable {
-    /// An empty table for `set`, built-in or custom alike.
     pub(super) fn new(set: &PropertySet) -> Self {
-        Self {
-            table: Table::instances(&set.name, &set.properties),
+        let rows = |side| Rows {
+            table: Table::new(&set.name, &set.properties, side),
             rows: HashMap::new(),
+        };
+        Self {
+            instances: rows(Side::Instance),
+            types: rows(Side::Type),
         }
     }
 
+    fn side(&self, is_type: bool) -> &Rows {
+        if is_type {
+            &self.types
+        } else {
+            &self.instances
+        }
+    }
+
+    pub(super) fn side_mut(&mut self, is_type: bool) -> &mut Rows {
+        if is_type {
+            &mut self.types
+        } else {
+            &mut self.instances
+        }
+    }
+
+    fn carries(&self, id: EntityId) -> bool {
+        self.instances.carries(id) || self.types.carries(id)
+    }
+
+    /// Removes the object's row, on whichever side it is, and returns its values.
+    pub(super) fn remove(&mut self, id: EntityId) -> Option<Vec<(String, AttributeValue)>> {
+        self.instances.remove(id).or_else(|| self.types.remove(id))
+    }
+}
+
+impl Rows {
     /// Whether the object carries the set.
-    pub(super) fn carries(&self, id: EntityId) -> bool {
+    fn carries(&self, id: EntityId) -> bool {
         self.rows.contains_key(&id)
     }
 
@@ -70,7 +109,7 @@ impl PropertyTable {
     }
 
     /// Removes the object's row and returns its values.
-    pub(super) fn remove(&mut self, id: EntityId) -> Option<Vec<(String, AttributeValue)>> {
+    fn remove(&mut self, id: EntityId) -> Option<Vec<(String, AttributeValue)>> {
         let row = self.rows.remove(&id)?;
         let (values, moved) = self.table.swap_remove(row);
         if let Some(moved) = moved {
@@ -128,25 +167,28 @@ impl Model {
     }
 
     /// Makes the object carry property set `set`, with the given values. Properties without a
-    /// value take their default, or stay empty when optional.
+    /// value take their default, or stay empty when optional. A type object holds the set's
+    /// `type` and `type_overridable` properties, an instance its `instance` and
+    /// `type_overridable` ones.
     ///
     /// # Errors
     ///
     /// Fails, changing nothing, when the object or set is unknown, the set does not apply to the
-    /// object's entity, the object already carries it, a property is unknown or set on the type,
-    /// a property is given twice, a required one is missing, or a value does not fit.
+    /// object's entity, the object already carries it, a property is unknown or not held by the
+    /// object (see [`Model::set_property`]), a property is given twice, a required one is missing, or a value does not fit.
     pub fn attach_property_set<N: AsRef<str>>(
         &mut self,
         id: EntityId,
         set: &str,
         values: impl IntoIterator<Item = (N, AttributeValue)>,
     ) -> Result<(), ModelError> {
-        let definition = self.applicable_set(id, set)?;
+        let (definition, object) = self.applicable_set(id, set)?;
         let values: Vec<(N, AttributeValue)> = values.into_iter().collect();
         for (name, _) in &values {
-            instance_property(definition, name.as_ref())?;
+            settable_property(definition, object, name.as_ref())?;
         }
-        let table = self.property_table(set)?;
+        let is_type = object.is_type();
+        let table = self.property_table(set)?.side_mut(is_type);
         if table.carries(id) {
             return Err(ModelError::AlreadyAttached(set.to_owned()));
         }
@@ -164,14 +206,15 @@ impl Model {
         id: EntityId,
         set: &str,
     ) -> Result<Vec<(String, AttributeValue)>, ModelError> {
-        self.applicable_set(id, set)?;
+        let is_type = self.applicable_set(id, set)?.1.is_type();
         self.property_table(set)?
+            .side_mut(is_type)
             .remove(id)
             .ok_or_else(|| ModelError::NotAttached(set.to_owned()))
     }
 
-    /// The value of property `property` of set `set` on the object: its own value, else the
-    /// property's default.
+    /// The value of property `property` of set `set` on the object: its own value, else, for an
+    /// instance and a property set on the type, its type's value, else the property's default.
     ///
     /// # Errors
     ///
@@ -183,23 +226,30 @@ impl Model {
         set: &str,
         property: &str,
     ) -> Result<Option<AttributeValue>, ModelError> {
-        let definition = self.applicable_set(id, set)?;
+        let (definition, object) = self.applicable_set(id, set)?;
         let attribute = find_property(definition, property)?;
-        let own = self
-            .property_sets
-            .get(set)
-            .and_then(|table| table.get(id, property));
-        Ok(own.or_else(|| default_value(attribute)))
+        let table = self.property_sets.get(set);
+        let stored = |id, is_type| table.and_then(|table| table.side(is_type).get(id, property));
+        let own = match (object, attribute.placement) {
+            (Object::Instance(_), Placement::Type) => None,
+            _ => stored(id, object.is_type()),
+        };
+        if object.is_type() || attribute.placement == Placement::Instance {
+            return Ok(own.or_else(|| default_value(attribute)));
+        }
+        Ok(own.or_else(|| self.inherit(id, attribute, |type_id| stored(type_id, true))))
     }
 
     /// Sets, or with `None` clears, a property of the object and returns its previous stored
-    /// value. The object starts carrying the set if it did not.
+    /// value. The object starts carrying the set if it did not. On a type, the change reaches
+    /// every instance that does not override it.
     ///
     /// # Errors
     ///
     /// Fails, changing nothing, when the object, set or property is unknown, the set does not
-    /// apply, the property is set on the type, a required property would be missing, or the
-    /// value does not fit.
+    /// apply, the property is set on the type and the object is an instance
+    /// ([`ModelError::NotOverridable`]) or set on instances and the object is a type, a
+    /// required property would be missing, or the value does not fit.
     pub fn set_property(
         &mut self,
         id: EntityId,
@@ -207,9 +257,12 @@ impl Model {
         property: &str,
         value: Option<AttributeValue>,
     ) -> Result<Option<AttributeValue>, ModelError> {
-        let definition = self.applicable_set(id, set)?;
-        instance_property(definition, property)?;
-        self.property_table(set)?.set(id, property, value)
+        let (definition, object) = self.applicable_set(id, set)?;
+        settable_property(definition, object, property)?;
+        let is_type = object.is_type();
+        self.property_table(set)?
+            .side_mut(is_type)
+            .set(id, property, value)
     }
 
     /// A quantity property, in the dimension of `U` (CORE-09).
@@ -253,16 +306,22 @@ impl Model {
         })
     }
 
-    /// The definition of `set`, which must apply to the entity of the object with this id.
-    fn applicable_set(&self, id: EntityId, set: &str) -> Result<&PropertySet, ModelError> {
-        let entity = self.store.entity_of(id).ok_or(StoreError::NotFound(id))?;
+    /// The definition of `set`, which must apply to the entity of the object with this id, and
+    /// what the object is. A set applies to the types of the entities it applies to.
+    fn applicable_set(
+        &self,
+        id: EntityId,
+        set: &str,
+    ) -> Result<(&PropertySet, Object<'_>), ModelError> {
+        let object = self.object(id)?;
         let definition = self.known_set(set)?;
-        if definition.applies_to.iter().any(|name| name == entity) {
-            Ok(definition)
+        let entity = &object.entity().name;
+        if definition.applies_to.contains(entity) {
+            Ok((definition, object))
         } else {
             Err(ModelError::NotApplicable {
                 set: set.to_owned(),
-                entity: entity.to_owned(),
+                entity: entity.clone(),
             })
         }
     }
@@ -304,17 +363,13 @@ fn find_property<'a>(set: &'a PropertySet, property: &str) -> Result<&'a Attribu
         })
 }
 
-/// A property an instance can hold a value for: not one set on the type (CORE-02).
-fn instance_property<'a>(
+/// A property the object can hold a value for (CORE-02).
+fn settable_property<'a>(
     set: &'a PropertySet,
+    object: Object<'_>,
     property: &str,
 ) -> Result<&'a Attribute, ModelError> {
     let attribute = find_property(set, property)?;
-    if attribute.placement == Placement::Type {
-        return Err(ModelError::NotOverridable {
-            owner: set.name.clone(),
-            name: property.to_owned(),
-        });
-    }
+    object.check_placement(&set.name, attribute)?;
     Ok(attribute)
 }

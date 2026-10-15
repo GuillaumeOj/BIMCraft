@@ -62,7 +62,7 @@ pub(super) fn namespace() -> Namespace {
                 doc: None,
             }),
             property_sets: vec!["Pset_WallCommon".into()],
-            ..entity("Wall", EntityKind::Element, "IfcWall")
+            ..wall()
         },
         entity("Opening", EntityKind::Element, "IfcOpeningElement"),
         entity("Group", EntityKind::Element, "IfcGroup"),
@@ -119,6 +119,23 @@ pub(super) fn namespace() -> Namespace {
             .collect(),
         property_sets: BTreeMap::from([("Pset_WallCommon".into(), wall_common())]),
     }
+}
+
+/// A wall with an attribute of each placement: `name` on instances, `thickness` on the type and
+/// `height` on the type with overrides.
+fn wall() -> Entity {
+    let mut wall = entity("Wall", EntityKind::Element, "IfcWall");
+    let length = || ValueType::Quantity(QuantityKind::Length);
+    wall.attributes.extend([
+        property("thickness", length(), Presence::Required, Placement::Type),
+        property(
+            "height",
+            length(),
+            Presence::Default(Value::Real(2.5)),
+            Placement::TypeOverridable,
+        ),
+    ]);
+    wall
 }
 
 fn property(name: &str, value: ValueType, presence: Presence, placement: Placement) -> Attribute {
