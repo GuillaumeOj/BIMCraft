@@ -9,11 +9,13 @@ publish = false
 
 [dependencies]
 core-model = { workspace = true }
+platform = { workspace = true }
 rusqlite = { workspace = true }
 schema = { workspace = true }
 thiserror = { workspace = true }
 
 [dev-dependencies]
+platform = { workspace = true, features = ["testing"] }
 proptest = { workspace = true }
 # The crash-safety tests watch every write through SQLite's hooks; `hooks` adds no dependency.
 rusqlite = { workspace = true, features = ["hooks"] }

@@ -17,6 +17,8 @@ A project file is a single file. You can copy it, back it up or send it like any
 
 Saving writes the complete model into the project file in one step. If the computer stops in the middle of a save, for example after a power cut, the file keeps the content of the previous save: it is never left half written.
 
+Between saves, BIMCraft keeps a recovery copy of your work at a regular interval, so a crash loses at most a few minutes of changes. See [Recover unsaved work after a crash](recover-unsaved-work.md).
+
 ## Opening
 
 Opening reads the model from the file. Opening a project never changes the file; only saving does.
@@ -42,4 +44,5 @@ The file contains objects with values BIMCraft does not accept, for example a wa
 
 ## See also
 
+- [Recover unsaved work after a crash](recover-unsaved-work.md)
 - [Install BIMCraft](getting-started.md)

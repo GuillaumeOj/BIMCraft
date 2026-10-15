@@ -746,6 +746,7 @@ name = "persist"
 version = "0.0.0"
 dependencies = [
  "core-model",
+ "platform",
  "proptest",
  "rusqlite",
  "schema",

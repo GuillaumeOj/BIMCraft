@@ -55,8 +55,7 @@ impl ManualClock {
 
     /// Moves the clock forwards by `millis`, stopping at the largest representable time.
     pub fn advance(&self, millis: u64) {
-        let now = self.now.get().as_unix_millis().saturating_add(millis);
-        self.now.set(Timestamp::from_unix_millis(now));
+        self.now.set(self.now.get().saturating_add_millis(millis));
     }
 }
 

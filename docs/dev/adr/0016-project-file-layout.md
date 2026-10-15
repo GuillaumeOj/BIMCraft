@@ -2,7 +2,7 @@
 
 - Status: Accepted
 - Requirements: PERS-01, PERS-02 (also CORE-05, CORE-12, ARCH-01, ARCH-02, SEC-03)
-- Issues: [#35](https://github.com/GuillaumeOj/BIMCraft/issues/35), [#36](https://github.com/GuillaumeOj/BIMCraft/issues/36), [#37](https://github.com/GuillaumeOj/BIMCraft/issues/37) (epic: SQLite project files)
+- Issues: [#35](https://github.com/GuillaumeOj/BIMCraft/issues/35), [#36](https://github.com/GuillaumeOj/BIMCraft/issues/36), [#37](https://github.com/GuillaumeOj/BIMCraft/issues/37), [#38](https://github.com/GuillaumeOj/BIMCraft/issues/38) (epic: SQLite project files)
 
 ## Context
 
@@ -62,7 +62,14 @@ A crash at any moment of a save leaves the file as the previous save left it (PE
 
 `crates/persist/tests/crash_safety.rs` injects faults: while a save runs with a one-page cache (so changed pages reach the file before the commit), a hook copies the file and its journal at every row write and at the commit, as a crash at that moment would leave them. Every copy must open and hold the previous save exactly, and some copies must hold a half-written file. A second test interrupts the save after more and more steps and checks the file and the connection after each.
 
-Autosave at a configurable interval, the other half of PERS-02, belongs to the host and is not part of this crate.
+### Autosave
+
+Autosave, the other half of PERS-02, writes a **recovery copy**: a project file of its own next to the project, never the project itself. The project file therefore changes, and moves to a newer format, only when the user saves. The work is split:
+
+- `Autosave` decides when a copy is due. It is session policy rather than file format, kept in `persist` until a session layer (the `api` crate) exists; it should move there with the save command. It is a state machine that receives the time from the host's `platform::Clock` and never reads a clock or sleeps, so tests drive it with a fake clock. The first change since the last copy starts the countdown and later changes do not push it back, so a crash loses at most one interval (NFR-06). A failed copy keeps the changes pending and is retried one interval later. If the clock is set back, the countdown restarts from the new time.
+- The interval is whole minutes from 1 to 60, 5 by default (`AutosaveInterval`). Autosave cannot be turned off.
+- `autosave_model` writes the model and the time of the copy (`autosaved_at` project property) in one transaction, so an interrupted autosave keeps the previous copy whole.
+- The host owns the timer, the copy's location, deleting the copy after a manual save, and offering to restore a copy found when a project is opened (`open_model` on the copy, then a normal save).
 
 ### Hostile files
 

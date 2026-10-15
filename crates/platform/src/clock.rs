@@ -17,6 +17,12 @@ impl Timestamp {
     pub const fn as_unix_millis(self) -> u64 {
         self.0
     }
+
+    /// The time `millis` later, stopping at the largest representable time.
+    #[must_use]
+    pub const fn saturating_add_millis(self, millis: u64) -> Self {
+        Self(self.0.saturating_add(millis))
+    }
 }
 
 /// Source of the current wall-clock time.
@@ -32,5 +38,17 @@ mod tests {
     #[test]
     fn timestamp_round_trips_millis() {
         assert_eq!(Timestamp::from_unix_millis(1_234).as_unix_millis(), 1_234);
+    }
+
+    #[test]
+    fn adding_stops_at_the_largest_time() {
+        assert_eq!(
+            Timestamp::from_unix_millis(1).saturating_add_millis(2),
+            Timestamp::from_unix_millis(3)
+        );
+        assert_eq!(
+            Timestamp::from_unix_millis(u64::MAX - 1).saturating_add_millis(5),
+            Timestamp::from_unix_millis(u64::MAX)
+        );
     }
 }
