@@ -16,11 +16,20 @@ use libfuzzer_sys::fuzz_target;
 /// The volume a boolean result may differ from its bounds by: rounding of the cut vertices.
 const SLACK: f64 = 1e-6;
 
-/// The prism over a raw profile, or `None` if the profile or the extrusion is rejected.
+/// Most faces per operand. Arcs hundreds of metres wide become thousands of chords, and a
+/// boolean of such prisms takes seconds, which would starve the fuzzer and brush the time limit
+/// of each input; the `extrusion` target covers them.
+const MAX_FACES: usize = 200;
+
+/// The prism over a raw profile, or `None` if the profile or the extrusion is rejected or the
+/// prism has more than [`MAX_FACES`] faces.
 fn prism(raw: &RawProfile, raw_direction: (i8, i8, i8)) -> Option<(Solid, f64)> {
     let (outer, holes) = profile_loops(raw);
     let profile = Profile::new(outer, holes).ok()?;
     let solid = Solid::extrude(&profile, direction(raw_direction)).ok()?;
+    if solid.face_count() > MAX_FACES {
+        return None;
+    }
     let volume = solid.volume();
     Some((solid, volume))
 }
