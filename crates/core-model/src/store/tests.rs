@@ -407,6 +407,39 @@ fn a_removed_object_inserts_back_unchanged() {
 }
 
 #[test]
+fn reads_whole_objects_and_lists_ids() {
+    let mut store = store();
+    insert_wall(&mut store, 1, [("name", text("W1"))]);
+    store
+        .insert(id(2), "Storey", [("elevation", real(3.2))])
+        .unwrap();
+
+    let mut ids: Vec<_> = store.ids().collect();
+    ids.sort();
+    assert_eq!(ids, [id(1), id(2)]);
+    assert_eq!(store.entity(id(3)), None);
+    let wall = store.entity(id(1)).unwrap();
+    assert_eq!(wall.entity, "Wall");
+    assert_eq!(store.remove(id(1)), Ok(wall));
+}
+
+#[test]
+fn values_serialise_and_deserialise() {
+    let value = AttributeValue::List(vec![
+        AttributeValue::Bool(true),
+        AttributeValue::Integer(-3),
+        real(2.5),
+        text("REI 60"),
+        AttributeValue::Ref(id(7)),
+    ]);
+    let json = serde_json::to_string(&value).unwrap();
+    assert_eq!(
+        serde_json::from_str::<AttributeValue>(&json).unwrap(),
+        value
+    );
+}
+
+#[test]
 fn errors_name_attributes_but_never_values_or_ids() {
     let id = EntityId::new(0xABCD);
     let messages = [

@@ -204,7 +204,7 @@ const OTHER_STOREY: u128 = 2;
 pub(super) const WALLS: [u128; 3] = [11, 12, 13];
 const OPENING: u128 = 21;
 const GROUP: u128 = 31;
-const CONTAINMENT: u128 = 100;
+pub(super) const CONTAINMENT: u128 = 100;
 
 /// Two storeys, three walls, an opening and a group, no relationship.
 pub(super) fn model() -> Model {
@@ -499,13 +499,22 @@ fn participants_are_added_and_removed() {
         .add_participant(id(CONTAINMENT), "elements", id(WALLS[2]))
         .unwrap();
     assert_eq!(participants(&model, CONTAINMENT, "elements"), ids(WALLS));
-    model
+    let position = model
         .remove_participant(id(CONTAINMENT), "elements", id(WALLS[0]))
         .unwrap();
+    assert_eq!(position, 0);
     assert_eq!(
         participants(&model, CONTAINMENT, "elements"),
         ids([WALLS[1], WALLS[2]])
     );
+    // Inserting at the returned position undoes the removal exactly.
+    model
+        .insert_participant(id(CONTAINMENT), "elements", id(WALLS[0]), position)
+        .unwrap();
+    assert_eq!(participants(&model, CONTAINMENT, "elements"), ids(WALLS));
+    model
+        .remove_participant(id(CONTAINMENT), "elements", id(WALLS[0]))
+        .unwrap();
     assert_eq!(played(&model, WALLS[0]), []);
     assert!(model.contains(id(WALLS[0])));
 }
@@ -832,40 +841,11 @@ fn errors_name_entities_and_roles_but_never_ids() {
 /// Every object id the tests and the property test use.
 const ALL_IDS: std::ops::Range<u128> = 0..256;
 
-/// Asserts that two models hold the same objects, values and relationships.
+/// Asserts that two models hold the same objects, values and relationships, and that the
+/// relationship index is consistent.
 fn assert_same(model: &Model, expected: &Model) {
     assert!(model.relationships.is_consistent());
-    assert_eq!(snapshot(model), snapshot(expected));
-}
-
-type Snapshot = Vec<(
-    u128,
-    Option<String>,
-    Option<AttributeValue>,
-    Vec<(u128, String, String)>,
-    Vec<Vec<EntityId>>,
-)>;
-
-fn snapshot(model: &Model) -> Snapshot {
-    ALL_IDS
-        .filter(|&raw| model.contains(id(raw)))
-        .map(|raw| {
-            let entity = model.entity_of(id(raw)).map(str::to_owned);
-            let roles = entity
-                .as_deref()
-                .and_then(|entity| model.namespace.entities.get(entity))
-                .map(|entity| {
-                    entity
-                        .roles
-                        .iter()
-                        .map(|role| participants(model, raw, &role.name))
-                        .collect()
-                })
-                .unwrap_or_default();
-            let name = model.get(id(raw), "name").unwrap();
-            (raw, entity, name, played(model, raw), roles)
-        })
-        .collect()
+    assert_eq!(model, expected);
 }
 
 /// One step of a random sequence of model operations on two storeys, six walls and up to four
@@ -932,10 +912,10 @@ proptest! {
                     contain(&mut model, containment(raw).get(), u128::from(storey) + 1, &walls)
                 }
                 Op::Add { raw, wall: index } => {
-                    model.add_participant(containment(raw), "elements", wall(index))
+                    model.add_participant(containment(raw), "elements", wall(index)).map(drop)
                 }
                 Op::Leave { raw, wall: index } => {
-                    model.remove_participant(containment(raw), "elements", wall(index))
+                    model.remove_participant(containment(raw), "elements", wall(index)).map(drop)
                 }
                 Op::Remove { object: index } => {
                     let before = model.clone();

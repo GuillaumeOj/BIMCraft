@@ -169,6 +169,26 @@ impl Store {
         Ok(())
     }
 
+    /// The ids of every stored object, table by table in row order. The order is deterministic
+    /// but changes when objects are removed.
+    pub fn ids(&self) -> impl Iterator<Item = EntityId> + '_ {
+        self.tables
+            .iter()
+            .flat_map(|table| table.ids().iter().copied())
+    }
+
+    /// A copy of the object with this id: its entity and the attributes that have a value, in
+    /// declaration order, as [`remove`](Self::remove) would return it.
+    #[must_use]
+    pub fn entity(&self, id: EntityId) -> Option<RemovedEntity> {
+        let location = self.index.get(&id)?;
+        let table = &self.tables[location.table];
+        Some(RemovedEntity {
+            entity: table.name().to_owned(),
+            values: table.values(location.row),
+        })
+    }
+
     /// The value of `attribute` on the object with this id, if it has one.
     ///
     /// # Errors

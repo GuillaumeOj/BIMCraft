@@ -178,6 +178,8 @@ dependencies = [
  "criterion",
  "proptest",
  "schema",
+ "serde",
+ "serde_json",
  "thiserror",
 ]
 

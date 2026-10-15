@@ -4,6 +4,7 @@
 mod error;
 mod property_sets;
 mod relationships;
+mod state;
 mod types;
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
@@ -15,6 +16,7 @@ pub use self::error::ModelError;
 use self::property_sets::PropertyTable;
 pub use self::relationships::Participation;
 use self::relationships::{Link, Relationships};
+pub use self::state::ObjectState;
 pub use self::types::{Component, LibraryRef};
 use self::types::{Object, Types};
 use crate::store::default_value;
@@ -291,6 +293,36 @@ impl Model {
             });
         }
         Ok(Removal { objects })
+    }
+
+    /// Every object removing `id` may delete or modify, `id` first: the relationships it plays a
+    /// role in, which lose it as a participant or are deleted with it, and so on for theirs, and
+    /// the instances of a type, which lose their type. Empty for an unknown id.
+    #[must_use]
+    pub fn removal_reach(&self, id: EntityId) -> Vec<EntityId> {
+        if !self.store.contains(id) {
+            return Vec::new();
+        }
+        // Relationships can relate relationships, so an object may be reached twice.
+        let mut seen = BTreeSet::from([id]);
+        let mut reach = vec![id];
+        // Only objects that may be deleted pass the removal on; instances only lose their type.
+        let mut deletable = vec![id];
+        while let Some(object) = deletable.pop() {
+            let relationships: Vec<EntityId> = self
+                .relationships
+                .links(object)
+                .map(|link| link.relationship)
+                .filter(|&found| seen.insert(found))
+                .collect();
+            reach.extend(
+                self.instances_of(object)
+                    .filter(|&found| seen.insert(found)),
+            );
+            reach.extend(&relationships);
+            deletable.extend(relationships);
+        }
+        reach
     }
 
     /// Puts back what [`Model::remove`] deleted, as it was.

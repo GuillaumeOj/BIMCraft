@@ -10,7 +10,7 @@ use crate::{AttributeValue, EntityId, StoreError};
 
 /// A reusable parametric definition of an element, such as a hinged door, from which types are
 /// made (spec §16.3).
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Component {
     /// The entity its types and instances belong to, such as `Door`; it must have a type.
     pub entity: String,
@@ -21,7 +21,7 @@ pub struct Component {
 }
 
 /// The library reference of a component: its id and version (INT-07, INT-08).
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct LibraryRef {
     /// The component's id in its library.
     pub id: String,
@@ -61,6 +61,11 @@ impl Types {
     /// The entity typed by the type named `name`.
     fn entity_of_type(&self, name: &str) -> Option<&str> {
         self.entities.get(name).map(String::as_str)
+    }
+
+    /// Whether both hold the same components under the same ids.
+    pub(super) fn same_components(&self, other: &Self) -> bool {
+        self.components == other.components
     }
 
     pub(super) fn has_component(&self, id: EntityId) -> bool {
