@@ -3,7 +3,7 @@
 use std::f64::consts::PI;
 
 use super::face::{PlanarFace, Pool};
-use crate::LINEAR_TOLERANCE;
+use crate::tolerance::{ROUNDING, WITHIN_TOLERANCE};
 use crate::vector::{Vector, cross, dot, length, sub};
 
 /// Where a piece of face lies relative to the other operand.
@@ -27,7 +27,7 @@ pub(super) enum Class {
 pub(super) fn classify(p: Vector, face: &PlanarFace, solid: &[PlanarFace], pool: &Pool) -> Class {
     let on = solid.iter().find(|other| {
         other.reaches(p)
-            && other.distance(p).abs() <= LINEAR_TOLERANCE
+            && other.distance(p).abs() <= WITHIN_TOLERANCE
             && other.contains(pool, other.projection.apply(p))
             && face.coplanar(other, pool)
     });
@@ -49,14 +49,16 @@ pub(super) fn classify(p: Vector, face: &PlanarFace, solid: &[PlanarFace], pool:
 /// is fanned into triangles from its first vertex; the signed angles of a fan add up to the
 /// ring's, whatever its shape.
 ///
-/// Faces whose plane passes within the tolerance of the point are left out. Seen from its own
+/// Faces whose plane passes through the point, up to rounding, are left out. Seen from its own
 /// plane a face subtends no angle, but the formula's arc tangent would then turn on the sign of
-/// a zero and give ±2π per triangle. A point inside such a face was already found on it.
+/// a zero and give ±2π per triangle. Faces merely within the tolerance stay in: a point a
+/// tolerance inside a face subtends half the sphere there, and leaving that out would put a
+/// piece a few tolerances wide outside the solid.
 fn winding(p: Vector, solid: &[PlanarFace], pool: &Pool) -> f64 {
     let mut total = 0.0;
     let seen = solid
         .iter()
-        .filter(|face| face.distance(p).abs() > LINEAR_TOLERANCE);
+        .filter(|face| face.distance(p).abs() > ROUNDING);
     for ring in seen.flat_map(|face| &face.rings) {
         let first = sub(pool.get(ring[0]), p);
         for pair in ring[1..].windows(2) {

@@ -13,10 +13,28 @@ use crate::vector::{add, dot, edges, scale, sub};
 pub(super) type Segments = Vec<Vec<(usize, usize)>>;
 
 /// Intersects every face of the first operand (`faces[..split]`) with every face of the second
-/// whose bounding box overlaps it, sorting by `x` first so far-apart faces are never compared.
+/// whose bounding box overlaps it.
 pub(super) fn segments(faces: &[PlanarFace], split: usize, pool: &mut Pool) -> Segments {
     let mut out = vec![Vec::new(); faces.len()];
     let mut crossings = BTreeMap::new();
+    for (f, g) in candidate_pairs(faces, split) {
+        let mut pair = Pair {
+            faces,
+            pool: &mut *pool,
+            crossings: &mut crossings,
+        };
+        for segment in pair.meet(f, g) {
+            out[f].push(segment);
+            out[g].push(segment);
+        }
+    }
+    out
+}
+
+/// The pairs of a face of the first operand (`faces[..split]`) and a face of the second whose
+/// bounding boxes overlap, in a fixed order. Faces are sorted by `x` first, so far-apart faces
+/// are never compared.
+pub(super) fn candidate_pairs(faces: &[PlanarFace], split: usize) -> Vec<(usize, usize)> {
     let mut second: Vec<usize> = (split..faces.len()).collect();
     second.sort_by(|&f, &g| {
         faces[f]
@@ -24,25 +42,18 @@ pub(super) fn segments(faces: &[PlanarFace], split: usize, pool: &mut Pool) -> S
             .total_cmp(&faces[g].min_x())
             .then(f.cmp(&g))
     });
-    let mut pair = Pair {
-        faces,
-        pool,
-        crossings: &mut crossings,
-    };
+    let mut pairs = Vec::new();
     for f in 0..split {
-        let reach = faces[f].max_x() + crate::LINEAR_TOLERANCE;
+        let reach = faces[f].max_x() + crate::tolerance::WITHIN_TOLERANCE;
         let end = second.partition_point(|&g| faces[g].min_x() <= reach);
-        for &g in &second[..end] {
-            if !faces[f].overlaps(&faces[g]) {
-                continue;
-            }
-            for segment in pair.meet(f, g) {
-                out[f].push(segment);
-                out[g].push(segment);
-            }
-        }
+        pairs.extend(
+            second[..end]
+                .iter()
+                .filter(|&&g| faces[f].overlaps(&faces[g]))
+                .map(|&g| (f, g)),
+        );
     }
-    out
+    pairs
 }
 
 /// The vertex where an edge crosses a face's plane, keyed by the edge and the face so that both

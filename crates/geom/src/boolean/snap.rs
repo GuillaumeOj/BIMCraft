@@ -1,16 +1,17 @@
-//! Merging vertices closer than the tolerance (ADR 0001, merge pass step 2).
+//! Merging vertices within the tolerance (ADR 0001, merge pass step 2).
 
 use std::collections::HashMap;
 
 use super::BooleanError;
-use super::face::{Pool, TOLERANCE_SQUARED};
+use super::face::Pool;
 use crate::LINEAR_TOLERANCE;
+use crate::tolerance::{WITHIN_TOLERANCE, WITHIN_TOLERANCE_SQUARED};
 use crate::vector::{Vector, bounds, distance_squared};
 
 /// The widest a group of merged vertices may be.
 const CHAIN_LIMIT: f64 = 10.0 * LINEAR_TOLERANCE;
 
-/// Groups vertices closer than the tolerance with a union–find and returns, for each vertex, the
+/// Groups vertices within the tolerance with a union–find and returns, for each vertex, the
 /// representative of its group: the smallest by x, then y, then z among the group's operand
 /// vertices if it has any, otherwise among all of them. Positions are never averaged, and the
 /// choice depends only on positions, so swapping the operands gives the same result.
@@ -28,7 +29,7 @@ pub(super) fn snap(pool: &Pool, among: &[usize]) -> Result<Vec<usize>, BooleanEr
                 for dz in -1..=1 {
                     let near = [cell[0] + dx, cell[1] + dy, cell[2] + dz];
                     for &w in cells.get(&near).into_iter().flatten() {
-                        if distance_squared(p, pool.get(w)) <= TOLERANCE_SQUARED {
+                        if distance_squared(p, pool.get(w)) <= WITHIN_TOLERANCE_SQUARED {
                             union(&mut parent, v, w);
                         }
                     }
@@ -76,7 +77,7 @@ fn lexicographic(a: Vector, b: Vector) -> std::cmp::Ordering {
     reason = "model coordinates over the tolerance stay within ±1e10"
 )]
 fn cell_of(p: Vector) -> [i64; 3] {
-    p.map(|c| (c / LINEAR_TOLERANCE).floor() as i64)
+    p.map(|c| (c / WITHIN_TOLERANCE).floor() as i64)
 }
 
 /// Joins the sets of `a` and `b` in a union–find. The smaller root stays root, so the result

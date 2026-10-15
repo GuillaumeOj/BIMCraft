@@ -27,7 +27,7 @@
 //!
 //! [`Solid::union`] combines two solids, [`Solid::difference`] cuts one out of another, for
 //! openings and voids, and [`Solid::intersection`] keeps what they share (GEO-03). Where they meet is decided with the exact
-//! predicates; vertices, faces and gaps closer than [`LINEAR_TOLERANCE`] merge, as the tolerance
+//! predicates; vertices, faces and gaps within [`LINEAR_TOLERANCE`] merge, as the tolerance
 //! policy prescribes. The result is checked like any solid; failures are a [`BooleanError`].
 //!
 //! A [`LocationLine`] says which line of a [`LayerSet`] a wall is drawn along (ARC-30), and a

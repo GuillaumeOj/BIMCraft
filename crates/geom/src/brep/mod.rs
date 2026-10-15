@@ -23,6 +23,7 @@ mod validate;
 
 pub use error::BrepError;
 pub use extrude::ExtrusionError;
+pub(crate) use validate::enclosed_volume;
 
 use crate::Point3;
 

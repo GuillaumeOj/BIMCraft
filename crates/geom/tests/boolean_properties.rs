@@ -5,8 +5,9 @@
 //! cases; boxes at random coordinates, and pairs turned together to any angle, exercise the
 //! general ones. The expected volumes come from the exact overlap of axis-aligned boxes, which a
 //! common rotation leaves unchanged. Grid boxes moved by up to half the tolerance check that
-//! near-coincident faces, edges and corners still merge (ADR 0001); boxes turned independently
-//! check the general position, where only bounds on the volume are known.
+//! near-coincident faces, edges and corners still merge (ADR 0001), and grid boxes moved by up to
+//! four tolerances check features between one and a few tolerances wide; boxes turned
+//! independently check the general position, where only bounds on the volume are known.
 
 use geom::{FaceInput, Point3, Solid};
 use proptest::prelude::*;
@@ -88,6 +89,29 @@ fn nudged_box() -> impl Strategy<Value = Corners> {
         let moved = |c: [f64; 3], by: [i8; 3]| [0, 1, 2].map(|i| c[i] + f64::from(by[i]) * 0.5e-6);
         (moved(min, lo), moved(max, hi))
     })
+}
+
+/// A grid box whose corners are each moved by k × 0.5 µm along each axis, k from −8 to 8: up
+/// to 4 µm, so faces, edges and corners of the two boxes end up between zero and a few
+/// tolerances apart, exactly one tolerance among them.
+fn thin_box() -> impl Strategy<Value = Corners> {
+    let nudge = || prop::array::uniform3(-8_i8..=8);
+    (grid_box(), nudge(), nudge()).prop_map(|((min, max), lo, hi)| {
+        let moved = |c: [f64; 3], by: [i8; 3]| [0, 1, 2].map(|i| c[i] + f64::from(by[i]) * 0.5e-6);
+        (moved(min, lo), moved(max, hi))
+    })
+}
+
+fn thin_cases() -> impl Strategy<Value = Case> {
+    let turn = (0.0..std::f64::consts::TAU, 0.0..std::f64::consts::TAU);
+    prop_oneof![
+        (grid_box(), thin_box()).prop_map(|(a, b)| Case {
+            a,
+            b,
+            turn: (0.0, 0.0)
+        }),
+        (grid_box(), thin_box(), turn).prop_map(|(a, b, turn)| Case { a, b, turn }),
+    ]
 }
 
 fn cases() -> impl Strategy<Value = Case> {
@@ -209,5 +233,26 @@ proptest! {
         prop_assert!((cut - (forward - volume(b))).abs() <= 1e-9 * forward);
         let shared = volume_of(checked(a_solid.intersection(&b_solid))?.as_ref());
         prop_assert!((forward + shared - volume(a) - volume(b)).abs() <= 1e-9 * forward);
+    }
+}
+
+proptest! {
+    #![proptest_config(config())]
+
+    #[test]
+    fn booleans_of_boxes_a_few_tolerances_apart_are_valid(case in thin_cases()) {
+        let (a, b) = (cuboid(case.a, case.turn)?, cuboid(case.b, case.turn)?);
+        let joined = checked(a.union(&b))?;
+        let expected = volume(case.a) + volume(case.b) - overlap(case.a, case.b);
+        // Closing a gap or dropping a layer moves faces by at most the tolerance.
+        prop_assert!((volume_of(joined.as_ref()) - expected).abs() <= 1e-4);
+        let cut = checked(a.difference(&b))?;
+        prop_assert!((volume_of(cut.as_ref()) - (volume(case.a) - overlap(case.a, case.b))).abs() <= 1e-4);
+        let shared = checked(a.intersection(&b))?;
+        prop_assert!((volume_of(shared.as_ref()) - overlap(case.a, case.b)).abs() <= 1e-4);
+        let backward = checked(b.union(&a))?;
+        let counts = |s: Option<&Solid>| s.map(|s| (s.vertices().len(), s.edge_count(), s.face_count(), s.shells().len()));
+        prop_assert_eq!(counts(joined.as_ref()), counts(backward.as_ref()));
+        prop_assert!((volume_of(joined.as_ref()) - volume_of(backward.as_ref())).abs() <= 1e-9 * volume_of(joined.as_ref()).max(1.0));
     }
 }

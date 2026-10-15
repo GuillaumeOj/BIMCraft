@@ -11,13 +11,15 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use super::BooleanError;
 use super::face::{
-    Pool, Projection, TOLERANCE_SQUARED, clean_face, plane, segment_distance_squared, sorted_by_x,
+    Pool, Projection, area_and_centre, clean_face, plane, segment_distance_squared, sorted_by_x,
     vertices_on_edge,
 };
 use super::planar::faces_of;
 use super::snap::{find, snap, union};
+use crate::brep::enclosed_volume;
+use crate::tolerance::{WITHIN_TOLERANCE, WITHIN_TOLERANCE_SQUARED};
 use crate::vector::{Vector, cross, dot, edges, length, scale, sub};
-use crate::{FaceInput, LINEAR_TOLERANCE, Point3, Solid};
+use crate::{FaceInput, Point3, Solid};
 
 /// Faces as rings of pool vertices, the outer ring first.
 pub(super) type Faces = Vec<Vec<Vec<usize>>>;
@@ -38,14 +40,18 @@ pub(super) fn assemble(mut faces: Faces, pool: &mut Pool) -> Result<Option<Solid
     if faces.is_empty() {
         return Ok(None);
     }
-    // Renaming vertices below moves none of them, so the normals hold throughout.
-    let normals: Vec<Vector> = faces.iter().map(|face| plane(face, pool).0).collect();
-    let Some(twins) = pair(&faces, &normals, pool) else {
+    // Renaming vertices below moves none of them, so the planes hold throughout.
+    let planes: Vec<(Vector, Vector)> = faces.iter().map(|face| plane(face, pool)).collect();
+    let Some(twins) = pair(&faces, &planes, pool) else {
         return build(&faces, pool);
     };
     separate_lumps(&mut faces, &twins, pool);
-    let faces = merge_coplanar(&faces, &normals, &twins, pool);
-    build(&remove_collinear(faces, pool), pool)
+    let faces = merge_coplanar(&faces, &planes, &twins, pool);
+    let faces = drop_thin_lumps(remove_collinear(faces, pool), pool);
+    if faces.is_empty() {
+        return Ok(None);
+    }
+    build(&faces, pool)
 }
 
 /// Splits every edge at the vertices of other faces lying on it, within the tolerance.
@@ -106,7 +112,7 @@ impl HalfEdges {
 
 /// Pairs each half-edge with the opposite one across the same lump. `None` if an edge cannot
 /// be paired, which the solid's checks then report.
-fn pair(faces: &Faces, normals: &[Vector], pool: &Pool) -> Option<Vec<usize>> {
+fn pair(faces: &Faces, planes: &[(Vector, Vector)], pool: &Pool) -> Option<Vec<usize>> {
     let half_edges = HalfEdges::new(faces);
     let mut by_edge: BTreeMap<(usize, usize), Vec<usize>> = BTreeMap::new();
     for h in 0..half_edges.origin.len() {
@@ -128,7 +134,7 @@ fn pair(faces: &Faces, normals: &[Vector], pool: &Pool) -> Option<Vec<usize>> {
             .iter()
             .map(|&h| {
                 let along = if forward(&h) { axis } else { scale(axis, -1.0) };
-                let into = cross(normals[half_edges.face(h)], along);
+                let into = cross(planes[half_edges.face(h)].0, along);
                 (libm::atan2(dot(into, y), dot(into, x)), h)
             })
             .collect();
@@ -191,17 +197,27 @@ fn separate_lumps(faces: &mut Faces, twins: &[usize], pool: &mut Pool) {
 }
 
 /// Merges adjacent faces that lie in the same plane within the tolerance and face the same way.
-fn merge_coplanar(faces: &Faces, normals: &[Vector], twins: &[usize], pool: &Pool) -> Faces {
+fn merge_coplanar(
+    faces: &Faces,
+    planes: &[(Vector, Vector)],
+    twins: &[usize],
+    pool: &Pool,
+) -> Faces {
     let half_edges = HalfEdges::new(faces);
     // Whether the two faces, taken as one, are planar within the tolerance: the test the solid's
-    // checks will apply to the merged face. Comparing each face with the other's plane instead
-    // would reject a small face tilted by a rounding error next to a large one.
+    // checks will apply to the merged face. It is not enough on its own: a face a few
+    // tolerances wide, square to its neighbour, would pass, its width split on either side of
+    // the plane fitted to both. So the vertices of both must also lie within the tolerance of
+    // one face's plane; requiring both planes would reject a small face tilted by a rounding
+    // error next to a large one.
     let flat_together = |f: usize, g: usize| {
         let both: Vec<Vec<usize>> = faces[f].iter().chain(&faces[g]).cloned().collect();
-        let (normal, centre) = plane(&both, pool);
-        both.iter()
-            .flatten()
-            .all(|&v| dot(normal, sub(pool.get(v), centre)).abs() <= LINEAR_TOLERANCE)
+        let near = |(normal, centre): (Vector, Vector)| {
+            both.iter()
+                .flatten()
+                .all(|&v| dot(normal, sub(pool.get(v), centre)).abs() <= WITHIN_TOLERANCE)
+        };
+        near(plane(&both, pool)) && (near(planes[f]) || near(planes[g]))
     };
     let mut group: Vec<usize> = (0..faces.len()).collect();
     for (h, &twin) in twins.iter().enumerate() {
@@ -209,7 +225,7 @@ fn merge_coplanar(faces: &Faces, normals: &[Vector], twins: &[usize], pool: &Poo
         // Faces sharing several edges are tested once: later edges find them merged.
         if f < g
             && find(&mut group, f) != find(&mut group, g)
-            && dot(normals[f], normals[g]) > 0.0
+            && dot(planes[f].0, planes[g].0) > 0.0
             && flat_together(f, g)
         {
             union(&mut group, f, g);
@@ -238,7 +254,7 @@ fn merge_coplanar(faces: &Faces, normals: &[Vector], twins: &[usize], pool: &Poo
             }
             _ => {}
         }
-        let projection = Projection::along(normals[f]);
+        let projection = Projection::along(planes[f].0);
         let at = move |v: usize| projection.apply(pool.get(v));
         merged.extend(faces_of(&boundaries[&f], at));
     }
@@ -267,7 +283,8 @@ fn remove_collinear(mut faces: Faces, pool: &Pool) -> Faces {
             }
         })
         .filter(|&(v, u, w)| {
-            segment_distance_squared(pool.get(v), pool.get(u), pool.get(w)) <= TOLERANCE_SQUARED
+            segment_distance_squared(pool.get(v), pool.get(u), pool.get(w))
+                <= WITHIN_TOLERANCE_SQUARED
         })
         .map(|(v, _, _)| v)
         .collect();
@@ -275,6 +292,43 @@ fn remove_collinear(mut faces: Faces, pool: &Pool) -> Faces {
         ring.retain(|v| !removable.contains(v));
     }
     faces
+}
+
+/// Removes the lumps, and the voids, no thicker than the tolerance on average: the solid's checks
+/// would reject them, and the result is regularised, so they vanish (ADR 0001, merge pass
+/// steps 1 and 4). Lumps share no vertex by now, so faces sharing one belong to the same lump.
+fn drop_thin_lumps(faces: Faces, pool: &Pool) -> Faces {
+    let mut lump: Vec<usize> = (0..faces.len()).collect();
+    let mut owner: BTreeMap<usize, usize> = BTreeMap::new();
+    for (f, face) in faces.iter().enumerate() {
+        for &v in face.iter().flatten() {
+            let g = *owner.entry(v).or_insert(f);
+            let (rf, rg) = (find(&mut lump, f), find(&mut lump, g));
+            lump[rf.max(rg)] = rf.min(rg);
+        }
+    }
+    let mut members: BTreeMap<usize, Vec<usize>> = BTreeMap::new();
+    for f in 0..faces.len() {
+        members.entry(find(&mut lump, f)).or_default().push(f);
+    }
+    let thin: BTreeSet<usize> = members
+        .values()
+        .filter(|members| {
+            let planes: Vec<(Vector, Vector)> = members
+                .iter()
+                .map(|&f| area_and_centre(&faces[f], pool))
+                .collect();
+            enclosed_volume(&planes).1
+        })
+        .flatten()
+        .copied()
+        .collect();
+    faces
+        .into_iter()
+        .enumerate()
+        .filter(|(f, _)| !thin.contains(f))
+        .map(|(_, face)| face)
+        .collect()
 }
 
 /// Numbers the used vertices in order and builds the solid, which validates it.
@@ -304,15 +358,15 @@ mod tests {
     use super::*;
     use crate::BrepError;
 
-    fn normals(faces: &Faces, pool: &Pool) -> Vec<Vector> {
-        faces.iter().map(|face| plane(face, pool).0).collect()
+    fn planes(faces: &Faces, pool: &Pool) -> Vec<(Vector, Vector)> {
+        faces.iter().map(|face| plane(face, pool)).collect()
     }
 
     #[test]
     fn an_open_edge_is_reported() {
         let mut pool = Pool::of(vec![[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]]);
         let faces = vec![vec![vec![0, 1, 2]]];
-        assert_eq!(pair(&faces, &normals(&faces, &pool), &pool), None);
+        assert_eq!(pair(&faces, &planes(&faces, &pool), &pool), None);
         assert_eq!(
             assemble(faces, &mut pool),
             Err(BooleanError::InvalidResult(BrepError::OpenEdge { face: 0 }))
@@ -337,7 +391,7 @@ mod tests {
             vec![vec![1, 0, 4]],
             vec![vec![1, 0, 5]],
         ];
-        assert_eq!(pair(&faces, &normals(&faces, &pool), &pool), None);
+        assert_eq!(pair(&faces, &planes(&faces, &pool), &pool), None);
     }
 
     #[test]

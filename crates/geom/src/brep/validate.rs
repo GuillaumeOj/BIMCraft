@@ -2,15 +2,14 @@
 //!
 //! Distances are compared squared, so only the shell areas need a square root (`f64::sqrt` is
 //! exactly rounded, so deterministic: ADR 0003). Every tolerance
-//! is [`LINEAR_TOLERANCE`], applied as ADR 0001 defines it: a face is planar if its vertices lie
-//! within the tolerance of its plane.
+//! is [`LINEAR_TOLERANCE`](crate::LINEAR_TOLERANCE), applied as ADR 0001 defines it: a face is
+//! planar if its vertices lie within the tolerance of its plane, and an edge, a face or a shell
+//! within the tolerance is too small. Within means at most the tolerance, up to rounding, as
+//! everywhere in the kernel.
 
 use super::{BrepError, Shell, Solid};
-use crate::LINEAR_TOLERANCE;
-use crate::tolerance::is_model_coordinate;
+use crate::tolerance::{WITHIN_TOLERANCE, WITHIN_TOLERANCE_SQUARED, is_model_coordinate};
 use crate::vector::{Vector, add, coords, dot, edges, newell, scale, sub};
-
-const TOLERANCE_SQUARED: f64 = LINEAR_TOLERANCE * LINEAR_TOLERANCE;
 
 impl Solid {
     /// Checks every validity rule of the module documentation.
@@ -129,7 +128,7 @@ impl Solid {
             }
             // Both sides have the same length: measure each edge once.
             let d = sub(self.point(target), self.point(edge.origin));
-            if h < edge.twin && dot(d, d) < TOLERANCE_SQUARED {
+            if h < edge.twin && dot(d, d) <= WITHIN_TOLERANCE_SQUARED {
                 return Err(BrepError::ShortEdge {
                     face: self.face_of(h),
                 });
@@ -187,7 +186,7 @@ impl Solid {
                 let longest = longest_edge_squared(ring);
                 // Twice the area over the longest edge bounds the width from above. Holes are
                 // checked too: a narrower ring's orientation is noise.
-                if dot(normal, normal) < TOLERANCE_SQUARED * longest {
+                if dot(normal, normal) <= WITHIN_TOLERANCE_SQUARED * longest {
                     return Err(BrepError::DegenerateFace { face });
                 }
                 if start == 0 {
@@ -197,7 +196,7 @@ impl Solid {
             }
             let normal = ring_normals.iter().fold([0.0; 3], |sum, &n| add(sum, n));
             let length_squared = dot(normal, normal);
-            if length_squared < TOLERANCE_SQUARED * outer_longest {
+            if length_squared <= WITHIN_TOLERANCE_SQUARED * outer_longest {
                 return Err(BrepError::DegenerateFace { face });
             }
             if ring_normals[1..].iter().any(|&n| dot(n, normal) >= 0.0) {
@@ -211,7 +210,7 @@ impl Solid {
                 points.iter().fold([0.0; 3], |sum, &p| add(sum, p)),
                 1.0 / points.len() as f64,
             );
-            let limit = TOLERANCE_SQUARED * length_squared;
+            let limit = WITHIN_TOLERANCE_SQUARED * length_squared;
             if points.iter().any(|&p| {
                 let off_plane = dot(normal, sub(p, centre));
                 off_plane * off_plane > limit
@@ -234,19 +233,9 @@ impl Solid {
         let holes = faces.iter().map(|&f| self.faces[f].rings.len() - 1).sum();
         let genus = genus(vertices, edges, faces.len(), holes)
             .ok_or(BrepError::EulerViolation { shell: index })?;
-        // Each face is the base of a cone from a point of the shell: six times its volume is the
-        // area vector dotted with the height. A shell point, not the origin, keeps products small.
-        let apex = planes[faces[0]].1;
-        let (six_volume, twice_area) = faces.iter().fold((0.0, 0.0), |(v, a), &f| {
-            let (normal, centre) = planes[f];
-            (
-                v + dot(normal, sub(centre, apex)),
-                a + dot(normal, normal).sqrt(),
-            )
-        });
-        let volume = six_volume / 6.0;
-        // Twice the volume over the area is the mean thickness: a slab's area counts both sides.
-        if 4.0 * volume.abs() <= LINEAR_TOLERANCE * twice_area {
+        let shell: Vec<(Vector, Vector)> = faces.iter().map(|&f| planes[f]).collect();
+        let (volume, thin) = enclosed_volume(&shell);
+        if thin {
             return Err(BrepError::ThinShell { shell: index });
         }
         Ok(Shell {
@@ -259,6 +248,24 @@ impl Solid {
     fn point(&self, vertex: usize) -> Vector {
         coords(self.vertices[vertex])
     }
+}
+
+/// The signed volume a closed shell encloses, given the plane of each face as its area vector
+/// (normal to the face, twice its area long) and the centre of its vertices; and whether it is
+/// thinner than the tolerance on average, which no valid shell is.
+pub(crate) fn enclosed_volume(planes: &[(Vector, Vector)]) -> (f64, bool) {
+    // Each face is the base of a cone from a point of the shell: six times its volume is the
+    // area vector dotted with the height. A shell point, not the origin, keeps products small.
+    let apex = planes.first().map_or([0.0; 3], |&(_, centre)| centre);
+    let (six_volume, twice_area) = planes.iter().fold((0.0, 0.0), |(v, a), &(normal, centre)| {
+        (
+            v + dot(normal, sub(centre, apex)),
+            a + dot(normal, normal).sqrt(),
+        )
+    });
+    let volume = six_volume / 6.0;
+    // Twice the volume over the area is the mean thickness: a slab's area counts both sides.
+    (volume, 4.0 * volume.abs() <= WITHIN_TOLERANCE * twice_area)
 }
 
 /// The genus G from the Euler–Poincaré formula of one shell, V − E + F − H = 2 − 2G, where H

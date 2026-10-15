@@ -46,8 +46,8 @@ pub enum BrepError {
         /// Index of the face.
         face: usize,
     },
-    /// An edge is shorter than [`LINEAR_TOLERANCE`](crate::LINEAR_TOLERANCE).
-    #[error("face {face} has an edge shorter than the linear tolerance")]
+    /// An edge is no longer than [`LINEAR_TOLERANCE`](crate::LINEAR_TOLERANCE).
+    #[error("face {face} has an edge within the linear tolerance")]
     ShortEdge {
         /// Index of the face.
         face: usize,
@@ -77,8 +77,8 @@ pub enum BrepError {
         /// Index of the vertex.
         vertex: usize,
     },
-    /// A face is narrower than [`LINEAR_TOLERANCE`](crate::LINEAR_TOLERANCE).
-    #[error("face {face} is narrower than the linear tolerance")]
+    /// A face is no wider than [`LINEAR_TOLERANCE`](crate::LINEAR_TOLERANCE).
+    #[error("face {face} is no wider than the linear tolerance")]
     DegenerateFace {
         /// Index of the face.
         face: usize,
@@ -102,8 +102,8 @@ pub enum BrepError {
         /// Index of the shell.
         shell: usize,
     },
-    /// A shell encloses a volume thinner than [`LINEAR_TOLERANCE`](crate::LINEAR_TOLERANCE) on
-    /// average.
+    /// A shell encloses a volume no thicker than [`LINEAR_TOLERANCE`](crate::LINEAR_TOLERANCE)
+    /// on average.
     #[error("shell {shell} encloses no volume above the linear tolerance")]
     ThinShell {
         /// Index of the shell.

@@ -2,15 +2,16 @@
 //!
 //! Following the tolerance policy, decisions on two straight edges are exact (orient2d). A pair
 //! involving an arc cannot be decided by the predicates, so it is decided in floating point and
-//! rejected when the edges come closer than [`LINEAR_TOLERANCE`]: near-touching profiles fail
-//! instead of producing slivers. Rationale: `docs/dev/adr/0005-profile-validation-with-arcs.md`.
+//! rejected when the edges come within [`LINEAR_TOLERANCE`](crate::LINEAR_TOLERANCE), read as
+//! the solids' checks read it (at most the tolerance, up to rounding): near-touching profiles
+//! fail instead of producing slivers. Rationale: `docs/dev/adr/0005-profile-validation-with-arcs.md`.
 
 use core::f64::consts::{PI, TAU};
 
 use crate::profile::edge::{Arc, Curve, Edge, cross, distance, dot, length, sub};
 use crate::profile::{LoopId, ProfileError};
-use crate::tolerance::is_model_coordinate;
-use crate::{LINEAR_TOLERANCE, Orientation, Point2, orient2d};
+use crate::tolerance::{WITHIN_TOLERANCE, is_model_coordinate};
+use crate::{Orientation, Point2, orient2d};
 
 /// Checks one loop on its own (coordinates, closure and degenerate edges) and returns the
 /// geometry of its edges for the checks between edges.
@@ -50,9 +51,9 @@ fn check_curve(curve: &Curve, loop_id: LoopId, edge: usize) -> Result<(), Profil
             // Distinct ends at the same angle sweep nothing counterclockwise and a full turn
             // clockwise; either way the arc is not what its ends describe.
             let same_angle = !arc.is_full_circle() && (arc.sweep == 0.0 || arc.sweep.abs() >= TAU);
-            if (distance(arc.end, arc.centre) - arc.radius).abs() > LINEAR_TOLERANCE {
+            if (distance(arc.end, arc.centre) - arc.radius).abs() > WITHIN_TOLERANCE {
                 Err(ProfileError::ArcRadiusMismatch { loop_id, edge })
-            } else if arc.radius < LINEAR_TOLERANCE || same_angle {
+            } else if arc.radius <= WITHIN_TOLERANCE || same_angle {
                 Err(ProfileError::DegenerateArc { loop_id, edge })
             } else {
                 Ok(())
@@ -95,7 +96,7 @@ pub(crate) fn check_simple(id: LoopId, curves: &[Curve]) -> Result<(), ProfileEr
     Ok(())
 }
 
-/// Whether two different loops meet, or come closer than the tolerance where arcs are involved.
+/// Whether two different loops meet, or come within the tolerance where arcs are involved.
 pub(crate) fn loops_meet(a: &[Curve], b: &[Curve]) -> bool {
     a.iter()
         .any(|ca| b.iter().any(|cb| curves_meet(ca, cb, &[])))
@@ -165,7 +166,7 @@ fn arc_angle(arc: &Arc, p: Point2, may_split: bool) -> f64 {
     chord_angle(arc.start, arc.end, p, side) + segment_turn
 }
 
-/// Whether two edges meet or, when an arc is involved, come closer than the tolerance. Points
+/// Whether two edges meet or, when an arc is involved, come within the tolerance. Points
 /// within the tolerance of a `shared` end of consecutive edges are not counted.
 fn curves_meet(a: &Curve, b: &Curve, shared: &[Point2]) -> bool {
     if boxes_apart(a.bounds(), b.bounds()) {
@@ -178,7 +179,7 @@ fn curves_meet(a: &Curve, b: &Curve, shared: &[Point2]) -> bool {
             let other_b = if b0 == v { *b1 } else { *b0 };
             folds_back(other_a, *v, other_b)
         }
-        _ => clearance(a, b, shared) < LINEAR_TOLERANCE,
+        _ => clearance(a, b, shared) <= WITHIN_TOLERANCE,
     }
 }
 
@@ -187,10 +188,10 @@ fn curves_meet(a: &Curve, b: &Curve, shared: &[Point2]) -> bool {
 fn boxes_apart(a: [f64; 4], b: [f64; 4]) -> bool {
     let [a_min_x, a_min_y, a_max_x, a_max_y] = a;
     let [b_min_x, b_min_y, b_max_x, b_max_y] = b;
-    a_min_x > b_max_x + LINEAR_TOLERANCE
-        || b_min_x > a_max_x + LINEAR_TOLERANCE
-        || a_min_y > b_max_y + LINEAR_TOLERANCE
-        || b_min_y > a_max_y + LINEAR_TOLERANCE
+    a_min_x > b_max_x + WITHIN_TOLERANCE
+        || b_min_x > a_max_x + WITHIN_TOLERANCE
+        || a_min_y > b_max_y + WITHIN_TOLERANCE
+        || b_min_y > a_max_y + WITHIN_TOLERANCE
 }
 
 /// Exact test of whether the closed segments `a0 a1` and `b0 b1` share a point.
@@ -232,7 +233,7 @@ fn ordered(p: Point2, q: Point2) -> (Point2, Point2) {
 /// and points along common normals). Points near a `shared` end are skipped.
 fn clearance(a: &Curve, b: &Curve, shared: &[Point2]) -> f64 {
     candidates(a, b)
-        .filter(|q| shared.iter().all(|v| distance(*q, *v) > LINEAR_TOLERANCE))
+        .filter(|q| shared.iter().all(|v| distance(*q, *v) > WITHIN_TOLERANCE))
         .map(|q| a.distance_to(q) + b.distance_to(q))
         .fold(f64::INFINITY, f64::min)
 }

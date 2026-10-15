@@ -521,3 +521,118 @@ fn turned_boxes_share_their_overlap() {
     .unwrap();
     assert_close(result.volume(), 1.0);
 }
+
+// Features between one and a few tolerances wide (ADR 0001, "Exactly one tolerance"). Each case
+// below failed before every test read "within the tolerance" the same way.
+
+/// Every operation of `a` and `b`, checked valid: the union, the difference and the
+/// intersection.
+fn all_three(a: &Solid, b: &Solid) -> [Option<Solid>; 3] {
+    [Some(union(a, b)), difference(a, b), intersection(a, b)]
+}
+
+fn volume_of(solid: Option<&Solid>) -> f64 {
+    solid.map_or(0.0, Solid::volume)
+}
+
+#[test]
+fn a_gap_of_exactly_one_tolerance_closes() {
+    // At several positions, so the gap rounds to just under the tolerance at some and just
+    // over at others: it closes everywhere.
+    for x in [0.5, 1.0, 1.5, 2.5, 3.0, 7.5] {
+        let first = cuboid([x - 1.0, 0.0, 0.0], [x, 1.0, 1.0]);
+        let second = cuboid([x + LINEAR_TOLERANCE, 0.0, 0.0], [x + 1.0, 1.0, 1.0]);
+        let result = union(&first, &second);
+        assert_eq!((result.vertices().len(), result.face_count()), (8, 6));
+    }
+}
+
+#[test]
+fn an_overlap_of_exactly_one_tolerance_is_empty() {
+    for z in [0.5, 1.0, 1.5, 2.0, 2.5, 3.0] {
+        let below = cuboid([0.0, 0.0, z - 1.0], [1.0, 1.0, z]);
+        let above = cuboid([0.0, 0.5, z - LINEAR_TOLERANCE], [1.0, 2.0, z + 1.0]);
+        assert!(intersection(&below, &above).is_none());
+        // What the cut leaves is the box, give or take the layer.
+        let cut = difference(&below, &above).unwrap();
+        assert!((cut.volume() - 1.0).abs() <= 2.0 * LINEAR_TOLERANCE);
+    }
+}
+
+#[test]
+fn a_ledge_beside_a_closed_gap_stays_flat() {
+    // The lower box stops 1 µm under the upper one, which closes, and 1.5 µm in from its
+    // front, which leaves a ledge 1.5 µm wide on the upper box's underside. Before, the ledge
+    // kept the upper box's plane on one side and the lower box's on the other: not flat.
+    let upper = cuboid([0.5, 0.0, 2.0], [2.0, 0.5, 3.0]);
+    let lower = cuboid(
+        [1.0, 1.5 * LINEAR_TOLERANCE, 1.5],
+        [2.5, 1.5, 2.0 - LINEAR_TOLERANCE],
+    );
+    let result = union(&upper, &lower);
+    assert_eq!(result.shells().len(), 1);
+    assert!((result.volume() - (0.75 + 1.125)).abs() <= 1e-5);
+}
+
+#[test]
+fn corners_within_the_tolerance_of_each_others_planes_meet() {
+    // The second box's corner lies 1 µm past the first's side and 0.5 µm short of its back:
+    // within the tolerance of both planes, √1.25 µm from the corner. The boxes touch along
+    // an edge, so they stay two lumps; before, the corner was cut onto both edges and left a
+    // face open.
+    let first = cuboid([1.5, 1.5, 2.0], [3.0, 2.5, 2.5]);
+    let second = cuboid(
+        [0.5, 2.5 - 0.5 * LINEAR_TOLERANCE, 2.0],
+        [1.5 + LINEAR_TOLERANCE, 3.5, 3.0],
+    );
+    let [joined, cut, shared] = all_three(&first, &second);
+    let joined = joined.unwrap();
+    assert_eq!(joined.shells().len(), 2);
+    assert!((joined.volume() - 1.75).abs() <= 1e-5);
+    assert!((volume_of(cut.as_ref()) - 0.75).abs() <= 1e-5);
+    assert!(shared.is_none());
+}
+
+#[test]
+fn a_notch_two_tolerances_wide_is_kept() {
+    // The boxes overlap along a 1 m edge, 2 µm deep each way. The notch's end faces are 2 µm
+    // squares, whose middle is 1 µm from the other box's faces: inside it, though within the
+    // tolerance. The overlap itself, a stick 2 µm thick on average 1 µm, vanishes.
+    let first = cuboid([1.0, 0.0, 2.0], [2.5, 0.5, 2.5]);
+    let second = cuboid(
+        [1.5, 0.5 - 2.0 * LINEAR_TOLERANCE, 1.0],
+        [2.5, 2.0, 2.0 + 2.0 * LINEAR_TOLERANCE],
+    );
+    let [joined, cut, shared] = all_three(&first, &second);
+    assert_eq!(joined.unwrap().shells().len(), 1);
+    assert_eq!(cut.unwrap().shells().len(), 1);
+    assert!(shared.is_none());
+}
+
+#[test]
+fn a_step_a_few_tolerances_high_is_not_merged_into_its_neighbours() {
+    // The second box reaches 1.5 µm below the first: the step between their bottoms is a face
+    // 1.5 µm high, square to them. A plane fitted to it and its neighbour passes within the
+    // tolerance of both, but it must not merge with it.
+    let first = cuboid([0.0, 0.5, 1.0], [1.5, 1.5, 1.5]);
+    let second = cuboid(
+        [-0.5 * LINEAR_TOLERANCE, 0.5, 1.0 - 1.5 * LINEAR_TOLERANCE],
+        [0.5, 1.5, 2.5],
+    );
+    let result = union(&first, &second);
+    assert_eq!(result.shells().len(), 1);
+    assert!((result.volume() - 1.25).abs() <= 1e-5);
+}
+
+#[test]
+fn turned_boxes_sharing_planes_through_the_origin() {
+    // Faces of both boxes lie in the same planes, one through the origin: moving a vertex onto
+    // the shared plane must keep its zero coordinates usable by the exact predicates.
+    let turn = (0.133_473_269_484_559_54, 3.034_849_336_434_191);
+    let result = union(
+        &turned([0.0, 1.0, 1.5], [0.5, 1.5, 2.0], turn),
+        &turned([0.0, 0.0, 2.0], [1.0, 1.5, 3.5], turn),
+    );
+    assert_eq!(result.shells().len(), 1);
+    assert_close(result.volume(), 2.25 + 0.125);
+}

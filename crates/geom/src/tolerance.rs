@@ -7,8 +7,24 @@
 pub const MODEL_EXTENT: f64 = 1e4;
 
 /// The kernel's single linear tolerance, 1 µm, in metres. Fixed, never user- or
-/// project-settable, so results are the same everywhere (ENG-04).
+/// project-settable, so results are the same everywhere (ENG-04). A distance is within the
+/// tolerance when it is at most this, up to rounding: a feature exactly 1 µm wide merges.
 pub const LINEAR_TOLERANCE: f64 = 1e-6;
+
+/// The largest distance the kernel reads as zero: [`LINEAR_TOLERANCE`] plus 1 nm for rounding.
+///
+/// A feature exactly one tolerance wide, as entered, is then within the tolerance whichever way
+/// its coordinates round, so every test agrees on it; with the bare tolerance, one test could
+/// round it in and the next out (ADR 0001). The allowance is hundreds of times the rounding of
+/// coordinates within [`MODEL_EXTENT`] and a thousandth of the tolerance.
+pub(crate) const WITHIN_TOLERANCE: f64 = LINEAR_TOLERANCE + ROUNDING;
+
+/// The allowance for rounding in [`WITHIN_TOLERANCE`], 1 nm: below it, two computations of one
+/// distance may disagree.
+pub(crate) const ROUNDING: f64 = 1e-9;
+
+/// [`WITHIN_TOLERANCE`] squared, for comparing squared distances.
+pub(crate) const WITHIN_TOLERANCE_SQUARED: f64 = WITHIN_TOLERANCE * WITHIN_TOLERANCE;
 
 /// Whether a finite coordinate is one the kernel accepts: within [`MODEL_EXTENT`], and zero or
 /// large enough for the exact predicates (tiny non-zero values would break them later).

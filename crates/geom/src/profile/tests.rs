@@ -382,6 +382,20 @@ fn rejects_arcs_closer_than_the_tolerance() {
 }
 
 #[test]
+fn rejects_arcs_exactly_one_tolerance_away() {
+    // Within the tolerance, as the solids' checks read it (ADR 0001): exactly 1 µm is too
+    // close, whichever way the radius rounds.
+    for centre in [0.5, 2.0, 3.5] {
+        let outer = rectangle(centre - 2.0, centre - 2.0, centre + 2.0, centre + 2.0);
+        let touching = circle(centre, centre, 2.0 - crate::LINEAR_TOLERANCE);
+        assert!(matches!(
+            Profile::new(outer, vec![touching]),
+            Err(ProfileError::LoopsIntersect { .. })
+        ));
+    }
+}
+
+#[test]
 fn rejects_holes_that_cross_lie_outside_or_nest() {
     let outer = || rectangle(0.0, 0.0, 10.0, 10.0);
     let crossing = rectangle(8.0, 8.0, 12.0, 9.0);

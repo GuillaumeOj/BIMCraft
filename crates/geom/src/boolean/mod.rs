@@ -3,23 +3,32 @@
 //!
 //! Every operation runs the same steps:
 //!
-//! 1. Each face of one operand is intersected with the faces of the other whose boxes overlap
+//! 1. Faces of the two operands that lie in one plane within the tolerance are put onto exactly
+//!    one plane (merge pass, step 1).
+//! 2. Each face of one operand is intersected with the faces of the other whose boxes overlap
 //!    it. Where an edge crosses a plane, the vertex is computed once and rounded once, and is
 //!    shared by every face along the edge. Coplanar faces exchange their boundaries.
-//! 2. Vertices closer than the tolerance merge (merge pass, step 2).
-//! 3. Each face is cut along those segments into pieces. Whether a cut crosses another is
+//! 3. Vertices within the tolerance merge (merge pass, step 2).
+//! 4. Each face is cut along those segments into pieces. Whether a cut crosses another is
 //!    decided exactly; every piece keeps the plane of its input face.
-//! 4. Each piece is classified against the other operand: inside, outside, or on one of its
+//! 5. Each piece is classified against the other operand: inside, outside, or on one of its
 //!    faces, facing the same way or the opposite way. The operation keeps some classes and drops
 //!    the others; kept pieces of the same face merge back into as few faces as possible.
-//! 5. The kept faces are stitched into a solid: edges split where other faces' vertices lie on
+//! 6. The kept faces are stitched into a solid: edges split where other faces' vertices lie on
 //!    them, lumps that only touch along an edge or at a point get their own vertices, adjacent
-//!    coplanar faces merge, and vertices between collinear edges go (merge pass, steps 1 to 4).
+//!    coplanar faces merge, vertices between collinear edges go, and lumps or voids no thicker
+//!    than the tolerance on average vanish (merge pass, steps 1 to 4).
 //!    The result is checked like any solid; an invalid one is an error, never a panic.
 //!
 //! The result is regularised: pieces of zero thickness, such as a face two operands share, are
 //! dropped.
+//!
+//! Every test reads "within the tolerance" the same way: a distance at most the tolerance, up
+//! to rounding. A feature exactly one tolerance wide is then within it at every step, whichever
+//! way its coordinates round; a step that read it differently from the next would leave a face
+//! bent or open.
 
+mod align;
 mod arrange;
 mod assemble;
 mod classify;
@@ -84,7 +93,7 @@ impl Solid {
     /// The union of two solids: every point in either of them.
     ///
     /// Solids that only touch along an edge or at a point stay separate lumps of the result.
-    /// Gaps narrower than [`crate::LINEAR_TOLERANCE`] close. The result is never empty; it is an
+    /// Gaps no wider than [`crate::LINEAR_TOLERANCE`] close. The result is never empty; it is an
     /// [`Option`] like the other operations' so they can be used alike.
     ///
     /// # Errors
@@ -99,7 +108,7 @@ impl Solid {
     /// Openings and voids in walls and slabs are made this way.
     ///
     /// A cutter flush with a face leaves no skin over the cut, and a cut that would leave a
-    /// layer thinner than [`crate::LINEAR_TOLERANCE`] removes it. A cutter strictly inside
+    /// layer no thicker than [`crate::LINEAR_TOLERANCE`] removes it. A cutter strictly inside
     /// leaves a void. `None` if the cutter covers this solid.
     ///
     /// # Errors
@@ -112,8 +121,8 @@ impl Solid {
 
     /// The intersection of two solids: every point in both of them.
     ///
-    /// Solids that only touch along a face, an edge or a point, or that overlap by less than
-    /// [`crate::LINEAR_TOLERANCE`], have no intersection: `None`.
+    /// Solids that only touch along a face, an edge or a point, or whose overlap is no thicker
+    /// than [`crate::LINEAR_TOLERANCE`] on average, have no intersection: `None`.
     ///
     /// # Errors
     ///
@@ -138,6 +147,7 @@ fn run(first: &Solid, second: &Solid, operation: Operation) -> Result<Option<Sol
         }
     }
     let split = first.face_count();
+    align::align(&mut faces, split, &mut pool);
     let segments = intersect::segments(&faces, split, &mut pool);
     let rename = snap::snap(&pool, &(0..pool.len()).collect::<Vec<_>>())?;
     for face in &mut faces {

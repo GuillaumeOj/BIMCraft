@@ -7,11 +7,10 @@
 
 use std::collections::BTreeSet;
 
-use super::face::{
-    PlanarFace, Pool, TOLERANCE_SQUARED, segment_distance_squared, sorted_by_x, vertices_on_edge,
-};
+use super::face::{PlanarFace, Pool, segment_distance_squared, sorted_by_x, vertices_on_edge};
 use super::planar::{Regions, chain, regions};
 use crate::predicates::orient2d;
+use crate::tolerance::WITHIN_TOLERANCE_SQUARED;
 use crate::vector::{add, distance_squared, dot, edges, scale, sub};
 use crate::{Orientation, Point2};
 
@@ -99,7 +98,7 @@ fn crossing(
     // nearly collinear edges would otherwise cross at an arbitrary point along their overlap.
     let near = |vertex: usize, (start, end): (usize, usize)| {
         segment_distance_squared(pool.get(vertex), pool.get(start), pool.get(end))
-            <= TOLERANCE_SQUARED
+            <= WITHIN_TOLERANCE_SQUARED
     };
     if near(first.0, second)
         || near(first.1, second)
@@ -126,7 +125,7 @@ fn crossing(
     let point = add(start, scale(sub(end, start), fraction));
     let taken = vertices
         .iter()
-        .any(|&vertex| distance_squared(point, pool.get(vertex)) <= TOLERANCE_SQUARED);
+        .any(|&vertex| distance_squared(point, pool.get(vertex)) <= WITHIN_TOLERANCE_SQUARED);
     (!taken).then(|| pool.push(point))
 }
 

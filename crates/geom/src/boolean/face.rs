@@ -2,12 +2,11 @@
 //! the plane they keep from their input face.
 
 use crate::predicates::{MIN_COORDINATE, orient2d};
+use crate::tolerance::{WITHIN_TOLERANCE, WITHIN_TOLERANCE_SQUARED};
 use crate::vector::{
     Vector, add, bounds, coords, cross, distance_squared, dot, edges, length, newell, scale, sub,
 };
-use crate::{LINEAR_TOLERANCE, Orientation, Point2, Solid};
-
-pub(super) const TOLERANCE_SQUARED: f64 = LINEAR_TOLERANCE * LINEAR_TOLERANCE;
+use crate::{Orientation, Point2, Solid};
 
 /// Every vertex of a boolean: those of the operands first, then the constructed ones.
 pub(super) struct Pool {
@@ -51,12 +50,16 @@ impl Pool {
         vertex < self.inputs
     }
 
-    /// Adds a constructed vertex. Components too small for the exact predicates are flushed to
-    /// zero: they are far below the tolerance, and the solid's checks would reject them.
+    /// Adds a constructed vertex, flushed like a moved one.
     pub(super) fn push(&mut self, point: Vector) -> usize {
-        self.points
-            .push(point.map(|c| if c.abs() < MIN_COORDINATE { 0.0 } else { c }));
+        self.points.push(flushed(point));
         self.points.len() - 1
+    }
+
+    /// Moves a vertex. Components too small for the exact predicates are flushed to zero: they
+    /// are far below the tolerance, and the solid's checks would reject them.
+    pub(super) fn set(&mut self, vertex: usize, point: Vector) {
+        self.points[vertex] = flushed(point);
     }
 
     /// Adds a copy of a vertex, for a solid that touches itself there.
@@ -64,6 +67,21 @@ impl Pool {
         self.points.push(self.points[vertex]);
         self.points.len() - 1
     }
+}
+
+fn flushed(point: Vector) -> Vector {
+    point.map(|c| if c.abs() < MIN_COORDINATE { 0.0 } else { c })
+}
+
+/// The axis along which a vector is largest, the first one on a tie.
+pub(super) fn largest_axis(v: Vector) -> usize {
+    (0..3).fold(0, |best, axis| {
+        if v[axis].abs() > v[best].abs() {
+            axis
+        } else {
+            best
+        }
+    })
 }
 
 /// A projection of a plane onto two coordinate axes, keeping the orientation seen from the side
@@ -77,13 +95,7 @@ pub(super) struct Projection {
 impl Projection {
     /// Drops the axis along which the normal is largest, so the projection never degenerates.
     pub(super) fn along(normal: Vector) -> Self {
-        let k = (0..3).fold(0, |best, axis| {
-            if normal[axis].abs() > normal[best].abs() {
-                axis
-            } else {
-                best
-            }
-        });
+        let k = largest_axis(normal);
         let (u, v) = ((k + 1) % 3, (k + 2) % 3);
         let axes = if normal[k] > 0.0 {
             [u, v, k]
@@ -142,6 +154,11 @@ impl PlanarFace {
         (self.min, self.max) = bounds(points).unwrap_or((self.centre, self.centre));
     }
 
+    /// The centre of its vertices, a point of its plane.
+    pub(super) const fn centre(&self) -> Vector {
+        self.centre
+    }
+
     /// The signed distance of a point from the plane, positive outside.
     pub(super) fn distance(&self, p: Vector) -> f64 {
         dot(self.normal, sub(p, self.centre))
@@ -150,9 +167,9 @@ impl PlanarFace {
     /// Where a vertex lies relative to the plane: within the tolerance counts as on it.
     pub(super) fn side(&self, p: Vector) -> i8 {
         let d = self.distance(p);
-        if d > LINEAR_TOLERANCE {
+        if d > WITHIN_TOLERANCE {
             1
-        } else if d < -LINEAR_TOLERANCE {
+        } else if d < -WITHIN_TOLERANCE {
             -1
         } else {
             0
@@ -160,7 +177,7 @@ impl PlanarFace {
     }
 
     /// Whether every vertex of this face lies on the plane of `other`, within the tolerance.
-    fn lies_on(&self, other: &Self, pool: &Pool) -> bool {
+    pub(super) fn lies_on(&self, other: &Self, pool: &Pool) -> bool {
         self.rings
             .iter()
             .flatten()
@@ -184,15 +201,15 @@ impl PlanarFace {
     /// Whether the bounding boxes, grown by the tolerance, overlap.
     pub(super) fn overlaps(&self, other: &Self) -> bool {
         (0..3).all(|i| {
-            self.min[i] <= other.max[i] + LINEAR_TOLERANCE
-                && other.min[i] <= self.max[i] + LINEAR_TOLERANCE
+            self.min[i] <= other.max[i] + WITHIN_TOLERANCE
+                && other.min[i] <= self.max[i] + WITHIN_TOLERANCE
         })
     }
 
     /// Whether the bounding box, grown by the tolerance, contains a point.
     pub(super) fn reaches(&self, p: Vector) -> bool {
         (0..3).all(|i| {
-            self.min[i] - LINEAR_TOLERANCE <= p[i] && p[i] <= self.max[i] + LINEAR_TOLERANCE
+            self.min[i] - WITHIN_TOLERANCE <= p[i] && p[i] <= self.max[i] + WITHIN_TOLERANCE
         })
     }
 
@@ -223,15 +240,17 @@ impl PlanarFace {
         self.contains(pool, self.projection.apply(p))
             || self.rings.iter().any(|ring| {
                 edges(ring).any(|(a, b)| {
-                    segment_distance_squared(p, pool.get(a), pool.get(b)) <= TOLERANCE_SQUARED
+                    segment_distance_squared(p, pool.get(a), pool.get(b))
+                        <= WITHIN_TOLERANCE_SQUARED
                 })
             })
     }
 }
 
-/// The unit normal of a face given as rings of pool vertices (Newell's method, over all its
-/// rings), and the centre of its vertices.
-pub(super) fn plane(rings: &[Vec<usize>], pool: &Pool) -> (Vector, Vector) {
+/// The area vector of a face given as rings of pool vertices (normal to it, twice its area
+/// long, by Newell's method over all its rings), and the centre of its vertices, as the solid's
+/// checks work them out.
+pub(super) fn area_and_centre(rings: &[Vec<usize>], pool: &Pool) -> (Vector, Vector) {
     let area = rings.iter().fold([0.0; 3], |sum, ring| {
         let ring: Vec<Vector> = ring.iter().map(|&v| pool.get(v)).collect();
         add(sum, newell(&ring))
@@ -242,10 +261,13 @@ pub(super) fn plane(rings: &[Vec<usize>], pool: &Pool) -> (Vector, Vector) {
         .fold(([0.0; 3], 0_u32), |(sum, count), &v| {
             (add(sum, pool.get(v)), count + 1)
         });
-    (
-        scale(area, 1.0 / length(area)),
-        scale(sum, 1.0 / f64::from(count)),
-    )
+    (area, scale(sum, 1.0 / f64::from(count)))
+}
+
+/// The unit normal of a face given as rings of pool vertices, and the centre of its vertices.
+pub(super) fn plane(rings: &[Vec<usize>], pool: &Pool) -> (Vector, Vector) {
+    let (area, centre) = area_and_centre(rings, pool);
+    (scale(area, 1.0 / length(area)), centre)
 }
 
 /// Cleans every ring of a face with [`clean_ring`]; a face whose outer ring goes loses its holes
@@ -273,8 +295,8 @@ pub(super) fn sorted_by_x(pool: &Pool, vertices: impl IntoIterator<Item = usize>
 /// come in order along the edge, and only those within the edge's span in `x` are looked at.
 pub(super) fn vertices_on_edge(pool: &Pool, by_x: &[usize], (u, v): (usize, usize)) -> Vec<usize> {
     let (p, q) = (pool.get(u), pool.get(v));
-    let lo = p[0].min(q[0]) - LINEAR_TOLERANCE;
-    let hi = p[0].max(q[0]) + LINEAR_TOLERANCE;
+    let lo = p[0].min(q[0]) - WITHIN_TOLERANCE;
+    let hi = p[0].max(q[0]) + WITHIN_TOLERANCE;
     let start = by_x.partition_point(|&w| pool.get(w)[0] < lo);
     let along = sub(q, p);
     let mut on: Vec<(f64, usize)> = by_x[start..]
@@ -285,9 +307,9 @@ pub(super) fn vertices_on_edge(pool: &Pool, by_x: &[usize], (u, v): (usize, usiz
             let point = pool.get(w);
             w != u
                 && w != v
-                && distance_squared(point, p) > TOLERANCE_SQUARED
-                && distance_squared(point, q) > TOLERANCE_SQUARED
-                && segment_distance_squared(point, p, q) <= TOLERANCE_SQUARED
+                && distance_squared(point, p) > WITHIN_TOLERANCE_SQUARED
+                && distance_squared(point, q) > WITHIN_TOLERANCE_SQUARED
+                && segment_distance_squared(point, p, q) <= WITHIN_TOLERANCE_SQUARED
         })
         .map(|w| (dot(sub(pool.get(w), p), along), w))
         .collect();
