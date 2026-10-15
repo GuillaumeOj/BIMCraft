@@ -3,7 +3,7 @@
 use core_model::{Model, ModelError};
 
 use crate::transaction::{Change, redo_all, undo_all};
-use crate::{ChangeEvent, Command, CommandError, Transaction};
+use crate::{ChangeEvent, Command, CommandError, HistoryEntry, Origin, Transaction};
 
 /// A model and the history of the commands applied to it.
 ///
@@ -20,10 +20,11 @@ pub struct Document<C> {
     undone: Vec<Record<C>>,
 }
 
-/// A command of the history, the changes it made and the event they emitted.
+/// A command of the history, who issued it, the changes it made and the event they emitted.
 #[derive(Clone, Debug)]
 struct Record<C> {
     command: C,
+    origin: Origin,
     changes: Vec<Change>,
     event: ChangeEvent,
 }
@@ -68,6 +69,13 @@ impl<C: Command> Document<C> {
         self.done.iter().map(|record| &record.command)
     }
 
+    /// Every command of the history with its origin (API-05), oldest first: the applied ones,
+    /// then the undone ones in the order a redo would apply them again.
+    pub fn history(&self) -> impl Iterator<Item = HistoryEntry<'_>> {
+        let done = self.done.iter().map(|record| record.entry(false));
+        done.chain(self.undone.iter().rev().map(|record| record.entry(true)))
+    }
+
     /// Whether a command can be undone.
     #[must_use]
     pub fn can_undo(&self) -> bool {
@@ -80,17 +88,18 @@ impl<C: Command> Document<C> {
         !self.undone.is_empty()
     }
 
-    /// Applies `command` as one transaction, records it, and returns what it changed. Commands
-    /// undone before can no longer be redone.
+    /// Applies `command` as one transaction, records it with its `origin`, and returns what it
+    /// changed. Commands undone before can no longer be redone.
     ///
     /// # Errors
     ///
     /// Returns the command's error; the model and the history are then unchanged.
-    pub fn execute(&mut self, command: C) -> Result<ChangeEvent, CommandError> {
+    pub fn execute(&mut self, command: C, origin: Origin) -> Result<ChangeEvent, CommandError> {
         let (changes, event) = Transaction::run(&mut self.model, &command)?;
         self.undone.clear();
         self.done.push(Record {
             command,
+            origin,
             changes,
             event: event.clone(),
         });
@@ -124,6 +133,16 @@ impl<C: Command> Document<C> {
         let event = record.event.clone();
         self.done.push(record);
         Ok(event)
+    }
+}
+
+impl<C: Command> Record<C> {
+    fn entry(&self, undone: bool) -> HistoryEntry<'_> {
+        HistoryEntry {
+            command: self.command.name(),
+            origin: &self.origin,
+            undone,
+        }
     }
 }
 

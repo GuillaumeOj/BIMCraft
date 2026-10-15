@@ -2,6 +2,7 @@ use core_model::StoreError;
 use proptest::prelude::*;
 
 use super::*;
+use crate::Origin;
 use crate::fixtures::{any_command, create_wall, diff, id, model};
 use crate::{ModelCommand, replay};
 
@@ -22,8 +23,8 @@ fn starts_with_nothing_to_undo_or_redo() {
 #[test]
 fn undoes_and_redoes_commands_in_order() {
     let mut document = document();
-    document.execute(create_wall(1)).unwrap();
-    document.execute(create_wall(2)).unwrap();
+    document.execute(create_wall(1), Origin::Ui).unwrap();
+    document.execute(create_wall(2), Origin::Ui).unwrap();
     assert!(document.can_undo());
 
     document.undo().unwrap();
@@ -44,9 +45,9 @@ fn undoes_and_redoes_commands_in_order() {
 #[test]
 fn a_new_command_discards_what_was_undone() {
     let mut document = document();
-    document.execute(create_wall(1)).unwrap();
+    document.execute(create_wall(1), Origin::Ui).unwrap();
     document.undo().unwrap();
-    document.execute(create_wall(2)).unwrap();
+    document.execute(create_wall(2), Origin::Ui).unwrap();
     assert!(!document.can_redo());
     assert_eq!(document.redo(), Err(HistoryError::NothingToRedo));
 }
@@ -54,8 +55,8 @@ fn a_new_command_discards_what_was_undone() {
 #[test]
 fn a_failing_command_changes_neither_the_model_nor_the_history() {
     let mut document = document();
-    document.execute(create_wall(1)).unwrap();
-    document.execute(create_wall(2)).unwrap();
+    document.execute(create_wall(1), Origin::Ui).unwrap();
+    document.execute(create_wall(2), Origin::Ui).unwrap();
     document.undo().unwrap();
     let before = document.model().clone();
 
@@ -67,7 +68,7 @@ fn a_failing_command_changes_neither_the_model_nor_the_history() {
         ],
     };
     assert_eq!(
-        document.execute(failing),
+        document.execute(failing, Origin::Ui),
         Err(CommandError::Model(StoreError::DuplicateId(id(1)).into()))
     );
     assert_eq!(document.model(), &before);
@@ -118,7 +119,7 @@ proptest! {
             let before = document.model().clone();
             let event = match step {
                 Step::Execute(command) => {
-                    let event = document.execute(command.clone());
+                    let event = document.execute(command.clone(), Origin::Ui);
                     if event.is_ok() {
                         done.push(command);
                         undone.clear();

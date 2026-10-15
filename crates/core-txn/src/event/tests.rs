@@ -1,4 +1,5 @@
 use super::*;
+use crate::Origin;
 use crate::fixtures::{
     PSET, Run, batch, component, contain, create_storey, create_wall, delete, diff, id, model,
     real, set, text,
@@ -57,7 +58,7 @@ fn document() -> Document<ModelCommand> {
 /// Executes `command` and checks its event against a full comparison of the model.
 fn execute(document: &mut Document<ModelCommand>, command: ModelCommand) -> ChangeEvent {
     let before = document.model().clone();
-    let event = document.execute(command).unwrap();
+    let event = document.execute(command, Origin::Ui).unwrap();
     assert_eq!(event, diff(&before, document.model()));
     event
 }
