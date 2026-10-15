@@ -17,6 +17,13 @@ describe("compareKeys", () => {
       extra: ["z"],
     });
   });
+
+  it("does not take inherited properties for translated keys", () => {
+    expect(compareKeys({ constructor: "C", toString: "S" }, {})).toEqual({
+      missing: ["constructor", "toString"],
+      extra: [],
+    });
+  });
 });
 
 describe("translateWith", () => {
@@ -34,6 +41,11 @@ describe("translateWith", () => {
 
   it("falls back to the key itself when no file has it", () => {
     expect(translateWith({}, english, "unknown.key")).toBe("unknown.key");
+  });
+
+  it("ignores inherited properties of the message files and parameters", () => {
+    expect(translateWith({}, { m: "{constructor}" }, "m")).toBe("{constructor}");
+    expect(translateWith({}, {}, "toString")).toBe("toString");
   });
 
   it("fills every occurrence of a parameter and leaves unknown placeholders", () => {

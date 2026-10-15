@@ -38,10 +38,15 @@ export function translateWith(
   key: string,
   params: MessageParams = {},
 ): string {
-  const template = messages[key] ?? fallback[key] ?? key;
+  const template = own(messages, key) ?? own(fallback, key) ?? key;
   return template.replace(/\{(\w+)\}/g, (placeholder, name: string) =>
-    String(params[name] ?? placeholder),
+    String(own(params, name) ?? placeholder),
   );
+}
+
+// Own properties only: `constructor` or `toString` must not resolve through Object.prototype.
+function own<T>(record: Readonly<Record<string, T>>, key: string): T | undefined {
+  return Object.hasOwn(record, key) ? record[key] : undefined;
 }
 
 /** Translates `key` into `language`, falling back to English. */
@@ -55,7 +60,7 @@ export function compareKeys(
 ): { missing: string[]; extra: string[] } {
   const notIn = (a: Messages, b: Messages) =>
     Object.keys(a)
-      .filter((key) => !(key in b))
+      .filter((key) => !Object.hasOwn(b, key))
       .sort();
   return { missing: notIn(reference, translation), extra: notIn(translation, reference) };
 }
