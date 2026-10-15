@@ -105,6 +105,10 @@ pub enum PersistError {
     /// the shape this build writes.
     #[error("the project file is damaged")]
     Corrupt,
+    /// The storage cannot keep a rollback journal, so a crash during a save could damage the
+    /// file (PERS-02).
+    #[error("the project storage cannot guarantee safe saves")]
+    NotDurable,
     /// No migration leads to a version the file must pass through.
     #[error("no migration of the \"{namespace}\" schema to version {version}")]
     MissingMigration {
@@ -135,25 +139,78 @@ impl From<rusqlite::Error> for PersistError {
     }
 }
 
-/// Prepares a database for use as a project file.
+/// Prepares a connection and its database for use as a project file.
 ///
-/// An empty database becomes a new project. Everything runs in one transaction, so an interrupted
-/// call leaves the file as it was (PERS-02). A file of an earlier format is accepted unchanged:
-/// it is migrated when it is read or written.
+/// The connection is made crash-safe first (PERS-02): a rollback journal and full syncs, so a
+/// transaction either reaches the disk whole or not at all. An empty database then becomes a
+/// new project, in one transaction, so an interrupted call leaves the file as it was. A file of
+/// an earlier format is accepted unchanged: it is migrated when it is read or written.
 ///
 /// # Errors
 ///
+/// [`PersistError::NotDurable`] when the storage refuses a rollback journal,
 /// [`PersistError::NotAProject`] for a database of another application,
 /// [`PersistError::NewerVersion`] for a file this build cannot read, and
 /// [`PersistError::Database`] when `SQLite` fails.
 pub fn open_project(conn: &mut Connection) -> Result<(), PersistError> {
-    let tx = conn.transaction()?;
-    match stored_version(&tx)? {
-        0 => create_format(&tx)?,
-        found => check_format(found)?,
+    // Checked before the journal mode changes, which rewrites the file header: a file of
+    // another application, or of a newer version, is refused untouched.
+    let found = stored_version(&begin(conn)?)?;
+    check_format(found)?;
+    make_durable(conn)?;
+    if found == 0 {
+        let tx = begin(conn)?;
+        // Checked again inside the transaction that writes.
+        if stored_version(&tx)? == 0 {
+            create_format(&tx)?;
+        }
+        tx.commit()?;
     }
-    tx.commit()?;
     Ok(())
+}
+
+/// Starts a transaction on `conn`.
+///
+/// An interrupt (`sqlite3_interrupt`, a progress handler) can stop `BEGIN` after it took effect:
+/// the call fails but the connection is left inside a transaction that nothing would end. It is
+/// rolled back here, so the connection stays usable.
+fn begin(conn: &Connection) -> Result<Transaction<'_>, PersistError> {
+    conn.unchecked_transaction().map_err(|error| {
+        if !conn.is_autocommit() {
+            // Best effort: the original error is the one worth reporting.
+            let _ = conn.execute_batch("ROLLBACK");
+        }
+        error.into()
+    })
+}
+
+/// Sets the connection up so that a crash at any moment leaves the last committed state.
+///
+/// - `journal_mode = DELETE`: `SQLite` copies every page it is about to change into a rollback
+///   journal before touching the file, and the next connection rolls an interrupted
+///   transaction back from it. Unlike WAL, it needs no shared memory, so it also works on the
+///   browser's OPFS storage, and the project stays one file once closed.
+/// - `synchronous = FULL`: the journal reaches the disk before the file changes, and the file
+///   before the journal is deleted.
+/// - `fullfsync`: on macOS, a sync also flushes the drive's own cache; elsewhere it does
+///   nothing.
+///
+/// An in-memory database keeps its journal in memory; it has no file to protect.
+fn make_durable(conn: &Connection) -> Result<(), PersistError> {
+    let mode: String =
+        conn.pragma_update_and_check(None, "journal_mode", "DELETE", |row| row.get(0))?;
+    let in_memory = conn.path().is_none_or(str::is_empty);
+    if !durable(&mode, in_memory) {
+        return Err(PersistError::NotDurable);
+    }
+    conn.pragma_update(None, "synchronous", "FULL")?;
+    conn.pragma_update(None, "fullfsync", true)?;
+    Ok(())
+}
+
+/// Whether a connection whose journal mode is now `mode` survives a crash.
+fn durable(mode: &str, in_memory: bool) -> bool {
+    mode.eq_ignore_ascii_case("delete") || in_memory && mode.eq_ignore_ascii_case("memory")
 }
 
 fn check_format(found: u32) -> Result<(), PersistError> {
@@ -205,7 +262,7 @@ fn run_format_migrations(
 /// [`PersistError::Database`] when `SQLite` fails, for instance on a database not prepared by
 /// [`open_project`].
 pub fn set_property(conn: &Connection, key: &str, value: &str) -> Result<(), PersistError> {
-    let tx = conn.unchecked_transaction()?;
+    let tx = begin(conn)?;
     upgrade_format(&tx)?;
     tx.execute(
         "INSERT INTO project_property (key, value) VALUES (?1, ?2)
@@ -223,7 +280,7 @@ pub fn set_property(conn: &Connection, key: &str, value: &str) -> Result<(), Per
 /// [`PersistError::Database`] when `SQLite` fails.
 pub fn property(conn: &Connection, key: &str) -> Result<Option<String>, PersistError> {
     // Never committed: reading leaves an older file as it is.
-    let tx = conn.unchecked_transaction()?;
+    let tx = begin(conn)?;
     upgrade_format(&tx)?;
     let value = tx
         .query_row(
@@ -394,6 +451,44 @@ mod tests {
             property(&conn, "name"),
             Err(PersistError::NotAProject)
         ));
+    }
+
+    /// Regression: an interrupt can stop `BEGIN` after it took effect, which left the
+    /// connection inside a transaction and every later save failing.
+    #[test]
+    fn an_interrupted_begin_leaves_the_connection_usable() {
+        let conn = new_project();
+        let mut interrupted = 0;
+        for steps in 1..=8 {
+            let mut fired = false;
+            conn.progress_handler(
+                steps,
+                Some(move || {
+                    let interrupt = !fired;
+                    fired = true;
+                    interrupt
+                }),
+            )
+            .unwrap();
+            let started = begin(&conn).map(drop);
+            conn.progress_handler(0, None::<fn() -> bool>).unwrap();
+            interrupted += usize::from(started.is_err());
+            assert!(conn.is_autocommit(), "after {steps} steps");
+        }
+        assert!(interrupted > 0);
+    }
+
+    #[test]
+    fn only_a_rollback_journal_is_durable() {
+        assert!(durable("delete", false));
+        assert!(durable("memory", true));
+        for mode in ["wal", "memory", "off", "truncate", "persist"] {
+            assert!(!durable(mode, false), "{mode}");
+        }
+        assert_eq!(
+            PersistError::NotDurable.to_string(),
+            "the project storage cannot guarantee safe saves"
+        );
     }
 
     #[test]

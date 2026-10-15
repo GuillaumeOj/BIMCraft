@@ -2,7 +2,7 @@
 
 - Status: Accepted
 - Requirements: PERS-01, PERS-02 (also CORE-05, CORE-12, ARCH-01, ARCH-02, SEC-03)
-- Issues: [#35](https://github.com/GuillaumeOj/BIMCraft/issues/35), [#36](https://github.com/GuillaumeOj/BIMCraft/issues/36) (epic: SQLite project files)
+- Issues: [#35](https://github.com/GuillaumeOj/BIMCraft/issues/35), [#36](https://github.com/GuillaumeOj/BIMCraft/issues/36), [#37](https://github.com/GuillaumeOj/BIMCraft/issues/37) (epic: SQLite project files)
 
 ## Context
 
@@ -51,6 +51,18 @@ Both versions migrate inside the transaction that reads or writes the file, so a
 - **Schema**: the host passes a `Schema`: the current namespace, the resolved migration to each later version (`schema_gen::History`), and the functions its `custom` steps name. A resolved migration lists every change explicitly, so no older schema is needed at run time. Each step becomes table changes: `ALTER TABLE … RENAME` for renames, `CREATE TABLE` or `ADD COLUMN` (filled with the default) for additions, `DROP TABLE` or `DROP COLUMN` for removals, a rewritten column for value changes, `UPDATE … WHERE … IS NULL` for `set_value`, and a call for `custom`.
 - A step that does not fit the file (a missing table or column) means the file does not hold the version it claims: `Corrupt`. A missing migration or custom function is reported as such.
 - Committed fixtures of every file format version and of every version of a sample namespace are opened by the tests; `docs/dev/schema-versions.md` explains how to add a version.
+
+### Crash safety
+
+A crash at any moment of a save leaves the file as the previous save left it (PERS-02):
+
+- `open_project` sets every project connection to `journal_mode = DELETE` and `synchronous = FULL` (plus `fullfsync`, which matters on macOS). Before changing a page of the file, SQLite copies it into a rollback journal and syncs the journal; the commit syncs the file and then deletes the journal. After a crash, the next connection finds the journal and rolls the half-written transaction back. A storage that refuses the rollback journal is refused (`NotDurable`). WAL would also be crash-safe, but it needs shared memory that the browser's OPFS storage does not offer, and leaves extra files next to the project.
+- Every change to a file happens in one transaction: `save_model` migrates, empties and rewrites the tables, and records the version together.
+- Transactions start through one helper that returns the connection to autocommit when `BEGIN` fails after taking effect, which an interrupt can cause; otherwise every later save on that connection would fail.
+
+`crates/persist/tests/crash_safety.rs` injects faults: while a save runs with a one-page cache (so changed pages reach the file before the commit), a hook copies the file and its journal at every row write and at the commit, as a crash at that moment would leave them. Every copy must open and hold the previous save exactly, and some copies must hold a half-written file. A second test interrupts the save after more and more steps and checks the file and the connection after each.
+
+Autosave at a configurable interval, the other half of PERS-02, belongs to the host and is not part of this crate.
 
 ### Hostile files
 

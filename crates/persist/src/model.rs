@@ -6,7 +6,7 @@ use rusqlite::{OptionalExtension, Statement, Transaction};
 
 use crate::layout::{self, EntityTable};
 use crate::migrate::migrate;
-use crate::{Connection, PersistError, Schema, codec, upgrade_format};
+use crate::{Connection, PersistError, Schema, begin, codec, upgrade_format};
 
 /// Writes every object of `store` into the project, replacing the objects saved before, and
 /// records the schema version of `schema.namespace`, the namespace `store` was created with.
@@ -29,7 +29,7 @@ pub fn save_model(
     store: &Store,
 ) -> Result<(), PersistError> {
     schema::validate(schema.namespace).map_err(StoreError::InvalidSchema)?;
-    let tx = conn.transaction()?;
+    let tx = begin(conn)?;
     let tables = prepare_tables(&tx, schema)?;
     let mut inserts = Vec::with_capacity(tables.len());
     for table in &tables {
@@ -81,7 +81,7 @@ pub fn open_model(conn: &mut Connection, schema: &Schema<'_>) -> Result<Store, P
     let mut store = Store::new(schema.namespace)?;
     // Never committed: migrations, and tables `prepare_tables` creates for a new namespace, are
     // rolled back.
-    let tx = conn.transaction()?;
+    let tx = begin(conn)?;
     let mut values = Vec::new();
     for table in prepare_tables(&tx, schema)? {
         let mut select = tx.prepare(&table.select_sql())?;
