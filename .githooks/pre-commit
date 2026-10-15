@@ -1,5 +1,5 @@
 #!/bin/sh
-# Fast checks on staged files. Full checks run in pre-push and CI.
+# Fast checks on staged files. Full checks run in CI.
 set -eu
 
 root=$(git rev-parse --show-toplevel)
