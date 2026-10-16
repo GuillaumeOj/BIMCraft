@@ -6,7 +6,14 @@ all-features = true
 [advisories]
 version = 2
 yanked = "deny"
-ignore = []
+# Keep in sync with .cargo/audit.toml. Each entry says why it cannot be fixed here.
+# RUSTSEC-2024-0429 (glib, unsound) is ignored there only: cargo-deny does not report unsound
+# advisories of dependencies, and an unused ignore here warns.
+ignore = [
+  # Through gtk 0.18 (gtk3-macros), the GTK 3 stack Tauri 2 uses for its Linux webview; no
+  # Tauri 2 release moves off it. A compile-time macro helper only, unmaintained, no flaw known.
+  { id = "RUSTSEC-2024-0370", reason = "proc-macro-error via Tauri 2's GTK 3 stack (Linux), compile time only" },
+]
 
 [licenses]
 version = 2
@@ -39,6 +46,12 @@ allow = ["NCSA"]
 multiple-versions = "warn"
 wildcards = "deny"
 allow-wildcard-paths = true
+# Tauri's dependency tree brings its own versions of common crates (thiserror 1, toml 0.8, syn 1…);
+# they are not ours to unify. Duplicates outside these trees still warn.
+skip-tree = [
+  { crate = "tauri@2.12.1", reason = "the desktop window's own dependency tree" },
+  { crate = "tauri-build@2.7.1", reason = "the desktop window's build-time dependency tree" },
+]
 
 [sources]
 unknown-registry = "deny"

@@ -1,0 +1,24 @@
+[package]
+name = "desktop-app"
+version = "0.0.0"
+description = "The BIMCraft desktop program: the web interface in a Tauri window on a document."
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[[bin]]
+name = "bimcraft"
+path = "src/main.rs"
+
+[dependencies]
+host-desktop = { workspace = true }
+# wry: Tauri's webview runtime (WKWebView, WebView2, WebKitGTK).
+tauri = { workspace = true, features = ["wry"] }
+thiserror = { workspace = true }
+
+[build-dependencies]
+tauri-build = { workspace = true }
+
+[lints]
+workspace = true
