@@ -8,7 +8,6 @@
 use std::sync::{Arc, Mutex, PoisonError};
 
 use api::conformance::run;
-use api::jsonrpc::Server;
 use api::{Transport, TransportError};
 use host_desktop::{DocumentHost, ipc};
 use tauri::ipc::{CallbackFn, InvokeBody};
@@ -27,8 +26,8 @@ struct TauriIpc {
     notifications: Arc<Mutex<Vec<String>>>,
 }
 
-fn connect(server: Server) -> TauriIpc {
-    let app = ipc::serve(mock_builder(), DocumentHost::new(server))
+fn connect(host: DocumentHost) -> TauriIpc {
+    let app = ipc::serve(mock_builder(), host)
         .build(mock_context(noop_assets()))
         .unwrap();
     let notifications = Arc::new(Mutex::new(Vec::new()));
@@ -78,12 +77,12 @@ impl Transport for TauriIpc {
 
 #[test]
 fn the_window_ipc_passes_the_conformance_suite() {
-    assert_eq!(run(connect), Ok(()));
+    assert_eq!(run(|server| connect(DocumentHost::new(server))), Ok(()));
 }
 
 #[test]
 fn a_new_document_is_empty_and_served_to_the_window() {
-    let mut client = connect_to_new_document();
+    let mut client = connect(DocumentHost::open_new().unwrap());
     let response = client
         .send(r#"{"jsonrpc":"2.0","id":1,"method":"history.state","params":{}}"#)
         .unwrap()
@@ -92,18 +91,4 @@ fn a_new_document_is_empty_and_served_to_the_window() {
     assert_eq!(response["id"], 1);
     assert_eq!(response["result"]["can_undo"], false, "{response}");
     assert_eq!(response["result"]["can_redo"], false, "{response}");
-}
-
-fn connect_to_new_document() -> TauriIpc {
-    let app = ipc::serve(mock_builder(), DocumentHost::open_new().unwrap())
-        .build(mock_context(noop_assets()))
-        .unwrap();
-    let webview = WebviewWindowBuilder::new(&app, "main", tauri::WebviewUrl::default())
-        .build()
-        .unwrap();
-    TauriIpc {
-        _app: app,
-        webview,
-        notifications: Arc::default(),
-    }
 }

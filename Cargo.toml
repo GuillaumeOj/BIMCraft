@@ -17,9 +17,9 @@ license = "MIT"
 api = { path = "crates/api" }
 core-model = { path = "crates/core-model" }
 core-txn = { path = "crates/core-txn" }
-host-desktop = { path = "crates/host-desktop" }
 criterion = { version = "=0.8.2", default-features = false }
 express = { path = "crates/express" }
+host-desktop = { path = "crates/host-desktop" }
 # Without the default features, which fetch remote and file `$ref`s over HTTP and TLS.
 jsonschema = { version = "=0.58.3", default-features = false }
 libm = "=0.2.16"

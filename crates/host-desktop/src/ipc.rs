@@ -14,9 +14,10 @@ pub const COMMAND: &str = "api";
 /// The Tauri event that carries a `model.changed` notification to the windows.
 pub const NOTIFICATION: &str = "api://notification";
 
-// Tauri hands commands their arguments by value.
+// Tauri hands commands their arguments by value. `async`: Tauri runs it off the main thread, so a
+// long command never freezes the window; the document's lock keeps messages one at a time.
 #[allow(clippy::needless_pass_by_value)]
-#[tauri::command]
+#[tauri::command(async)]
 fn api<R: Runtime>(
     app: AppHandle<R>,
     host: State<'_, DocumentHost>,
