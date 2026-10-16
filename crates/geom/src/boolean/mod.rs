@@ -168,7 +168,7 @@ fn run(first: &Solid, second: &Solid, operation: Operation) -> Result<Option<Sol
         } else {
             (Operand::Second, &faces[..split])
         };
-        let pieces = arrange::split(face, &segments[index], &chains, &pool);
+        let pieces = arrange::split(face, index, &chains, &pool);
         let keep = |q: Point2| operation.keeps(operand, classify(face.lift(q), face, other, &pool));
         let mut parts = kept_parts(face, &pieces, keep, &pool);
         if operation.reverses(operand) {
