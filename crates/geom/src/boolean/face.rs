@@ -2,11 +2,8 @@
 //! the plane they keep from their input face.
 
 use crate::predicates::{MIN_COORDINATE, orient2d};
-use crate::tolerance::{WITHIN_TOLERANCE, WITHIN_TOLERANCE_SQUARED};
-use crate::vector::{
-    Vector, add, bounds, coords, cross, distance_squared, dot, edges, length, newell, scale, sub,
-    unit,
-};
+use crate::tolerance::WITHIN_TOLERANCE;
+use crate::vector::{Vector, add, bounds, coords, cross, dot, length, newell, scale, sub, unit};
 use crate::{Orientation, Point2, Solid};
 
 /// Every vertex of a boolean: those of the operands first, then the constructed ones.
@@ -235,17 +232,6 @@ impl PlanarFace {
             inside ^ ring_contains(ring.iter().map(|&v| at(v)), q)
         })
     }
-
-    /// Whether a point lies inside the face or within the tolerance of its boundary.
-    pub(super) fn covers(&self, pool: &Pool, p: Vector) -> bool {
-        self.contains(pool, self.projection.apply(p))
-            || self.rings.iter().any(|ring| {
-                edges(ring).any(|(a, b)| {
-                    segment_distance_squared(p, pool.get(a), pool.get(b))
-                        <= WITHIN_TOLERANCE_SQUARED
-                })
-            })
-    }
 }
 
 /// The area vector of a face given as rings of pool vertices (normal to it, twice its area
@@ -281,48 +267,6 @@ pub(super) fn clean_face(rings: &mut Vec<Vec<usize>>) {
         rings.clear();
     }
     rings.retain(|ring| !ring.is_empty());
-}
-
-/// Vertices sorted by `x`, without repeats, for [`vertices_on_edge`].
-pub(super) fn sorted_by_x(pool: &Pool, vertices: impl IntoIterator<Item = usize>) -> Vec<usize> {
-    let mut sorted: Vec<usize> = vertices.into_iter().collect();
-    sorted.sort_by(|&v, &w| pool.get(v)[0].total_cmp(&pool.get(w)[0]).then(v.cmp(&w)));
-    sorted.dedup();
-    sorted
-}
-
-/// The vertices among `by_x` (sorted by [`sorted_by_x`]) that lie on the edge from `u` to `v`,
-/// within the tolerance, and farther than it from both ends: where the edge must be split. They
-/// come in order along the edge, and only those within the edge's span in `x` are looked at.
-pub(super) fn vertices_on_edge(pool: &Pool, by_x: &[usize], (u, v): (usize, usize)) -> Vec<usize> {
-    let (p, q) = (pool.get(u), pool.get(v));
-    let lo = p[0].min(q[0]) - WITHIN_TOLERANCE;
-    let hi = p[0].max(q[0]) + WITHIN_TOLERANCE;
-    let start = by_x.partition_point(|&w| pool.get(w)[0] < lo);
-    let along = sub(q, p);
-    let mut on: Vec<(f64, usize)> = by_x[start..]
-        .iter()
-        .copied()
-        .take_while(|&w| pool.get(w)[0] <= hi)
-        .filter(|&w| {
-            let point = pool.get(w);
-            // Outside the edge's box, grown by the tolerance, a vertex cannot be within it.
-            let reach = |i: usize| {
-                p[i].min(q[i]) - WITHIN_TOLERANCE <= point[i]
-                    && point[i] <= p[i].max(q[i]) + WITHIN_TOLERANCE
-            };
-            reach(1)
-                && reach(2)
-                && w != u
-                && w != v
-                && distance_squared(point, p) > WITHIN_TOLERANCE_SQUARED
-                && distance_squared(point, q) > WITHIN_TOLERANCE_SQUARED
-                && segment_distance_squared(point, p, q) <= WITHIN_TOLERANCE_SQUARED
-        })
-        .map(|w| (dot(sub(pool.get(w), p), along), w))
-        .collect();
-    on.sort_by(|a, b| a.0.total_cmp(&b.0).then(a.1.cmp(&b.1)));
-    on.into_iter().map(|(_, w)| w).collect()
 }
 
 /// A ring with repeated vertices (`u`, `u`) and spikes (`u`, `v`, `u`) removed, all around

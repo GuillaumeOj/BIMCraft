@@ -5,6 +5,11 @@
 //! later be split where the other starts and ends. Segments go to both faces, and each segment
 //! where two planes cross remembers the two faces it lies in, so that the pieces along it can
 //! later be told which side of each face they lie on.
+//!
+//! Every vertex is recorded on the lines it was made on, its supports: an edge holds its ends
+//! and the vertices where it crosses a plane; the line where two planes meet holds the points
+//! where either face's boundary meets the other's plane. Whether a vertex lies on a line is
+//! later read from these, never from its distance to the line.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -18,6 +23,26 @@ pub(super) type Segments = Vec<Vec<(usize, usize)>>;
 
 /// For each segment where the planes of two faces cross, the faces it lies in.
 pub(super) type Cuts = BTreeMap<Line, BTreeSet<usize>>;
+
+/// A line a vertex is known to lie on from how it was made, never from how close it is: an edge
+/// of an operand (its ends in increasing order), or the line where the planes of two faces meet.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub(super) enum Support {
+    Edge(usize, usize),
+    Meet(usize, usize),
+}
+
+/// The vertices on each support: an edge's ends and the vertices where it crosses a plane; the
+/// points where two faces meet a plane-crossing line, each judged on both planes.
+pub(super) type Supports = BTreeMap<Support, BTreeSet<usize>>;
+
+/// The supports with their vertices renamed.
+pub(super) fn renamed_supports(supports: Supports, rename: &[usize]) -> Supports {
+    supports
+        .into_iter()
+        .map(|(support, on)| (support, on.into_iter().map(|v| rename[v]).collect()))
+        .collect()
+}
 
 /// The cuts with their vertices renamed; those whose ends merge go.
 pub(super) fn renamed(cuts: Cuts, rename: &[usize]) -> Cuts {
@@ -34,9 +59,14 @@ pub(super) fn renamed(cuts: Cuts, rename: &[usize]) -> Cuts {
 
 /// Intersects every face of the first operand (`faces[..split]`) with every face of the second
 /// whose bounding box overlaps it.
-pub(super) fn segments(faces: &[PlanarFace], split: usize, pool: &mut Pool) -> (Segments, Cuts) {
+pub(super) fn segments(
+    faces: &[PlanarFace],
+    split: usize,
+    pool: &mut Pool,
+) -> (Segments, Cuts, Supports) {
     let mut out = vec![Vec::new(); faces.len()];
     let mut cuts = Cuts::new();
+    let mut supports = Supports::new();
     let mut crossings = BTreeMap::new();
     let mut neighbours = vec![Vec::new(); pool.len()];
     for (u, v) in faces
@@ -46,6 +76,11 @@ pub(super) fn segments(faces: &[PlanarFace], split: usize, pool: &mut Pool) -> (
     {
         neighbours[u].push(v);
         neighbours[v].push(u);
+        let (a, b) = line(u, v);
+        supports
+            .entry(Support::Edge(a, b))
+            .or_default()
+            .extend([a, b]);
     }
     for (f, g) in candidate_pairs(faces, split) {
         let mut pair = Pair {
@@ -54,17 +89,26 @@ pub(super) fn segments(faces: &[PlanarFace], split: usize, pool: &mut Pool) -> (
             crossings: &mut crossings,
             neighbours: &neighbours,
         };
-        let (coplanar, segments) = pair.meet(f, g);
-        for (u, v) in segments {
+        let meeting = pair.meet(f, g);
+        if !meeting.points.is_empty() {
+            supports.insert(Support::Meet(f, g), meeting.points);
+        }
+        for (u, v) in meeting.segments {
             out[f].push((u, v));
             out[g].push((u, v));
             // Coplanar faces' segments are their own edges, which say where each face lies.
-            if !coplanar && u != v {
+            if !meeting.coplanar && u != v {
                 cuts.entry(line(u, v)).or_default().extend([f, g]);
             }
         }
     }
-    (out, cuts)
+    for (&((a, b), _), &vertex) in &crossings {
+        supports
+            .entry(Support::Edge(a, b))
+            .or_default()
+            .insert(vertex);
+    }
+    (out, cuts, supports)
 }
 
 /// The pairs of a face of the first operand (`faces[..split]`) and a face of the second whose
@@ -105,46 +149,74 @@ struct Pair<'a> {
     neighbours: &'a [Vec<usize>],
 }
 
+/// How two faces meet.
+#[derive(Default)]
+struct Meeting {
+    /// Whether they lie in one plane, within the tolerance.
+    coplanar: bool,
+    /// The segments to insert into both.
+    segments: Vec<(usize, usize)>,
+    /// The points where the boundary of either meets the plane of the other, all on the line
+    /// the planes share.
+    points: BTreeSet<usize>,
+}
+
 impl Pair<'_> {
-    /// Whether the faces are coplanar, and the segments to insert into both.
-    fn meet(&mut self, first: usize, second: usize) -> (bool, Vec<(usize, usize)>) {
+    fn meet(&mut self, first: usize, second: usize) -> Meeting {
         let (one, other) = (&self.faces[first], &self.faces[second]);
         let sides_a = self.sides(one, other);
         let sides_b = self.sides(other, one);
         if apart(&sides_a) || apart(&sides_b) {
-            return (false, Vec::new());
+            return Meeting::default();
         }
         let flat = |sides: &[Vec<i8>]| sides.iter().flatten().all(|&s| s == 0);
         // The same test as `PlanarFace::coplanar`, from the sides already worked out.
         if flat(&sides_a) || flat(&sides_b) {
             let boundaries = one.rings.iter().chain(&other.rings);
-            return (true, boundaries.flat_map(|ring| edges(ring)).collect());
+            return Meeting {
+                coplanar: true,
+                segments: boundaries.flat_map(|ring| edges(ring)).collect(),
+                points: BTreeSet::new(),
+            };
         }
         // Exactly parallel planes with vertices on both sides of the tolerance band share no
         // line: ordering points along a zero direction would join them at random.
         let Some(direction) = meeting_direction(one, other) else {
-            return (false, Vec::new());
+            return Meeting::default();
         };
         let sides_a = self.settled(one, sides_a, other);
         let sides_b = self.settled(other, sides_b, one);
-        let mut points = self.on_plane(first, &sides_a, second);
-        points.extend(self.on_plane(second, &sides_b, first));
+        let one_points = self.on_plane(first, &sides_a, second);
+        let other_points = self.on_plane(second, &sides_b, first);
         let pool = &*self.pool;
-        let mut points: Vec<(f64, usize)> = points
-            .into_iter()
-            .map(|v| (dot(direction, pool.get(v)), v))
+        // Each point toggles whether the line is inside one face or the other, with the
+        // vertices on the plane taken just above it or just below.
+        let mut points: Vec<(f64, usize, [bool; 4])> = (one_points.into_iter())
+            .map(|(v, [up, down])| (v, [up, down, false, false]))
+            .chain((other_points.into_iter()).map(|(v, [up, down])| (v, [false, false, up, down])))
+            .map(|(v, toggles)| (dot(direction, pool.get(v)), v, toggles))
             .collect();
         points.sort_by(|p, q| p.0.total_cmp(&q.0).then(p.1.cmp(&q.1)));
-        points.dedup_by_key(|p| p.1);
-        let segments = points
-            .windows(2)
-            .filter_map(|pair| {
-                let (u, v) = (pair[0].1, pair[1].1);
-                let middle = scale(add(pool.get(u), pool.get(v)), 0.5);
-                (one.covers(pool, middle) && other.covers(pool, middle)).then_some((u, v))
-            })
-            .collect();
-        (false, segments)
+        let mut inside = [false; 4];
+        let mut segments = Vec::new();
+        for (i, &(_, v, toggles)) in points.iter().enumerate() {
+            for (side, toggle) in inside.iter_mut().zip(toggles) {
+                *side ^= toggle;
+            }
+            // Inside or on the boundary of each face: inside it one way or the other.
+            if let Some(&(_, w, _)) = points.get(i + 1)
+                && (inside[0] || inside[1])
+                && (inside[2] || inside[3])
+                && w != v
+            {
+                segments.push((v, w));
+            }
+        }
+        Meeting {
+            coplanar: false,
+            segments,
+            points: points.iter().map(|p| p.1).collect(),
+        }
     }
 
     /// The side of `plane` each vertex of `face` lies on, ring by ring.
@@ -192,15 +264,19 @@ impl Pair<'_> {
     }
 
     /// The points where the boundary of face `f` meets the plane of face `g`: its vertices on
-    /// the plane, and the crossings of its edges.
-    fn on_plane(&mut self, f: usize, sides: &[Vec<i8>], g: usize) -> Vec<usize> {
+    /// the plane, and the crossings of its edges; each with whether the boundary passes from one
+    /// side of the plane to the other there, with the vertices on the plane taken just above it,
+    /// then just below. Taken above, the boundary passes at such a vertex once for each of its
+    /// two edges leading below; taken below, once for each leading above.
+    fn on_plane(&mut self, f: usize, sides: &[Vec<i8>], g: usize) -> Vec<(usize, [bool; 2])> {
         let mut points = Vec::new();
         for (ring, sides) in self.faces[f].rings.iter().zip(sides) {
-            for ((u, v), (su, sv)) in edges(ring).zip(edges(sides)) {
+            let before = sides.iter().copied().cycle().skip(sides.len() - 1);
+            for (((u, v), (su, sv)), sb) in edges(ring).zip(edges(sides)).zip(before) {
                 if su == 0 {
-                    points.push(u);
+                    points.push((u, [(sb < 0) != (sv < 0), (sb > 0) != (sv > 0)]));
                 } else if su * sv < 0 {
-                    points.push(self.crossing(u.min(v), u.max(v), g));
+                    points.push((self.crossing(u.min(v), u.max(v), g), [true, true]));
                 }
             }
         }
@@ -227,4 +303,63 @@ impl Pair<'_> {
 fn apart(sides: &[Vec<i8>]) -> bool {
     let mut all = sides.iter().flatten();
     all.clone().all(|&s| s > 0) || all.all(|&s| s < 0)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The unit square in z = 0 facing up, then a square in x = 0.5 from y = 0.2 to 0.8,
+    /// facing +x, from height `low` to `high`.
+    fn square_and_wall(low: f64, high: f64) -> (Vec<PlanarFace>, Pool) {
+        let pool = Pool::of(vec![
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [1.0, 1.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [0.5, 0.2, low],
+            [0.5, 0.8, low],
+            [0.5, 0.8, high],
+            [0.5, 0.2, high],
+        ]);
+        let faces = vec![
+            PlanarFace::new(vec![vec![0, 1, 2, 3]], &pool),
+            PlanarFace::new(vec![vec![4, 5, 6, 7]], &pool),
+        ];
+        (faces, pool)
+    }
+
+    fn cut(low: f64, high: f64) -> Vec<(usize, usize)> {
+        let (faces, mut pool) = square_and_wall(low, high);
+        segments(&faces, 1, &mut pool).0[0].clone()
+    }
+
+    #[test]
+    fn a_wall_through_a_face_cuts_it_where_both_hold_the_line() {
+        // The wall's edges cross the square's plane at (0.5, 0.2) and (0.5, 0.8); the square's
+        // own edges cross the wall's plane at y = 0 and y = 1, outside the wall.
+        let (faces, mut pool) = square_and_wall(-1.0, 1.0);
+        let (segments, cuts, supports) = segments(&faces, 1, &mut pool);
+        assert_eq!(segments[0].len(), 1);
+        let (u, v) = segments[0][0];
+        let ys = [pool.get(u)[1], pool.get(v)[1]];
+        assert!(ys.contains(&0.2) && ys.contains(&0.8));
+        assert_eq!(cuts[&line(u, v)], [0, 1].into());
+        // Both ends, and the square's crossings beyond the wall, lie on the planes' line.
+        assert_eq!(supports[&Support::Meet(0, 1)].len(), 4);
+    }
+
+    #[test]
+    fn a_wall_standing_on_a_face_cuts_it_along_its_foot() {
+        // The wall's foot lies on the plane: the stretch along it lies on the wall's boundary and
+        // in the square, so it counts whichever side the wall stands on. Hanging below the
+        // square, the wall meets it along its top edge.
+        assert_eq!(cut(0.0, 1.0), [(4, 5)]);
+        assert_eq!(cut(-1.0, 0.0), [(7, 6)]);
+    }
+
+    #[test]
+    fn a_wall_above_a_face_cuts_nothing() {
+        assert!(cut(0.5, 1.0).is_empty());
+    }
 }

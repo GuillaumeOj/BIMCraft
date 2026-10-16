@@ -15,6 +15,8 @@
 //!   two faces along an edge of the operand.
 //! - Pieces joined only by such edges, which the other operand's surface does not meet along an
 //!   edge it can be read from, are classified once, from a point inside the roomiest of them.
+//! - A piece bounded by exactly the same vertices as a piece of a face of the other operand lies
+//!   on that face, whatever its edges say: every one of its vertices lies on both planes.
 //!
 //! A piece read along several edges takes the reading with the widest angle to the half-planes
 //! around its edge, the most reliable one.
@@ -22,14 +24,14 @@
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::f64::consts::{PI, TAU};
 
-use super::arrange::{Line, line};
+use super::arrange::{Line, Pieces, line};
 use super::face::{PlanarFace, Pool};
 use super::intersect::Cuts;
-use super::planar::{OUTSIDE, Regions, interior_point};
+use super::planar::{OUTSIDE, Region, interior_point};
 use crate::Point2;
 use crate::tolerance::{ROUNDING, WITHIN_TOLERANCE, WITHIN_TOLERANCE_SQUARED};
 use crate::vector::{
-    Vector, add, cross, distance_squared, dot, edges, length, lexicographic, scale, sub, unit,
+    Vector, cross, distance_squared, dot, edges, length, lexicographic, scale, sub, unit,
 };
 
 /// Where a piece of face lies relative to the other operand.
@@ -101,22 +103,18 @@ struct Numbering {
 }
 
 impl Numbering {
-    /// A piece lies inside its face if a point inside it does: a line split at a vertex up to
-    /// the tolerance off it bends, and a piece as small as the bend may then lie on the inner
-    /// side of the boundary of both faces along the line.
-    fn new(operands: Operands, pieces: &[Regions]) -> Self {
+    fn new(operands: Operands, pieces: &[Pieces]) -> Self {
         let mut numbering = Self {
             start: Vec::with_capacity(pieces.len()),
             face_of: Vec::new(),
             points: Vec::new(),
         };
-        for (f, regions) in pieces.iter().enumerate() {
+        for (f, cut) in pieces.iter().enumerate() {
             numbering.start.push(numbering.points.len());
             let face = &operands.faces[f];
             let at = |v: usize| face.projection.apply(operands.pool.get(v));
-            for region in &regions.regions {
-                let point =
-                    interior_point(region, at).filter(|&(_, q)| face.contains(operands.pool, q));
+            for (region, &inside) in cut.regions.regions.iter().zip(&cut.inside) {
+                let point = interior_point(region, at).filter(|_| inside);
                 numbering.face_of.push(f);
                 numbering.points.push(point);
             }
@@ -125,10 +123,10 @@ impl Numbering {
     }
 
     /// The pieces on each side of every edge of the pieces inside their faces.
-    fn sides(&self, pieces: &[Regions]) -> BTreeMap<Line, Vec<Side>> {
+    fn sides(&self, pieces: &[Pieces]) -> BTreeMap<Line, Vec<Side>> {
         let mut sides: BTreeMap<Line, Vec<Side>> = BTreeMap::new();
-        for (f, regions) in pieces.iter().enumerate() {
-            for (&(from, to), &region) in &regions.left {
+        for (f, cut) in pieces.iter().enumerate() {
+            for (&(from, to), &region) in &cut.regions.left {
                 if region == OUTSIDE {
                     continue;
                 }
@@ -158,7 +156,7 @@ impl Numbering {
 pub(super) fn classes(
     faces: &[PlanarFace],
     split: usize,
-    pieces: &[Regions],
+    pieces: &[Pieces],
     holding: &BTreeMap<Line, Vec<Line>>,
     cuts: &Cuts,
     pool: &Pool,
@@ -168,6 +166,9 @@ pub(super) fn classes(
     let sides = numbering.sides(pieces);
     let count = numbering.points.len();
     let (mut class, joined) = read_sides(operands, &sides, holding, cuts, count);
+    for (piece, on) in coincident(operands, pieces, &numbering) {
+        class[piece] = Some(on);
+    }
     let known: Vec<usize> = (0..class.len()).filter(|&p| class[p].is_some()).collect();
     spread(&joined, &mut class, known);
     let mut visited = vec![false; count];
@@ -195,8 +196,68 @@ pub(super) fn classes(
     pieces
         .iter()
         .zip(numbering.start)
-        .map(|(regions, s)| class[s..s + regions.regions.len()].to_vec())
+        .map(|(regions, s)| class[s..s + regions.inside.len()].to_vec())
         .collect()
+}
+
+/// The pieces bounded by exactly the same vertices as a piece of a face of the other operand,
+/// with the class that says so: on a face facing the same way if they run round the same way,
+/// the opposite way otherwise. Every vertex of such a piece lies on both planes, so the two
+/// faces coincide over it, however steep the angle between their planes: a piece a tolerance or
+/// two wide where faces meet may lie within the tolerance of both.
+fn coincident(operands: Operands, pieces: &[Pieces], numbering: &Numbering) -> Vec<(usize, Class)> {
+    let mut by_boundary: BTreeMap<Vec<Vec<usize>>, Vec<usize>> = BTreeMap::new();
+    let mut boundaries = Vec::new();
+    for (f, cut) in pieces.iter().enumerate() {
+        for (r, region) in cut.regions.regions.iter().enumerate() {
+            let piece = numbering.start[f] + r;
+            if numbering.points[piece].is_some() {
+                let forward = canonical(region, false);
+                by_boundary.entry(forward).or_default().push(piece);
+                boundaries.push((piece, f, region));
+            }
+        }
+    }
+    let mut on = Vec::new();
+    for (piece, f, region) in boundaries {
+        let other = |&p: &usize| operands.second(numbering.face_of[p]) != operands.second(f);
+        let matched = |reversed: bool| {
+            (by_boundary.get(&canonical(region, reversed)).into_iter())
+                .flatten()
+                .any(other)
+        };
+        if matched(false) {
+            on.push((piece, Class::OnSame));
+        } else if matched(true) {
+            on.push((piece, Class::OnOpposite));
+        }
+    }
+    on
+}
+
+/// A region's rings, run the other way round if `reversed`, in a form that does not depend on
+/// where each starts or on their order: each rotated to its smallest rotation, sorted. Only
+/// rotations starting at the smallest vertex can be smallest, and a ring passing through it
+/// twice is compared from both passes.
+fn canonical(region: &Region, reversed: bool) -> Vec<Vec<usize>> {
+    let mut out: Vec<Vec<usize>> = std::iter::once(&region.outer)
+        .chain(&region.holes)
+        .map(|ring| {
+            let mut ring = ring.clone();
+            if reversed {
+                ring.reverse();
+            }
+            let least = ring.iter().copied().min().unwrap_or_default();
+            let rotated = |start: usize| ring[start..].iter().chain(&ring[..start]).copied();
+            let first = (0..ring.len())
+                .filter(|&i| ring[i] == least)
+                .min_by(|&i, &j| rotated(i).cmp(rotated(j)))
+                .unwrap_or(0);
+            rotated(first).collect()
+        })
+        .collect();
+    out.sort();
+    out
 }
 
 /// Reads the edges of `count` pieces: for each piece, the side read along its edges, and the
@@ -219,7 +280,7 @@ fn read_sides(
     let mut joined: Vec<Vec<usize>> = vec![Vec::new(); count];
     for (&edge, sides) in sides {
         let along_edge = holding.get(&edge).map_or(&[][..], Vec::as_slice);
-        let (near, holds) = holds(edge, along_edge, cuts, &borders, operands);
+        let (near, holds) = holds(along_edge, cuts, &borders);
         // The longest line along the edge gives its direction best. It is at least as long as
         // the edge, so it has a direction wherever the edge is long enough to be read along.
         let (start, end) = along_edge.first().copied().unwrap_or(edge);
@@ -285,23 +346,18 @@ const fn rank(class: Class) -> u8 {
 /// The faces near an edge of the pieces, and those holding it and how. Near are the faces with a
 /// boundary or a cut along one of the lines the edge is part of: an edge another operand's face
 /// comes that close to is not part of this operand's surface only. A face holds the edge if its
-/// boundary runs along such a line, or if it is cut along such a line and the edge lies inside
-/// it: a cut's ends may lie up to the tolerance beyond its faces, and that part holds nothing.
+/// boundary runs along such a line, or if it is cut along such a line: a cut runs only where it
+/// lies inside both faces or on their boundaries.
 fn holds(
-    edge: Line,
     lines: &[Line],
     cuts: &Cuts,
     borders: &BTreeMap<Line, Vec<(usize, usize, usize)>>,
-    Operands { faces, pool, .. }: Operands,
 ) -> (BTreeSet<usize>, BTreeMap<usize, Hold>) {
-    let middle = scale(add(pool.get(edge.0), pool.get(edge.1)), 0.5);
     let (mut near, mut holds) = (BTreeSet::new(), BTreeMap::new());
     for line in lines {
         for &h in cuts.get(line).into_iter().flatten() {
             near.insert(h);
-            if faces[h].contains(pool, faces[h].projection.apply(middle)) {
-                holds.entry(h).or_insert(Hold::Across);
-            }
+            holds.entry(h).or_insert(Hold::Across);
         }
         for &(h, p, q) in borders.get(line).into_iter().flatten() {
             near.insert(h);
@@ -324,9 +380,9 @@ fn surface(holds: &[(usize, Hold)]) -> bool {
     }
 }
 
-/// Gives every piece reached through links from the classified pieces `from`, in order, the
-/// class of the piece it is reached from.
-fn spread(links: &[Vec<usize>], class: &mut [Option<Class>], from: Vec<usize>) {
+/// Gives every item reached through links from the labelled items `from`, in order, the label
+/// of the item it is reached from.
+pub(super) fn spread<T: Copy>(links: &[Vec<usize>], class: &mut [Option<T>], from: Vec<usize>) {
     let mut queue = VecDeque::from(from);
     while let Some(piece) = queue.pop_front() {
         for &next in &links[piece] {
@@ -483,6 +539,7 @@ fn solid_angle(a: Vector, b: Vector, c: Vector) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::boolean::planar::regions;
 
     /// A square from −1 to 1 in x and y, facing up, followed by the given points.
     fn pool_with(points: &[Vector]) -> Pool {
@@ -615,31 +672,16 @@ mod tests {
     }
 
     #[test]
-    fn a_cut_holds_only_the_part_inside_its_faces() {
-        let pool = pool_with(&[
-            [0.0, -1.0, -1.0],
-            [0.0, -1.0, 1.0],
-            [0.0, 1.0, 1.0],
-            [0.0, 1.0, -1.0],
-            [0.0, -0.5, 0.0],
-            [0.0, 0.5, 0.0],
-            [0.0, 1.2, 0.0],
-            [0.0, 1.6, 0.0],
-        ]);
-        let faces = [
-            PlanarFace::new(vec![vec![0, 1, 2, 3]], &pool),
-            PlanarFace::new(vec![vec![4, 5, 6, 7]], &pool),
-        ];
-        let operands = Operands {
-            faces: &faces,
-            split: 1,
-            pool: &pool,
-        };
-        let cuts: Cuts = [((8, 9), [0, 1].into()), ((10, 11), [0, 1].into())].into();
-        let (near, inside) = holds((8, 9), &[(8, 9)], &cuts, &BTreeMap::new(), operands);
-        assert_eq!((near.len(), inside.len()), (2, 2));
-        let (near, beyond) = holds((10, 11), &[(10, 11)], &cuts, &BTreeMap::new(), operands);
-        assert_eq!((near.len(), beyond.len()), (2, 0));
+    fn a_cut_holds_an_edge_across_and_a_boundary_along_it() {
+        // Faces 0 and 1 are cut along (8, 9); face 2 has its own edge there.
+        let cuts: Cuts = [((8, 9), [0, 1].into())].into();
+        let borders = BTreeMap::from([((8, 9), vec![(2, 9, 8)])]);
+        let (near, holding) = holds(&[(8, 9)], &cuts, &borders);
+        assert_eq!(near, [0, 1, 2].into());
+        assert!(matches!(holding[&0], Hold::Across));
+        assert!(matches!(holding[&2], Hold::Boundary(9, 8)));
+        let (near, holding) = holds(&[(10, 11)], &cuts, &borders);
+        assert!(near.is_empty() && holding.is_empty());
     }
 
     #[test]
@@ -662,14 +704,14 @@ mod tests {
 
     #[test]
     fn an_edge_along_a_cut_of_the_other_solid_joins_nothing() {
-        // Two pieces of the square on either side of a cut along x = 0, beyond the end of the
-        // other solid's face there: the cut holds nothing, but the pieces are not joined either.
+        // Two pieces of the square on either side of a cut along x = 0 by the other solid's
+        // face: each takes its side from the cut, and the cut does not join them.
         let pool = pool_with(&[
             [0.0, -1.0, -1.0],
             [0.0, -1.0, 1.0],
-            [0.0, 0.5, 1.0],
-            [0.0, 0.5, -1.0],
-            [0.0, 0.6, 0.0],
+            [0.0, 1.0, 1.0],
+            [0.0, 1.0, -1.0],
+            [0.0, -0.6, 0.0],
             [0.0, 0.9, 0.0],
         ]);
         let faces = [
@@ -691,10 +733,70 @@ mod tests {
         let holding = BTreeMap::from([((8, 9), vec![(8, 9)])]);
         let cuts: Cuts = [((8, 9), [0, 1].into())].into();
         let (read, joined) = read_sides(operands, &sides, &holding, &cuts, 2);
-        assert_eq!(read, [None, None]);
+        // On the left of +y, seen from above, lies −x, away from the other solid.
+        assert_eq!(read, [Some(Class::Outside), Some(Class::Inside)]);
         assert!(joined.iter().all(Vec::is_empty));
         // Without the cut, the edge is the square's own and joins them.
         let (_, joined) = read_sides(operands, &sides, &holding, &Cuts::new(), 2);
         assert_eq!(joined, [vec![1], vec![0]]);
+    }
+
+    /// One face's pieces, all inside it: the regions the given rings bound.
+    fn pieces_of(face: &PlanarFace, rings: &[Vec<usize>], pool: &Pool) -> Pieces {
+        let at = |v: usize| face.projection.apply(pool.get(v));
+        let regions = regions(rings.to_vec(), at);
+        let inside = vec![true; regions.regions.len()];
+        Pieces { regions, inside }
+    }
+
+    #[test]
+    fn pieces_bounded_alike_lie_on_each_other() {
+        // A triangle of each solid's face, with the same corners: running the same way round
+        // they face the same way; the other way round, opposite ways (the first piece matches
+        // both, and the same way round is found first). A piece sharing only two corners lies
+        // on nothing.
+        let pool = Pool::of(vec![
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [1.0, 1.0, 0.0],
+        ]);
+        let faces = [
+            PlanarFace::new(vec![vec![0, 1, 3, 2]], &pool),
+            PlanarFace::new(vec![vec![0, 1, 3, 2]], &pool),
+            PlanarFace::new(vec![vec![0, 2, 3, 1]], &pool),
+        ];
+        let operands = Operands {
+            faces: &faces,
+            split: 1,
+            pool: &pool,
+        };
+        let same = [
+            pieces_of(&faces[0], &[vec![0, 1, 2], vec![1, 3, 2]], &pool),
+            pieces_of(&faces[1], &[vec![0, 1, 2]], &pool),
+            pieces_of(&faces[2], &[vec![0, 2, 1]], &pool),
+        ];
+        let numbering = Numbering::new(operands, &same);
+        assert_eq!(
+            coincident(operands, &same, &numbering),
+            [
+                (0, Class::OnSame),
+                (2, Class::OnSame),
+                (3, Class::OnOpposite),
+            ]
+        );
+    }
+
+    #[test]
+    fn a_ring_through_its_smallest_vertex_twice_has_one_form() {
+        let forms = |ring: &[usize]| {
+            let region = Region {
+                outer: ring.to_vec(),
+                holes: Vec::new(),
+            };
+            canonical(&region, false)
+        };
+        assert_eq!(forms(&[5, 1, 9, 1, 7]), forms(&[1, 7, 5, 1, 9]));
+        assert_eq!(forms(&[5, 1, 9, 1, 7]), [vec![1, 7, 5, 1, 9]]);
     }
 }
