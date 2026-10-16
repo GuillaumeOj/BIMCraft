@@ -1,0 +1,51 @@
+/* Colour tokens from the Penpot library (Light/… and Dark/… colours). contrast.test.ts checks
+   them against WCAG 2.2 AA, so keep every value a #rrggbb literal. */
+:root {
+  color-scheme: light dark;
+  --bc-paper: #fbfbfa;
+  --bc-surface: #ffffff;
+  --bc-raised: #f4f5f6;
+  --bc-hover: #eceef0;
+  --bc-line: #d3d6da;
+  --bc-ink: #1b1d21;
+  --bc-ink-2: #474c55;
+  --bc-muted: #5f6570;
+  --bc-verdigris: #0f6b5e;
+  --bc-on-verdigris: #ffffff;
+  --bc-shadow: 0 4px 16px rgb(0 0 0 / 10%);
+  --bc-font: "IBM Plex Sans", system-ui, sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bc-paper: #1c1e21;
+    --bc-surface: #26282c;
+    --bc-raised: #2e3135;
+    --bc-hover: #363a40;
+    --bc-line: #3a3e44;
+    --bc-ink: #e6e7e9;
+    --bc-ink-2: #b9bdc3;
+    --bc-muted: #9aa0a8;
+    --bc-verdigris: #4db6a3;
+    --bc-on-verdigris: #0e1513;
+    --bc-shadow: 0 4px 16px rgb(0 0 0 / 40%);
+  }
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font: 400 13px / 1.2 var(--bc-font);
+  color: var(--bc-ink);
+  background: var(--bc-paper);
+}
+
+:focus-visible {
+  outline: 2px solid var(--bc-verdigris);
+  outline-offset: 2px;
+}
