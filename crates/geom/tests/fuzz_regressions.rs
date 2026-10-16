@@ -211,8 +211,8 @@ fn check_booleans(a: &Solid, b: &Solid) -> Result<(), BooleanError> {
 }
 
 /// `fuzz/seeds/extruded_boolean/sliver-along-a-shared-edge` (the input CI found on #255): the
-/// prisms of `a_triangle_a_few_tolerances_wide_beside_an_edge_closes`, the first slanted the
-/// other way. Each face split the lines it shares with its neighbours on its own, at the
+/// profiles of `a_triangle_a_few_tolerances_wide_beside_an_edge_closes`, extruded in other
+/// directions. Each face split the lines it shares with its neighbours on its own, at the
 /// vertices near them in that face only, so two faces along one line could split it at
 /// different vertices; their pieces' edges did not match and the union was left with an open
 /// edge.
@@ -256,7 +256,7 @@ fn a_needle_on_a_corner_splits_the_edges_there_alike() {
             (-1, 0, 253),
             (82, 45, 55),
         ),
-        // `…-d` (`old-eede88c0`): the needle starts 0.75 µm lower; the union had a degenerate
+        // `…-d` (`old-eede88c0`): the needle starts 1.9 µm lower; the union had a degenerate
         // ring.
         (
             [(69, -95, 229), (59, 122, 255), (0, 0, 0)],

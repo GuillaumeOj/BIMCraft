@@ -74,11 +74,12 @@ fn lexicographic(a: Vector, b: Vector) -> std::cmp::Ordering {
         .then(a[2].total_cmp(&b[2]))
 }
 
+/// The cell one tolerance wide holding a point.
 #[expect(
     clippy::cast_possible_truncation,
     reason = "model coordinates over the tolerance stay within ±1e10"
 )]
-fn cell_of(p: Vector) -> [i64; 3] {
+pub(super) fn cell_of(p: Vector) -> [i64; 3] {
     p.map(|c| (c / WITHIN_TOLERANCE).floor() as i64)
 }
 
