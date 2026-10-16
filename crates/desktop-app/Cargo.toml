@@ -13,8 +13,15 @@ path = "src/main.rs"
 
 [dependencies]
 host-desktop = { workspace = true }
-# wry: Tauri's webview runtime (WKWebView, WebView2, WebKitGTK).
-tauri = { workspace = true, features = ["wry"] }
+# Tauri's default window features, less dbus and dynamic-acl, which nothing uses: wry, the
+# webview runtime (WKWebView, WebView2, WebKitGTK); x11, for Linux X11 sessions as well as
+# Wayland; compression of the embedded UI; Windows' version 6 common controls.
+tauri = { workspace = true, features = [
+  "wry",
+  "x11",
+  "compression",
+  "common-controls-v6",
+] }
 thiserror = { workspace = true }
 
 [build-dependencies]
