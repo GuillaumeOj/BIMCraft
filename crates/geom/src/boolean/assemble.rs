@@ -1,7 +1,5 @@
 //! Turning the kept pieces of faces into a valid solid: the rest of the merge pass of ADR 0001.
 //!
-//! - Vertices lying on an edge of another face split that edge, so neighbouring faces share
-//!   their edges exactly.
 //! - Where more than two faces meet at an edge (lumps touching along it), each side is paired
 //!   with the face across the same lump; lumps touching at an edge or a point then get their own
 //!   copies of the vertices, so no non-manifold edge or vertex is created.
@@ -14,7 +12,6 @@ use std::collections::{BTreeMap, BTreeSet};
 use super::BooleanError;
 use super::face::{
     Pool, Projection, area_and_centre, clean_face, plane, ring_contains, segment_distance_squared,
-    sorted_by_x, vertices_on_edge,
 };
 use super::planar::{faces_of, regions};
 use super::snap::{find, snap};
@@ -38,7 +35,6 @@ pub(super) fn assemble(mut faces: Faces, pool: &mut Pool) -> Result<Option<Solid
     for vertex in faces.iter_mut().flatten().flatten() {
         *vertex = rename[*vertex];
     }
-    split_at_vertices(&mut faces, pool);
     clean(&mut faces);
     if faces.is_empty() {
         return Ok(None);
@@ -67,19 +63,6 @@ pub(super) fn assemble(mut faces: Faces, pool: &mut Pool) -> Result<Option<Solid
 
 fn planes_of(faces: &Faces, pool: &Pool) -> Vec<(Vector, Vector)> {
     faces.iter().map(|face| plane(face, pool)).collect()
-}
-
-/// Splits every edge at the vertices of other faces lying on it, within the tolerance.
-fn split_at_vertices(faces: &mut Faces, pool: &Pool) {
-    let by_x = sorted_by_x(pool, faces.iter().flatten().flatten().copied());
-    for ring in faces.iter_mut().flatten() {
-        let mut split = Vec::with_capacity(ring.len());
-        for edge in edges(ring) {
-            split.push(edge.0);
-            split.extend(vertices_on_edge(pool, &by_x, edge));
-        }
-        *ring = split;
-    }
 }
 
 /// Drops repeated vertices and rings too short to bound anything, then the faces left empty.

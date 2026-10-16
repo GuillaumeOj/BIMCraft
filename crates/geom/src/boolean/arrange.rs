@@ -1,83 +1,135 @@
-//! Splitting a face along the segments the other operand left on it.
+//! Splitting faces along the segments the other operand left on them.
 //!
-//! The face's boundary and the segments are noded: edges that cross are split at a new vertex
-//! (crossings decided with the exact `orient2d`), and edges passing within the tolerance of a
-//! vertex are split there. The result is planar, so following its edges gives the regions the
-//! face is cut into.
+//! Every line, an edge of a face or a segment, is noded once for all the faces along it: split
+//! where it crosses another line of a face it lies in (decided with the exact `orient2d`), and at
+//! every vertex within the tolerance of it, such as where it crosses a plane of the other
+//! operand. Two faces sharing a line then split it the same way, so their pieces meet edge to
+//! edge without a later pass splitting edges to make them agree. Each face's lines, so split,
+//! are planar, and following them gives the regions the face is cut into.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use super::face::{PlanarFace, Pool, segment_distance_squared, sorted_by_x, vertices_on_edge};
+use super::intersect::Segments;
 use super::planar::{Regions, chain, regions};
 use crate::predicates::orient2d;
 use crate::tolerance::WITHIN_TOLERANCE_SQUARED;
 use crate::vector::{add, distance_squared, dot, edges, scale, sub};
 use crate::{Orientation, Point2};
 
-/// Cuts a face along segments; the regions include those outside the face, if segments reach
-/// there.
-pub(super) fn split(face: &PlanarFace, segments: &[(usize, usize)], pool: &mut Pool) -> Regions {
-    let mut lines: BTreeSet<(usize, usize)> = BTreeSet::new();
-    for (u, v) in face
+/// A line between two vertices, its ends in increasing order.
+type Line = (usize, usize);
+
+/// For every line of every face, the vertices splitting it, in order from its first end.
+pub(super) struct Chains(BTreeMap<Line, Vec<usize>>);
+
+/// The lines of a face: its edges and the segments cut on it, without repeats.
+fn lines_of(face: &PlanarFace, segments: &[(usize, usize)]) -> Vec<Line> {
+    let lines: BTreeSet<Line> = face
         .rings
         .iter()
         .flat_map(|ring| edges(ring))
         .chain(segments.iter().copied())
-    {
-        if u != v {
-            lines.insert((u.min(v), u.max(v)));
+        .filter(|&(u, v)| u != v)
+        .map(|(u, v)| (u.min(v), u.max(v)))
+        .collect();
+    lines.into_iter().collect()
+}
+
+/// Nodes the lines of all faces once: each is split at its crossings with the other lines of
+/// each face it lies in, then at every vertex of any line or crossing within the tolerance of it.
+/// Vertices of other faces count too: a corner of one operand on an edge of the other splits it
+/// even where no face holds both.
+pub(super) fn node(faces: &[PlanarFace], segments: &Segments, pool: &mut Pool) -> Chains {
+    let mut splits: BTreeMap<Line, BTreeSet<usize>> = BTreeMap::new();
+    let mut vertices = BTreeSet::new();
+    let lines: Vec<Vec<Line>> = faces
+        .iter()
+        .zip(segments)
+        .map(|(face, segments)| lines_of(face, segments))
+        .collect();
+    for &(u, v) in lines.iter().flatten() {
+        splits.entry((u, v)).or_default();
+        vertices.extend([u, v]);
+    }
+    // Two lines crossing in several faces, such as edges of coplanar faces, are crossed once.
+    let mut crossed: BTreeSet<(Line, Line)> = BTreeSet::new();
+    for (face, lines) in faces.iter().zip(&lines) {
+        let at = |pool: &Pool, v: usize| face.projection.apply(pool.get(v));
+        for (first, second) in pairs_of_boxes(lines, |v| at(pool, v)) {
+            if !crossed.insert((first, second)) {
+                continue;
+            }
+            if let Some(vertex) = crossing(first, second, &vertices, pool, &at) {
+                for line in [first, second] {
+                    splits.entry(line).or_default().insert(vertex);
+                }
+                vertices.insert(vertex);
+            }
         }
     }
-    let lines: Vec<(usize, usize)> = lines.into_iter().collect();
-    let mut cuts: Vec<Vec<usize>> = vec![Vec::new(); lines.len()];
-    let mut vertices: BTreeSet<usize> = lines.iter().flat_map(|&(u, v)| [u, v]).collect();
-    let at = |pool: &Pool, v: usize| face.projection.apply(pool.get(v));
-    // Sort and sweep along x, so only lines whose boxes overlap are compared.
+    let by_x = sorted_by_x(pool, vertices);
+    let chains = splits
+        .into_iter()
+        .map(|((u, v), mut split)| {
+            split.extend(vertices_on_edge(pool, &by_x, (u, v)));
+            let (p, d) = (pool.get(u), sub(pool.get(v), pool.get(u)));
+            let along = |w: usize| dot(sub(pool.get(w), p), d);
+            let mut chain: Vec<usize> = split.into_iter().collect();
+            chain.sort_by(|&w, &x| along(w).total_cmp(&along(x)).then(w.cmp(&x)));
+            ((u, v), chain)
+        })
+        .collect();
+    Chains(chains)
+}
+
+/// The pairs of lines, as given and in order, whose boxes in the plane overlap. Lines are
+/// sorted and swept along x, so only those overlapping in x are compared.
+fn pairs_of_boxes(lines: &[Line], at: impl Fn(usize) -> Point2) -> Vec<(Line, Line)> {
     let boxes: Vec<[f64; 4]> = lines
         .iter()
         .map(|&(u, v)| {
-            let (p, q) = (at(pool, u), at(pool, v));
+            let (p, q) = (at(u), at(v));
             [p.x.min(q.x), p.x.max(q.x), p.y.min(q.y), p.y.max(q.y)]
         })
         .collect();
     let mut order: Vec<usize> = (0..lines.len()).collect();
     order.sort_by(|&i, &j| boxes[i][0].total_cmp(&boxes[j][0]).then(i.cmp(&j)));
+    let mut pairs = Vec::new();
     for (k, &i) in order.iter().enumerate() {
         for &j in order[k + 1..]
             .iter()
             .take_while(|&&j| boxes[j][0] <= boxes[i][1])
         {
-            if boxes[j][2] > boxes[i][3] || boxes[i][2] > boxes[j][3] {
-                continue;
-            }
-            if let Some(vertex) = crossing(lines[i], lines[j], &vertices, pool, &at) {
-                cuts[i].push(vertex);
-                cuts[j].push(vertex);
-                vertices.insert(vertex);
+            if boxes[j][2] <= boxes[i][3] && boxes[i][2] <= boxes[j][3] {
+                pairs.push((lines[i.min(j)], lines[i.max(j)]));
             }
         }
     }
-    let by_x = sorted_by_x(pool, vertices.iter().copied());
+    pairs
+}
+
+/// Cuts a face along segments, from the lines as [`node`] split them; the regions include those
+/// outside the face, if segments reach there.
+pub(super) fn split(
+    face: &PlanarFace,
+    segments: &[(usize, usize)],
+    chains: &Chains,
+    pool: &Pool,
+) -> Regions {
     let mut pieces = BTreeSet::new();
-    for (&(u, v), cuts) in lines.iter().zip(&mut cuts) {
-        let (p, d) = (pool.get(u), sub(pool.get(v), pool.get(u)));
-        let along = |w: usize| dot(sub(pool.get(w), p), d);
-        cuts.extend(vertices_on_edge(pool, &by_x, (u, v)));
-        cuts.sort_by(|&w, &x| along(w).total_cmp(&along(x)).then(w.cmp(&x)));
-        cuts.dedup();
+    for (u, v) in lines_of(face, segments) {
         let stops: Vec<usize> = std::iter::once(u)
-            .chain(cuts.iter().copied())
+            .chain(chains.0[&(u, v)].iter().copied())
             .chain(std::iter::once(v))
             .collect();
         for pair in stops.windows(2) {
-            if pair[0] != pair[1] {
-                pieces.insert((pair[0], pair[1]));
-                pieces.insert((pair[1], pair[0]));
-            }
+            pieces.insert((pair[0], pair[1]));
+            pieces.insert((pair[1], pair[0]));
         }
     }
-    let pool = &*pool;
-    regions(chain(&pieces, |v| at(pool, v)), |v| at(pool, v))
+    let at = |v: usize| face.projection.apply(pool.get(v));
+    regions(chain(&pieces, at), at)
 }
 
 /// The vertex where two edges cross in their interiors, if they do. The decision is exact; the
@@ -143,7 +195,9 @@ mod tests {
             [0.0, 1.0, 0.0],
         ]);
         let face = PlanarFace::new(vec![vec![0, 1, 2, 3]], &pool);
-        let pieces = split(&face, &[(0, 2), (1, 3)], &mut pool);
+        let segments = vec![vec![(0, 2), (1, 3)]];
+        let chains = node(std::slice::from_ref(&face), &segments, &mut pool);
+        let pieces = split(&face, &segments[0], &chains, &pool);
         assert_eq!(pieces.regions.len(), 4);
         assert!(distance_squared(pool.get(4), [0.5, 0.5, 0.0]) < 1e-30);
         assert!(
