@@ -1,6 +1,6 @@
 //! Merging vertices within the tolerance (ADR 0001, merge pass step 2).
 
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 use super::BooleanError;
 use super::face::Pool;
@@ -17,10 +17,12 @@ const CHAIN_LIMIT: f64 = 10.0 * LINEAR_TOLERANCE;
 /// choice depends only on positions, so swapping the operands gives the same result.
 ///
 /// Only the vertices in `among` take part; every other vertex keeps its own name. Candidates
-/// come from a hash of cells one tolerance wide, never from comparing all pairs.
+/// come from a grid of cells one tolerance wide, never from comparing all pairs.
 pub(super) fn snap(pool: &Pool, among: &[usize]) -> Result<Vec<usize>, BooleanError> {
     let mut parent: Vec<usize> = (0..pool.len()).collect();
-    let mut cells: HashMap<[i64; 3], Vec<usize>> = HashMap::new();
+    // Ordered, not hashed: a per-process hash seed would change the fuzzer's coverage feedback,
+    // so a seeded fuzz run would not explore the same inputs twice.
+    let mut cells: BTreeMap<[i64; 3], Vec<usize>> = BTreeMap::new();
     for &v in among {
         let p = pool.get(v);
         let cell = cell_of(p);

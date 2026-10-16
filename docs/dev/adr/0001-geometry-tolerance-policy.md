@@ -62,7 +62,7 @@ Every boolean ends with the same deterministic clean-up:
 3. **Faces.** Adjacent faces with compatible orientation merge into one face when they are coplanar: always if they keep the same input plane, otherwise if they are coplanar within the tolerance, taken as one face and against the plane of one of them. A face a few tolerances wide, square to its neighbour, is within the tolerance of a plane fitted to both, but not of the neighbour's plane: it stays. Faces already merged are tested as a group, so a face a few tolerances wide lying within the tolerance of two neighbours that are not coplanar joins one of them at most, never both into one bent face.
 4. **Slivers.** Faces narrower than the tolerance everywhere are removed. Booleans are **regularised**: the result is the closure of the interior, so lower-dimensional pieces (shared faces, edges or points) are dropped.
 
-Candidate pairs are never found by comparing everything with everything: vertices go through a spatial hash with cells one tolerance wide, and faces are bucketed by the input plane they keep.
+Candidate pairs are never found by comparing everything with everything: vertices go through an ordered grid of cells one tolerance wide (ordered, not hashed, so runs are reproducible), and faces are bucketed by the input plane they keep.
 
 The B-rep validity checks (#50) then run on the result. A failure returns a typed error, never a panic.
 
