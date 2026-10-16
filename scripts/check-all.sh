@@ -18,6 +18,7 @@ require() {
 }
 has_rust() { ls crates/*/Cargo.toml >/dev/null 2>&1; }
 has_ui() { [ -f ui/package.json ]; }
+has_e2e() { [ -f ui/playwright.config.ts ]; }
 has_fuzz() { [ -f fuzz/Cargo.toml ]; }
 in_scope() { [ -z "${CHECK_CRATES:-}" ] || case " $CHECK_CRATES " in *" $1 "*) true ;; *) false ;; esac; }
 packages() { if [ -n "${CHECK_CRATES:-}" ]; then printf -- '--package %s ' $CHECK_CRATES; else echo --workspace; fi; }
@@ -155,7 +156,7 @@ check_ui() {
 }
 
 check_e2e() {
-  has_ui || { step "E2E: no UI yet, skipped"; return; }
+  has_e2e || { step "E2E: no Playwright tests yet, skipped"; return; }
   step "UI: end-to-end tests"
   (cd ui && bun install --frozen-lockfile && bunx playwright test)
 }
