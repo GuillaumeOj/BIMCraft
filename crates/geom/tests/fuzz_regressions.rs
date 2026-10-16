@@ -314,3 +314,238 @@ fn a_thin_piece_takes_its_side_from_its_edges() {
         assert_eq!(check_booleans(&prism, &needle), Ok(()));
     }
 }
+
+/// A lens of the needle family, its exponent and direction, then the needle's start, exponent
+/// and direction, as in `a_needle_on_a_corner_splits_the_edges_there_alike`.
+type NeedleCase = (
+    [(i8, i8, u8); 3],
+    i32,
+    (i8, i8, i8),
+    (i8, i8, u8),
+    i32,
+    (i8, i8, i8),
+);
+
+/// Checks every operation of each needle on its lens, as the fuzz target does.
+fn check_needles(cases: &[NeedleCase]) {
+    for &(lens, exponent, direction, needle, needle_exponent, needle_direction) in cases {
+        let prism = raw_prism(&lens, exponent, direction);
+        let needle = raw_prism(&[needle], needle_exponent, needle_direction);
+        let checked = prism.zip(needle).map(|(a, b)| check_booleans(&a, &b));
+        assert_eq!(checked, Some(Ok(())));
+    }
+}
+
+/// `fuzz/seeds/extruded_boolean/needle-on-a-lens-corner-h` to `…-o`: needles on lens corners
+/// again. Lines were split at every vertex within the tolerance of them, though only a vertex
+/// made on a line lies on it: one up to the tolerance off it bent the line there, after the
+/// crossings had been decided on the straight line, and the cuts near the corner went missing.
+/// A line is now split only at the vertices made on it, an edge only at the points made on that
+/// edge.
+#[test]
+fn a_line_is_split_only_at_the_vertices_made_on_it() {
+    check_needles(&[
+        // `…-h` (`ci-pr257-needle`, the input CI found on #257): the union had a degenerate
+        // ring.
+        (
+            [(35, 41, 5), (-95, 65, 122), (0, 0, 0)],
+            -6,
+            (42, -1, 28),
+            (0, -1, 255),
+            -18,
+            (90, 45, 54),
+        ),
+        // `…-i` (`crash-41d06295…`): the union had a non-manifold edge.
+        (
+            [(65, -93, 41), (49, -1, 5), (0, 0, 0)],
+            -6,
+            (42, 48, 28),
+            (0, -1, 255),
+            -18,
+            (90, -1, 55),
+        ),
+        // `…-j` (`crash-7218ba65c72b2f1dff605043c880c302c20bbc3c`): the union had a non-manifold edge.
+        (
+            [(65, -95, 165), (35, 0, 255), (0, 0, 122)],
+            -6,
+            (42, -1, 28),
+            (0, -1, 255),
+            -18,
+            (90, 45, 54),
+        ),
+        // `…-k` (`crash-8bd71d27…`): the union had an open edge.
+        (
+            [(-63, -95, 165), (35, 122, 1), (0, 0, 1)],
+            -6,
+            (42, 0, 28),
+            (-1, -1, 255),
+            -18,
+            (76, -1, 52),
+        ),
+        // `…-l` (`crash-b6fd7d0c…`): a needle four times wider; the union had a non-manifold
+        // edge.
+        (
+            [(65, -95, 165), (31, 126, 254), (0, 0, 0)],
+            -6,
+            (42, -1, 28),
+            (0, -1, 255),
+            -16,
+            (74, 45, 53),
+        ),
+        // `…-m` (`old-46d30597`): the union had a non-manifold edge.
+        (
+            [(65, -95, 165), (35, 122, 255), (0, 0, 0)],
+            -6,
+            (42, -1, 28),
+            (0, -1, 255),
+            -18,
+            (90, 45, 51),
+        ),
+        // `…-n` (`old-cdc324fc`): the intersection had an open edge.
+        (
+            [(65, -95, 28), (35, 122, 255), (0, 0, 0)],
+            -6,
+            (42, -1, 28),
+            (0, -1, 255),
+            -18,
+            (-1, 45, 55),
+        ),
+        // `…-o` (`old-fc2e4f67`): the difference had a non-manifold edge.
+        (
+            [(64, -95, 122), (-1, 35, 5), (0, 0, 0)],
+            -6,
+            (42, -1, 28),
+            (0, -1, 255),
+            -16,
+            (90, 28, 55),
+        ),
+    ]);
+}
+
+/// `fuzz/seeds/extruded_boolean/half-lens-across-a-lens` (`ci-pr268-half-lens`, the input CI
+/// found on #268): two lenses a quarter of the grid size, slanted, an arc of one ending within
+/// micrometres of an edge of the other. The edge was split at a vertex 1 µm off it, made where
+/// the two planes along it meet a third, and the difference had a non-manifold edge.
+#[test]
+fn an_edge_is_not_bent_to_a_vertex_beside_it() {
+    let a = raw_prism(&[(50, 41, 5), (65, -95, 255)], -2, (28, 90, 84)).unwrap();
+    let b = raw_prism(&[(8, -95, 255), (-1, -1, 41)], -2, (90, 45, 39)).unwrap();
+    assert_eq!(check_booleans(&a, &b), Ok(()));
+}
+
+/// `fuzz/seeds/extruded_boolean/needle-on-a-lens-corner-p` (`crash-556988cc…`): a triangle a
+/// micrometre or two wide lies in a face of each solid at once, all its vertices on both planes.
+/// Each copy was classified inside the other solid and both were dropped, leaving the union
+/// with a non-manifold edge. Pieces of the two solids bounded by the same vertices lie on each
+/// other.
+#[test]
+fn pieces_bounded_alike_in_both_solids_lie_on_each_other() {
+    check_needles(&[(
+        [(65, -91, 122), (41, 5, 35), (0, 0, 0)],
+        -6,
+        (81, -1, 28),
+        (0, -1, 255),
+        -18,
+        (90, 45, 48),
+    )]);
+}
+
+/// `fuzz/seeds/extruded_boolean/needle-on-a-lens-corner-q` to `…-t`: two cuts of a face were
+/// tested for crossing as straight lines, then split at vertices a tolerance off them; the
+/// pieces then crossed with no vertex between them, the face's pieces did not close, and the
+/// union had an open edge. Crossings are now decided on the pieces as split.
+#[test]
+fn cuts_cross_where_their_pieces_do() {
+    check_needles(&[
+        // `…-q` (`crash-c0c3507c…`).
+        (
+            [(65, 33, 167), (35, 122, 254), (0, 0, 0)],
+            -6,
+            (42, -1, 28),
+            (0, -1, 255),
+            -18,
+            (90, 45, 52),
+        ),
+        // `…-r` (`crash-ff2d6e95…`).
+        (
+            [(65, 33, 38), (35, 122, 191), (0, 0, 0)],
+            -6,
+            (10, -1, 28),
+            (0, -1, 255),
+            -18,
+            (90, 45, 52),
+        ),
+        // `…-s` (`old-4b735e4c`).
+        (
+            [(65, -31, 229), (35, 122, 255), (0, 0, 0)],
+            -6,
+            (42, 0, 28),
+            (-1, -1, 255),
+            -18,
+            (90, 45, 54),
+        ),
+        // `…-t` (`old-abce4d70`).
+        (
+            [(64, 33, 165), (35, 123, 255), (0, 0, 0)],
+            -6,
+            (42, -1, 28),
+            (0, -1, 255),
+            -18,
+            (90, 52, 56),
+        ),
+    ]);
+}
+
+/// `fuzz/seeds/extruded_boolean/needle-on-a-lens-corner-u` to `…-w`: where two planes meet,
+/// a stretch of their line was kept if its middle lay inside both faces or within the
+/// tolerance of their boundaries; near the corner, a stretch a few micrometres long lying beyond
+/// a face was kept, or one inside dropped, and the union had a non-manifold edge. The stretches
+/// inside both faces are now counted exactly from where their boundaries cross the line.
+#[test]
+fn a_cut_runs_where_its_line_lies_in_both_faces() {
+    check_needles(&[
+        // `…-u` (`crash-0ccbe827…`).
+        (
+            [(65, -95, 245), (35, 0, 41), (0, 0, 122)],
+            -6,
+            (42, -4, 28),
+            (1, -1, 255),
+            -18,
+            (82, -1, 52),
+        ),
+        // `…-v` (`crash-e1fd6331…`).
+        (
+            [(65, -95, 165), (35, 122, 254), (0, 0, 0)],
+            -6,
+            (58, -1, 28),
+            (0, -1, 255),
+            -18,
+            (90, 45, 52),
+        ),
+        // `…-w` (the input `scripts/check-all.sh fuzz` found after stage 2).
+        (
+            [(71, -95, 165), (35, 122, 37), (0, 0, 0)],
+            -6,
+            (91, -1, 28),
+            (0, -1, 255),
+            -18,
+            (90, 57, 56),
+        ),
+    ]);
+}
+
+/// `fuzz/seeds/extruded_boolean/needle-on-a-lens-corner-x` (the input CI found on #271): the
+/// needle of `…-g` on a prism slanted along x and z only. Stage 2's noding near the corner left
+/// the union with a non-manifold edge; it closes once lines are split at the vertices made on
+/// them and their pieces are crossed and kept exactly.
+#[test]
+fn a_needle_on_a_lens_slanted_in_its_plane_closes() {
+    check_needles(&[(
+        [(64, -95, 165), (35, 122, 37), (0, 0, 0)],
+        -6,
+        (28, 0, 28),
+        (0, -1, 255),
+        -18,
+        (90, 45, 56),
+    )]);
+}

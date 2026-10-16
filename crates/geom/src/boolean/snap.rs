@@ -73,7 +73,7 @@ pub(super) fn snap(pool: &Pool, among: &[usize]) -> Result<Vec<usize>, BooleanEr
     clippy::cast_possible_truncation,
     reason = "model coordinates over the tolerance stay within ±1e10"
 )]
-pub(super) fn cell_of(p: Vector) -> [i64; 3] {
+fn cell_of(p: Vector) -> [i64; 3] {
     p.map(|c| (c / WITHIN_TOLERANCE).floor() as i64)
 }
 

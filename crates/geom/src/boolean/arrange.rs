@@ -1,21 +1,22 @@
 //! Splitting faces along the segments the other operand left on them.
 //!
-//! Every line, an edge of a face or a segment, is noded once for all the faces along it: split
-//! where it crosses another line of a face it lies in (decided with the exact `orient2d`), and at
-//! every vertex within the tolerance of it, such as where it crosses a plane of the other
-//! operand. Two faces sharing a line then split it the same way, so their pieces meet edge to
-//! edge without a later pass splitting edges to make them agree. Each face's lines, so split,
-//! are planar, and following them gives the regions the face is cut into.
+//! Every line, an edge of a face or a segment, is noded once for all the faces along it: split at
+//! the vertices its generators put on it, such as where it crosses a plane of the other operand,
+//! then where its pieces cross the pieces of another line of a face it lies in (decided with the
+//! exact `orient2d`). Two faces sharing a line then split it the same way, so their pieces meet
+//! edge to edge without a later pass splitting edges to make them agree. Each face's lines, so
+//! split, are planar, and following them gives the regions the face is cut into. Which regions
+//! lie inside the face is read from its boundary, as split.
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use super::face::{PlanarFace, Pool, segment_distance_squared, sorted_by_x, vertices_on_edge};
-use super::intersect::Segments;
-use super::planar::{Regions, chain, regions};
-use super::snap::cell_of;
+use super::classify::spread;
+use super::face::{PlanarFace, Pool};
+use super::intersect::{Segments, Support, Supports};
+use super::planar::{OUTSIDE, Regions, chain, regions};
 use crate::predicates::orient2d;
 use crate::tolerance::WITHIN_TOLERANCE_SQUARED;
-use crate::vector::{Vector, add, distance_squared, dot, edges, scale, sub};
+use crate::vector::{add, distance_squared, dot, edges, scale, sub};
 use crate::{Orientation, Point2};
 
 /// A line between two vertices, its ends in increasing order.
@@ -39,11 +40,9 @@ impl Chains {
     /// which a face of the other is cut.
     pub(super) fn holding(&self, pool: &Pool) -> BTreeMap<Line, Vec<Line>> {
         let mut holding: BTreeMap<Line, Vec<Line>> = BTreeMap::new();
-        for (&(u, v), along) in &self.along {
-            let mut from = u;
-            for &to in along.iter().chain(std::iter::once(&v)) {
-                holding.entry(line(from, to)).or_default().push((u, v));
-                from = to;
+        for (&l, along) in &self.along {
+            for pair in chain_of(l, along).windows(2) {
+                holding.entry(line(pair[0], pair[1])).or_default().push(l);
             }
         }
         let length = |&(u, v): &Line| distance_squared(pool.get(u), pool.get(v));
@@ -67,90 +66,167 @@ fn lines_of(face: &PlanarFace, segments: &[(usize, usize)]) -> Vec<Line> {
     lines.into_iter().collect()
 }
 
-/// Nodes the lines of all faces once: each is split at its crossings with the other lines of
-/// each face it lies in, then at every vertex of any line or crossing within the tolerance of it.
-/// Vertices of other faces count too: a corner of one operand on an edge of the other splits it
-/// even where no face holds both.
-pub(super) fn node(faces: &[PlanarFace], segments: &Segments, pool: &mut Pool) -> Chains {
+/// Nodes the lines of all faces once. Each is first split at every vertex of the arrangement
+/// lying on one of its supports: the edge of an operand it runs along, or, for a segment cut on a
+/// face, the line where two planes meet that holds both its ends. Whether a vertex lies on a line
+/// is never judged by its distance from it. An edge is split only at the points made on it: the
+/// planes of two faces at a small angle meet along a line whose points, each within the
+/// tolerance of both planes, may lie several tolerances apart across it.
+///
+/// The pieces so split are then split where they cross the pieces of other lines of a face they
+/// lie in, decided exactly on the pieces themselves: a vertex merged with another may lie up to
+/// the tolerance off a line it is on, and a crossing decided on the straight line need not hold
+/// for the line bent there.
+pub(super) fn node(
+    faces: &[PlanarFace],
+    segments: &Segments,
+    supports: &Supports,
+    pool: &mut Pool,
+) -> Chains {
     let lines: Vec<Vec<Line>> = faces
         .iter()
         .zip(segments)
         .map(|(face, segments)| lines_of(face, segments))
         .collect();
-    let mut splits: BTreeMap<Line, Vec<usize>> = lines
-        .iter()
-        .flatten()
-        .map(|&line| (line, Vec::new()))
-        .collect();
-    let mut vertices = Nearby::default();
-    for &(u, v) in splits.keys() {
-        vertices.insert(u, pool);
-        vertices.insert(v, pool);
+    let mut on: BTreeMap<usize, BTreeSet<Support>> = BTreeMap::new();
+    for (&support, vertices) in supports {
+        for &v in vertices {
+            on.entry(v).or_default().insert(support);
+        }
     }
-    // Each face decides in its own projection whether two of its lines cross, so that its lines
-    // stay planar: faces a tolerance apart may project differently. Lines crossing in several
-    // faces, such as edges of coplanar faces, share one vertex: later faces find it taken.
+    let held_by: BTreeMap<Line, Vec<Support>> = (lines.iter().flatten())
+        .map(|&l| (l, held(l, &on)))
+        .collect();
+    // Only vertices some line ends at split others: a crossing no cut reaches marks nothing.
+    let ends: BTreeSet<usize> = lines.iter().flatten().flat_map(|&(u, v)| [u, v]).collect();
+    let mut along: BTreeMap<Line, Vec<usize>> = (held_by.iter())
+        .map(|(&l, held)| {
+            let made = held.iter().filter_map(|support| supports.get(support));
+            let split = made
+                .flatten()
+                .copied()
+                .filter(|w| ends.contains(w))
+                .collect();
+            (l, ordered(l, split, pool))
+        })
+        .collect();
+    // Crossings lie on the supports of both lines, so lines along them elsewhere split there too.
+    let mut crossed: BTreeMap<Support, BTreeSet<usize>> = BTreeMap::new();
     for (face, lines) in faces.iter().zip(&lines) {
-        let at = |pool: &Pool, v: usize| face.projection.apply(pool.get(v));
-        for (first, second) in pairs_of_boxes(lines, |v| at(pool, v)) {
-            if let Some(vertex) = crossing(first, second, &vertices, pool, &at) {
-                for line in [first, second] {
-                    if let Some(split) = splits.get_mut(&line) {
-                        split.push(vertex);
-                    }
-                }
-                vertices.insert(vertex, pool);
+        for (l, vertex) in cross_pieces(face, lines, &mut along, pool) {
+            for &support in &held_by[&l] {
+                crossed.entry(support).or_default().insert(vertex);
             }
         }
     }
-    let by_x = sorted_by_x(pool, vertices.all());
-    let along = splits
-        .into_iter()
-        .map(|((u, v), mut split)| {
-            split.extend(vertices_on_edge(pool, &by_x, (u, v)));
-            let (p, d) = (pool.get(u), sub(pool.get(v), pool.get(u)));
-            let mut chain: Vec<(f64, usize)> = split
-                .into_iter()
-                .map(|w| (dot(sub(pool.get(w), p), d), w))
-                .collect();
-            // A vertex found twice has the same key both times, so its copies end up together.
-            chain.sort_by(|a, b| a.0.total_cmp(&b.0).then(a.1.cmp(&b.1)));
-            chain.dedup_by_key(|&mut (_, w)| w);
-            ((u, v), chain.into_iter().map(|(_, w)| w).collect())
-        })
-        .collect();
+    for (l, split) in &mut along {
+        let elsewhere: Vec<usize> = (held_by[l].iter())
+            .filter_map(|support| crossed.get(support))
+            .flatten()
+            .copied()
+            .collect();
+        if !elsewhere.is_empty() {
+            split.extend(elsewhere);
+            *split = ordered(*l, std::mem::take(split), pool);
+        }
+    }
     Chains { lines, along }
 }
 
-/// Vertices bucketed by cells one tolerance wide, as the vertex merge does, so the vertices near
-/// a point are found without looking at all of them.
-#[derive(Default)]
-struct Nearby(BTreeMap<[i64; 3], Vec<usize>>);
-
-impl Nearby {
-    /// Adds a vertex; adding one twice is harmless.
-    fn insert(&mut self, vertex: usize, pool: &Pool) {
-        self.0
-            .entry(cell_of(pool.get(vertex)))
-            .or_default()
-            .push(vertex);
+/// Splits the pieces of a face's lines where they cross, deciding it in the face's own
+/// projection so that its lines stay planar: faces a tolerance apart may project differently.
+/// Lines crossing in several faces, such as edges of coplanar faces, share one vertex: later
+/// faces find them split. A crossing at an end of one piece splits the other there, which may
+/// bend it, so the bent pieces are crossed again until none is split. Each pass splits at least
+/// one piece, so as many passes as the face has lines are a bound rounding cannot push past.
+/// Returns each line split with the vertex splitting it.
+fn cross_pieces(
+    face: &PlanarFace,
+    lines: &[Line],
+    along: &mut BTreeMap<Line, Vec<usize>>,
+    pool: &mut Pool,
+) -> Vec<(Line, usize)> {
+    let at = |pool: &Pool, v: usize| face.projection.apply(pool.get(v));
+    let mut all = Vec::new();
+    // Pieces left whole by a pass were all tested against each other already.
+    let mut tested: BTreeSet<Line> = BTreeSet::new();
+    for _ in 0..=lines.len() {
+        let mut owners: BTreeMap<Line, Vec<Line>> = BTreeMap::new();
+        for &l in lines {
+            for pair in chain_of(l, &along[&l]).windows(2) {
+                owners.entry((pair[0], pair[1])).or_default().push(l);
+            }
+        }
+        let pieces: Vec<Line> = owners.keys().copied().collect();
+        let mut found: BTreeMap<Line, Vec<usize>> = BTreeMap::new();
+        for (first, second) in pairs_of_boxes(&pieces, |v| at(pool, v)) {
+            if tested.contains(&first) && tested.contains(&second) {
+                continue;
+            }
+            let (one, other) = (&owners[&first], &owners[&second]);
+            // Pieces of one line meet only at their ends.
+            if one.iter().any(|l| other.contains(l)) {
+                continue;
+            }
+            if let Some(vertex) = crossing(first, second, pool, &at) {
+                for &l in one.iter().chain(other) {
+                    found.entry(l).or_default().push(vertex);
+                }
+            }
+        }
+        tested = pieces.into_iter().collect();
+        let mut split_any = false;
+        for (l, vertices) in found {
+            if let Some(split) = along.get_mut(&l) {
+                let before = split.len();
+                all.extend(vertices.iter().map(|&vertex| (l, vertex)));
+                split.extend(vertices);
+                *split = ordered(l, std::mem::take(split), pool);
+                split_any |= split.len() > before;
+            }
+        }
+        if !split_any {
+            break;
+        }
     }
+    all
+}
 
-    fn all(&self) -> impl Iterator<Item = usize> + '_ {
-        self.0.values().flatten().copied()
+/// The supports holding both ends of a line; only the edges among them if it runs along an edge
+/// of an operand, which is exact where the line where two planes meet need not be.
+fn held((u, v): Line, on: &BTreeMap<usize, BTreeSet<Support>>) -> Vec<Support> {
+    let (Some(at_u), Some(at_v)) = (on.get(&u), on.get(&v)) else {
+        return Vec::new();
+    };
+    let both: Vec<Support> = at_u.intersection(at_v).copied().collect();
+    let is_edge = |support: &Support| matches!(support, Support::Edge(..));
+    if both.iter().any(is_edge) {
+        both.into_iter().filter(is_edge).collect()
+    } else {
+        both
     }
+}
 
-    /// Whether a vertex lies within the tolerance of a point.
-    fn any_within(&self, point: Vector, pool: &Pool) -> bool {
-        let [x, y, z] = cell_of(point);
-        (-1..=1)
-            .flat_map(|dx| {
-                (-1..=1).flat_map(move |dy| (-1..=1).map(move |dz| [x + dx, y + dy, z + dz]))
-            })
-            .filter_map(|cell| self.0.get(&cell))
-            .flatten()
-            .any(|&vertex| distance_squared(point, pool.get(vertex)) <= WITHIN_TOLERANCE_SQUARED)
-    }
+/// A line's ends with the vertices splitting it in between, in order.
+fn chain_of((u, v): Line, split: &[usize]) -> Vec<usize> {
+    std::iter::once(u)
+        .chain(split.iter().copied())
+        .chain(std::iter::once(v))
+        .collect()
+}
+
+/// The vertices splitting a line, without its ends, repeats or vertices beyond its ends, in
+/// order from its first end.
+fn ordered(l: Line, split: Vec<usize>, pool: &Pool) -> Vec<usize> {
+    let mut chain: Vec<(f64, usize)> = split
+        .into_iter()
+        .filter(|&w| w != l.0 && w != l.1)
+        .filter_map(|w| Some((within(w, l, pool)?, w)))
+        .collect();
+    // A vertex found twice has the same key both times, so its copies end up together.
+    chain.sort_by(|a, b| a.0.total_cmp(&b.0).then(a.1.cmp(&b.1)));
+    chain.dedup_by_key(|&mut (_, w)| w);
+    chain.into_iter().map(|(_, w)| w).collect()
 }
 
 /// The pairs of lines, as given and in order, whose boxes in the plane overlap. Lines are
@@ -179,47 +255,91 @@ fn pairs_of_boxes(lines: &[Line], at: impl Fn(usize) -> Point2) -> Vec<(Line, Li
     pairs
 }
 
-/// Cuts face `index` of the faces given to [`node`] along its lines as they were split there;
-/// the regions include those outside the face, if segments reach there.
-pub(super) fn split(face: &PlanarFace, index: usize, chains: &Chains, pool: &Pool) -> Regions {
+/// Where a vertex projects onto a line, measured along it from its first end in units of its
+/// squared length; `None` unless strictly between its ends.
+fn within(vertex: usize, (u, v): Line, pool: &Pool) -> Option<f64> {
+    let (origin, span) = (pool.get(u), sub(pool.get(v), pool.get(u)));
+    let position = dot(sub(pool.get(vertex), origin), span);
+    (position > 0.0 && position < dot(span, span)).then_some(position)
+}
+
+/// A face cut into pieces: the regions its lines bound, and which of them lie inside the face.
+pub(super) struct Pieces {
+    pub(super) regions: Regions,
+    pub(super) inside: Vec<bool>,
+}
+
+/// Cuts face `index` of the faces given to [`node`] along its lines as they were split there.
+/// The regions include those outside the face where segments reach there; which side of the
+/// face's boundary each lies on is read from the boundary itself, as split, never from a point
+/// inside it: a boundary split at a vertex off its straight line no longer runs along it.
+pub(super) fn split(face: &PlanarFace, index: usize, chains: &Chains, pool: &Pool) -> Pieces {
     let mut pieces = BTreeSet::new();
-    for &(u, v) in &chains.lines[index] {
-        let mut from = u;
-        for &to in chains.along[&(u, v)].iter().chain(std::iter::once(&v)) {
-            pieces.insert((from, to));
-            pieces.insert((to, from));
-            from = to;
+    for &l in &chains.lines[index] {
+        for pair in chain_of(l, &chains.along[&l]).windows(2) {
+            pieces.insert((pair[0], pair[1]));
+            pieces.insert((pair[1], pair[0]));
         }
     }
     let at = |v: usize| face.projection.apply(pool.get(v));
-    regions(chain(&pieces, at), at)
+    let regions = regions(chain(&pieces, at), at);
+    let inside = inside(face, chains, &regions);
+    Pieces { regions, inside }
 }
 
-/// The vertex where two lines cross in their interiors, if they do. The decision is exact; the
-/// point is computed once. A crossing within the tolerance of an existing vertex is left to the
-/// splitting of lines at vertices instead, which puts that vertex on both lines.
+/// Which regions lie inside the face: those on the left of its boundary, followed in the
+/// direction of its rings, and those reached from them across the face's cuts. Across its
+/// boundary, the regions on the right lie outside. Where the boundary runs along a piece and
+/// back, as at a corner so sharp that its two edges meet the same vertices, it bounds nothing,
+/// and the regions on both sides lie outside.
+fn inside(face: &PlanarFace, chains: &Chains, regions: &Regions) -> Vec<bool> {
+    let mut boundary = BTreeSet::new();
+    for (a, b) in face.rings.iter().flat_map(|ring| edges(ring)) {
+        let (u, v) = line(a, b);
+        let mut chain = chain_of((u, v), &chains.along[&(u, v)]);
+        if a != u {
+            chain.reverse();
+        }
+        boundary.extend(chain.windows(2).map(|pair| (pair[0], pair[1])));
+    }
+    let count = regions.regions.len();
+    let mut label: Vec<Option<bool>> = vec![None; count];
+    let mut links: Vec<Vec<usize>> = vec![Vec::new(); count];
+    for (&(u, v), &region) in &regions.left {
+        if region == OUTSIDE {
+            continue;
+        }
+        match (boundary.contains(&(u, v)), boundary.contains(&(v, u))) {
+            (true, false) => label[region] = Some(true),
+            (_, true) => {
+                label[region].get_or_insert(false);
+            }
+            (false, false) => {
+                if let Some(&across) = regions.left.get(&(v, u))
+                    && across != OUTSIDE
+                {
+                    links[region].push(across);
+                }
+            }
+        }
+    }
+    let labelled = (0..count).filter(|&r| label[r].is_some()).collect();
+    spread(&links, &mut label, labelled);
+    label.into_iter().map(|l| l == Some(true)).collect()
+}
+
+/// The vertex where two pieces of lines cross in their interiors, if they do. The decision is
+/// exact; the point is computed once. A crossing within the tolerance of an end of either piece
+/// is that end, as the vertex merge would make it, provided the end lies within the other
+/// piece's span: the other piece is split there.
 fn crossing(
     first: Line,
     second: Line,
-    vertices: &Nearby,
     pool: &mut Pool,
     at: &impl Fn(&Pool, usize) -> Point2,
 ) -> Option<usize> {
     let ends = [first.0, first.1, second.0, second.1];
     if ends[..2].iter().any(|end| ends[2..].contains(end)) {
-        return None;
-    }
-    // Lines that touch or overlap within the tolerance are split at each other's ends instead:
-    // nearly collinear lines would otherwise cross at an arbitrary point along their overlap.
-    let near = |vertex: usize, (start, end): Line| {
-        segment_distance_squared(pool.get(vertex), pool.get(start), pool.get(end))
-            <= WITHIN_TOLERANCE_SQUARED
-    };
-    if near(first.0, second)
-        || near(first.1, second)
-        || near(second.0, first)
-        || near(second.1, first)
-    {
         return None;
     }
     let [a, b, c, d] = ends.map(|vertex| at(pool, vertex));
@@ -238,7 +358,15 @@ fn crossing(
         / (along.x * across.y - along.y * across.x);
     let (start, end) = (pool.get(first.0), pool.get(first.1));
     let point = add(start, scale(sub(end, start), fraction));
-    (!vertices.any_within(point, pool)).then(|| pool.push(point))
+    // An end of one piece can stand for the crossing only if it splits the other piece.
+    let nearest = (ends.into_iter().zip([second, second, first, first]))
+        .filter(|&(vertex, other)| within(vertex, other, pool).is_some())
+        .map(|(vertex, _)| (distance_squared(point, pool.get(vertex)), vertex))
+        .min_by(|p, q| p.0.total_cmp(&q.0).then(p.1.cmp(&q.1)));
+    match nearest {
+        Some((distance, vertex)) if distance <= WITHIN_TOLERANCE_SQUARED => Some(vertex),
+        _ => Some(pool.push(point)),
+    }
 }
 
 #[cfg(test)]
@@ -256,12 +384,18 @@ mod tests {
         ]);
         let face = PlanarFace::new(vec![vec![0, 1, 2, 3]], &pool);
         let segments = vec![vec![(0, 2), (1, 3)]];
-        let chains = node(std::slice::from_ref(&face), &segments, &mut pool);
+        let chains = node(
+            std::slice::from_ref(&face),
+            &segments,
+            &Supports::new(),
+            &mut pool,
+        );
         let pieces = split(&face, 0, &chains, &pool);
-        assert_eq!(pieces.regions.len(), 4);
+        assert_eq!(pieces.regions.regions.len(), 4);
         assert!(distance_squared(pool.get(4), [0.5, 0.5, 0.0]) < 1e-30);
         assert!(
             pieces
+                .regions
                 .regions
                 .iter()
                 .all(|region| region.outer.contains(&4))
@@ -284,14 +418,109 @@ mod tests {
             PlanarFace::new(vec![vec![0, 1, 2]], &pool),
             PlanarFace::new(vec![vec![0, 2, 3]], &pool),
         ];
-        let chains = node(&faces, &vec![vec![(1, 4)], Vec::new()], &mut pool);
+        // The cut reaches the diagonal where it crosses a plane: vertex 4 lies on that edge.
+        let supports = Supports::from([(Support::Edge(0, 2), BTreeSet::from([0, 2, 4]))]);
+        let chains = node(
+            &faces,
+            &vec![vec![(1, 4)], Vec::new()],
+            &supports,
+            &mut pool,
+        );
         let first = split(&faces[0], 0, &chains, &pool);
         let second = split(&faces[1], 1, &chains, &pool);
-        assert_eq!(first.regions.len(), 2);
-        assert_eq!(second.regions.len(), 1);
+        assert_eq!(first.regions.regions.len(), 2);
+        assert_eq!(second.regions.regions.len(), 1);
         assert_eq!(
-            second.regions[0].outer.iter().filter(|&&v| v == 4).count(),
+            second.regions.regions[0]
+                .outer
+                .iter()
+                .filter(|&&v| v == 4)
+                .count(),
             1
         );
+    }
+
+    #[test]
+    fn a_crossing_splits_every_line_along_the_same_support() {
+        // The unit square's diagonals cross at its centre. Another face's edge from corner 0
+        // to (2, 2) runs along the first diagonal, both on the line where two planes meet: it
+        // is split at the far corner and at the crossing found in the square.
+        let mut pool = Pool::of(vec![
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [1.0, 1.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [2.0, 2.0, 0.0],
+            [0.0, 0.0, 1.0],
+        ]);
+        let faces = [
+            PlanarFace::new(vec![vec![0, 1, 2, 3]], &pool),
+            PlanarFace::new(vec![vec![0, 4, 5]], &pool),
+        ];
+        let supports = Supports::from([(Support::Meet(0, 9), BTreeSet::from([0, 2, 4]))]);
+        let segments = vec![vec![(0, 2), (1, 3)], Vec::new()];
+        let chains = node(&faces, &segments, &supports, &mut pool);
+        assert_eq!(chains.along[&(0, 4)], [6, 2]);
+        assert!(distance_squared(pool.get(6), [0.5, 0.5, 0.0]) < 1e-30);
+    }
+
+    #[test]
+    fn an_edge_is_split_only_at_the_points_made_on_it() {
+        // Both ends of the edge also lie on a line where two planes meet: only the points made
+        // on the edge split it. A cut is split at the points on its planes' line; a line with an
+        // end on neither is held by nothing.
+        let on = BTreeMap::from([
+            (
+                0,
+                BTreeSet::from([Support::Edge(0, 1), Support::Meet(3, 4)]),
+            ),
+            (
+                1,
+                BTreeSet::from([Support::Edge(0, 1), Support::Meet(3, 4)]),
+            ),
+        ]);
+        assert_eq!(held((0, 1), &on), [Support::Edge(0, 1)]);
+        let cut = BTreeMap::from([
+            (0, BTreeSet::from([Support::Meet(3, 4)])),
+            (1, BTreeSet::from([Support::Meet(3, 4)])),
+        ]);
+        assert_eq!(held((0, 1), &cut), [Support::Meet(3, 4)]);
+        assert!(held((0, 2), &cut).is_empty());
+    }
+
+    #[test]
+    fn a_boundary_running_out_and_back_bounds_nothing() {
+        // A square whose last edge, from 3 back to 0, is split at vertex 4 on its first edge,
+        // as when a corner is so sharp that both its edges meet the same vertex: the boundary
+        // runs from 0 to 4 and back. The square beyond 4 is inside; the triangle a cut closes
+        // against the spike is not.
+        let pool = Pool::of(vec![
+            [0.0, 0.0, 0.0],
+            [2.0, 0.0, 0.0],
+            [2.0, 1.0, 0.0],
+            [1.0, 1.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [0.5, -0.5, 0.0],
+        ]);
+        let face = PlanarFace::new(vec![vec![0, 1, 2, 3]], &pool);
+        let chains = Chains {
+            lines: vec![vec![(0, 1), (1, 2), (2, 3), (0, 3), (0, 5), (4, 5)]],
+            along: BTreeMap::from([
+                ((0, 1), vec![4]),
+                ((1, 2), Vec::new()),
+                ((2, 3), Vec::new()),
+                ((0, 3), vec![4]),
+                ((0, 5), Vec::new()),
+                ((4, 5), Vec::new()),
+            ]),
+        };
+        let pieces = split(&face, 0, &chains, &pool);
+        let inside: Vec<&Vec<usize>> = (pieces.regions.regions.iter())
+            .zip(&pieces.inside)
+            .filter(|&(_, &inside)| inside)
+            .map(|(region, _)| &region.outer)
+            .collect();
+        assert_eq!(inside.len(), 1);
+        assert!(!inside[0].contains(&0));
     }
 }
