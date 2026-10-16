@@ -22,15 +22,11 @@ const MAX_FACES: usize = 200;
 
 /// The prism over a raw profile, or `None` if the profile or the extrusion is rejected or the
 /// prism has more than [`MAX_FACES`] faces.
-fn prism(raw: &RawProfile, raw_direction: (i8, i8, i8)) -> Option<(Solid, f64)> {
+fn prism(raw: &RawProfile, raw_direction: (i8, i8, i8)) -> Option<Solid> {
     let (outer, holes) = profile_loops(raw);
     let profile = Profile::new(outer, holes).ok()?;
     let solid = Solid::extrude(&profile, direction(raw_direction)).ok()?;
-    if solid.face_count() > MAX_FACES {
-        return None;
-    }
-    let volume = solid.volume();
-    Some((solid, volume))
+    (solid.face_count() <= MAX_FACES).then_some(solid)
 }
 
 /// Two profiles and their extrusion directions in quarter metres.
@@ -38,12 +34,13 @@ type Input = (RawProfile, (i8, i8, i8), RawProfile, (i8, i8, i8));
 
 fuzz_target!(|input: Input| {
     let (first, first_direction, second, second_direction) = input;
-    let (Some((a, va)), Some((b, vb))) = (
+    let (Some(a), Some(b)) = (
         prism(&first, first_direction),
         prism(&second, second_direction),
     ) else {
         return;
     };
+    let (va, vb) = (a.volume(), b.volume());
     let slack = SLACK * (va + vb).max(1.0);
     let union = a.union(&b).expect("union").expect("a union is never empty");
     assert_eq!(union.validate(), Ok(()));

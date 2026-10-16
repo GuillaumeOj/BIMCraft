@@ -638,42 +638,33 @@ fn turned_boxes_sharing_planes_through_the_origin() {
 }
 
 /// A prism over the polygon with corners at `corners` sixteenths of a turn on a circle, maybe
-/// with a square hole a quarter of the radius from the centre each way, extruded along
-/// `direction`.
+/// with a square hole a quarter of the radius from the centre each way, extruded along `along`.
 fn prism(
     corners: &[u32],
     (centre, radius): (Point2, f64),
     with_hole: bool,
     along: Vector3,
 ) -> Solid {
-    let polygon = |points: &[Point2]| {
-        (0..points.len())
-            .map(|i| Edge::Line {
-                start: points[i],
-                end: points[(i + 1) % points.len()],
-            })
-            .collect::<Vec<_>>()
-    };
-    let at = |x: f64, y: f64| Point2::new(centre.x + x, centre.y + y);
-    let outer: Vec<Point2> = corners
+    use crate::profile::tests::{polygon, rectangle};
+
+    let outer: Vec<(f64, f64)> = corners
         .iter()
         .map(|&k| {
             let angle = std::f64::consts::TAU * f64::from(k) / 16.0;
-            at(radius * libm::cos(angle), radius * libm::sin(angle))
+            (
+                centre.x + radius * libm::cos(angle),
+                centre.y + radius * libm::sin(angle),
+            )
         })
         .collect();
     let side = radius / 4.0;
-    let hole = [
-        at(-side, -side),
-        at(side, -side),
-        at(side, side),
-        at(-side, side),
-    ];
-    let holes = if with_hole {
-        vec![polygon(&hole)]
-    } else {
-        Vec::new()
-    };
+    let hole = rectangle(
+        centre.x - side,
+        centre.y - side,
+        centre.x + side,
+        centre.y + side,
+    );
+    let holes = if with_hole { vec![hole] } else { Vec::new() };
     Solid::extrude(&Profile::new(polygon(&outer), holes).unwrap(), along).unwrap()
 }
 

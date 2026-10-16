@@ -17,7 +17,7 @@ use super::face::{
     sorted_by_x, vertices_on_edge,
 };
 use super::planar::{faces_of, regions};
-use super::snap::{find, snap, union};
+use super::snap::{find, snap};
 use crate::brep::enclosed_volume;
 use crate::predicates::orient2d;
 use crate::tolerance::{WITHIN_TOLERANCE, WITHIN_TOLERANCE_SQUARED};
@@ -43,8 +43,8 @@ pub(super) fn assemble(mut faces: Faces, pool: &mut Pool) -> Result<Option<Solid
     if faces.is_empty() {
         return Ok(None);
     }
-    // Renaming vertices below moves none of them, so the planes hold throughout.
-    let planes: Vec<(Vector, Vector)> = faces.iter().map(|face| plane(face, pool)).collect();
+    // Renaming vertices below moves none of them, so the planes hold until the merge.
+    let planes = planes_of(&faces, pool);
     let Some(twins) = pair(&faces, &planes, pool) else {
         return build(&faces, pool);
     };
@@ -55,8 +55,7 @@ pub(super) fn assemble(mut faces: Faces, pool: &mut Pool) -> Result<Option<Solid
     // It goes, and the edge is left to the faces that meet there; the lumps that only touched
     // through it may now touch at a vertex, so they are separated again.
     clean(&mut faces);
-    let planes: Vec<(Vector, Vector)> = faces.iter().map(|face| plane(face, pool)).collect();
-    if let Some(twins) = pair(&faces, &planes, pool) {
+    if let Some(twins) = pair(&faces, &planes_of(&faces, pool), pool) {
         separate_lumps(&mut faces, &twins, pool);
     }
     let faces = drop_thin_lumps(faces, pool);
@@ -64,6 +63,10 @@ pub(super) fn assemble(mut faces: Faces, pool: &mut Pool) -> Result<Option<Solid
         return Ok(None);
     }
     build(&split_pinched(faces, pool), pool)
+}
+
+fn planes_of(faces: &Faces, pool: &Pool) -> Vec<(Vector, Vector)> {
+    faces.iter().map(|face| plane(face, pool)).collect()
 }
 
 /// Splits every edge at the vertices of other faces lying on it, within the tolerance.
@@ -238,15 +241,17 @@ fn merge_coplanar(
     let mut members: Vec<Vec<usize>> = (0..faces.len()).map(|f| vec![f]).collect();
     for (h, &twin) in twins.iter().enumerate() {
         let (f, g) = (half_edges.face(h), half_edges.face(twin));
+        if f >= g {
+            continue;
+        }
         let (rf, rg) = (find(&mut group, f), find(&mut group, g));
         // Faces sharing several edges are tested once: later edges find them merged.
-        if f < g
-            && rf != rg
+        if rf != rg
             && dot(planes[f].0, planes[g].0) > 0.0
             && flat_together([&members[rf], &members[rg]])
         {
-            union(&mut group, rf, rg);
             let (root, other) = (rf.min(rg), rf.max(rg));
+            group[other] = root;
             let moved = std::mem::take(&mut members[other]);
             members[root].extend(moved);
         }
@@ -422,8 +427,9 @@ fn chord(
     };
     between
         .flat_map(|k| outside.iter().map(move |&l| (k, l)))
-        .filter(|&(k, l)| ring[k] != ring[l] && inside(rings, (ring[k], ring[l]), at))
-        .map(|(k, l)| (clearance((ring[k], ring[l])), (k, l)))
+        .map(|(k, l)| ((ring[k], ring[l]), (k, l)))
+        .filter(|&((u, v), _)| u != v && inside(rings, (u, v), at))
+        .map(|(ends, chord)| (clearance(ends), chord))
         .max_by(|one, other| one.0.total_cmp(&other.0))
         .map(|(_, chord)| chord)
 }

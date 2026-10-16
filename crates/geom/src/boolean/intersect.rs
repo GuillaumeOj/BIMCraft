@@ -75,7 +75,8 @@ struct Pair<'a> {
     faces: &'a [PlanarFace],
     pool: &'a mut Pool,
     crossings: &'a mut Crossings,
-    /// The vertices joined to each vertex by an edge of its operand.
+    /// The vertices joined to each vertex by an edge of either operand: a vertex the operands
+    /// share after snapping has the edges of both.
     neighbours: &'a [Vec<usize>],
 }
 
@@ -154,8 +155,9 @@ impl Pair<'_> {
                 let crosses_far = self.neighbours[v].iter().any(|&w| {
                     let q = self.pool.get(w);
                     let e = plane.distance(q);
-                    plane.side(q) != 0
-                        && d * e < 0.0
+                    // `e` beyond the tolerance is `plane.side(q) != 0`, without a second product.
+                    d * e < 0.0
+                        && e.abs() > WITHIN_TOLERANCE
                         && d / (d - e) * length(sub(q, p)) > WITHIN_TOLERANCE
                 });
                 if crosses_far {
