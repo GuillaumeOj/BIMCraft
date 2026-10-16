@@ -1,20 +1,28 @@
 [package]
 name = "host-desktop"
 version = "0.0.0"
-description = "Desktop host: platform traits backed by files, threads, the system clock and processes."
+description = "Desktop host: the document served to the window, and platform traits backed by files, threads, the system clock and processes."
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 publish = false
 
 [dependencies]
+api = { workspace = true }
+core-model = { workspace = true }
+core-txn = { workspace = true }
 platform = { workspace = true }
 rayon = { workspace = true }
+schema-gen = { workspace = true }
 tempfile = { workspace = true }
+tauri = { workspace = true }
 thiserror = { workspace = true }
 
 [dev-dependencies]
+api = { workspace = true, features = ["conformance"] }
+serde_json = { workspace = true }
 platform = { workspace = true, features = ["testing"] }
+tauri = { workspace = true, features = ["test"] }
 
 # Test fixture: a stand-in solver that the compute tests start as a child process.
 [[bin]]

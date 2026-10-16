@@ -88,6 +88,9 @@ jobs:
       - uses: taiki-e/install-action@83ac0ad63c0167e6f06796fab0fce28db1bf3db0 # v2.87.22
         with:
           tool: cargo-audit@${{ env.CARGO_AUDIT_VERSION }},cargo-cyclonedx@${{ env.CARGO_CYCLONEDX_VERSION }},cargo-deny@${{ env.CARGO_DENY_VERSION }}
+      - name: Install the desktop window's Linux libraries (GTK 3, WebKitGTK)
+        if: runner.os == 'Linux'
+        run: scripts/linux-desktop-deps.sh
       - run: scripts/check-all.sh rust
       - name: Find the wasm32 C toolchain
         run: scripts/wasm-toolchain.sh
@@ -122,6 +125,8 @@ jobs:
       - uses: taiki-e/install-action@83ac0ad63c0167e6f06796fab0fce28db1bf3db0 # v2.87.22
         with:
           tool: cargo-llvm-cov@${{ env.CARGO_LLVM_COV_VERSION }}
+      - name: Install the desktop window's Linux libraries (GTK 3, WebKitGTK)
+        run: scripts/linux-desktop-deps.sh
       - run: scripts/check-all.sh coverage
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
@@ -165,6 +170,29 @@ jobs:
           persist-credentials: false
       - uses: ./.github/actions/setup-rust
       - run: scripts/check-all.sh corpus
+
+  # The desktop program with the bundled UI, where users run it. Linux builds it in the rust job.
+  desktop:
+    name: Desktop (${{ matrix.os }})
+    needs: detect
+    if: needs.detect.outputs.rust == 'true' && needs.detect.outputs.ui == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15, windows-2025]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-rust
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      - run: scripts/check-all.sh desktop
 
   ui:
     name: UI
