@@ -8,8 +8,8 @@ use core_model::{Model, ModelError};
 use core_txn::Origin;
 use schema_gen::{Source, parse_sources};
 
-/// The files of `schema/core`, embedded so that the program needs nothing beside it. The tests
-/// check that the list matches the directory.
+/// The definition files of `schema/core`, embedded so that the program needs nothing beside it.
+/// A test checks them against the directory, as `schema_gen::load_dir` reads it.
 pub(crate) const CORE_SCHEMA: &[(&str, &str)] = &[(
     "namespace.toml",
     include_str!("../../../schema/core/namespace.toml"),

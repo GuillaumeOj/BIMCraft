@@ -9,26 +9,18 @@
 // Release builds run as a windowed program on Windows, without a console window.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+use std::error::Error;
 use std::io::{self, Write};
 use std::process::ExitCode;
 
-use host_desktop::{DocumentHost, OpenError, ipc};
-
-/// Why the window could not run.
-#[derive(Debug, thiserror::Error)]
-enum WindowError {
-    #[error(transparent)]
-    Open(#[from] OpenError),
-    #[error(transparent)]
-    Tauri(#[from] tauri::Error),
-}
+use host_desktop::{DocumentHost, ipc};
 
 fn main() -> ExitCode {
     exit_code(run(), &mut io::stderr())
 }
 
 /// Opens the window on a new document and runs until it closes.
-fn run() -> Result<(), WindowError> {
+fn run() -> Result<(), Box<dyn Error>> {
     let host = DocumentHost::open_new()?;
     ipc::serve(tauri::Builder::default(), host).run(tauri::generate_context!())?;
     Ok(())
@@ -36,7 +28,7 @@ fn run() -> Result<(), WindowError> {
 
 /// The program's exit status for `result`, telling `log` why it failed: the window did not open,
 /// so nothing else can.
-fn exit_code(result: Result<(), WindowError>, log: &mut impl Write) -> ExitCode {
+fn exit_code(result: Result<(), Box<dyn Error>>, log: &mut impl Write) -> ExitCode {
     match result {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => {
@@ -60,7 +52,7 @@ mod tests {
     #[test]
     fn a_window_that_cannot_open_says_why() {
         let mut log = Vec::new();
-        let error = WindowError::Open(OpenError::Schema(Vec::new()));
+        let error = host_desktop::OpenError::Schema(Vec::new()).into();
         assert_eq!(exit_code(Err(error), &mut log), ExitCode::FAILURE);
         assert_eq!(
             String::from_utf8(log).unwrap(),

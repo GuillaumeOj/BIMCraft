@@ -18,7 +18,7 @@ The UI side of this channel is the typed client in `ui/src/api/`.
 2. Start the UI development server: `cd ui && bun run dev`.
 3. In another terminal: `cargo run -p desktop-app`. The window loads the development server, so UI changes reload live.
 
-To build the program with the UI inside it, as a release does: `scripts/check-all.sh desktop`. It bundles `ui/dist` and builds `desktop-app` with `tauri/custom-protocol`, which embeds the bundle. CI runs it on macOS and Windows; the Linux build is part of the `rust` job.
+To build the program with the UI inside it, as a release does: `scripts/check-all.sh desktop`. It bundles `ui/dist` and builds `desktop-app` with `tauri/custom-protocol`, which embeds the bundle. CI runs it in the `rust` job on Linux, macOS and Windows.
 
 ## Configuration
 
