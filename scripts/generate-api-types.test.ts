@@ -52,7 +52,16 @@ describe("typeOf", () => {
     expect(() => typeOf({ $ref: "other.json#/x" }, "a")).toThrow("a: unsupported $ref other.json#/x");
     expect(() => typeOf({ type: ["string", "null"] }, "a")).toThrow('a: unsupported type ["string","null"]');
     expect(() => typeOf({ type: "object" }, "a")).toThrow('a: objects must set "additionalProperties": false');
-    expect(() => typeOf({ type: "array", prefixItems: [] }, "a")).toThrow('a: tuples must set "items": false');
+    expect(() => typeOf({ type: "array", prefixItems: [] }, "a")).toThrow(
+      'a: tuples must set "items": false and "minItems" to their length',
+    );
+    expect(() => typeOf({ type: "array", prefixItems: [{ type: "null" }], items: false }, "a")).toThrow(
+      'a: tuples must set "items": false and "minItems" to their length',
+    );
+    expect(() =>
+      typeOf({ type: "object", additionalProperties: false, oneOf: [{ type: "null" }] }, "a"),
+    ).toThrow("a: cannot combine type, additionalProperties, oneOf");
+    expect(() => typeOf({ $ref: "#/$defs/A", const: 1 }, "a")).toThrow("a: cannot combine $ref, const");
     expect(() => typeOf({ type: "array" }, "a")).toThrow("a.items: expected a schema object");
   });
 });
