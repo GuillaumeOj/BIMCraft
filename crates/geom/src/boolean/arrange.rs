@@ -46,15 +46,18 @@ fn lines_of(face: &PlanarFace, segments: &[(usize, usize)]) -> Vec<Line> {
 /// Vertices of other faces count too: a corner of one operand on an edge of the other splits it
 /// even where no face holds both.
 pub(super) fn node(faces: &[PlanarFace], segments: &Segments, pool: &mut Pool) -> Chains {
-    let mut splits: BTreeMap<Line, BTreeSet<usize>> = BTreeMap::new();
-    let mut vertices = Nearby::default();
     let lines: Vec<Vec<Line>> = faces
         .iter()
         .zip(segments)
         .map(|(face, segments)| lines_of(face, segments))
         .collect();
-    for &(u, v) in lines.iter().flatten() {
-        splits.entry((u, v)).or_default();
+    let mut splits: BTreeMap<Line, Vec<usize>> = lines
+        .iter()
+        .flatten()
+        .map(|&line| (line, Vec::new()))
+        .collect();
+    let mut vertices = Nearby::default();
+    for &(u, v) in splits.keys() {
         vertices.insert(u, pool);
         vertices.insert(v, pool);
     }
@@ -66,52 +69,61 @@ pub(super) fn node(faces: &[PlanarFace], segments: &Segments, pool: &mut Pool) -
         for (first, second) in pairs_of_boxes(lines, |v| at(pool, v)) {
             if let Some(vertex) = crossing(first, second, &vertices, pool, &at) {
                 for line in [first, second] {
-                    splits.entry(line).or_default().insert(vertex);
+                    if let Some(split) = splits.get_mut(&line) {
+                        split.push(vertex);
+                    }
                 }
                 vertices.insert(vertex, pool);
             }
         }
     }
     let by_x = sorted_by_x(pool, vertices.all());
-    let chains = splits
+    let along = splits
         .into_iter()
         .map(|((u, v), mut split)| {
             split.extend(vertices_on_edge(pool, &by_x, (u, v)));
             let (p, d) = (pool.get(u), sub(pool.get(v), pool.get(u)));
-            let along = |w: usize| dot(sub(pool.get(w), p), d);
-            let mut chain: Vec<usize> = split.into_iter().collect();
-            chain.sort_by(|&w, &x| along(w).total_cmp(&along(x)).then(w.cmp(&x)));
-            ((u, v), chain)
+            let mut chain: Vec<(f64, usize)> = split
+                .into_iter()
+                .map(|w| (dot(sub(pool.get(w), p), d), w))
+                .collect();
+            // A vertex found twice has the same key both times, so its copies end up together.
+            chain.sort_by(|a, b| a.0.total_cmp(&b.0).then(a.1.cmp(&b.1)));
+            chain.dedup_by_key(|&mut (_, w)| w);
+            ((u, v), chain.into_iter().map(|(_, w)| w).collect())
         })
         .collect();
-    Chains {
-        lines,
-        along: chains,
-    }
+    Chains { lines, along }
 }
 
-/// Vertices bucketed by slices of x one tolerance wide, so the vertices near a point are found
-/// without looking at all of them.
+/// Vertices bucketed by cells one tolerance wide, as the vertex merge does, so the vertices near
+/// a point are found without looking at all of them.
 #[derive(Default)]
-struct Nearby(BTreeSet<(i64, usize)>);
+struct Nearby(BTreeMap<[i64; 3], Vec<usize>>);
 
 impl Nearby {
+    /// Adds a vertex; adding one twice is harmless.
     fn insert(&mut self, vertex: usize, pool: &Pool) {
-        self.0.insert((cell_of(pool.get(vertex))[0], vertex));
+        self.0
+            .entry(cell_of(pool.get(vertex)))
+            .or_default()
+            .push(vertex);
     }
 
     fn all(&self) -> impl Iterator<Item = usize> + '_ {
-        self.0.iter().map(|&(_, vertex)| vertex)
+        self.0.values().flatten().copied()
     }
 
     /// Whether a vertex lies within the tolerance of a point.
     fn any_within(&self, point: Vector, pool: &Pool) -> bool {
-        let x = cell_of(point)[0];
-        self.0
-            .range((x - 1, 0)..=(x + 1, usize::MAX))
-            .any(|&(_, vertex)| {
-                distance_squared(point, pool.get(vertex)) <= WITHIN_TOLERANCE_SQUARED
+        let [x, y, z] = cell_of(point);
+        (-1..=1)
+            .flat_map(|dx| {
+                (-1..=1).flat_map(move |dy| (-1..=1).map(move |dz| [x + dx, y + dy, z + dz]))
             })
+            .filter_map(|cell| self.0.get(&cell))
+            .flatten()
+            .any(|&vertex| distance_squared(point, pool.get(vertex)) <= WITHIN_TOLERANCE_SQUARED)
     }
 }
 
@@ -146,36 +158,34 @@ fn pairs_of_boxes(lines: &[Line], at: impl Fn(usize) -> Point2) -> Vec<(Line, Li
 pub(super) fn split(face: &PlanarFace, index: usize, chains: &Chains, pool: &Pool) -> Regions {
     let mut pieces = BTreeSet::new();
     for &(u, v) in &chains.lines[index] {
-        let stops: Vec<usize> = std::iter::once(u)
-            .chain(chains.along[&(u, v)].iter().copied())
-            .chain(std::iter::once(v))
-            .collect();
-        for pair in stops.windows(2) {
-            pieces.insert((pair[0], pair[1]));
-            pieces.insert((pair[1], pair[0]));
+        let mut from = u;
+        for &to in chains.along[&(u, v)].iter().chain(std::iter::once(&v)) {
+            pieces.insert((from, to));
+            pieces.insert((to, from));
+            from = to;
         }
     }
     let at = |v: usize| face.projection.apply(pool.get(v));
     regions(chain(&pieces, at), at)
 }
 
-/// The vertex where two edges cross in their interiors, if they do. The decision is exact; the
+/// The vertex where two lines cross in their interiors, if they do. The decision is exact; the
 /// point is computed once. A crossing within the tolerance of an existing vertex is left to the
-/// splitting of edges at vertices instead, which puts that vertex on both edges.
+/// splitting of lines at vertices instead, which puts that vertex on both lines.
 fn crossing(
-    first: (usize, usize),
-    second: (usize, usize),
+    first: Line,
+    second: Line,
     vertices: &Nearby,
     pool: &mut Pool,
     at: &impl Fn(&Pool, usize) -> Point2,
 ) -> Option<usize> {
     let ends = [first.0, first.1, second.0, second.1];
-    if first.0 == second.0 || first.0 == second.1 || first.1 == second.0 || first.1 == second.1 {
+    if ends[..2].iter().any(|end| ends[2..].contains(end)) {
         return None;
     }
-    // Edges that touch or overlap within the tolerance are split at each other's ends instead:
-    // nearly collinear edges would otherwise cross at an arbitrary point along their overlap.
-    let near = |vertex: usize, (start, end): (usize, usize)| {
+    // Lines that touch or overlap within the tolerance are split at each other's ends instead:
+    // nearly collinear lines would otherwise cross at an arbitrary point along their overlap.
+    let near = |vertex: usize, (start, end): Line| {
         segment_distance_squared(pool.get(vertex), pool.get(start), pool.get(end))
             <= WITHIN_TOLERANCE_SQUARED
     };

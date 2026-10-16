@@ -147,7 +147,8 @@ fn a_triangle_a_few_tolerances_wide_beside_an_edge_closes() {
     assert!((va - (cut.volume() + shared.volume())).abs() <= slack);
 }
 
-/// A loop decoded as the `extruded_boolean` fuzz target decodes one: points in quarter metres
+/// A loop decoded as the `extruded_boolean` fuzz target decodes one (`edge_loop` in
+/// `fuzz/src/lib.rs`, which these tests cannot depend on; keep the two alike): points in quarter metres
 /// scaled by `2^exponent`, each edge a line for a kind below 128, otherwise an arc whose centre
 /// lies `kind & 0x3f` minus 32 eighths of the chord away, counterclockwise when `kind & 0x40` is
 /// set.
