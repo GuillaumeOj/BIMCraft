@@ -2,10 +2,13 @@
 //!
 //! Each pair of faces whose boxes overlap gives the segments where the two faces overlap along
 //! the line their planes share. Coplanar pairs exchange their boundaries instead, so each can
-//! later be split where the other starts and ends. Segments go to both faces.
+//! later be split where the other starts and ends. Segments go to both faces, and each segment
+//! where two planes cross remembers the two faces it lies in, so that the pieces along it can
+//! later be told which side of each face they lie on.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
+use super::arrange::{Line, line};
 use super::face::{PlanarFace, Pool, meeting_direction};
 use crate::tolerance::WITHIN_TOLERANCE;
 use crate::vector::{add, dot, edges, length, scale, sub};
@@ -13,10 +16,27 @@ use crate::vector::{add, dot, edges, length, scale, sub};
 /// The segments to insert into each face, as vertex pairs of the pool.
 pub(super) type Segments = Vec<Vec<(usize, usize)>>;
 
+/// For each segment where the planes of two faces cross, the faces it lies in.
+pub(super) type Cuts = BTreeMap<Line, BTreeSet<usize>>;
+
+/// The cuts with their vertices renamed; those whose ends merge go.
+pub(super) fn renamed(cuts: Cuts, rename: &[usize]) -> Cuts {
+    let mut out = Cuts::new();
+    for ((u, v), on) in cuts {
+        if rename[u] != rename[v] {
+            out.entry(line(rename[u], rename[v]))
+                .or_default()
+                .extend(on);
+        }
+    }
+    out
+}
+
 /// Intersects every face of the first operand (`faces[..split]`) with every face of the second
 /// whose bounding box overlaps it.
-pub(super) fn segments(faces: &[PlanarFace], split: usize, pool: &mut Pool) -> Segments {
+pub(super) fn segments(faces: &[PlanarFace], split: usize, pool: &mut Pool) -> (Segments, Cuts) {
     let mut out = vec![Vec::new(); faces.len()];
+    let mut cuts = Cuts::new();
     let mut crossings = BTreeMap::new();
     let mut neighbours = vec![Vec::new(); pool.len()];
     for (u, v) in faces
@@ -34,12 +54,17 @@ pub(super) fn segments(faces: &[PlanarFace], split: usize, pool: &mut Pool) -> S
             crossings: &mut crossings,
             neighbours: &neighbours,
         };
-        for segment in pair.meet(f, g) {
-            out[f].push(segment);
-            out[g].push(segment);
+        let (coplanar, segments) = pair.meet(f, g);
+        for (u, v) in segments {
+            out[f].push((u, v));
+            out[g].push((u, v));
+            // Coplanar faces' segments are their own edges, which say where each face lies.
+            if !coplanar && u != v {
+                cuts.entry(line(u, v)).or_default().extend([f, g]);
+            }
         }
     }
-    out
+    (out, cuts)
 }
 
 /// The pairs of a face of the first operand (`faces[..split]`) and a face of the second whose
@@ -81,27 +106,24 @@ struct Pair<'a> {
 }
 
 impl Pair<'_> {
-    fn meet(&mut self, first: usize, second: usize) -> Vec<(usize, usize)> {
+    /// Whether the faces are coplanar, and the segments to insert into both.
+    fn meet(&mut self, first: usize, second: usize) -> (bool, Vec<(usize, usize)>) {
         let (one, other) = (&self.faces[first], &self.faces[second]);
         let sides_a = self.sides(one, other);
         let sides_b = self.sides(other, one);
         if apart(&sides_a) || apart(&sides_b) {
-            return Vec::new();
+            return (false, Vec::new());
         }
         let flat = |sides: &[Vec<i8>]| sides.iter().flatten().all(|&s| s == 0);
         // The same test as `PlanarFace::coplanar`, from the sides already worked out.
         if flat(&sides_a) || flat(&sides_b) {
-            return one
-                .rings
-                .iter()
-                .chain(&other.rings)
-                .flat_map(|ring| edges(ring))
-                .collect();
+            let boundaries = one.rings.iter().chain(&other.rings);
+            return (true, boundaries.flat_map(|ring| edges(ring)).collect());
         }
         // Exactly parallel planes with vertices on both sides of the tolerance band share no
         // line: ordering points along a zero direction would join them at random.
         let Some(direction) = meeting_direction(one, other) else {
-            return Vec::new();
+            return (false, Vec::new());
         };
         let sides_a = self.settled(one, sides_a, other);
         let sides_b = self.settled(other, sides_b, one);
@@ -114,14 +136,15 @@ impl Pair<'_> {
             .collect();
         points.sort_by(|p, q| p.0.total_cmp(&q.0).then(p.1.cmp(&q.1)));
         points.dedup_by_key(|p| p.1);
-        points
+        let segments = points
             .windows(2)
             .filter_map(|pair| {
                 let (u, v) = (pair[0].1, pair[1].1);
                 let middle = scale(add(pool.get(u), pool.get(v)), 0.5);
                 (one.covers(pool, middle) && other.covers(pool, middle)).then_some((u, v))
             })
-            .collect()
+            .collect();
+        (false, segments)
     }
 
     /// The side of `plane` each vertex of `face` lies on, ring by ring.

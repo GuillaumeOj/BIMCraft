@@ -14,8 +14,11 @@
 //!    tolerance of it, so neighbouring pieces share their edges exactly. Whether a cut crosses
 //!    another is decided exactly; every piece keeps the plane of its input face.
 //! 5. Each piece is classified against the other operand: inside, outside, or on one of its
-//!    faces, facing the same way or the opposite way. The operation keeps some classes and drops
-//!    the others; kept pieces of the same face merge back into as few faces as possible.
+//!    faces, facing the same way or the opposite way. The side is read along the edges where
+//!    the other operand's faces cut the pieces, from those faces' planes, and carried across
+//!    the edges they do not hold; only pieces the other operand does not reach are classified
+//!    from a point inside them. The operation keeps some classes and drops the others; kept
+//!    pieces of the same face merge back into as few faces as possible.
 //! 6. The kept faces are stitched into a solid: lumps that only touch along an edge or at a
 //!    point get their own vertices, adjacent coplanar faces merge, vertices between collinear
 //!    edges go, and lumps or voids no thicker than the tolerance on average vanish (merge pass,
@@ -42,10 +45,10 @@ mod snap;
 
 pub use error::BooleanError;
 
-use self::classify::{Class, classify};
+use self::classify::Class;
 use self::face::{PlanarFace, Pool};
-use self::planar::{OUTSIDE, Regions, faces_of, interior_point};
-use crate::{Point2, Solid};
+use self::planar::{OUTSIDE, Regions, faces_of};
+use crate::Solid;
 
 /// A boolean operation.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -150,7 +153,7 @@ fn run(first: &Solid, second: &Solid, operation: Operation) -> Result<Option<Sol
     }
     let split = first.face_count();
     align::align(&mut faces, split, &mut pool);
-    let mut segments = intersect::segments(&faces, split, &mut pool);
+    let (mut segments, cuts) = intersect::segments(&faces, split, &mut pool);
     let rename = snap::snap(&pool, &(0..pool.len()).collect::<Vec<_>>())?;
     for face in &mut faces {
         face.remap(&rename, &pool);
@@ -158,17 +161,25 @@ fn run(first: &Solid, second: &Solid, operation: Operation) -> Result<Option<Sol
     for (u, v) in segments.iter_mut().flatten() {
         (*u, *v) = (rename[*u], rename[*v]);
     }
+    let cuts = intersect::renamed(cuts, &rename);
     let chains = arrange::node(&faces, &segments, &mut pool);
+    let pieces: Vec<Regions> = (faces.iter().enumerate())
+        .map(|(index, face)| arrange::split(face, index, &chains, &pool))
+        .collect();
+    let holding = chains.holding(&pool);
+    let classes = classify::classes(&faces, split, &pieces, &holding, &cuts, &pool);
     let mut kept = Vec::new();
     for (index, face) in faces.iter().enumerate() {
-        let (operand, other) = if index < split {
-            (Operand::First, &faces[split..])
+        let operand = if index < split {
+            Operand::First
         } else {
-            (Operand::Second, &faces[..split])
+            Operand::Second
         };
-        let pieces = arrange::split(face, index, &chains, &pool);
-        let keep = |q: Point2| operation.keeps(operand, classify(face.lift(q), face, other, &pool));
-        let mut parts = kept_parts(face, &pieces, keep, &pool);
+        let keep: Vec<bool> = classes[index]
+            .iter()
+            .map(|class| class.is_some_and(|class| operation.keeps(operand, class)))
+            .collect();
+        let mut parts = kept_parts(face, &pieces[index], &keep, &pool);
         if operation.reverses(operand) {
             parts.iter_mut().flatten().for_each(|ring| ring.reverse());
         }
@@ -177,20 +188,15 @@ fn run(first: &Solid, second: &Solid, operation: Operation) -> Result<Option<Sol
     assemble::assemble(kept, &mut pool)
 }
 
-/// The parts of a cut face to keep, as faces: the pieces `keep` accepts at an interior point,
-/// merged back together where they touch.
+/// The parts of a cut face to keep, as faces: the pieces marked `kept`, merged back together
+/// where they touch.
 fn kept_parts(
     face: &PlanarFace,
     pieces: &Regions,
-    keep: impl Fn(Point2) -> bool,
+    kept: &[bool],
     pool: &Pool,
 ) -> Vec<Vec<Vec<usize>>> {
     let at = |v: usize| face.projection.apply(pool.get(v));
-    let kept: Vec<bool> = pieces
-        .regions
-        .iter()
-        .map(|region| interior_point(region, at).is_some_and(|q| face.contains(pool, q) && keep(q)))
-        .collect();
     let kept_side = |region: usize| region != OUTSIDE && kept[region];
     let boundary = pieces
         .left
