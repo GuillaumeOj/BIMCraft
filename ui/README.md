@@ -13,12 +13,13 @@ Run them from `ui/` after `bun install`:
 | Development server | `bun run dev` |
 | Production build | `bun run build` |
 | Unit tests with coverage | `bunx vitest run --coverage` |
+| End-to-end tests (first run: `bunx playwright install chromium`) | `bunx playwright test` |
 | Lint, format and imports | `bunx biome ci .` |
-| Type check | `bunx tsc --noEmit` |
+| Type check (all code, then the app without Node types) | `bun run typecheck` |
 
 ## Configuration
 
 - `bunfig.toml` — exact versions, 14-day minimum release age.
 - `biome.json` — formatter, linter and import sorting.
 - `tsconfig.base.json` — strict TypeScript; `tsconfig.json` extends it.
-- `vitest.config.ts` — unit tests and coverage thresholds; see [docs/dev/ui-setup.md](../docs/dev/ui-setup.md).
+- `vitest.config.ts` — unit tests and coverage thresholds; `playwright.config.ts` — end-to-end tests in `e2e/`; see [docs/dev/ui-setup.md](../docs/dev/ui-setup.md).
