@@ -496,4 +496,24 @@ mod tests {
         assert!(curves_meet(&chord, &long, &[v]));
         assert!(!curves_meet(&chord, &long, &[v, p(0.0, 1.0)]));
     }
+
+    #[test]
+    fn a_wedge_beside_an_arc_of_almost_a_full_turn_is_no_cusp() {
+        // A unit circle open over 0.1 mm at (1, 0), then a line leaving its end 0.3° outside the
+        // arc: the arc is 6 m long, so the wedge opens 5 mm over the first metre. Measured by the
+        // arc's 0.1 mm chord, the turn looked like a cusp.
+        let gap = 1e-4;
+        let (start, end) = (p(libm::cos(gap), libm::sin(gap)), p(1.0, 0.0));
+        let turn = 5e-3;
+        let below = p(1.0 + turn, -1.0);
+        let edges = vec![
+            ccw(start, end, p(0.0, 0.0)),
+            line(end, below),
+            line(below, p(2.0, 2.0)),
+            line(p(2.0, 2.0), start),
+        ];
+        let curves = curves(&edges);
+        assert!(!leave_together(&curves[0], &curves[1], end));
+        assert_eq!(check_simple(LoopId::Outer, &curves), Ok(()));
+    }
 }
