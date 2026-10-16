@@ -71,10 +71,6 @@ describe("readChange", () => {
     ["not an object", "1"],
     ["another method", JSON.stringify({ jsonrpc: "2.0", method: "other", params: event })],
     ["no params", JSON.stringify({ jsonrpc: "2.0", method: "model.changed" })],
-    [
-      "params that are no change",
-      JSON.stringify({ jsonrpc: "2.0", method: "model.changed", params: { created: "a" } }),
-    ],
   ])("ignores %s", (_case, text) => {
     expect(readChange(text)).toBeNull();
   });

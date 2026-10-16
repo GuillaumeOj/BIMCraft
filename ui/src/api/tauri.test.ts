@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { TransportError } from "./jsonrpc";
-import { COMMAND, NOTIFICATION, tauriTransport } from "./tauri";
+import { tauriTransport } from "./tauri";
 
 const tauri = vi.hoisted(() => ({ invoke: vi.fn(), listen: vi.fn() }));
 vi.mock("@tauri-apps/api/core", () => ({ invoke: tauri.invoke }));
@@ -17,8 +17,8 @@ describe("tauriTransport", () => {
     await expect(tauriTransport.send("message")).resolves.toBe(
       '{"jsonrpc":"2.0","id":1,"result":null}',
     );
-    expect(tauri.invoke).toHaveBeenCalledWith(COMMAND, { message: "message" });
-    expect(COMMAND).toBe("api");
+    // The names host_desktop::ipc serves.
+    expect(tauri.invoke).toHaveBeenCalledWith("api", { message: "message" });
   });
 
   it("reports a failed IPC call as a TransportError", async () => {
@@ -37,8 +37,7 @@ describe("tauriTransport", () => {
     tauri.listen.mockResolvedValue(unlisten);
     const received: string[] = [];
     const unsubscribe = await tauriTransport.listen((message) => received.push(message));
-    expect(tauri.listen).toHaveBeenCalledWith(NOTIFICATION, expect.any(Function));
-    expect(NOTIFICATION).toBe("api://notification");
+    expect(tauri.listen).toHaveBeenCalledWith("api://notification", expect.any(Function));
     const handler = tauri.listen.mock.calls[0]?.[1] as (event: { payload: string }) => void;
     handler({ payload: "notification" });
     expect(received).toEqual(["notification"]);

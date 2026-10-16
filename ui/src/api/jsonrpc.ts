@@ -28,7 +28,6 @@ type Message = {
   params?: unknown;
 };
 type ErrorObject = { code?: unknown; message?: unknown; data?: unknown };
-type ChangeObject = { created?: unknown; modified?: unknown; deleted?: unknown };
 
 /** Whether `value` is a JSON object; its fields are then read as `unknown`. */
 const isObject = <T extends object>(value: unknown): value is T =>
@@ -56,9 +55,9 @@ export const request = (id: number, method: string, params: unknown): string =>
 export function readResponse(text: string | null, id: number): unknown {
   if (text === null) throw new TransportError(`no response to request ${id}`);
   const response = parse(text);
-  const malformed = new TransportError(`malformed response to request ${id}`);
+  const malformed = () => new TransportError(`malformed response to request ${id}`);
   if (!isObject<Message>(response) || response.jsonrpc !== "2.0" || response.id !== id) {
-    throw malformed;
+    throw malformed();
   }
   if ("result" in response) return response.result;
   const { error } = response;
@@ -69,20 +68,15 @@ export function readResponse(text: string | null, id: number): unknown {
   ) {
     throw new ApiError(error.code, error.message, error.data);
   }
-  throw malformed;
+  throw malformed();
 }
 
-const isIdList = (value: unknown): boolean =>
-  Array.isArray(value) && value.every((id) => typeof id === "string");
-
-/** The change a `model.changed` notification `text` reports, or null for any other message. */
+/**
+ * The change a `model.changed` notification `text` reports, or null for any other message.
+ * Like results, its contents are trusted to follow the schema; only the envelope is checked.
+ */
 export function readChange(text: string): ChangeEvent | null {
   const message = parse(text);
   if (!isObject<Message>(message) || message.method !== "model.changed") return null;
-  const { params } = message;
-  if (!isObject<ChangeObject>(params)) return null;
-  if (!isIdList(params.created) || !isIdList(params.modified) || !isIdList(params.deleted)) {
-    return null;
-  }
-  return params as ChangeEvent;
+  return isObject<ChangeEvent>(message.params) ? message.params : null;
 }

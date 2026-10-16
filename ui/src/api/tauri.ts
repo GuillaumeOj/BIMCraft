@@ -4,9 +4,9 @@ import type { Transport } from "./client";
 import { TransportError } from "./jsonrpc";
 
 /** The desktop window's command that carries one message (host_desktop::ipc::COMMAND). */
-export const COMMAND = "api";
+const COMMAND = "api";
 /** The event that carries the core's notifications (host_desktop::ipc::NOTIFICATION). */
-export const NOTIFICATION = "api://notification";
+const NOTIFICATION = "api://notification";
 
 /** The transport of the desktop window: Tauri's IPC to the document in the same program. */
 export const tauriTransport: Transport = {
