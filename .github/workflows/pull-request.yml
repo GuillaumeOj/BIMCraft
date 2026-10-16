@@ -1,8 +1,6 @@
 # Checks the pull request itself: commit messages and the user-docs rule (scripts/check-pr.sh).
-# It is the only workflow that reruns when a label changes, because the no-user-docs label is an
-# input of the check. Kept apart from ci.yml so that opening a pull request with a label, which
-# fires `opened` and `labeled` together, starts the build jobs once: a cancelled duplicate run
-# leaves a failed `Rust (${{ matrix.os }})` check behind, as its matrix was never expanded.
+# The no-user-docs label is an input of the check, so this is the only workflow that reruns when
+# a label changes; ci.yml does not, so a pull request opened with a label builds once.
 name: Pull request
 
 on:
@@ -15,7 +13,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: pr-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -23,13 +21,22 @@ jobs:
     name: Commits and user docs
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      pull-requests: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
+      # Labels are read now, not from the event: a pull request created with labels gets them
+      # after `opened` fires, and concurrency may cancel the `labeled` run and keep that one.
       - env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          NO_USER_DOCS: ${{ contains(github.event.pull_request.labels.*.name, 'no-user-docs') }}
-        run: scripts/check-pr.sh "$BASE_SHA" "$HEAD_SHA"
+        run: |
+          NO_USER_DOCS=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER" --jq 'any(.labels[]; .name == "no-user-docs")')
+          export NO_USER_DOCS
+          scripts/check-pr.sh "$BASE_SHA" "$HEAD_SHA"
