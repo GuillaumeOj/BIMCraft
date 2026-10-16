@@ -305,7 +305,14 @@ pub(super) fn vertices_on_edge(pool: &Pool, by_x: &[usize], (u, v): (usize, usiz
         .take_while(|&w| pool.get(w)[0] <= hi)
         .filter(|&w| {
             let point = pool.get(w);
-            w != u
+            // Outside the edge's box, grown by the tolerance, a vertex cannot be within it.
+            let reach = |i: usize| {
+                p[i].min(q[i]) - WITHIN_TOLERANCE <= point[i]
+                    && point[i] <= p[i].max(q[i]) + WITHIN_TOLERANCE
+            };
+            reach(1)
+                && reach(2)
+                && w != u
                 && w != v
                 && distance_squared(point, p) > WITHIN_TOLERANCE_SQUARED
                 && distance_squared(point, q) > WITHIN_TOLERANCE_SQUARED
