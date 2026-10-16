@@ -18,6 +18,14 @@ use tauri::test::{
 use tauri::webview::InvokeRequest;
 use tauri::{App, Listener, WebviewWindow, WebviewWindowBuilder};
 
+/// The window's own origin, which Tauri lets call app commands: Windows serves the app over
+/// HTTP, the other platforms over the `tauri` scheme.
+const APP_URL: &str = if cfg!(windows) {
+    "http://tauri.localhost"
+} else {
+    "tauri://localhost"
+};
+
 fn failed(error: impl Display) -> TransportError {
     TransportError {
         reason: error.to_string(),
@@ -59,7 +67,7 @@ impl Transport for TauriIpc {
             cmd: ipc::COMMAND.into(),
             callback: CallbackFn(0),
             error: CallbackFn(1),
-            url: "tauri://localhost".parse().unwrap(),
+            url: APP_URL.parse().unwrap(),
             body: InvokeBody::Json(serde_json::json!({ "message": message })),
             headers: tauri::http::HeaderMap::default(),
             invoke_key: INVOKE_KEY.to_owned(),
