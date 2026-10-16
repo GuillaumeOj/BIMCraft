@@ -31,4 +31,4 @@ Every string shown to the user comes from `src/i18n/messages/en.json` (the refer
 
 ## Reaching the core (UI-01)
 
-UI code reaches the core only through the typed client in `src/api/`: `new ApiClient(tauriTransport)`, then `client.command(name, params)`, `client.query(name, params)` and `client.onChange(listener)`. Names, parameters and results are typed from `src/api/protocol.gen.ts`, which `bun scripts/generate-api-types.ts` generates from the published schema (`schema/api/protocol.schema.json`); `scripts/check-all.sh repo` fails when it is stale. Biome forbids importing `@tauri-apps/*` outside `src/api/`. See [docs/dev/desktop.md](../docs/dev/desktop.md).
+UI code reaches the core only through the typed client in `src/api/`: `new ApiClient(tauriTransport)`, then `client.command(name, params)`, `client.query(name, params)` and `client.onChange(listener)`. Names, parameters and results are typed from `src/api/protocol.gen.ts`, generated from the published schema: see [docs/dev/api.md](../docs/dev/api.md#transports) for when and how to regenerate it. Biome forbids importing `@tauri-apps/*` outside `src/api/`. See [docs/dev/desktop.md](../docs/dev/desktop.md).

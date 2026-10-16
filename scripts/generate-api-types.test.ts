@@ -86,6 +86,7 @@ describe("generate", () => {
     };
     const generated = generate(schema);
     expect(generated).toContain("/** An id. */\nexport type EntityId = string;\n");
+    // Shared even though no method refers to it, as ChangeEvent is for notifications.
     expect(generated).toContain("\nexport type Plain = boolean;\n");
     expect(generated).toContain(
       '  /** Does history.undo. */\n  "history.undo": { params: Record<string, never>; result: null };\n',
