@@ -51,9 +51,17 @@ fn check_curve(curve: &Curve, loop_id: LoopId, edge: usize) -> Result<(), Profil
             // Distinct ends at the same angle sweep nothing counterclockwise and a full turn
             // clockwise; either way the arc is not what its ends describe.
             let same_angle = !arc.is_full_circle() && (arc.sweep == 0.0 || arc.sweep.abs() >= TAU);
+            // The checks between consecutive edges ignore points within the tolerance of their
+            // common end, so an arc must reach beyond it: its ends must not merge under the
+            // tolerance policy, and its middle, the point farthest from the nearer end, must lie
+            // outside the tolerance of them. Otherwise they could miss the arc retracing or
+            // crossing its neighbour.
+            let within_ends = !arc.is_full_circle()
+                && (distance(arc.start, arc.end) <= WITHIN_TOLERANCE
+                    || distance(arc.middle, arc.start) <= WITHIN_TOLERANCE);
             if (distance(arc.end, arc.centre) - arc.radius).abs() > WITHIN_TOLERANCE {
                 Err(ProfileError::ArcRadiusMismatch { loop_id, edge })
-            } else if arc.radius <= WITHIN_TOLERANCE || same_angle {
+            } else if arc.radius <= WITHIN_TOLERANCE || same_angle || within_ends {
                 Err(ProfileError::DegenerateArc { loop_id, edge })
             } else {
                 Ok(())
@@ -179,7 +187,46 @@ fn curves_meet(a: &Curve, b: &Curve, shared: &[Point2]) -> bool {
             let other_b = if b0 == v { *b1 } else { *b0 };
             folds_back(other_a, *v, other_b)
         }
-        _ => clearance(a, b, shared) <= WITHIN_TOLERANCE,
+        _ => {
+            shared.iter().any(|&v| leave_together(a, b, v))
+                || clearance(a, b, shared) <= WITHIN_TOLERANCE
+        }
+    }
+}
+
+/// Whether consecutive edges leave their common end `v` in the same direction, so closely that
+/// the turn alone keeps them within the tolerance along the shorter one: a cusp. Its sliver
+/// starts among the points near `v` that [`clearance`] ignores, so it may find no point of it.
+fn leave_together(a: &Curve, b: &Curve, v: Point2) -> bool {
+    let (along_a, along_b) = (departure(a, v), departure(b, v));
+    let reach = length_of(a).min(length_of(b));
+    dot(along_a, along_b) > 0.0 && cross(along_a, along_b).abs() * reach <= WITHIN_TOLERANCE
+}
+
+/// The length of an edge along itself: an arc's is longer than its chord, much longer for an
+/// arc of almost a full turn.
+fn length_of(curve: &Curve) -> f64 {
+    match curve {
+        Curve::Segment(start, end) => distance(*start, *end),
+        Curve::Arc(arc) => arc.radius * arc.sweep.abs(),
+    }
+}
+
+/// The unit direction in which `curve` leaves its end `v`.
+fn departure(curve: &Curve, v: Point2) -> Point2 {
+    let travel = match curve {
+        Curve::Segment(start, end) => sub(*end, *start),
+        Curve::Arc(arc) => {
+            let radial = sub(v, arc.centre);
+            let turn = arc.sweep.signum();
+            Point2::new(-radial.y * turn, radial.x * turn)
+        }
+    };
+    let direction = unit(travel);
+    if v == curve.start() {
+        direction
+    } else {
+        Point2::new(-direction.x, -direction.y)
     }
 }
 
@@ -448,5 +495,25 @@ mod tests {
         let long = ccw(v, p(0.0, -1.0), p(0.0, 0.0)).curve();
         assert!(curves_meet(&chord, &long, &[v]));
         assert!(!curves_meet(&chord, &long, &[v, p(0.0, 1.0)]));
+    }
+
+    #[test]
+    fn a_wedge_beside_an_arc_of_almost_a_full_turn_is_no_cusp() {
+        // A unit circle open over 0.1 mm at (1, 0), then a line leaving its end 0.3° outside the
+        // arc: the arc is 6 m long, so the wedge opens 5 mm over the first metre. Measured by the
+        // arc's 0.1 mm chord, the turn looked like a cusp.
+        let gap = 1e-4;
+        let (start, end) = (p(libm::cos(gap), libm::sin(gap)), p(1.0, 0.0));
+        let turn = 5e-3;
+        let below = p(1.0 + turn, -1.0);
+        let edges = vec![
+            ccw(start, end, p(0.0, 0.0)),
+            line(end, below),
+            line(below, p(2.0, 2.0)),
+            line(p(2.0, 2.0), start),
+        ];
+        let curves = curves(&edges);
+        assert!(!leave_together(&curves[0], &curves[1], end));
+        assert_eq!(check_simple(LoopId::Outer, &curves), Ok(()));
     }
 }

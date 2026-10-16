@@ -89,7 +89,8 @@ pub enum ProfileError {
         /// The edge.
         edge: usize,
     },
-    /// An arc has a radius within the tolerance, or distinct ends at the same angle.
+    /// An arc has a radius within the tolerance, distinct ends at the same angle or within the
+    /// tolerance of each other, or lies all within the tolerance of its ends.
     #[error("edge {edge} of {loop_id} is a degenerate arc")]
     DegenerateArc {
         /// The loop.

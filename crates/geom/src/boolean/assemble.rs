@@ -6,20 +6,23 @@
 //!   with the face across the same lump; lumps touching at an edge or a point then get their own
 //!   copies of the vertices, so no non-manifold edge or vertex is created.
 //! - Adjacent coplanar faces merge, and vertices left between two collinear edges go.
+//! - A face whose boundary passes through a vertex twice, such as one notched up to a corner,
+//!   is split in two along a segment inside it.
 
 use std::collections::{BTreeMap, BTreeSet};
 
 use super::BooleanError;
 use super::face::{
-    Pool, Projection, area_and_centre, clean_face, plane, segment_distance_squared, sorted_by_x,
-    vertices_on_edge,
+    Pool, Projection, area_and_centre, clean_face, plane, ring_contains, segment_distance_squared,
+    sorted_by_x, vertices_on_edge,
 };
-use super::planar::faces_of;
-use super::snap::{find, snap, union};
+use super::planar::{faces_of, regions};
+use super::snap::{find, snap};
 use crate::brep::enclosed_volume;
+use crate::predicates::orient2d;
 use crate::tolerance::{WITHIN_TOLERANCE, WITHIN_TOLERANCE_SQUARED};
 use crate::vector::{Vector, cross, dot, edges, length, scale, sub};
-use crate::{FaceInput, Point3, Solid};
+use crate::{FaceInput, Orientation, Point2, Point3, Solid};
 
 /// Faces as rings of pool vertices, the outer ring first.
 pub(super) type Faces = Vec<Vec<Vec<usize>>>;
@@ -40,18 +43,30 @@ pub(super) fn assemble(mut faces: Faces, pool: &mut Pool) -> Result<Option<Solid
     if faces.is_empty() {
         return Ok(None);
     }
-    // Renaming vertices below moves none of them, so the planes hold throughout.
-    let planes: Vec<(Vector, Vector)> = faces.iter().map(|face| plane(face, pool)).collect();
+    // Renaming vertices below moves none of them, so the planes hold until the merge.
+    let planes = planes_of(&faces, pool);
     let Some(twins) = pair(&faces, &planes, pool) else {
         return build(&faces, pool);
     };
     separate_lumps(&mut faces, &twins, pool);
-    let faces = merge_coplanar(&faces, &planes, &twins, pool);
-    let faces = drop_thin_lumps(remove_collinear(faces, pool), pool);
+    let mut faces = remove_collinear(merge_coplanar(&faces, &planes, &twins, pool), pool);
+    // Where the solid touches itself along an edge in the middle of a face, merging the face's
+    // pieces from both sides leaves a ring running along the edge and back, enclosing nothing.
+    // It goes, and the edge is left to the faces that meet there; the lumps that only touched
+    // through it may now touch at a vertex, so they are separated again.
+    clean(&mut faces);
+    if let Some(twins) = pair(&faces, &planes_of(&faces, pool), pool) {
+        separate_lumps(&mut faces, &twins, pool);
+    }
+    let faces = drop_thin_lumps(faces, pool);
     if faces.is_empty() {
         return Ok(None);
     }
-    build(&faces, pool)
+    build(&split_pinched(faces, pool), pool)
+}
+
+fn planes_of(faces: &Faces, pool: &Pool) -> Vec<(Vector, Vector)> {
+    faces.iter().map(|face| plane(face, pool)).collect()
 }
 
 /// Splits every edge at the vertices of other faces lying on it, within the tolerance.
@@ -204,31 +219,41 @@ fn merge_coplanar(
     pool: &Pool,
 ) -> Faces {
     let half_edges = HalfEdges::new(faces);
-    // Whether the two faces, taken as one, are planar within the tolerance: the test the solid's
-    // checks will apply to the merged face. It is not enough on its own: a face a few
+    // Whether two groups of faces, taken as one, are planar within the tolerance: the test the
+    // solid's checks will apply to the merged face. It is not enough on its own: a face a few
     // tolerances wide, square to its neighbour, would pass, its width split on either side of
-    // the plane fitted to both. So the vertices of both must also lie within the tolerance of
-    // one face's plane; requiring both planes would reject a small face tilted by a rounding
-    // error next to a large one.
-    let flat_together = |f: usize, g: usize| {
-        let both: Vec<Vec<usize>> = faces[f].iter().chain(&faces[g]).cloned().collect();
+    // the plane fitted to both. So their vertices must also lie within the tolerance of one
+    // face's plane; requiring every face's plane would reject a small face tilted by a rounding
+    // error next to a large one. Groups are tested whole, not face by face: a face a few
+    // tolerances wide may lie within the tolerance of two neighbours that are not coplanar,
+    // and would otherwise join them into one bent face.
+    let flat_together = |groups: [&[usize]; 2]| {
+        let members = || groups.into_iter().flatten().copied();
+        let both: Vec<Vec<usize>> = members().flat_map(|f| faces[f].iter().cloned()).collect();
         let near = |(normal, centre): (Vector, Vector)| {
             both.iter()
                 .flatten()
                 .all(|&v| dot(normal, sub(pool.get(v), centre)).abs() <= WITHIN_TOLERANCE)
         };
-        near(plane(&both, pool)) && (near(planes[f]) || near(planes[g]))
+        near(plane(&both, pool)) && members().any(|f| near(planes[f]))
     };
     let mut group: Vec<usize> = (0..faces.len()).collect();
+    let mut members: Vec<Vec<usize>> = (0..faces.len()).map(|f| vec![f]).collect();
     for (h, &twin) in twins.iter().enumerate() {
         let (f, g) = (half_edges.face(h), half_edges.face(twin));
+        if f >= g {
+            continue;
+        }
+        let (rf, rg) = (find(&mut group, f), find(&mut group, g));
         // Faces sharing several edges are tested once: later edges find them merged.
-        if f < g
-            && find(&mut group, f) != find(&mut group, g)
+        if rf != rg
             && dot(planes[f].0, planes[g].0) > 0.0
-            && flat_together(f, g)
+            && flat_together([&members[rf], &members[rg]])
         {
-            union(&mut group, f, g);
+            let (root, other) = (rf.min(rg), rf.max(rg));
+            group[other] = root;
+            let moved = std::mem::take(&mut members[other]);
+            members[root].extend(moved);
         }
     }
     let mut size = vec![0_usize; faces.len()];
@@ -331,6 +356,137 @@ fn drop_thin_lumps(faces: Faces, pool: &Pool) -> Faces {
         .collect()
 }
 
+/// Splits each face whose rings pass through a vertex more than once into faces whose rings do
+/// not, which the solid's checks require. Such a face is left where a piece cut off a face
+/// touches its boundary at a single vertex: a notch reaching a corner, or two holes touching.
+/// It cannot keep the notch as a hole either: a hole touching the outer ring leaves the face a
+/// disc, not a ring, and the Euler–Poincaré count of the shell would be off by one.
+fn split_pinched(faces: Faces, pool: &Pool) -> Faces {
+    faces
+        .into_iter()
+        .flat_map(|face| {
+            if face.iter().all(|ring| repeat(ring).is_none()) {
+                return vec![face];
+            }
+            let projection = Projection::along(plane(&face, pool).0);
+            let at = |v: usize| projection.apply(pool.get(v));
+            let mut rings = face;
+            while let Some((r, repeat)) = rings
+                .iter()
+                .enumerate()
+                .find_map(|(r, ring)| Some((r, repeat(ring)?)))
+            {
+                let Some(chord) = chord(&rings, r, repeat, pool, at) else {
+                    break;
+                };
+                let ring = rings.swap_remove(r);
+                rings.extend(split_ring(&ring, chord));
+            }
+            regions(rings, at)
+                .regions
+                .into_iter()
+                .map(|region| std::iter::once(region.outer).chain(region.holes).collect())
+                .collect()
+        })
+        .collect()
+}
+
+/// The first two positions in a ring holding the same vertex.
+fn repeat(ring: &[usize]) -> Option<(usize, usize)> {
+    let mut first = BTreeMap::new();
+    ring.iter()
+        .enumerate()
+        .find_map(|(j, &v)| first.insert(v, j).map(|i| (i, j)))
+}
+
+/// The positions in ring `r`, one strictly between its two passes through a vertex and one
+/// strictly outside them, whose vertices a segment inside the face joins: of those, the segment
+/// farthest from the face's other vertices, so neither part is thin. `None` if there is none.
+fn chord(
+    rings: &[Vec<usize>],
+    r: usize,
+    (first, second): (usize, usize),
+    pool: &Pool,
+    at: impl Fn(usize) -> Point2 + Copy,
+) -> Option<(usize, usize)> {
+    let ring = &rings[r];
+    let pinch = ring[first];
+    let between = (first + 1..second).filter(|&k| ring[k] != pinch);
+    let outside: Vec<usize> = (second + 1..ring.len())
+        .chain(0..first)
+        .filter(|&k| ring[k] != pinch)
+        .collect();
+    let clearance = |(from, to): (usize, usize)| {
+        let (start, end) = (pool.get(from), pool.get(to));
+        rings
+            .iter()
+            .flatten()
+            .filter(|&&other| other != from && other != to)
+            .map(|&other| segment_distance_squared(pool.get(other), start, end))
+            .fold(f64::INFINITY, f64::min)
+    };
+    between
+        .flat_map(|k| outside.iter().map(move |&l| (k, l)))
+        .map(|(k, l)| ((ring[k], ring[l]), (k, l)))
+        .filter(|&((u, v), _)| u != v && inside(rings, (u, v), at))
+        .map(|(ends, chord)| (clearance(ends), chord))
+        .max_by(|one, other| one.0.total_cmp(&other.0))
+        .map(|(_, chord)| chord)
+}
+
+/// Whether the segment between two vertices runs inside the face: it meets no edge of the rings
+/// but at its ends, decided exactly, and its middle is inside.
+fn inside(rings: &[Vec<usize>], (from, to): (usize, usize), at: impl Fn(usize) -> Point2) -> bool {
+    let (start, end) = (at(from), at(to));
+    let side = |a, b, point| orient2d(a, b, point).unwrap_or(Orientation::Zero);
+    let within = |a: Point2, b: Point2, point: Point2| {
+        (a.x.min(b.x)..=a.x.max(b.x)).contains(&point.x)
+            && (a.y.min(b.y)..=a.y.max(b.y)).contains(&point.y)
+    };
+    // An edge leaving an end meets the segment again only if it runs along it.
+    let along = |vertex: usize, other: usize| {
+        let (near, far) = if vertex == from {
+            (start, end)
+        } else {
+            (end, start)
+        };
+        let point = at(other);
+        side(near, far, point) == Orientation::Zero
+            && (point.x - near.x) * (far.x - near.x) + (point.y - near.y) * (far.y - near.y) > 0.0
+    };
+    let crosses = |a: Point2, b: Point2| {
+        let (side_a, side_b) = (side(start, end, a), side(start, end, b));
+        if side_a == Orientation::Zero && side_b == Orientation::Zero {
+            return within(start, end, a) || within(start, end, b) || within(a, b, start);
+        }
+        side_a != side_b && side(a, b, start) != side(a, b, end)
+    };
+    let is_end = |vertex: usize| vertex == from || vertex == to;
+    let meets = |(u, v): (usize, usize)| match (is_end(u), is_end(v)) {
+        (true, _) => along(u, v),
+        (false, true) => along(v, u),
+        (false, false) => crosses(at(u), at(v)),
+    };
+    if rings.iter().flat_map(|ring| edges(ring)).any(meets) {
+        return false;
+    }
+    let middle = Point2::new(f64::midpoint(start.x, end.x), f64::midpoint(start.y, end.y));
+    rings.iter().fold(false, |odd, ring| {
+        odd ^ ring_contains(ring.iter().map(|&v| at(v)), middle)
+    })
+}
+
+/// The two rings a ring splits into along a segment between positions `k` and `l`, each
+/// keeping both ends.
+fn split_ring(ring: &[usize], (k, l): (usize, usize)) -> [Vec<usize>; 2] {
+    let n = ring.len();
+    let walk = |from: usize, to: usize| {
+        let steps = (to + n - from) % n;
+        (0..=steps).map(|s| ring[(from + s) % n]).collect()
+    };
+    [walk(k, l), walk(l, k)]
+}
+
 /// Numbers the used vertices in order and builds the solid, which validates it.
 fn build(faces: &Faces, pool: &Pool) -> Result<Option<Solid>, BooleanError> {
     let used: BTreeSet<usize> = faces.iter().flatten().flatten().copied().collect();
@@ -415,5 +571,53 @@ mod tests {
     fn nothing_left_is_none() {
         let mut pool = Pool::of(vec![[0.0; 3], [1.0, 0.0, 0.0]]);
         assert_eq!(assemble(vec![vec![vec![0, 1, 0]]], &mut pool), Ok(None));
+    }
+
+    #[test]
+    fn a_notch_reaching_a_corner_is_split_off() {
+        // A 4 m square whose ring, after its corner 0, runs round a triangular notch back to 0.
+        let pool = Pool::of(vec![
+            [0.0, 0.0, 0.0],
+            [4.0, 0.0, 0.0],
+            [4.0, 4.0, 0.0],
+            [0.0, 4.0, 0.0],
+            [1.0, 2.0, 0.0],
+            [2.0, 1.0, 0.0],
+        ]);
+        let faces = split_pinched(vec![vec![vec![0, 1, 2, 3, 0, 4, 5]]], &pool);
+        assert_eq!(faces.len(), 2);
+        assert!(faces.iter().flatten().all(|ring| repeat(ring).is_none()));
+    }
+
+    #[test]
+    fn lobes_touching_at_a_vertex_have_no_chord() {
+        // Two triangles meeting at vertex 0: every segment between them leaves the face, so the
+        // face is left for the solid's checks to report.
+        let pool = Pool::of(vec![
+            [0.0, 0.0, 0.0],
+            [2.0, -1.0, 0.0],
+            [2.0, 1.0, 0.0],
+            [-2.0, 1.0, 0.0],
+            [-2.0, -1.0, 0.0],
+        ]);
+        let face = vec![vec![0, 1, 2, 0, 3, 4]];
+        assert_eq!(split_pinched(vec![face.clone()], &pool), [face]);
+    }
+
+    #[test]
+    fn a_segment_along_an_edge_is_not_inside() {
+        // The diagonal of a square, inside it until a triangular hole has an edge along it.
+        let points = [
+            (0.0, 0.0),
+            (4.0, 0.0),
+            (4.0, 4.0),
+            (0.0, 4.0),
+            (1.0, 1.0),
+            (2.0, 2.0),
+            (2.0, 1.0),
+        ];
+        let at = |v: usize| Point2::new(points[v].0, points[v].1);
+        assert!(inside(&[vec![0, 1, 2, 3]], (0, 2), at));
+        assert!(!inside(&[vec![0, 1, 2, 3], vec![4, 5, 6]], (0, 2), at));
     }
 }

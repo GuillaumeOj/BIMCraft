@@ -50,6 +50,20 @@ doc = false
 bench = false
 
 [[bin]]
+name = "extruded_boolean"
+path = "fuzz_targets/extruded_boolean.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "extrusion"
+path = "fuzz_targets/extrusion.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
 name = "jsonrpc"
 path = "fuzz_targets/jsonrpc.rs"
 test = false
@@ -66,6 +80,13 @@ bench = false
 [[bin]]
 name = "parse_quantity"
 path = "fuzz_targets/parse_quantity.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "profile"
+path = "fuzz_targets/profile.rs"
 test = false
 doc = false
 bench = false
