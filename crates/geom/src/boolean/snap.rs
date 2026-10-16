@@ -6,7 +6,7 @@ use super::BooleanError;
 use super::face::Pool;
 use crate::LINEAR_TOLERANCE;
 use crate::tolerance::{WITHIN_TOLERANCE, WITHIN_TOLERANCE_SQUARED};
-use crate::vector::{Vector, bounds, distance_squared};
+use crate::vector::{Vector, bounds, distance_squared, lexicographic};
 
 /// The widest a group of merged vertices may be.
 const CHAIN_LIMIT: f64 = 10.0 * LINEAR_TOLERANCE;
@@ -66,12 +66,6 @@ pub(super) fn snap(pool: &Pool, among: &[usize]) -> Result<Vec<usize>, BooleanEr
         }
     }
     Ok(rename)
-}
-
-fn lexicographic(a: Vector, b: Vector) -> std::cmp::Ordering {
-    a[0].total_cmp(&b[0])
-        .then(a[1].total_cmp(&b[1]))
-        .then(a[2].total_cmp(&b[2]))
 }
 
 /// The cell one tolerance wide holding a point.

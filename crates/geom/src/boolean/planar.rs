@@ -168,8 +168,12 @@ fn connected_parts(rings: &[Vec<usize>]) -> BTreeMap<usize, usize> {
 /// lines halfway between consecutive vertex heights. The span kept is the one farthest from the
 /// boundary by a simple measure: the smaller of its width and the gap between the heights its
 /// line runs between. A line squeezed between two nearly equal heights may run along an edge, so
-/// its spans never win. `None` for a region too thin to have one.
-pub(super) fn interior_point(region: &Region, at: impl Fn(usize) -> Point2) -> Option<Point2> {
+/// its spans never win. `None` for a region too thin to have one; otherwise the point and that
+/// measure of its room.
+pub(super) fn interior_point(
+    region: &Region,
+    at: impl Fn(usize) -> Point2,
+) -> Option<(f64, Point2)> {
     let rings: Vec<Vec<Point2>> = std::iter::once(&region.outer)
         .chain(&region.holes)
         .map(|ring| ring.iter().map(|&v| at(v)).collect())
@@ -197,7 +201,7 @@ pub(super) fn interior_point(region: &Region, at: impl Fn(usize) -> Point2) -> O
             }
         }
     }
-    best.filter(|&(room, _)| room > 0.0).map(|(_, p)| p)
+    best.filter(|&(room, _)| room > 0.0)
 }
 
 #[cfg(test)]
@@ -241,7 +245,7 @@ mod tests {
         let band = found.regions.iter().find(|r| r.outer.contains(&0)).unwrap();
         assert_eq!(band.holes.len(), 1);
         assert_eq!(found.left[&(1, 0)], OUTSIDE);
-        let point = interior_point(band, at).unwrap();
+        let (_, point) = interior_point(band, at).unwrap();
         assert!(point.x < 1.0 || point.x > 3.0 || point.y < 1.0 || point.y > 3.0);
     }
 

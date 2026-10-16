@@ -19,13 +19,39 @@ use crate::vector::{Vector, add, distance_squared, dot, edges, scale, sub};
 use crate::{Orientation, Point2};
 
 /// A line between two vertices, its ends in increasing order.
-type Line = (usize, usize);
+pub(super) type Line = (usize, usize);
+
+/// The line between two vertices.
+pub(super) const fn line(u: usize, v: usize) -> Line {
+    if u < v { (u, v) } else { (v, u) }
+}
 
 /// The lines of every face, and for every line the vertices splitting it, in order from its
 /// first end.
 pub(super) struct Chains {
     lines: Vec<Vec<Line>>,
     along: BTreeMap<Line, Vec<usize>>,
+}
+
+impl Chains {
+    /// For each edge of the pieces, its ends in increasing order, the lines it is part of, the
+    /// longest first: several lines may run along one edge, such as an edge of one operand along
+    /// which a face of the other is cut.
+    pub(super) fn holding(&self, pool: &Pool) -> BTreeMap<Line, Vec<Line>> {
+        let mut holding: BTreeMap<Line, Vec<Line>> = BTreeMap::new();
+        for (&(u, v), along) in &self.along {
+            let mut from = u;
+            for &to in along.iter().chain(std::iter::once(&v)) {
+                holding.entry(line(from, to)).or_default().push((u, v));
+                from = to;
+            }
+        }
+        let length = |&(u, v): &Line| distance_squared(pool.get(u), pool.get(v));
+        for lines in holding.values_mut() {
+            lines.sort_by(|a, b| length(b).total_cmp(&length(a)).then(a.cmp(b)));
+        }
+        holding
+    }
 }
 
 /// The lines of a face: its edges and the segments cut on it, without repeats.
@@ -36,7 +62,7 @@ fn lines_of(face: &PlanarFace, segments: &[(usize, usize)]) -> Vec<Line> {
         .flat_map(|ring| edges(ring))
         .chain(segments.iter().copied())
         .filter(|&(u, v)| u != v)
-        .map(|(u, v)| (u.min(v), u.max(v)))
+        .map(|(u, v)| line(u, v))
         .collect();
     lines.into_iter().collect()
 }
