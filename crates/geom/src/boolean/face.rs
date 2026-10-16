@@ -5,6 +5,7 @@ use crate::predicates::{MIN_COORDINATE, orient2d};
 use crate::tolerance::{WITHIN_TOLERANCE, WITHIN_TOLERANCE_SQUARED};
 use crate::vector::{
     Vector, add, bounds, coords, cross, distance_squared, dot, edges, length, newell, scale, sub,
+    unit,
 };
 use crate::{Orientation, Point2, Solid};
 
@@ -384,9 +385,7 @@ pub(super) fn segment_distance_squared(point: Vector, start: Vector, end: Vector
 
 /// The unit direction of the line where two planes meet; `None` if they are parallel.
 pub(super) fn meeting_direction(a: &PlanarFace, b: &PlanarFace) -> Option<Vector> {
-    let d = cross(a.normal, b.normal);
-    let l = length(d);
-    (l > 0.0).then(|| scale(d, 1.0 / l))
+    unit(cross(a.normal, b.normal))
 }
 
 #[cfg(test)]

@@ -39,6 +39,19 @@ pub(crate) fn length(a: Vector) -> f64 {
     dot(a, a).sqrt()
 }
 
+/// The vector scaled to length 1; `None` for the zero vector.
+pub(crate) fn unit(a: Vector) -> Option<Vector> {
+    let l = length(a);
+    (l > 0.0).then(|| scale(a, 1.0 / l))
+}
+
+/// Orders points by x, then y, then z.
+pub(crate) fn lexicographic(a: Vector, b: Vector) -> std::cmp::Ordering {
+    a[0].total_cmp(&b[0])
+        .then(a[1].total_cmp(&b[1]))
+        .then(a[2].total_cmp(&b[2]))
+}
+
 /// The squared distance between two points.
 pub(crate) fn distance_squared(a: Vector, b: Vector) -> f64 {
     let d = sub(a, b);

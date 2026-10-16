@@ -272,3 +272,45 @@ fn a_needle_on_a_corner_splits_the_edges_there_alike() {
         assert_eq!(check_booleans(&prism, &needle), Ok(()));
     }
 }
+
+/// `fuzz/seeds/extruded_boolean/needle-on-a-lens-corner-e` to `…-g`: the needle of
+/// `a_needle_on_a_corner_splits_the_edges_there_alike` on the corner of larger lenses. Each cut
+/// leaves a triangle a few micrometres wide that was classified from a point inside it, a
+/// micrometre or so from the other solid's faces, and came out on the wrong side of them.
+#[test]
+fn a_thin_piece_takes_its_side_from_its_edges() {
+    for (lens, exponent, direction, needle_direction) in [
+        // `…-e` (`crash-546eb2a8…`): a triangle 2.5 to 5 µm wide on a side of the needle, which
+        // a face of the prism cuts along two of its edges with the triangle outside; put inside,
+        // it left the union with an open edge.
+        (
+            [(28, -1, 28), (-95, 44, 122), (0, 0, 0)],
+            -4,
+            (42, -1, 28),
+            (90, 45, 90),
+        ),
+        // `…-f` (the input `scripts/check-all.sh fuzz` found after the shared noding): a
+        // triangle 2 µm wide in a face of the prism, beside a piece 40 µm long inside the needle
+        // across an edge no face of the needle holds; put outside, it made an edge of the union
+        // non-manifold.
+        (
+            [(71, -95, 165), (35, 122, 37), (0, 0, 0)],
+            -6,
+            (91, -1, 28),
+            (90, 45, 56),
+        ),
+        // `…-g` (the input CI found on #270): a triangle 2 to 4 µm wide on a side of the
+        // needle, which a face of the prism cuts along its longest edge with the triangle
+        // inside; put outside, it made an edge of the union non-manifold.
+        (
+            [(64, -95, 165), (35, 122, 37), (0, 0, 0)],
+            -6,
+            (91, -1, 28),
+            (90, 45, 55),
+        ),
+    ] {
+        let prism = raw_prism(&lens, exponent, direction).unwrap();
+        let needle = raw_prism(&[(0, -1, 255)], -18, needle_direction).unwrap();
+        assert_eq!(check_booleans(&prism, &needle), Ok(()));
+    }
+}
