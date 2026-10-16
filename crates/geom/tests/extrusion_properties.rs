@@ -215,13 +215,14 @@ proptest! {
             return Ok(());
         };
         let [x, y, z] = direction;
-        match Solid::extrude(&profile, Vector3::new(x, y, z)) {
-            Ok(solid) => {
-                prop_assert_eq!(solid.validate(), Ok(()));
-                prop_assert!(solid.volume() > 0.0);
-            }
-            Err(ExtrusionError::NotUpward) => prop_assert!(z <= 0.0),
-            Err(_) => {}
+        let result = Solid::extrude(&profile, Vector3::new(x, y, z));
+        // A finite direction is rejected as not upward exactly when it does not point up.
+        if direction.iter().all(|c| c.is_finite()) {
+            prop_assert_eq!(matches!(result, Err(ExtrusionError::NotUpward)), z <= 0.0);
+        }
+        if let Ok(solid) = result {
+            prop_assert_eq!(solid.validate(), Ok(()));
+            prop_assert!(solid.volume() > 0.0);
         }
     }
 }
