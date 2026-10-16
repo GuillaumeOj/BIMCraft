@@ -28,3 +28,7 @@ Run them from `ui/` after `bun install`:
 ## Translations (UI-04)
 
 Every string shown to the user comes from `src/i18n/messages/en.json` (the reference) and `fr.json`; components read them with `useI18n().t("key")`, with `{name}` placeholders filled from a second argument. Biome's `noJsxLiterals` rule rejects text written directly in JSX and the `lint/no-literal-text-attributes.grit` plugin rejects it in user-visible attributes (`aria-label`, `title`, `alt`, `placeholder`…), and a unit test fails, listing the keys, when `fr.json` misses or adds a key. At run time a missing French string falls back to English.
+
+## Reaching the core (UI-01)
+
+UI code reaches the core only through the typed client in `src/api/`: `new ApiClient(tauriTransport)`, then `client.command(name, params)`, `client.query(name, params)` and `client.onChange(listener)`. Names, parameters and results are typed from `src/api/protocol.gen.ts`, which `bun scripts/generate-api-types.ts` generates from the published schema (`schema/api/protocol.schema.json`); `scripts/check-all.sh repo` fails when it is stale. Biome forbids importing `@tauri-apps/*` outside `src/api/`. See [docs/dev/desktop.md](../docs/dev/desktop.md).

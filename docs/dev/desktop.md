@@ -10,7 +10,7 @@ The desktop program, `bimcraft`, is a [Tauri 2](https://tauri.app) window around
 - The window may call only that command and listen to events: `crates/desktop-app/capabilities/main.json` grants nothing else, and its `build.rs` declares `api` as the only application command.
 - `crates/host-desktop/tests/ipc.rs` runs the transport conformance suite (`API-04`) through Tauri's IPC with its mock runtime, so it needs no window or webview.
 
-The UI side of this channel is the typed client in `ui/src/api/`.
+The UI side of this channel is the typed client in `ui/src/api/` (`tauriTransport`, `ApiClient`), the only code allowed to import `@tauri-apps/*`.
 
 ## Running it
 
