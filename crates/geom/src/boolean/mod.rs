@@ -44,7 +44,6 @@ pub use error::BooleanError;
 
 use self::classify::{Class, classify};
 use self::face::{PlanarFace, Pool};
-use self::intersect::Segments;
 use self::planar::{OUTSIDE, Regions, faces_of, interior_point};
 use crate::{Point2, Solid};
 
@@ -151,15 +150,14 @@ fn run(first: &Solid, second: &Solid, operation: Operation) -> Result<Option<Sol
     }
     let split = first.face_count();
     align::align(&mut faces, split, &mut pool);
-    let segments = intersect::segments(&faces, split, &mut pool);
+    let mut segments = intersect::segments(&faces, split, &mut pool);
     let rename = snap::snap(&pool, &(0..pool.len()).collect::<Vec<_>>())?;
     for face in &mut faces {
         face.remap(&rename, &pool);
     }
-    let segments: Segments = segments
-        .iter()
-        .map(|face| face.iter().map(|&(u, v)| (rename[u], rename[v])).collect())
-        .collect();
+    for (u, v) in segments.iter_mut().flatten() {
+        (*u, *v) = (rename[*u], rename[*v]);
+    }
     let chains = arrange::node(&faces, &segments, &mut pool);
     let mut kept = Vec::new();
     for (index, face) in faces.iter().enumerate() {
