@@ -1,10 +1,11 @@
-# Every job calls scripts/check-all.sh or scripts/check-pr.sh, so CI and local checks never drift.
+# Every job calls scripts/check-all.sh, so CI and local checks never drift. Commit messages and the
+# user-docs rule run in pull-request.yml, the only workflow that reacts to label changes.
 # Actions are pinned to commit SHAs; tool versions come from scripts/tool-versions.env (AGENTS.md §4).
 name: CI
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened, labeled, unlabeled]
+    types: [opened, synchronize, reopened]
   push:
     branches: [main]
   merge_group:
@@ -64,21 +65,6 @@ jobs:
           tar -xzf "actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz" -C bin actionlint
           echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
       - run: scripts/check-all.sh repo docs
-
-  pull-request:
-    name: Commits and user docs
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-      - env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          NO_USER_DOCS: ${{ contains(github.event.pull_request.labels.*.name, 'no-user-docs') }}
-        run: scripts/check-pr.sh "$BASE_SHA" "$HEAD_SHA"
 
   rust:
     name: Rust (${{ matrix.os }})

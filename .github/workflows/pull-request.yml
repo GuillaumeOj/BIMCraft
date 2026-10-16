@@ -1,0 +1,35 @@
+# Checks the pull request itself: commit messages and the user-docs rule (scripts/check-pr.sh).
+# It is the only workflow that reruns when a label changes, because the no-user-docs label is an
+# input of the check. Kept apart from ci.yml so that opening a pull request with a label, which
+# fires `opened` and `labeled` together, starts the build jobs once: a cancelled duplicate run
+# leaves a failed `Rust (${{ matrix.os }})` check behind, as its matrix was never expanded.
+name: Pull request
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+  # A required check must report in the merge queue too; the job is skipped there.
+  merge_group:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pull-request:
+    name: Commits and user docs
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          NO_USER_DOCS: ${{ contains(github.event.pull_request.labels.*.name, 'no-user-docs') }}
+        run: scripts/check-pr.sh "$BASE_SHA" "$HEAD_SHA"
