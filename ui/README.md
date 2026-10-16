@@ -12,6 +12,7 @@ Run them from `ui/` after `bun install`:
 | --- | --- |
 | Development server | `bun run dev` |
 | Production build | `bun run build` |
+| Desktop window around the development server (see [docs/dev/desktop.md](../docs/dev/desktop.md)) | `cargo run -p desktop-app` |
 | Unit tests with coverage | `bunx vitest run --coverage` |
 | End-to-end tests (first run: `bunx playwright install chromium`) | `bunx playwright test` |
 | Lint, format and imports | `bunx biome ci .` |
