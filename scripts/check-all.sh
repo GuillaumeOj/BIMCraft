@@ -25,13 +25,14 @@ packages() { if [ -n "${CHECK_CRATES:-}" ]; then printf -- '--package %s ' $CHEC
 existing_crates() { while read -r crate; do [ -f "crates/$crate/Cargo.toml" ] && echo "$crate"; done < "$1"; }
 
 check_repo() {
-  step "Repository: spelling, TOML, secrets, pinned versions, crate layering"
+  step "Repository: spelling, TOML, secrets, pinned versions, crate layering, generated API types"
   require bun; require typos; require taplo; require gitleaks
   typos
   taplo fmt --check
   gitleaks git --no-banner --redact
   bun scripts/check-pinned-deps.ts
   bun scripts/check-architecture.ts
+  bun scripts/generate-api-types.ts --check
   (cd scripts && bun test)
   if command -v actionlint >/dev/null 2>&1; then actionlint; fi
 }
