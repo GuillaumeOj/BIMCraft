@@ -199,8 +199,17 @@ fn curves_meet(a: &Curve, b: &Curve, shared: &[Point2]) -> bool {
 /// starts among the points near `v` that [`clearance`] ignores, so it may find no point of it.
 fn leave_together(a: &Curve, b: &Curve, v: Point2) -> bool {
     let (along_a, along_b) = (departure(a, v), departure(b, v));
-    let reach = distance(a.start(), a.end()).min(distance(b.start(), b.end()));
+    let reach = length_of(a).min(length_of(b));
     dot(along_a, along_b) > 0.0 && cross(along_a, along_b).abs() * reach <= WITHIN_TOLERANCE
+}
+
+/// The length of an edge along itself: an arc's is longer than its chord, much longer for an
+/// arc of almost a full turn.
+fn length_of(curve: &Curve) -> f64 {
+    match curve {
+        Curve::Segment(start, end) => distance(*start, *end),
+        Curve::Arc(arc) => arc.radius * arc.sweep.abs(),
+    }
 }
 
 /// The unit direction in which `curve` leaves its end `v`.
