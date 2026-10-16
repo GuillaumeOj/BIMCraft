@@ -26,6 +26,10 @@ describe("tauriTransport", () => {
     await expect(tauriTransport.send("message")).rejects.toEqual(
       new TransportError("the window is closing"),
     );
+    tauri.invoke.mockRejectedValue({ message: "api not allowed" });
+    await expect(tauriTransport.send("message")).rejects.toEqual(
+      new TransportError('{"message":"api not allowed"}'),
+    );
   });
 
   it("delivers notification events and stops on unsubscribe", async () => {

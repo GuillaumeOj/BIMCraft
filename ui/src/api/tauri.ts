@@ -14,7 +14,8 @@ export const tauriTransport: Transport = {
     try {
       return await invoke<string | null>(COMMAND, { message });
     } catch (error) {
-      throw new TransportError(String(error));
+      // Tauri rejects with a string or, for some IPC failures, an object: keep its content.
+      throw new TransportError(typeof error === "string" ? error : JSON.stringify(error));
     }
   },
   listen(onMessage) {

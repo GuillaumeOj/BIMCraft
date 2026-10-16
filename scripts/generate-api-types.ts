@@ -12,6 +12,10 @@ export const OUTPUT_FILE = "ui/src/api/protocol.gen.ts";
 
 type Schema = { [keyword: string]: unknown };
 
+// Keywords that decide the TypeScript type. A $ref, a const or a union decides it alone, so it
+// cannot be combined with another of them: the generator would have to drop one.
+const SHAPING = ["type", "properties", "required", "additionalProperties", "items", "prefixItems", "$ref", "const", "anyOf", "oneOf"];
+const ALONE = ["$ref", "const", "anyOf", "oneOf"];
 // Keywords that narrow values without changing their TypeScript type: the server checks them.
 const NARROWING = new Set(["description", "pattern", "minimum", "maximum", "uniqueItems", "minItems"]);
 const SUPPORTED = new Set([
@@ -63,7 +67,9 @@ function objectType(schema: Schema, where: string): string {
 
 function arrayType(schema: Schema, where: string): string {
   if (Array.isArray(schema.prefixItems)) {
-    if (schema.items !== false) throw new Error(`${where}: tuples must set "items": false`);
+    if (schema.items !== false || schema.minItems !== schema.prefixItems.length) {
+      throw new Error(`${where}: tuples must set "items": false and "minItems" to their length`);
+    }
     const items = schema.prefixItems.map((item, index) => typeOf(item, `${where}[${index}]`));
     return `[${items.join(", ")}]`;
   }
@@ -76,6 +82,10 @@ export function typeOf(value: unknown, where: string): string {
   const unsupported = Object.keys(schema).filter((keyword) => !SUPPORTED.has(keyword));
   if (unsupported.length > 0) {
     throw new Error(`${where}: unsupported JSON Schema keyword(s): ${unsupported.join(", ")}`);
+  }
+  const shaping = SHAPING.filter((keyword) => keyword in schema);
+  if (shaping.length > 1 && shaping.some((keyword) => ALONE.includes(keyword))) {
+    throw new Error(`${where}: cannot combine ${shaping.join(", ")}`);
   }
   if (typeof schema.$ref === "string") {
     const match = /^#\/\$defs\/([A-Za-z]\w*)$/.exec(schema.$ref);
