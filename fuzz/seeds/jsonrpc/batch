@@ -1,0 +1,1 @@
+[{"jsonrpc":"2.0","id":1,"method":"model.create","params":{"id":"00000000000000000000000000000002","entity":"Wall","values":[]}},{"jsonrpc":"2.0","method":"history.undo"},{"jsonrpc":"2.0","id":2,"method":"model.list_objects","params":{"entity":"Wall","limit":5}}]

@@ -3,6 +3,18 @@
 version = 4
 
 [[package]]
+name = "api"
+version = "0.0.0"
+dependencies = [
+ "core-model",
+ "core-txn",
+ "schema",
+ "serde",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
 name = "arbitrary"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -12,7 +24,9 @@ checksum = "3bc62ac97cc33321f50863d514c3bc38a453947a8f9e781137e47c7401020aed"
 name = "bimcraft-fuzz"
 version = "0.0.0"
 dependencies = [
+ "api",
  "core-model",
+ "core-txn",
  "express",
  "geom",
  "interop-ifc",
@@ -21,6 +35,7 @@ dependencies = [
  "persist",
  "schema",
  "schema-gen",
+ "serde_json",
 ]
 
 [[package]]
@@ -58,6 +73,15 @@ name = "core-model"
 version = "0.0.0"
 dependencies = [
  "schema",
+ "serde",
+ "thiserror",
+]
+
+[[package]]
+name = "core-txn"
+version = "0.0.0"
+dependencies = [
+ "core-model",
  "serde",
  "thiserror",
 ]
