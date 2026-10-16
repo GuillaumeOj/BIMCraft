@@ -22,7 +22,6 @@ tauri = { workspace = true, features = [
   "compression",
   "common-controls-v6",
 ] }
-thiserror = { workspace = true }
 
 [build-dependencies]
 tauri-build = { workspace = true }

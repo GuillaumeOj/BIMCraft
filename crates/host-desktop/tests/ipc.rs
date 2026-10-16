@@ -5,6 +5,7 @@
 // The client helpers run outside #[test] functions; a failed setup is a failed test.
 #![allow(clippy::unwrap_used)]
 
+use std::fmt::Display;
 use std::sync::{Arc, Mutex, PoisonError};
 
 use api::conformance::run;
@@ -16,6 +17,12 @@ use tauri::test::{
 };
 use tauri::webview::InvokeRequest;
 use tauri::{App, Listener, WebviewWindow, WebviewWindowBuilder};
+
+fn failed(error: impl Display) -> TransportError {
+    TransportError {
+        reason: error.to_string(),
+    }
+}
 
 /// A client end of the window's channel: requests go through Tauri's IPC to the `api` command,
 /// notifications come back as `api://notification` events.
@@ -57,13 +64,8 @@ impl Transport for TauriIpc {
             headers: tauri::http::HeaderMap::default(),
             invoke_key: INVOKE_KEY.to_owned(),
         };
-        let response =
-            get_ipc_response(&self.webview, request).map_err(|error| TransportError {
-                reason: error.to_string(),
-            })?;
-        response.deserialize().map_err(|error| TransportError {
-            reason: error.to_string(),
-        })
+        let response = get_ipc_response(&self.webview, request).map_err(failed)?;
+        response.deserialize().map_err(failed)
     }
 
     fn notifications(&mut self) -> Vec<String> {

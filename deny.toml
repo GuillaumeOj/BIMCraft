@@ -49,8 +49,8 @@ allow-wildcard-paths = true
 # Tauri's dependency tree brings its own versions of common crates (thiserror 1, toml 0.8, syn 1…);
 # they are not ours to unify. Duplicates outside these trees still warn.
 skip-tree = [
-  { crate = "tauri@2.12.1", reason = "the desktop window's own dependency tree" },
-  { crate = "tauri-build@2.7.1", reason = "the desktop window's build-time dependency tree" },
+  { crate = "tauri", reason = "the desktop window's own dependency tree" },
+  { crate = "tauri-build", reason = "the desktop window's build-time dependency tree" },
 ]
 
 [sources]
