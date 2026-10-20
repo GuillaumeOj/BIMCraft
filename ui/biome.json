@@ -16,6 +16,7 @@
     "enabled": true,
     "actions": { "source": { "organizeImports": "on", "useSortedKeys": "off" } }
   },
+  "plugins": ["./lint/no-literal-text-attributes.grit"],
   "linter": {
     "enabled": true,
     "rules": {
@@ -28,6 +29,7 @@
         "useHookAtTopLevel": "error"
       },
       "style": {
+        "noJsxLiterals": "error",
         "noNonNullAssertion": "error",
         "useConst": "error",
         "useImportType": "error"
@@ -42,7 +44,9 @@
   "overrides": [
     {
       "includes": ["**/*.test.ts", "**/*.test.tsx", "e2e/**"],
-      "linter": { "rules": { "suspicious": { "noConsole": "off" } } }
+      "linter": {
+        "rules": { "style": { "noJsxLiterals": "off" }, "suspicious": { "noConsole": "off" } }
+      }
     }
   ]
 }
