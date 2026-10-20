@@ -2,7 +2,8 @@
 //! names the seed file that keeps replaying it in the fuzz run.
 
 use geom::{
-    ArcDirection, BooleanError, Edge, LoopId, Point2, Profile, ProfileError, Solid, Vector3,
+    ArcDirection, BooleanError, Edge, LINEAR_TOLERANCE, LoopId, Point2, Profile, ProfileError,
+    Solid, Vector3,
 };
 
 /// A point given in quarter metres, scaled by `2^exponent`.
@@ -189,11 +190,35 @@ fn raw_prism(raw: &[(i8, i8, u8)], exponent: i32, (x, y, z): (i8, i8, i8)) -> Op
     Solid::extrude(&profile, direction).ok()
 }
 
+/// The total area of a solid's faces, as `surface_area` in `fuzz/src/lib.rs` works it out (keep
+/// the two alike).
+fn surface_area(solid: &Solid) -> f64 {
+    let points = solid.vertices();
+    solid
+        .to_faces()
+        .iter()
+        .map(|face| {
+            let mut area = [0.0_f64; 3];
+            for ring in std::iter::once(&face.outer).chain(&face.holes) {
+                for (i, &start) in ring.iter().enumerate() {
+                    let (p, q) = (points[start], points[ring[(i + 1) % ring.len()]]);
+                    area[0] += (p.y - q.y) * (p.z + q.z);
+                    area[1] += (p.z - q.z) * (p.x + q.x);
+                    area[2] += (p.x - q.x) * (p.y + q.y);
+                }
+            }
+            area.iter().map(|c| c * c).sum::<f64>().sqrt() / 2.0
+        })
+        .sum()
+}
+
 /// What the `extruded_boolean` fuzz target checks: every operation succeeds and gives valid
-/// solids within the volume bounds of its operands. An operation that fails returns its error.
+/// solids within the volume bounds of its operands, give or take rounding and what the merge
+/// pass may move: the tolerance times the operands' area. An operation that fails returns its
+/// error.
 fn check_booleans(a: &Solid, b: &Solid) -> Result<(), BooleanError> {
     let (va, vb) = (a.volume(), b.volume());
-    let slack = 1e-6 * (va + vb).max(1.0);
+    let slack = 1e-6 * (va + vb).max(1.0) + LINEAR_TOLERANCE * (surface_area(a) + surface_area(b));
     let volume = |solid: Option<Solid>| {
         solid.map_or(0.0, |solid| {
             assert_eq!(solid.validate(), Ok(()));
@@ -282,7 +307,10 @@ fn a_thin_piece_takes_its_side_from_its_edges() {
     for (lens, exponent, direction, needle_direction) in [
         // `…-e` (`crash-546eb2a8…`): a triangle 2.5 to 5 µm wide on a side of the needle, which
         // a face of the prism cuts along two of its edges with the triangle outside; put inside,
-        // it left the union with an open edge.
+        // it left the union with an open edge. Its union is valid, but the corner of the lens
+        // merges 0.95 µm onto a vertex of the needle, on a face of about 10 m², and adds
+        // 1.1e-6 m³: within the tolerance times the operands' area, not within 1e-6 of their
+        // volume.
         (
             [(28, -1, 28), (-95, 44, 122), (0, 0, 0)],
             -4,
@@ -548,4 +576,66 @@ fn a_needle_on_a_lens_slanted_in_its_plane_closes() {
         -18,
         (90, 45, 56),
     )]);
+}
+
+/// `fuzz/seeds/extruded_boolean/corner-merged-on-a-large-face-a` to `…-f`: needles on lens
+/// corners whose results are valid, but whose volume moved by 1e-6 to 4e-6 m³ against operands
+/// of about 1 m³: the lens corner merges up to a tolerance onto a vertex of the needle, on faces
+/// of square metres, and the volume of a face is measured from the centre of its vertices. The
+/// merge pass may move vertices by the tolerance, so a volume within the tolerance times the
+/// operands' area of its bounds is right (ADR 0001); the fuzz target checked 1e-6 of their
+/// volume only.
+#[test]
+fn a_corner_merged_on_a_large_face_moves_the_volume_by_its_area() {
+    check_needles(&[
+        // `…-a` (`crash-10a6d57f…`): the union, 1.0e-6 m³ short.
+        (
+            [(64, -120, 0), (-95, 65, 122), (0, 0, 0)],
+            -6,
+            (42, -1, 28),
+            (0, -1, 255),
+            -18,
+            (76, 45, 53),
+        ),
+        // `…-b` (`crash-8adf1d03…`): the union, 3.0e-6 m³ over.
+        (
+            [(35, 41, 28), (-95, 44, 122), (0, 0, 0)],
+            -6,
+            (42, -1, 99),
+            (0, -1, 255),
+            -18,
+            (90, 45, 90),
+        ),
+        // `…-c` (`crash-9bcdc7c4…`): the difference, 1.2e-6 m³ over.
+        (
+            [(65, -95, 229), (35, 122, 127), (0, 0, 0)],
+            -6,
+            (42, -1, 28),
+            (-1, 0, 255),
+            -18,
+            (90, 45, 52),
+        ),
+        // `…-d` (`crash-2f9ae4ef…`): the union, 1.0e-6 m³ over.
+        (
+            [(65, -31, 28), (35, 122, 255), (0, 0, 0)],
+            -6,
+            (-118, 0, 28),
+            (-3, -1, 255),
+            -18,
+            (90, 45, 54),
+        ),
+        // `…-e` (`crash-e8f929ec…`): the union, 1.6e-6 m³ short.
+        (
+            [(65, 41, 237), (35, 0, 255), (0, 0, 122)],
+            -4,
+            (42, 50, 28),
+            (0, -1, 255),
+            -18,
+            (90, 45, 49),
+        ),
+    ]);
+    // `…-f` (`crash-b03f9bc1…`): a lens of two arcs; the union, 4.1e-6 m³ short.
+    let a = raw_prism(&[(-87, 122, 255), (0, 0, 0)], -3, (42, -1, 28)).unwrap();
+    let b = raw_prism(&[(0, -1, 255)], -18, (90, 45, 42)).unwrap();
+    assert_eq!(check_booleans(&a, &b), Ok(()));
 }

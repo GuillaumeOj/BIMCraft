@@ -8,11 +8,12 @@
 
 #![no_main]
 
-use bimcraft_fuzz::{RawProfile, direction, profile_loops};
-use geom::{Profile, Solid};
+use bimcraft_fuzz::{RawProfile, direction, profile_loops, surface_area};
+use geom::{LINEAR_TOLERANCE, Profile, Solid};
 use libfuzzer_sys::fuzz_target;
 
-/// The volume a boolean result may differ from its bounds by: rounding of the cut vertices.
+/// The volume a boolean result may differ from its bounds by, relative to the operands' volume:
+/// rounding of the cut vertices.
 const SLACK: f64 = 1e-6;
 
 /// Most faces per operand. Arcs hundreds of metres wide become thousands of chords, and a
@@ -41,7 +42,10 @@ fuzz_target!(|input: Input| {
         return;
     };
     let (va, vb) = (a.volume(), b.volume());
-    let slack = SLACK * (va + vb).max(1.0);
+    // The merge pass moves vertices by up to the tolerance, which sweeps at most the tolerance
+    // times the area of the faces around them (ADR 0001).
+    let slack =
+        SLACK * (va + vb).max(1.0) + LINEAR_TOLERANCE * (surface_area(&a) + surface_area(&b));
     let union = a.union(&b).expect("union").expect("a union is never empty");
     assert_eq!(union.validate(), Ok(()));
     let volume = union.volume();
