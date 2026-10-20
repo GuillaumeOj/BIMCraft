@@ -2,8 +2,8 @@
 //! names the seed file that keeps replaying it in the fuzz run.
 
 use geom::{
-    ArcDirection, BooleanError, Edge, LINEAR_TOLERANCE, LoopId, Point2, Profile, ProfileError,
-    Solid, Vector3,
+    ArcDirection, BooleanError, Containment, Edge, LINEAR_TOLERANCE, LoopId, MERGE_CHAIN_WIDTH,
+    Point2, Point3, Profile, ProfileError, Solid, Vector3,
 };
 
 /// A point given in quarter metres, scaled by `2^exponent`.
@@ -132,20 +132,20 @@ fn a_triangle_a_few_tolerances_wide_beside_an_edge_closes() {
         ],
         (90.0, 45.0, 57.0),
     );
+    assert_eq!(check_booleans(&a, &b), Ok(()));
     let (va, vb) = (a.volume(), b.volume());
-    let slack = 1e-6 * (va + vb);
-    let union = a.union(&b).unwrap().unwrap();
-    assert_eq!(union.validate(), Ok(()));
-    assert!(union.volume() <= va + vb + slack && union.volume() >= va.max(vb) - slack);
-    let cut = a.difference(&b).unwrap().unwrap();
-    assert_eq!(cut.validate(), Ok(()));
-    assert!(cut.volume() <= va + slack && cut.volume() >= va - vb - slack);
-    let shared = a.intersection(&b).unwrap().unwrap();
-    assert_eq!(shared.validate(), Ok(()));
-    assert!(shared.volume() <= va.min(vb) + slack);
+    let slack = volume_slack(&a, &b);
+    let volume = |solid: Result<Option<Solid>, BooleanError>| {
+        solid.ok().flatten().map_or(0.0, |solid| solid.volume())
+    };
+    let (union, cut, shared) = (
+        volume(a.union(&b)),
+        volume(a.difference(&b)),
+        volume(a.intersection(&b)),
+    );
     // Inclusion–exclusion: the three results account for the same volume.
-    assert!((union.volume() - (cut.volume() + vb)).abs() <= slack);
-    assert!((va - (cut.volume() + shared.volume())).abs() <= slack);
+    assert!((union - (cut + vb)).abs() <= slack);
+    assert!((va - (cut + shared)).abs() <= slack);
 }
 
 /// A loop decoded as the `extruded_boolean` fuzz target decodes one (`edge_loop` in
@@ -212,28 +212,69 @@ fn surface_area(solid: &Solid) -> f64 {
         .sum()
 }
 
-/// What the `extruded_boolean` fuzz target checks: every operation succeeds and gives valid
-/// solids within the volume bounds of its operands, give or take rounding and what the merge
-/// pass may move: the tolerance times the operands' area. An operation that fails returns its
-/// error.
-fn check_booleans(a: &Solid, b: &Solid) -> Result<(), BooleanError> {
+/// The farthest the merge pass may move a vertex, as `MERGE_REACH` in `fuzz/src/lib.rs` (keep
+/// the two alike): across a group of merged vertices at most `MERGE_CHAIN_WIDTH` wide along each
+/// axis (ADR 0001, merge pass step 2).
+const MERGE_REACH: f64 = MERGE_CHAIN_WIDTH * 1.732_050_807_568_877_2;
+
+/// How far a boolean's volume may lie from its bounds, as `volume_slack` in `fuzz/src/lib.rs`
+/// (keep the two alike): the tolerance times the operands' area.
+fn volume_slack(a: &Solid, b: &Solid) -> f64 {
+    LINEAR_TOLERANCE * (surface_area(a) + surface_area(b))
+}
+
+/// Whether every point lies with respect to `solid` as `allowed` says, or within
+/// [`MERGE_REACH`] of its boundary, as `all_located` in `fuzz/src/lib.rs` (keep the two alike).
+fn all_located(points: &[Point3], solid: &Solid, allowed: impl Fn(Containment) -> bool) -> bool {
+    (points.iter()).all(|&p| allowed(solid.locate(p)) || solid.boundary_distance(p) <= MERGE_REACH)
+}
+
+/// What the `extruded_boolean` fuzz target checks of each operation, in the order union,
+/// difference, intersection (keep the two alike): it gives a valid solid within the volume
+/// bounds of its operands, give or take the tolerance times their area, which is what the merge
+/// pass may move (ADR 0001), with its vertices where the operation puts them: every operand
+/// vertex inside or on the union, every vertex of the difference inside or on the first operand
+/// and not inside the second, every vertex of the intersection inside or on both, "on" meaning
+/// within the reach of a vertex merge ([`MERGE_REACH`]). An operation that fails gives its
+/// error; the fuzz target accepts only [`BooleanError::FeaturesTooClose`].
+fn check_each(a: &Solid, b: &Solid) -> [Result<(), BooleanError>; 3] {
     let (va, vb) = (a.volume(), b.volume());
-    let slack = 1e-6 * (va + vb).max(1.0) + LINEAR_TOLERANCE * (surface_area(a) + surface_area(b));
-    let volume = |solid: Option<Solid>| {
-        solid.map_or(0.0, |solid| {
-            assert_eq!(solid.validate(), Ok(()));
-            solid.volume()
-        })
-    };
-    let union = a.union(b)?;
-    assert!(union.is_some(), "a union is never empty");
-    let union = volume(union);
-    assert!(union <= va + vb + slack && union >= va.max(vb) - slack);
-    let cut = volume(a.difference(b)?);
-    assert!(cut <= va + slack && cut >= va - vb - slack);
-    let shared = volume(a.intersection(b)?);
-    assert!(shared <= va.min(vb) + slack);
-    Ok(())
+    let slack = volume_slack(a, b);
+    let not_outside = |c| c != Containment::Outside;
+    let union = a.union(b).map(|union| {
+        assert!(union.is_some(), "a union is never empty");
+        let volume = union.map_or(0.0, |union| {
+            assert_eq!(union.validate(), Ok(()));
+            assert!(all_located(a.vertices(), &union, not_outside));
+            assert!(all_located(b.vertices(), &union, not_outside));
+            union.volume()
+        });
+        assert!(volume <= va + vb + slack && volume >= va.max(vb) - slack);
+    });
+    let cut = a.difference(b).map(|cut| {
+        let volume = cut.map_or(0.0, |cut| {
+            assert_eq!(cut.validate(), Ok(()));
+            assert!(all_located(cut.vertices(), a, not_outside));
+            assert!(all_located(cut.vertices(), b, |c| c != Containment::Inside));
+            cut.volume()
+        });
+        assert!(volume <= va + slack && volume >= va - vb - slack);
+    });
+    let shared = a.intersection(b).map(|shared| {
+        let volume = shared.map_or(0.0, |shared| {
+            assert_eq!(shared.validate(), Ok(()));
+            assert!(all_located(shared.vertices(), a, not_outside));
+            assert!(all_located(shared.vertices(), b, not_outside));
+            shared.volume()
+        });
+        assert!(volume <= va.min(vb) + slack);
+    });
+    [union, cut, shared]
+}
+
+/// [`check_each`] for operands every operation must succeed on: the first error, if any.
+fn check_booleans(a: &Solid, b: &Solid) -> Result<(), BooleanError> {
+    check_each(a, b).into_iter().collect()
 }
 
 /// `fuzz/seeds/extruded_boolean/sliver-along-a-shared-edge` (the input CI found on #255): the
@@ -708,11 +749,11 @@ fn a_pinched_face_is_split_where_both_parts_stay_wide() {
     assert_eq!(check_booleans(&a, &b), Ok(()));
 }
 
-/// `crash-2eea7226…` (found by the fuzz target while the booleans were hardened; not a seed,
-/// since the fuzz target does not accept the error yet): a vertex of the needle 1.46 µm above the lens's bottom merges with
-/// one the bottom was cut at, within the tolerance of it, and bends the bottom face beyond the
-/// tolerance. No local operation straightens it without moving other vertices, so the union
-/// fails with the typed error instead of returning an invalid solid.
+/// `fuzz/seeds/extruded_boolean/features-too-close-bent-face` (`crash-2eea7226…`): a vertex of
+/// the needle 1.46 µm above the lens's bottom merges with one the bottom was cut at, within the
+/// tolerance of it, and bends the bottom face beyond the tolerance. No local operation
+/// straightens it without moving other vertices, so the union fails with the typed error
+/// instead of returning an invalid solid; the other operations hold.
 #[test]
 fn vertices_that_would_bend_a_face_to_merge_are_too_close() {
     let a = raw_prism(
@@ -722,7 +763,26 @@ fn vertices_that_would_bend_a_face_to_merge_are_too_close() {
     )
     .unwrap();
     let b = raw_prism(&[(0, -1, 255)], -18, (90, 45, 50)).unwrap();
-    assert_eq!(a.union(&b), Err(BooleanError::FeaturesTooClose));
+    assert_eq!(
+        check_each(&a, &b),
+        [Err(BooleanError::FeaturesTooClose), Ok(()), Ok(())]
+    );
+}
+
+/// `fuzz/seeds/extruded_boolean/features-too-close-sliver-off-a-face` (`crash-a39e9827…`, found
+/// by the stage-4 survey): the difference leaves a triangle 2.75 µm long and narrower than the
+/// tolerance at the lens corner, one of its vertices 1.08 µm above the lens's bottom, the face
+/// across its longest edge. Zipping it onto that face would put the vertex beyond the tolerance
+/// of the face's plane, and no other operation removes it, so the difference fails with the
+/// typed error; the union and the intersection hold.
+#[test]
+fn a_sliver_off_the_plane_of_the_face_across_is_too_close() {
+    let a = raw_prism(&[(35, 41, 161), (67, -1, 122), (0, 0, 0)], -6, (42, -1, 28)).unwrap();
+    let b = raw_prism(&[(1, -1, 255)], -18, (90, 45, 54)).unwrap();
+    assert_eq!(
+        check_each(&a, &b),
+        [Ok(()), Err(BooleanError::FeaturesTooClose), Ok(())]
+    );
 }
 
 /// `fuzz/seeds/extruded_boolean/corner-merged-on-a-large-face-a` to `…-f`: needles on lens
