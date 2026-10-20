@@ -52,7 +52,7 @@ mod tolerance;
 mod vector;
 
 pub use boolean::BooleanError;
-pub use brep::{BrepError, ExtrusionError, FaceInput, Shell, Solid};
+pub use brep::{BrepError, Containment, ExtrusionError, FaceInput, Shell, Solid};
 pub use location::{
     CardinalPoint, DirectionSense, Face, IfcCardinalPoint, Layer, LayerId, LayerPlacement,
     LayerSet, LocationError, LocationLine, LocationPoint, MAX_LAYERS, Resolved, SnapInfo,
@@ -65,4 +65,4 @@ pub use predicates::{
 };
 pub use profile::{ArcDirection, Edge, LoopId, MAX_PROFILE_EDGES, Profile, ProfileError};
 pub use section::{MAX_MESH_NODES, ShearCentreError};
-pub use tolerance::{ARC_CHORD_TOLERANCE, LINEAR_TOLERANCE, MODEL_EXTENT};
+pub use tolerance::{ARC_CHORD_TOLERANCE, LINEAR_TOLERANCE, MERGE_CHAIN_WIDTH, MODEL_EXTENT};
