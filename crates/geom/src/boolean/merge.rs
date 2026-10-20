@@ -1,28 +1,34 @@
 //! The merge pass of ADR 0001 after the faces are paired: local operations on the faces of the
 //! result, each applied only if the faces it leaves meet the solid's own checks.
 //!
+//! - Vertices joined by edges no longer than the tolerance collapse onto one of them (step 2),
+//!   and faces left back to back cancel (step 1).
 //! - Adjacent coplanar faces merge (step 3).
 //! - Vertices left between two collinear edges go.
 //! - A face narrower than the tolerance is zipped shut: its vertices lie within the tolerance of
-//!   its longest edge, so they join the face across that edge instead (step 4).
+//!   its longest edge, so they join the face across that edge instead; one that does not zip
+//!   whole may zip in two parts (step 4).
 //! - Lumps and voids no thicker than the tolerance on average vanish (steps 1 and 4).
 //!
-//! No operation moves a vertex, and none is applied if a face it touches would then break a
-//! rule of the solid's checks: bent beyond the tolerance, no wider than it, or with an edge no
-//! longer than it. So the pass never makes a valid result invalid. A face narrower than the
-//! tolerance that no operation removes is reported as [`BooleanError::FeaturesTooClose`].
+//! Only a collapse moves a vertex's place in a face, by no more than the tolerance, and no
+//! operation is applied if a face it touches would then break a rule of the solid's checks it
+//! did not break before (bent beyond the tolerance, no wider than it), or if the faces along an
+//! edge it touches would no longer pair. So the pass never makes a valid result invalid. An
+//! edge no longer than the tolerance or a face narrower than it that no operation removes is
+//! reported as [`BooleanError::FeaturesTooClose`].
 
 use std::collections::{BTreeMap, BTreeSet};
 
 use super::BooleanError;
-use super::assemble::{Faces, HalfEdges};
-use super::face::{Pool, Projection, area_and_centre, clean_face};
-use super::planar::faces_of;
+use super::assemble::{Faces, HalfEdges, around_edge};
+use super::face::{Pool, Projection, area_and_centre, clean_face, plane};
+use super::planar::{canonical, faces_of};
 use super::snap::{find, union};
+use crate::MERGE_CHAIN_WIDTH;
 use crate::brep::{FaceFault, enclosed_volume, face_plane};
 use crate::tolerance::{WITHIN_TOLERANCE, WITHIN_TOLERANCE_SQUARED};
 use crate::vector::{
-    Vector, distance_squared, dot, edges, lexicographic, segment_distance_squared, sub,
+    Vector, bounds, distance_squared, dot, edges, lexicographic, segment_distance_squared, sub,
 };
 
 /// The plane of a face as the solid's checks find it, or the rule of its own it breaks.
@@ -47,6 +53,320 @@ fn holds(face: &[Vec<usize>], pool: &Pool) -> bool {
     face.iter()
         .all(|ring| ring.len() >= 3 && !has_short_edge(ring, pool))
         && checked(face, pool).is_ok()
+}
+
+/// Collapses the edges no longer than the tolerance (ADR 0001, merge pass step 2). The vertices
+/// joined by such edges collapse together onto one of them, which takes their place in every
+/// face around them; this moves those faces' boundaries by no more than the group is wide. The
+/// vertex kept is an operand vertex if the group has one, then the smallest by x, then y, then
+/// z, so the choice depends only on positions. A collapse is applied only if every face it
+/// changes is left without a fault of its own the solid's checks find (bent, degenerate) or
+/// vanishes, and the faces along every edge it touches still pair ([`still_paired`]). A group
+/// that cannot collapse whole is collapsed edge by edge where that holds, either end staying.
+/// Groups and edges are taken in order of position, and tried again until none collapses. A group
+/// wider than [`MERGE_CHAIN_WIDTH`] along an axis is [`BooleanError::MergeChainTooWide`]. An edge
+/// no collapse removes is left to the other operations, or to [`sliver_remains`].
+pub(super) fn collapse_short_edges(faces: &mut Faces, pool: &Pool) -> Result<(), BooleanError> {
+    if !faces
+        .iter()
+        .flatten()
+        .any(|ring| has_short_edge(ring, pool))
+    {
+        return Ok(());
+    }
+    let mut state = Collapsing::new(faces);
+    loop {
+        let short = state.short_edges(pool);
+        let mut any = false;
+        for group in groups(&short) {
+            let keep = (group.iter().copied())
+                .reduce(|best, v| if kept_before(pool, v, best) { v } else { best })
+                .unwrap_or(group[0]);
+            let gone: Vec<usize> = group.iter().copied().filter(|&v| v != keep).collect();
+            let widened = state.widen(keep, &gone, pool)?;
+            if let Some(changed) = collapsed(faces, &state, pool, keep, &gone) {
+                state.apply(faces, (keep, &gone), changed, widened);
+                any = true;
+            }
+        }
+        if any {
+            continue;
+        }
+        for (u, v) in short {
+            if !state.joined(u, v) {
+                continue;
+            }
+            let preferred = if kept_before(pool, u, v) {
+                (u, v)
+            } else {
+                (v, u)
+            };
+            let widened = state.widen(u, &[v], pool)?;
+            // The other end stays if the preferred one cannot.
+            let found = [preferred, (preferred.1, preferred.0)]
+                .into_iter()
+                .find_map(|(keep, gone)| {
+                    Some((keep, gone, collapsed(faces, &state, pool, keep, &[gone])?))
+                });
+            if let Some((keep, gone, changed)) = found {
+                state.apply(faces, (keep, &[gone]), changed, widened);
+                any = true;
+            }
+        }
+        if !any {
+            return Ok(());
+        }
+    }
+}
+
+/// The groups of vertices the edges join, each in the order its vertices are first met, the
+/// groups in the order of their first edge.
+fn groups(edges: &[(usize, usize)]) -> Vec<Vec<usize>> {
+    let count = edges.iter().map(|&(u, v)| u.max(v) + 1).max().unwrap_or(0);
+    let mut parent: Vec<usize> = (0..count).collect();
+    for &(u, v) in edges {
+        union(&mut parent, u, v);
+    }
+    let mut groups: Vec<Vec<usize>> = Vec::new();
+    let mut group_of: BTreeMap<usize, usize> = BTreeMap::new();
+    for &(u, v) in edges {
+        let g = *group_of.entry(find(&mut parent, u)).or_insert_with(|| {
+            groups.push(Vec::new());
+            groups.len() - 1
+        });
+        for x in [u, v] {
+            if !groups[g].contains(&x) {
+                groups[g].push(x);
+            }
+        }
+    }
+    groups
+}
+
+/// What [`collapse_short_edges`] keeps track of: the faces around each vertex, the faces along
+/// each directed edge, and the box of the vertices each kept vertex stands for.
+struct Collapsing {
+    owners: BTreeMap<usize, BTreeSet<usize>>,
+    along: Along,
+    boxes: BTreeMap<usize, (Vector, Vector)>,
+}
+
+impl Collapsing {
+    fn new(faces: &Faces) -> Self {
+        let mut state = Self {
+            owners: BTreeMap::new(),
+            along: BTreeMap::new(),
+            boxes: BTreeMap::new(),
+        };
+        for (f, face) in faces.iter().enumerate() {
+            for &v in face.iter().flatten() {
+                state.owners.entry(v).or_default().insert(f);
+            }
+            own(&mut state.along, face, f);
+        }
+        state
+    }
+
+    /// The edges no longer than the tolerance, each with its smaller vertex first, in order of
+    /// position: by their ends, the smaller by x, then y, then z first.
+    fn short_edges(&self, pool: &Pool) -> Vec<(usize, usize)> {
+        let mut short: Vec<(usize, usize)> = (self.along.keys())
+            .map(|&(u, v)| (u.min(v), u.max(v)))
+            .filter(|&(u, v)| {
+                distance_squared(pool.get(u), pool.get(v)) <= WITHIN_TOLERANCE_SQUARED
+            })
+            .collect::<BTreeSet<_>>()
+            .into_iter()
+            .collect();
+        sort_by_ends(&mut short, |v| pool.get(v));
+        short
+    }
+
+    /// Whether an edge joins the two vertices.
+    fn joined(&self, u: usize, v: usize) -> bool {
+        self.along.contains_key(&(u, v)) || self.along.contains_key(&(v, u))
+    }
+
+    fn box_of(&self, v: usize, pool: &Pool) -> (Vector, Vector) {
+        (self.boxes.get(&v).copied()).unwrap_or((pool.get(v), pool.get(v)))
+    }
+
+    /// The box of the vertices `keep` and `gone` stand for, taken together; an error if it is
+    /// wider than [`MERGE_CHAIN_WIDTH`] along an axis.
+    fn widen(
+        &self,
+        keep: usize,
+        gone: &[usize],
+        pool: &Pool,
+    ) -> Result<(Vector, Vector), BooleanError> {
+        let corners = std::iter::once(keep)
+            .chain(gone.iter().copied())
+            .flat_map(|v| <[Vector; 2]>::from(self.box_of(v, pool)));
+        let (lo, hi) = bounds(corners).unwrap_or_default();
+        if (0..3).any(|i| hi[i] - lo[i] > MERGE_CHAIN_WIDTH) {
+            return Err(BooleanError::MergeChainTooWide);
+        }
+        Ok((lo, hi))
+    }
+
+    /// Puts `keep` in the place of the vertices `gone`, the faces around them `changed`; `keep`
+    /// now stands for the vertices in `widened` ([`Self::widen`]).
+    fn apply(
+        &mut self,
+        faces: &mut Faces,
+        (keep, gone): (usize, &[usize]),
+        changed: Vec<(usize, Vec<Vec<usize>>)>,
+        widened: (Vector, Vector),
+    ) {
+        self.boxes.insert(keep, widened);
+        for (f, face) in changed {
+            disown(&mut self.along, &faces[f], f);
+            own(&mut self.along, &face, f);
+            for &x in faces[f].iter().flatten() {
+                if let Some(of) = self.owners.get_mut(&x) {
+                    of.remove(&f);
+                }
+            }
+            for &x in face.iter().flatten() {
+                self.owners.entry(x).or_default().insert(f);
+            }
+            faces[f] = face;
+        }
+        self.along.retain(|_, of| !of.is_empty());
+        for v in gone {
+            self.owners.remove(v);
+            self.boxes.remove(v);
+        }
+    }
+}
+
+/// The faces around the vertices `gone` once `keep` takes their place, if the collapse is
+/// allowed: each is left without a fault of its own the solid's checks find, or vanishes, and
+/// the edges still pair ([`still_paired`]).
+fn collapsed(
+    faces: &Faces,
+    state: &Collapsing,
+    pool: &Pool,
+    keep: usize,
+    gone: &[usize],
+) -> Option<Vec<(usize, Vec<Vec<usize>>)>> {
+    let around: BTreeSet<usize> = (gone.iter())
+        .filter_map(|v| state.owners.get(v))
+        .flatten()
+        .copied()
+        .collect();
+    let changed: Vec<(usize, Vec<Vec<usize>>)> = around
+        .into_iter()
+        .map(|f| {
+            let mut face: Vec<Vec<usize>> = (faces[f].iter())
+                .map(|ring| {
+                    (ring.iter())
+                        .map(|&x| if gone.contains(&x) { keep } else { x })
+                        .collect()
+                })
+                .collect();
+            clean_face(&mut face);
+            (f, face)
+        })
+        .collect();
+    let no_fault = changed.iter().all(|(f, face)| {
+        face.is_empty() || {
+            let after = checked(face, pool);
+            after.is_ok() || after == checked(&faces[*f], pool)
+        }
+    });
+    (no_fault && still_paired(&state.along, &changed, faces, pool)).then_some(changed)
+}
+
+/// The faces running along each directed edge.
+type Along = BTreeMap<(usize, usize), Vec<usize>>;
+
+/// Whether vertex `u` stays when an edge from it to `v` collapses: an operand vertex rather than
+/// a constructed one, then the smaller by x, then y, then z, then by number.
+fn kept_before(pool: &Pool, u: usize, v: usize) -> bool {
+    (pool.is_input(v).cmp(&pool.is_input(u)))
+        .then(lexicographic(pool.get(u), pool.get(v)))
+        .then(u.cmp(&v))
+        .is_lt()
+}
+
+/// Whether every edge the faces of `changed` have, or have once changed, is still met as often
+/// one way as the other, and the faces along it still pair as the solid's checks pair them:
+/// around the edge, each side running one way next to one running the other way.
+fn still_paired(
+    along: &Along,
+    changed: &[(usize, Vec<Vec<usize>>)],
+    faces: &Faces,
+    pool: &Pool,
+) -> bool {
+    let new: BTreeMap<usize, &Vec<Vec<usize>>> =
+        changed.iter().map(|(f, face)| (*f, face)).collect();
+    let touched: BTreeSet<(usize, usize)> = (changed.iter())
+        .flat_map(|(f, face)| faces[*f].iter().chain(face.iter()))
+        .flat_map(|ring| edges(ring))
+        .map(|(a, b)| (a.min(b), a.max(b)))
+        .collect();
+    // Only the edges touched can change.
+    let mut after: Along = (touched.iter())
+        .flat_map(|&(a, b)| [(a, b), (b, a)])
+        .filter_map(|edge| Some((edge, along.get(&edge)?.clone())))
+        .collect();
+    for (f, face) in changed {
+        disown(&mut after, &faces[*f], *f);
+        own(&mut after, face, *f);
+    }
+    let of = |edge| after.get(&edge).map_or(&[][..], Vec::as_slice);
+    let mut normals: BTreeMap<usize, Vector> = BTreeMap::new();
+    let mut normal = |g: usize| {
+        *(normals.entry(g))
+            .or_insert_with(|| plane(new.get(&g).copied().unwrap_or(&faces[g]), pool).0)
+    };
+    touched.into_iter().all(|(a, b)| {
+        let (forward, backward) = (of((a, b)), of((b, a)));
+        if forward.len() != backward.len() {
+            return false;
+        }
+        if forward.len() < 2 {
+            return true;
+        }
+        let sides: Vec<(bool, Vector)> = (forward.iter().map(|&g| (true, g)))
+            .chain(backward.iter().map(|&g| (false, g)))
+            .map(|(ahead, g)| (ahead, normal(g)))
+            .collect();
+        let order = around_edge(pool.get(a), pool.get(b), sides.iter().copied());
+        (0..order.len()).all(|i| {
+            let before = order[(i + order.len() - 1) % order.len()];
+            !(sides[order[i]].0 && sides[before].0)
+        })
+    })
+}
+
+/// Removes the faces that coincide with another one turned the other way, vertex for vertex:
+/// two faces back to back bound nothing (ADR 0001, merge pass step 1). Each edge of one is met
+/// the other way by the other, so the edges around stay paired.
+pub(super) fn cancel_back_to_back(faces: &mut Faces) {
+    let mut by_form: BTreeMap<Vec<Vec<usize>>, Vec<usize>> = BTreeMap::new();
+    for (f, face) in faces.iter().enumerate() {
+        by_form.entry(canonical(face, false)).or_default().push(f);
+    }
+    let mut gone = BTreeSet::new();
+    for (f, face) in faces.iter().enumerate() {
+        if face.is_empty() || gone.contains(&f) {
+            continue;
+        }
+        let back = (by_form.get(&canonical(face, true)).into_iter().flatten())
+            .copied()
+            .find(|&g| g != f && !gone.contains(&g));
+        if let Some(g) = back {
+            gone.extend([f, g]);
+        }
+    }
+    *faces = std::mem::take(faces)
+        .into_iter()
+        .enumerate()
+        .filter(|(f, _)| !gone.contains(f))
+        .map(|(_, face)| face)
+        .collect();
 }
 
 /// Merges adjacent faces that lie in the same plane within the tolerance and face the same way.
@@ -208,7 +528,7 @@ pub(super) fn remove_collinear(mut faces: Faces, pool: &Pool) -> Faces {
 /// sliver stays. Slivers are taken in order of position, so the operands' order does not
 /// matter.
 pub(super) fn remove_slivers(faces: &mut Faces, pool: &Pool) -> bool {
-    let mut owners: BTreeMap<(usize, usize), Vec<usize>> = BTreeMap::new();
+    let mut owners: Along = BTreeMap::new();
     for (f, face) in faces.iter().enumerate() {
         own(&mut owners, face, f);
     }
@@ -233,28 +553,102 @@ pub(super) fn remove_slivers(faces: &mut Faces, pool: &Pool) -> bool {
     // earlier one zip, so the list is walked again until none does.
     let mut slivers: Vec<usize> = by_position.into_iter().map(|(_, f)| f).collect();
     let mut zipped_any = false;
-    while let Some((k, f, (g, face))) = slivers.iter().enumerate().find_map(|(k, &f)| {
-        let zipped = sliver(&faces[f]).then(|| zip(f, faces, &owners, pool))??;
-        Some((k, f, zipped))
-    }) {
+    loop {
+        while let Some((k, f, (g, face))) = slivers.iter().enumerate().find_map(|(k, &f)| {
+            let zipped = sliver(&faces[f]).then(|| zip(f, faces, &owners, pool))??;
+            Some((k, f, zipped))
+        }) {
+            slivers.remove(k);
+            apply_zip(faces, &mut owners, f, (g, face));
+            zipped_any = true;
+        }
+        // A sliver no zip takes whole may zip in two parts, split along a diagonal.
+        let Some((k, split)) = slivers.iter().enumerate().find_map(|(k, &f)| {
+            Some((
+                k,
+                sliver(&faces[f]).then(|| zip_in_two(f, faces, &owners, pool))??,
+            ))
+        }) else {
+            return zipped_any;
+        };
         slivers.remove(k);
-        disown(&mut owners, &std::mem::take(&mut faces[f]), f);
-        disown(&mut owners, &std::mem::replace(&mut faces[g], face), g);
-        own(&mut owners, &faces[g], g);
+        (*faces, owners) = split;
         zipped_any = true;
     }
-    zipped_any
+}
+
+/// The faces once face `sliver` is split along a diagonal into two parts, each then zipped like a
+/// whole sliver ([`zip`]), with their owners; `None` if no diagonal lets both parts zip. The
+/// diagonals are tried in order of their ends' positions, so the operands' order does not
+/// matter. Like a zipped sliver, both parts are left empty.
+fn zip_in_two(sliver: usize, faces: &Faces, owners: &Along, pool: &Pool) -> Option<(Faces, Along)> {
+    let ring = &faces[sliver][0];
+    let count = ring.len();
+    let mut diagonals: Vec<(usize, usize)> = (0..count)
+        .flat_map(|from| (from + 2..count).map(move |to| (from, to)))
+        .filter(|&(from, to)| !(from == 0 && to == count - 1))
+        .collect();
+    sort_by_ends(&mut diagonals, |k| pool.get(ring[k]));
+    diagonals.into_iter().find_map(|(from, to)| {
+        let mut trial = faces.clone();
+        let mut owned = owners.clone();
+        disown(&mut owned, &trial[sliver], sliver);
+        let half = ring[from..=to].to_vec();
+        let rest = ring[to..].iter().chain(&ring[..=from]).copied().collect();
+        let other = trial.len();
+        trial[sliver] = vec![half];
+        trial.push(vec![rest]);
+        own(&mut owned, &trial[sliver], sliver);
+        own(&mut owned, &trial[other], other);
+        for part in [sliver, other] {
+            let zipped = zip(part, &trial, &owned, pool)?;
+            apply_zip(&mut trial, &mut owned, part, zipped);
+        }
+        Some((trial, owned))
+    })
+}
+
+/// Removes face `sliver` and gives the face across it what it becomes ([`zip`]), keeping the
+/// owners of the edges up to date.
+fn apply_zip(
+    faces: &mut Faces,
+    owners: &mut Along,
+    sliver: usize,
+    (across, face): (usize, Vec<Vec<usize>>),
+) {
+    disown(owners, &std::mem::take(&mut faces[sliver]), sliver);
+    disown(owners, &std::mem::replace(&mut faces[across], face), across);
+    own(owners, &faces[across], across);
+}
+
+/// Sorts pairs of items by the positions of their two ends, the smaller end by x, then y, then
+/// z first, then by the items themselves: an order that depends only on positions, so the
+/// operands' order does not matter.
+fn sort_by_ends(pairs: &mut [(usize, usize)], at: impl Fn(usize) -> Vector) {
+    let ends = |(one, other): (usize, usize)| {
+        let (p, q) = (at(one), at(other));
+        if lexicographic(p, q).is_le() {
+            (p, q)
+        } else {
+            (q, p)
+        }
+    };
+    pairs.sort_by(|&one, &other| {
+        let ((first, last), (first_other, last_other)) = (ends(one), ends(other));
+        (lexicographic(first, first_other).then(lexicographic(last, last_other)))
+            .then(one.cmp(&other))
+    });
 }
 
 /// Records face `f` as an owner of each of its directed edges.
-fn own(owners: &mut BTreeMap<(usize, usize), Vec<usize>>, face: &[Vec<usize>], f: usize) {
+fn own(owners: &mut Along, face: &[Vec<usize>], f: usize) {
     for edge in face.iter().flat_map(|ring| edges(ring)) {
         owners.entry(edge).or_default().push(f);
     }
 }
 
 /// Forgets face `f` as an owner of each of the directed edges it had.
-fn disown(owners: &mut BTreeMap<(usize, usize), Vec<usize>>, face: &[Vec<usize>], f: usize) {
+fn disown(owners: &mut Along, face: &[Vec<usize>], f: usize) {
     for edge in face.iter().flat_map(|ring| edges(ring)) {
         if let Some(of) = owners.get_mut(&edge) {
             of.retain(|&g| g != f);
@@ -267,7 +661,7 @@ fn disown(owners: &mut BTreeMap<(usize, usize), Vec<usize>>, face: &[Vec<usize>]
 fn zip(
     sliver: usize,
     faces: &Faces,
-    owners: &BTreeMap<(usize, usize), Vec<usize>>,
+    owners: &Along,
     pool: &Pool,
 ) -> Option<(usize, Vec<Vec<usize>>)> {
     let ring = &faces[sliver][0];
@@ -318,19 +712,6 @@ fn zip(
         forward <= 1 && forward == backward
     });
     (once && paired && holds(&face, pool)).then_some((across, face))
-}
-
-/// Whether merging vertices within the tolerance bent a face beyond it, as the solid's checks
-/// find it. The pieces of a face lie in its plane, so only a merge can bend one, and the merge
-/// pass cannot straighten it without moving other vertices.
-pub(super) fn bent_by_merging(faces: &Faces, pool: &Pool) -> Result<(), BooleanError> {
-    if faces
-        .iter()
-        .any(|face| checked(face, pool) == Err(FaceFault::NonPlanar))
-    {
-        return Err(BooleanError::FeaturesTooClose);
-    }
-    Ok(())
 }
 
 /// Whether a face no operation could remove is narrower than the tolerance, or has an edge no
@@ -422,9 +803,10 @@ mod tests {
     }
 
     #[test]
-    fn a_sliver_zigzagging_along_its_edge_is_features_too_close() {
+    fn a_sliver_zigzagging_along_its_edge_zips_in_two() {
         // A sliver along the edge from 0 to 1 whose other vertices run back the wrong way: 4
-        // near 1, then 5 near 0. Nothing it touches could take them in order.
+        // near 1, then 5 near 0. No face takes them in order, but split along its diagonal from
+        // 0 to 5, each part zips onto the face across its own longest edge.
         let mut pool = tetrahedron(&[[0.9, -0.4e-6, 0.3e-6], [0.1, -0.4e-6, 0.3e-6]]);
         let faces = vec![
             vec![vec![0, 2, 1, 5, 4]],
@@ -433,10 +815,9 @@ mod tests {
             vec![vec![1, 2, 3]],
             vec![vec![0, 4, 5, 1]],
         ];
-        assert_eq!(
-            assemble(faces, &mut pool),
-            Err(BooleanError::FeaturesTooClose)
-        );
+        let solid = assemble(faces, &mut pool).unwrap().unwrap();
+        assert_eq!((solid.vertices().len(), solid.face_count()), (4, 4));
+        assert!((solid.volume() - 1.0 / 6.0).abs() < 1e-12);
     }
 
     #[test]
@@ -485,5 +866,51 @@ mod tests {
         let pool = Pool::of(vec![[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.5, 0.5e-6, 0.0]]);
         let faces = vec![vec![vec![0, 1, 2]], vec![vec![0, 2, 1]]];
         assert_eq!(remove_collinear(faces.clone(), &pool), faces);
+    }
+
+    #[test]
+    fn a_chain_of_short_edges_wider_than_ten_tolerances_is_refused() {
+        // Two faces back to back whose rings run through thirteen vertices 0.9 µm apart: the
+        // edges between them collapse as one group 10.8 µm wide.
+        let mut points: Vec<Vector> = (0..13).map(|i| [f64::from(i) * 0.9e-6, 0.0, 0.0]).collect();
+        points.push([0.0, 1.0, 0.0]);
+        let pool = Pool::of(points);
+        let ring: Vec<usize> = (0..14).collect();
+        let back: Vec<usize> = ring.iter().rev().copied().collect();
+        let mut faces = vec![vec![ring], vec![back]];
+        assert_eq!(
+            collapse_short_edges(&mut faces, &pool),
+            Err(BooleanError::MergeChainTooWide)
+        );
+    }
+
+    #[test]
+    fn a_collapse_must_leave_each_edge_met_both_ways() {
+        // Two faces back to back along the edge from 0 to 1; a third running from 0 to 1 too
+        // would leave it met twice one way and once the other.
+        let pool = Pool::of(vec![[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]]);
+        let faces = vec![vec![vec![0, 1, 2]], vec![vec![2, 1, 0]], Vec::new()];
+        let mut along = BTreeMap::new();
+        for (f, face) in faces.iter().enumerate() {
+            own(&mut along, face, f);
+        }
+        let changed = [(2, vec![vec![0, 1, 2]])];
+        assert!(!still_paired(&along, &changed, &faces, &pool));
+        assert!(still_paired(&along, &[(2, Vec::new())], &faces, &pool));
+    }
+
+    #[test]
+    fn faces_back_to_back_cancel() {
+        // The first two faces run round the same vertices opposite ways; the third shares only
+        // an edge with them, and empty faces match nothing.
+        let mut faces = vec![
+            vec![vec![0, 1, 2]],
+            Vec::new(),
+            vec![vec![1, 0, 2]],
+            vec![vec![0, 1, 3]],
+            Vec::new(),
+        ];
+        cancel_back_to_back(&mut faces);
+        assert_eq!(faces, [Vec::new(), vec![vec![0, 1, 3]], Vec::new()]);
     }
 }

@@ -749,40 +749,50 @@ fn a_pinched_face_is_split_where_both_parts_stay_wide() {
     assert_eq!(check_booleans(&a, &b), Ok(()));
 }
 
-/// `fuzz/seeds/extruded_boolean/features-too-close-bent-face` (`crash-2eea7226…`): a vertex of
-/// the needle 1.46 µm above the lens's bottom merges with one the bottom was cut at, within the
-/// tolerance of it, and bends the bottom face beyond the tolerance. No local operation
-/// straightens it without moving other vertices, so the union fails with the typed error
-/// instead of returning an invalid solid; the other operations hold.
+/// `fuzz/seeds/extruded_boolean/features-too-close-micro-triangle-a` (`crash-2eea7226…`) and
+/// `…-b` (`crash-b162b855…`, found by the stage-4 survey): the union leaves a triangle a
+/// micrometre or two across where the needle meets the lens's bottom, its apex 0.5 to 1 µm above
+/// it: narrower than the tolerance, with an edge no longer than it. Collapsing that edge would
+/// cross the faces around it, its other edges are longer than the tolerance, and the triangle
+/// does not lie along any of its edges, so no operation removes it and the union fails with the
+/// typed error instead of returning an invalid solid; the other operations hold. Before the cut
+/// was made on the operands as they are, a vertex merge bent the lens's bottom in the first,
+/// and the second's union had a non-manifold edge.
 #[test]
-fn vertices_that_would_bend_a_face_to_merge_are_too_close() {
-    let a = raw_prism(
-        &[(65, -95, 157), (35, 122, 255), (0, 3, 73)],
-        -19,
-        (36, -110, 74),
-    )
-    .unwrap();
-    let b = raw_prism(&[(0, -1, 255)], -18, (90, 45, 50)).unwrap();
-    assert_eq!(
-        check_each(&a, &b),
-        [Err(BooleanError::FeaturesTooClose), Ok(()), Ok(())]
-    );
+fn a_micro_triangle_above_a_face_is_too_close() {
+    let cases = [
+        (
+            raw_prism(
+                &[(65, -95, 157), (35, 122, 255), (0, 3, 73)],
+                -19,
+                (36, -110, 74),
+            ),
+            raw_prism(&[(0, -1, 255)], -18, (90, 45, 50)),
+        ),
+        (
+            raw_prism(&[(64, 89, 5), (28, -91, 0), (0, 35, 254)], -19, (0, 0, 28)),
+            raw_prism(&[(8, -1, 255)], -20, (90, 45, 51)),
+        ),
+    ];
+    for (a, b) in cases {
+        assert_eq!(
+            check_each(&a.unwrap(), &b.unwrap()),
+            [Err(BooleanError::FeaturesTooClose), Ok(()), Ok(())]
+        );
+    }
 }
 
-/// `fuzz/seeds/extruded_boolean/features-too-close-sliver-off-a-face` (`crash-a39e9827…`, found
-/// by the stage-4 survey): the difference leaves a triangle 2.75 µm long and narrower than the
-/// tolerance at the lens corner, one of its vertices 1.08 µm above the lens's bottom, the face
-/// across its longest edge. Zipping it onto that face would put the vertex beyond the tolerance
-/// of the face's plane, and no other operation removes it, so the difference fails with the
-/// typed error; the union and the intersection hold.
+/// `fuzz/seeds/extruded_boolean/sliver-off-a-face-cut-exactly` (`crash-a39e9827…`, found by the
+/// stage-4 survey): the difference left a triangle 2.75 µm long and narrower than the tolerance
+/// at the lens corner, one of its vertices 1.08 µm above the lens's bottom, the face across its
+/// longest edge, and failed with the typed error, as no operation could remove it. The cut now
+/// decides on the operands as they are and merges no vertex before it, and the difference no
+/// longer leaves the triangle: every operation holds.
 #[test]
-fn a_sliver_off_the_plane_of_the_face_across_is_too_close() {
+fn a_sliver_off_the_plane_of_the_face_across_is_cut_away() {
     let a = raw_prism(&[(35, 41, 161), (67, -1, 122), (0, 0, 0)], -6, (42, -1, 28)).unwrap();
     let b = raw_prism(&[(1, -1, 255)], -18, (90, 45, 54)).unwrap();
-    assert_eq!(
-        check_each(&a, &b),
-        [Ok(()), Err(BooleanError::FeaturesTooClose), Ok(())]
-    );
+    assert_eq!(check_each(&a, &b), [Ok(()), Ok(()), Ok(())]);
 }
 
 /// `fuzz/seeds/extruded_boolean/corner-merged-on-a-large-face-a` to `…-f`: needles on lens
@@ -844,5 +854,246 @@ fn a_corner_merged_on_a_large_face_moves_the_volume_by_its_area() {
     // `…-f` (`crash-b03f9bc1…`): a lens of two arcs; the union, 4.1e-6 m³ short.
     let a = raw_prism(&[(-87, 122, 255), (0, 0, 0)], -3, (42, -1, 28)).unwrap();
     let b = raw_prism(&[(0, -1, 255)], -18, (90, 45, 42)).unwrap();
+    assert_eq!(check_booleans(&a, &b), Ok(()));
+}
+
+/// The inputs of [`a_cut_on_the_operands_as_they_are_closes`] that are needles on three-edge
+/// lenses, by seed.
+const CUT_ON_THE_OPERANDS: [NeedleCase; 23] = [
+    // `…-a` (`crash-1d765262…`): the union had a non-manifold edge.
+    (
+        [(65, -31, 255), (-1, -68, 255), (0, 0, 0)],
+        -6,
+        (0, 0, 28),
+        (-1, -1, 255),
+        -18,
+        (90, 45, 28),
+    ),
+    // `…-b` (`crash-1e3cfdaf…`): the union had a non-manifold edge.
+    (
+        [(65, -95, 255), (122, -91, 35), (0, 0, 0)],
+        -6,
+        (42, -1, 28),
+        (0, -1, 255),
+        -18,
+        (90, 45, 51),
+    ),
+    // `…-c` (`crash-1e659169…`): the union and the difference had a degenerate ring.
+    (
+        [(65, -95, 165), (63, 122, 255), (0, 0, 0)],
+        -6,
+        (42, -1, 28),
+        (0, -1, 255),
+        -18,
+        (90, -68, 42),
+    ),
+    // `…-d` (`crash-7abd432747cd7c823ad88d4f9d4b0744ee7e4e6f`): the union had a non-manifold
+    // edge.
+    (
+        [(63, -8, 115), (35, 122, 37), (0, 0, 0)],
+        -6,
+        (91, -1, 28),
+        (0, -1, 255),
+        -18,
+        (90, 45, 56),
+    ),
+    // `…-e` (`crash-ef3bd05a…`): every operation had an open or non-manifold edge.
+    (
+        [(64, 33, 165), (123, 35, 41), (0, 0, 0)],
+        -6,
+        (42, -1, 28),
+        (0, -1, 255),
+        -18,
+        (90, 52, 57),
+    ),
+    // `…-f` (`crash-15919eff…`): every operation had an open or non-manifold edge.
+    (
+        [(106, -95, 28), (35, 123, 37), (0, 0, 0)],
+        -6,
+        (52, -1, 28),
+        (-1, 0, 255),
+        -18,
+        (90, 45, 56),
+    ),
+    // `…-g` (`crash-5f688e70…`): a lens a hundred thousand times smaller; the difference had
+    // a degenerate ring.
+    (
+        [(-95, -95, 28), (-84, -1, 0), (41, 122, 0)],
+        -21,
+        (42, -1, 28),
+        (-1, 0, 255),
+        -18,
+        (90, 0, 90),
+    ),
+    // `…-h` (`crash-6e0ec3bc…`): every operation had an open or non-manifold edge.
+    (
+        [(64, 33, 165), (123, 35, 41), (0, 0, 0)],
+        -6,
+        (42, -1, 28),
+        (0, -1, 255),
+        -18,
+        (59, 50, 53),
+    ),
+    // `…-i` (`crash-781a2aff…`): every operation had an open edge.
+    (
+        [(71, -95, 37), (122, -91, 35), (0, 0, 0)],
+        -6,
+        (91, -1, 21),
+        (0, -1, 255),
+        -18,
+        (0, 45, 56),
+    ),
+    // `…-j` (`crash-868df505…`): a needle four times wider; the union was too close and the
+    // difference and the intersection had an open edge.
+    (
+        [(65, -95, 165), (121, 0, 35), (0, 0, 254)],
+        -6,
+        (42, -65, 28),
+        (0, -1, 255),
+        -16,
+        (116, 45, 51),
+    ),
+    // `…-k` (`crash-930a4c59…`): the union had a non-manifold edge.
+    (
+        [(42, -1, 99), (-95, 44, 122), (0, 0, 0)],
+        -6,
+        (42, -1, 99),
+        (0, -1, 255),
+        -18,
+        (-1, 0, 90),
+    ),
+    // `…-l` (`crash-94cb21e3…`): the difference had a non-manifold edge.
+    (
+        [(-126, -70, 174), (35, 123, 255), (0, 0, 0)],
+        -6,
+        (42, -1, 28),
+        (0, -1, 255),
+        -18,
+        (26, 53, 48),
+    ),
+    // `…-m` (`crash-97f5a439…`): the union had a non-manifold edge, the intersection an open
+    // one.
+    (
+        [(64, 33, 165), (35, -3, 255), (0, 0, 0)],
+        -6,
+        (42, -1, 28),
+        (0, -1, 255),
+        -18,
+        (26, 52, 57),
+    ),
+    // `…-n` (`crash-c38347c1…`): the union had a non-manifold edge.
+    (
+        [(65, -95, 165), (35, 0, 255), (0, 0, 122)],
+        -10,
+        (-1, -1, 28),
+        (0, -1, 255),
+        -18,
+        (59, 45, 54),
+    ),
+    // `…-p` (`crash-e25522f6…`): every operation had a non-manifold edge.
+    (
+        [(64, -91, 35), (5, 41, 33), (0, 0, 0)],
+        -10,
+        (42, -1, 28),
+        (0, -1, 188),
+        -18,
+        (90, -1, 56),
+    ),
+    // `…-q` (`crash-c5cb99793b…`): every operation had an open edge, the union one 12.6 m
+    // long, a whole face of the lens dropped.
+    (
+        [(69, 33, 231), (35, 122, 254), (0, 0, 0)],
+        -6,
+        (42, -1, 28),
+        (0, -1, 255),
+        -18,
+        (90, -81, 56),
+    ),
+    // `…-r` (`crash-f01740a7…`): the union had a degenerate ring.
+    (
+        [(65, -95, 165), (35, 58, 254), (0, 0, 0)],
+        -6,
+        (58, -1, 28),
+        (0, -1, 255),
+        -18,
+        (90, 45, 50),
+    ),
+    // `…-s` (`crash-f1addc4c…`): the union had a non-manifold edge.
+    (
+        [(69, 33, 239), (35, -1, 28), (0, 0, 0)],
+        -6,
+        (42, 40, 28),
+        (0, -1, 255),
+        -18,
+        (94, 45, 56),
+    ),
+    // `…-t` (`crash-ffa57750…`): the union had a non-manifold edge.
+    (
+        [(35, 41, 161), (67, -1, 122), (0, 0, 0)],
+        -6,
+        (58, -1, 28),
+        (0, -1, 255),
+        -18,
+        (90, 13, 54),
+    ),
+    // `…-u` (`ci-pr275-crash-06fca011`, the input CI found on #275): the difference had a
+    // non-manifold edge.
+    (
+        [(-11, -95, 165), (35, 122, 37), (0, 0, 0)],
+        -6,
+        (83, -1, 28),
+        (0, -1, 255),
+        -18,
+        (90, 57, 56),
+    ),
+    // `…-v` (`crash-ffc80604…`, the input `scripts/check-all.sh fuzz` found on stage 4): the
+    // union had a non-manifold edge.
+    (
+        [(65, 92, 122), (41, 5, 35), (0, 0, 0)],
+        -6,
+        (81, -1, 28),
+        (0, -1, 255),
+        -18,
+        (90, -4, 48),
+    ),
+    // `…-w` (`stage5-fuzz-crash-c2e99f34`, the input `scripts/check-all.sh fuzz` found on
+    // stage 5): the difference and the intersection had an open edge.
+    (
+        [(-63, -95, 165), (35, 122, 1), (0, 0, 1)],
+        -6,
+        (0, 42, 28),
+        (0, 5, 255),
+        -18,
+        (76, -1, 51),
+    ),
+    // `…-x` (`ci-pr276-crash-7ac25ad5`, the input CI found on #276): the union had a
+    // non-manifold edge.
+    (
+        [(65, 33, 38), (35, 122, 197), (0, 0, 0)],
+        -6,
+        (10, -1, 28),
+        (0, -1, 255),
+        -18,
+        (90, 45, 52),
+    ),
+];
+
+/// `fuzz/seeds/extruded_boolean/needle-cut-exactly-a` to `…-x`: needles on lens corners that
+/// the fuzz runs of stages 3 to 5 and CI found failing, every one at the first pairing of the kept
+/// pieces, before the merge pass. Operand vertices were merged within the tolerance before the
+/// cut, after the sides of the cut had been decided on their own positions: the lens corner moved
+/// up to a micrometre onto a vertex of the needle. A piece classified on one side of a face then
+/// lay on it, back to back with it (`…-v`, `crash-ffc80604…`), a sharp corner merged into a fin
+/// shared by two faces (`…-b`, `crash-1e3cfdaf…`), or a misread side spread over a whole face of
+/// the lens (`…-q`, `crash-c5cb9979…`), and the result had a non-manifold or open edge or a
+/// degenerate ring. The cut now decides on the operands as they are, every vertex lying on the
+/// planes it was made on; the merge pass collapses what is left within the tolerance.
+#[test]
+fn a_cut_on_the_operands_as_they_are_closes() {
+    check_needles(&CUT_ON_THE_OPERANDS);
+    // `…-o` (`crash-855b3ba8a4e598f12b0254158028736285d42a71`): a lens of an arc and a line;
+    // the difference and the intersection had an open edge.
+    let a = raw_prism(&[(65, -95, 255), (0, 0, 122)], -6, (42, -1, 28)).unwrap();
+    let b = raw_prism(&[(0, -1, 255)], -18, (90, 45, 52)).unwrap();
     assert_eq!(check_booleans(&a, &b), Ok(()));
 }

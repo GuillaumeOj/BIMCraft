@@ -81,6 +81,34 @@ fn clockwise(back: f64, to: Point2, here: Point2) -> f64 {
     if angle <= 0.0 { angle + TAU } else { angle }
 }
 
+/// Rings, run the other way round if `reversed`, in a form that does not depend on where each
+/// starts or on their order: each rotated to its smallest rotation, sorted. Only rotations
+/// starting at the smallest vertex can be smallest, and a ring passing through it twice is
+/// compared from both passes.
+pub(super) fn canonical<'a>(
+    rings: impl IntoIterator<Item = &'a Vec<usize>>,
+    reversed: bool,
+) -> Vec<Vec<usize>> {
+    let mut out: Vec<Vec<usize>> = rings
+        .into_iter()
+        .map(|ring| {
+            let mut ring = ring.clone();
+            if reversed {
+                ring.reverse();
+            }
+            let least = ring.iter().copied().min().unwrap_or_default();
+            let rotated = |start: usize| ring[start..].iter().chain(&ring[..start]).copied();
+            let first = (0..ring.len())
+                .filter(|&i| ring[i] == least)
+                .min_by(|&i, &j| rotated(i).cmp(rotated(j)))
+                .unwrap_or(0);
+            rotated(first).collect()
+        })
+        .collect();
+    out.sort();
+    out
+}
+
 /// Twice the signed area of a ring (shoelace formula).
 fn area(ring: &[usize], at: &impl Fn(usize) -> Point2) -> f64 {
     let points: Vec<Point2> = ring.iter().map(|&v| at(v)).collect();
