@@ -57,7 +57,7 @@ Error messages never hold model content (SEC-03). The `jsonrpc` fuzz target (`fu
 
 A transport carries messages between a client and a server (API-04). The client's end implements `api::Transport`: `send` takes one message and returns the response, or `None` for notifications, and `notifications` takes the `model.changed` notifications received since the last call. Calls are blocking and carry text, so the trait builds for `wasm32-unknown-unknown` too; an asynchronous transport adapts to it in its tests.
 
-`api::InProcess` is the transport to a server in the same process, for tests, the browser build and the desktop host. Each transport sets the `Origin` of its client. The desktop window reaches its document over Tauri's IPC, which passes the same suite: see [desktop.md](desktop.md).
+`api::InProcess` is the transport to a server in the same process, for tests, the browser build and the desktop host. Each transport sets the `Origin` of its client. The desktop window reaches its document over Tauri's IPC, which passes the same suite: see [desktop.md](desktop.md). In the UI, `ui/src/api/` holds the typed client; its types are generated from `schema/api/protocol.schema.json` by `bun scripts/generate-api-types.ts`, so regenerate them, and commit `ui/src/api/protocol.gen.ts`, whenever the schema changes (`scripts/check-all.sh repo` fails until then).
 
 ### The conformance suite
 
