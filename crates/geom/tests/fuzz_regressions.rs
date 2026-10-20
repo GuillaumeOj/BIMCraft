@@ -283,7 +283,8 @@ fn a_needle_on_a_corner_splits_the_edges_there_alike() {
             (82, 45, 55),
         ),
         // `…-d` (`old-eede88c0`): the needle starts 1.9 µm lower; the union had a degenerate
-        // ring.
+        // ring, then kept a face of the needle's tip 0.82 µm wide, which is now zipped onto
+        // the face across its longest edge.
         (
             [(69, -95, 229), (59, 122, 255), (0, 0, 0)],
             -6,
@@ -576,6 +577,152 @@ fn a_needle_on_a_lens_slanted_in_its_plane_closes() {
         -18,
         (90, 45, 56),
     )]);
+}
+
+/// Faces narrower than the tolerance, which the solid's checks reject: each face's vertices lie
+/// within the tolerance of its longest edge, in order along it, so the merge pass zips it shut
+/// onto the face across that edge, which then runs through them. Before, the result kept the
+/// sliver and was rejected.
+#[test]
+fn a_sliver_is_zipped_onto_the_face_across_its_longest_edge() {
+    check_needles(&[
+        // `fuzz/seeds/extruded_boolean/sliver-zipped-a` (`crash-0384fb71…`): the union.
+        (
+            [(65, -31, 229), (35, 122, 255), (0, 0, 0)],
+            -6,
+            (0, 42, 28),
+            (0, -1, 255),
+            -18,
+            (90, 45, 50),
+        ),
+        // `…-b` (`crash-3f3f6b44…`): the union.
+        (
+            [(65, -95, 165), (35, 0, 255), (0, 0, 122)],
+            -10,
+            (-1, -1, 28),
+            (0, -1, 255),
+            -18,
+            (90, 45, 54),
+        ),
+        // `…-c` (`crash-4d5c925e…`): a lens a hundred times smaller; the union.
+        (
+            [(65, -93, 165), (31, 126, 254), (0, 0, 0)],
+            -18,
+            (0, -68, 28),
+            (0, -1, 255),
+            -16,
+            (90, 45, 55),
+        ),
+        // `…-d` (`crash-f3581a16…`): the union.
+        (
+            [(65, -95, 165), (122, 0, 35), (-2, 0, 0)],
+            -6,
+            (42, -1, 28),
+            (0, -1, 255),
+            -18,
+            (90, 45, 54),
+        ),
+    ]);
+    // `…-e` (`mainfix-1b3d348f`): a half disc and a circle a few micrometres across; the
+    // difference kept a sliver of the circle's side.
+    let a = raw_prism(&[(-1, 41, 65), (-1, -1, 188)], -16, (-1, -68, 42)).unwrap();
+    let b = raw_prism(&[(-1, 90, 188)], -17, (-77, -68, 38)).unwrap();
+    assert_eq!(check_booleans(&a, &b), Ok(()));
+}
+
+/// A face narrower than the tolerance lying back to back with the face across its longest edge,
+/// which also runs along another of its edges: zipped onto it, the two cancel, and the vertex
+/// they shared goes. Before, the difference kept the sliver and was rejected.
+#[test]
+fn a_sliver_folded_back_on_a_face_cancels_with_it() {
+    check_needles(&[
+        // `fuzz/seeds/extruded_boolean/sliver-folded-back-a` (`crash-033923b4…`).
+        (
+            [(64, 33, 165), (35, 123, 255), (0, 0, 0)],
+            -6,
+            (42, -1, 28),
+            (0, -1, 255),
+            -18,
+            (26, 52, 57),
+        ),
+        // `…-b` (`crash-44f51d94…`): a lens as small as the needle.
+        (
+            [(64, 33, 165), (35, 123, 254), (0, -1, 255)],
+            -18,
+            (90, 57, 52),
+            (0, -1, 255),
+            -18,
+            (90, 52, 56),
+        ),
+        // `…-c` (`crash-5b85f1f1…`).
+        (
+            [(64, 33, 165), (35, 123, 254), (0, -1, 255)],
+            -18,
+            (90, 57, 54),
+            (0, -1, 255),
+            -18,
+            (90, 52, 54),
+        ),
+        // `…-d` (`crash-5ce1e111…`).
+        (
+            [(122, 71, 5), (-27, -95, 35), (0, 0, 0)],
+            -6,
+            (91, -1, 28),
+            (0, -1, 255),
+            -18,
+            (90, 65, 54),
+        ),
+    ]);
+}
+
+/// `fuzz/seeds/extruded_boolean/vertex-kept-for-a-wide-face` (`crash-36dc90d3…`): a vertex
+/// between two edges within the tolerance of a line was removed from both its faces, which left
+/// one no wider than the tolerance, and the difference was rejected. A vertex now goes only if
+/// its faces still pass the solid's checks without it.
+#[test]
+fn a_vertex_goes_only_if_its_faces_stay_valid() {
+    check_needles(&[(
+        [(-63, -95, 165), (35, 122, 1), (0, 0, 1)],
+        -6,
+        (42, 0, 28),
+        (0, 5, 255),
+        -18,
+        (76, -1, 51),
+    )]);
+}
+
+/// `fuzz/seeds/extruded_boolean/pinched-face-split-wide` (`crash-154eee8e…`): a merged face
+/// passing a vertex twice, a long thin triangle with a small one at its tip, was split along the
+/// chord farthest from the other vertices, which ran 12 m down the long side and left a part
+/// 0.87 µm wide. The chord now leaves the narrower part widest, as the solid's checks measure
+/// width.
+#[test]
+fn a_pinched_face_is_split_where_both_parts_stay_wide() {
+    let a = raw_prism(
+        &[(-95, -95, 28), (35, -1, 0), (41, 122, 0)],
+        -21,
+        (42, -1, 28),
+    )
+    .unwrap();
+    let b = raw_prism(&[(-1, 0, 255)], -18, (90, 0, 90)).unwrap();
+    assert_eq!(check_booleans(&a, &b), Ok(()));
+}
+
+/// `crash-2eea7226…` (found by the fuzz target while the booleans were hardened; not a seed,
+/// since the fuzz target does not accept the error yet): a vertex of the needle 1.46 µm above the lens's bottom merges with
+/// one the bottom was cut at, within the tolerance of it, and bends the bottom face beyond the
+/// tolerance. No local operation straightens it without moving other vertices, so the union
+/// fails with the typed error instead of returning an invalid solid.
+#[test]
+fn vertices_that_would_bend_a_face_to_merge_are_too_close() {
+    let a = raw_prism(
+        &[(65, -95, 157), (35, 122, 255), (0, 3, 73)],
+        -19,
+        (36, -110, 74),
+    )
+    .unwrap();
+    let b = raw_prism(&[(0, -1, 255)], -18, (90, 45, 50)).unwrap();
+    assert_eq!(a.union(&b), Err(BooleanError::FeaturesTooClose));
 }
 
 /// `fuzz/seeds/extruded_boolean/corner-merged-on-a-large-face-a` to `…-f`: needles on lens

@@ -173,51 +173,15 @@ impl Solid {
         let mut planes = Vec::with_capacity(self.faces.len());
         // Reused across faces to avoid allocating per face.
         let mut points = Vec::new();
-        let mut ring_normals = Vec::new();
+        let mut ends = Vec::new();
         for (face, data) in self.faces.iter().enumerate() {
             points.clear();
-            ring_normals.clear();
-            let mut outer_longest = 0.0;
+            ends.clear();
             for &ring in &data.rings {
-                let start = points.len();
                 points.extend(self.ring_vertices(ring).map(|v| self.point(v)));
-                let ring = &points[start..];
-                let normal = newell(ring);
-                let longest = longest_edge_squared(ring);
-                // Twice the area over the longest edge bounds the width from above. Holes are
-                // checked too: a narrower ring's orientation is noise.
-                if dot(normal, normal) <= WITHIN_TOLERANCE_SQUARED * longest {
-                    return Err(BrepError::DegenerateFace { face });
-                }
-                if start == 0 {
-                    outer_longest = longest;
-                }
-                ring_normals.push(normal);
+                ends.push(points.len());
             }
-            let normal = ring_normals.iter().fold([0.0; 3], |sum, &n| add(sum, n));
-            let length_squared = dot(normal, normal);
-            if length_squared <= WITHIN_TOLERANCE_SQUARED * outer_longest {
-                return Err(BrepError::DegenerateFace { face });
-            }
-            if ring_normals[1..].iter().any(|&n| dot(n, normal) >= 0.0) {
-                return Err(BrepError::MisorientedHole { face });
-            }
-            #[expect(
-                clippy::cast_precision_loss,
-                reason = "a face has far fewer than 2^52 vertices"
-            )]
-            let centre = scale(
-                points.iter().fold([0.0; 3], |sum, &p| add(sum, p)),
-                1.0 / points.len() as f64,
-            );
-            let limit = WITHIN_TOLERANCE_SQUARED * length_squared;
-            if points.iter().any(|&p| {
-                let off_plane = dot(normal, sub(p, centre));
-                off_plane * off_plane > limit
-            }) {
-                return Err(BrepError::NonPlanarFace { face });
-            }
-            planes.push((normal, centre));
+            planes.push(face_plane(&points, &ends).map_err(|fault| fault.of(face))?);
         }
         Ok(planes)
     }
@@ -250,6 +214,80 @@ impl Solid {
     }
 }
 
+/// Why a face breaks a validity rule of its own, whatever the faces around it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum FaceFault {
+    /// A ring, or the whole face, no wider than the tolerance.
+    Degenerate,
+    /// A hole turning the same way as the outer ring.
+    MisorientedHole,
+    /// A vertex farther than the tolerance from the face's plane.
+    NonPlanar,
+}
+
+impl FaceFault {
+    const fn of(self, face: usize) -> BrepError {
+        match self {
+            Self::Degenerate => BrepError::DegenerateFace { face },
+            Self::MisorientedHole => BrepError::MisorientedHole { face },
+            Self::NonPlanar => BrepError::NonPlanarFace { face },
+        }
+    }
+}
+
+/// Checks the rules a face must meet on its own and returns its plane: the area vector (normal
+/// to the face, twice its area long) and the centre of its vertices. The face is given as the
+/// points of its rings one after the other, the outer ring first, and where each ring ends.
+/// The merge pass of the booleans runs it on the faces an operation would leave, so it never
+/// leaves one the solid's checks reject.
+pub(crate) fn face_plane(points: &[Vector], ends: &[usize]) -> Result<(Vector, Vector), FaceFault> {
+    let mut normal = [0.0; 3];
+    let mut outer_longest = 0.0;
+    let mut start = 0;
+    for &end in ends {
+        let ring = &points[start..end];
+        let ring_normal = newell(ring);
+        let longest = longest_edge_squared(ring);
+        // Twice the area over the longest edge bounds the width from above. Holes are checked
+        // too: a narrower ring's orientation is noise.
+        if dot(ring_normal, ring_normal) <= WITHIN_TOLERANCE_SQUARED * longest {
+            return Err(FaceFault::Degenerate);
+        }
+        if start == 0 {
+            outer_longest = longest;
+        }
+        normal = add(normal, ring_normal);
+        start = end;
+    }
+    let length_squared = dot(normal, normal);
+    if length_squared <= WITHIN_TOLERANCE_SQUARED * outer_longest {
+        return Err(FaceFault::Degenerate);
+    }
+    let mut start = ends.first().copied().unwrap_or(0);
+    for &end in ends.iter().skip(1) {
+        if dot(newell(&points[start..end]), normal) >= 0.0 {
+            return Err(FaceFault::MisorientedHole);
+        }
+        start = end;
+    }
+    #[expect(
+        clippy::cast_precision_loss,
+        reason = "a face has far fewer than 2^52 vertices"
+    )]
+    let centre = scale(
+        points.iter().fold([0.0; 3], |sum, &p| add(sum, p)),
+        1.0 / points.len() as f64,
+    );
+    let limit = WITHIN_TOLERANCE_SQUARED * length_squared;
+    if points.iter().any(|&p| {
+        let off_plane = dot(normal, sub(p, centre));
+        off_plane * off_plane > limit
+    }) {
+        return Err(FaceFault::NonPlanar);
+    }
+    Ok((normal, centre))
+}
+
 /// The signed volume a closed shell encloses, given the plane of each face as its area vector
 /// (normal to the face, twice its area long) and the centre of its vertices; and whether it is
 /// thinner than the tolerance on average, which no valid shell is.
@@ -279,7 +317,8 @@ fn genus(vertices: usize, edges: usize, faces: usize, holes: usize) -> Option<u3
     }
 }
 
-fn longest_edge_squared(ring: &[Vector]) -> f64 {
+/// The squared length of the longest edge of a ring: twice its area over it bounds its width.
+pub(crate) fn longest_edge_squared(ring: &[Vector]) -> f64 {
     edges(ring)
         .map(|(p, q)| {
             let d = sub(q, p);

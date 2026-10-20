@@ -28,8 +28,11 @@
 //!    pieces of the same face merge back into as few faces as possible.
 //! 6. The kept faces are stitched into a solid: lumps that only touch along an edge or at a
 //!    point get their own vertices, adjacent coplanar faces merge, vertices between collinear
-//!    edges go, and lumps or voids no thicker than the tolerance on average vanish (merge pass,
-//!    steps 1 to 4).
+//!    edges go, faces narrower than the tolerance are zipped shut onto the face across their
+//!    longest edge, and lumps or voids no thicker than the tolerance on average vanish (merge
+//!    pass, steps 1 to 4). Each of these operations is applied only if the faces it leaves pass
+//!    the solid's checks, so it never makes a valid result invalid; a feature within the
+//!    tolerance that none can remove is [`BooleanError::FeaturesTooClose`].
 //!    The result is checked like any solid; an invalid one is an error, never a panic.
 //!
 //! The result is regularised: pieces of zero thickness, such as a face two operands share, are
@@ -47,6 +50,7 @@ mod classify;
 mod error;
 mod face;
 mod intersect;
+mod merge;
 mod planar;
 mod snap;
 
@@ -110,8 +114,8 @@ impl Solid {
     ///
     /// # Errors
     ///
-    /// Returns a [`BooleanError`] if near-coincident vertices cannot be merged safely, or if the
-    /// result is not a valid solid.
+    /// Returns a [`BooleanError`] if near-coincident vertices or faces cannot be merged safely,
+    /// or if the result is not a valid solid.
     pub fn union(&self, other: &Self) -> Result<Option<Self>, BooleanError> {
         run(self, other, Operation::Union)
     }
@@ -125,8 +129,8 @@ impl Solid {
     ///
     /// # Errors
     ///
-    /// Returns a [`BooleanError`] if near-coincident vertices cannot be merged safely, or if the
-    /// result is not a valid solid.
+    /// Returns a [`BooleanError`] if near-coincident vertices or faces cannot be merged safely,
+    /// or if the result is not a valid solid.
     pub fn difference(&self, cutter: &Self) -> Result<Option<Self>, BooleanError> {
         run(self, cutter, Operation::Difference)
     }
@@ -138,8 +142,8 @@ impl Solid {
     ///
     /// # Errors
     ///
-    /// Returns a [`BooleanError`] if near-coincident vertices cannot be merged safely, or if the
-    /// result is not a valid solid.
+    /// Returns a [`BooleanError`] if near-coincident vertices or faces cannot be merged safely,
+    /// or if the result is not a valid solid.
     pub fn intersection(&self, other: &Self) -> Result<Option<Self>, BooleanError> {
         run(self, other, Operation::Intersection)
     }
