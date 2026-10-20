@@ -16,6 +16,7 @@ use std::collections::BTreeMap;
 
 use super::face::{PlanarFace, Pool};
 use super::intersect::candidate_pairs;
+use super::snap::{find, union};
 use crate::vector::{Vector, dot, largest_axis, scale, sub};
 
 /// Projects the vertices of each face of one operand (`faces[..split]`) or the other onto the
@@ -24,11 +25,16 @@ use crate::vector::{Vector, dot, largest_axis, scale, sub};
 /// again.
 pub(super) fn align(faces: &mut [PlanarFace], split: usize, pool: &mut Pool) {
     let mut target: Vec<Option<usize>> = vec![None; faces.len()];
+    // Faces already on exactly one plane share its number.
+    let mut same: Vec<usize> = (0..faces.len()).collect();
     for (f, g) in candidate_pairs(faces, split) {
         let (first, later) = match plane_order(&faces[f], &faces[g]) {
             Ordering::Less => (f, g),
             Ordering::Greater => (g, f),
-            Ordering::Equal => continue,
+            Ordering::Equal => {
+                union(&mut same, f, g);
+                continue;
+            }
         };
         // Only the moving face's vertices are known to be within the tolerance of the other
         // plane; the other way round, a large face could move far more than the tolerance.
@@ -50,12 +56,19 @@ pub(super) fn align(faces: &mut [PlanarFace], split: usize, pool: &mut Pool) {
     };
     // Each moved vertex goes onto every plane its faces move to, in plane order.
     let mut planes: BTreeMap<usize, Vec<usize>> = BTreeMap::new();
+    // A moved face takes the number of the plane it goes onto, its target's before that moves
+    // in turn: a face whose target moves on to a plane it does not lie on is not on that one.
+    let mut onto: Vec<usize> = (0..faces.len()).collect();
     for (f, face) in faces.iter().enumerate() {
         if let Some(t) = target[f].map(|t| resolve(f, t)) {
+            onto[f] = t;
             for &v in face.rings.iter().flatten() {
                 planes.entry(v).or_default().push(t);
             }
         }
+    }
+    for (f, face) in faces.iter_mut().enumerate() {
+        face.plane = find(&mut same, onto[f]);
     }
     for (&v, planes) in &mut planes {
         planes.sort_by(|&f, &g| plane_order(&faces[f], &faces[g]).then(f.cmp(&g)));
@@ -67,7 +80,7 @@ pub(super) fn align(faces: &mut [PlanarFace], split: usize, pool: &mut Pool) {
     }
     for face in faces.iter_mut() {
         if face.rings.iter().flatten().any(|v| planes.contains_key(v)) {
-            *face = PlanarFace::new(std::mem::take(&mut face.rings), pool);
+            *face = PlanarFace::new(std::mem::take(&mut face.rings), pool, face.plane);
         }
     }
 }

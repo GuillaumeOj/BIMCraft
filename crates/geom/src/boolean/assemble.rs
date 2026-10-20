@@ -3,7 +3,8 @@
 //! - Where more than two faces meet at an edge (lumps touching along it), each side is paired
 //!   with the face across the same lump; lumps touching at an edge or a point then get their own
 //!   copies of the vertices, so no non-manifold edge or vertex is created.
-//! - The merge pass's local operations then run on the paired faces (see `merge`).
+//! - The merge pass's local operations then run on the paired faces (see `merge`): edges no
+//!   longer than the tolerance collapse first, then the rest.
 //! - A face whose boundary passes through a vertex twice, such as one notched up to a corner,
 //!   is split in two along a segment inside it.
 
@@ -12,11 +13,10 @@ use std::collections::{BTreeMap, BTreeSet};
 use super::BooleanError;
 use super::face::{Pool, Projection, clean_face, plane, ring_contains};
 use super::merge::{
-    bent_by_merging, drop_thin_lumps, merge_coplanar, remove_collinear, remove_slivers,
-    sliver_remains,
+    cancel_back_to_back, collapse_short_edges, drop_thin_lumps, merge_coplanar, remove_collinear,
+    remove_slivers, sliver_remains,
 };
 use super::planar::regions;
-use super::snap::snap;
 use crate::brep::longest_edge_squared;
 use crate::predicates::orient2d;
 use crate::vector::{Vector, cross, dot, edges, length, newell, scale, sub};
@@ -27,28 +27,25 @@ pub(super) type Faces = Vec<Vec<Vec<usize>>>;
 
 /// Builds the solid bounded by the faces; `None` if no face is left.
 pub(super) fn assemble(mut faces: Faces, pool: &mut Pool) -> Result<Option<Solid>, BooleanError> {
-    // Cutting faces adds vertices, which may land on each other from neighbouring faces. Only
-    // the vertices kept take part: those of dropped pieces must not make a chain fail.
-    let mut used: Vec<usize> = faces.iter().flatten().flatten().copied().collect();
-    used.sort_unstable();
-    used.dedup();
-    let rename = snap(pool, &used)?;
-    for vertex in faces.iter_mut().flatten().flatten() {
-        *vertex = rename[*vertex];
-    }
     clean(&mut faces);
     if faces.is_empty() {
         return Ok(None);
     }
+    // The cut merged no vertices within the tolerance of each other: the merge pass does, on
+    // the classified result, once lumps that only touch have their own vertices.
+    let Some((twins, _)) = paired(&mut faces, pool) else {
+        return build(&faces, pool);
+    };
+    separate_lumps(&mut faces, &twins, pool);
+    collapse_short_edges(&mut faces, pool)?;
+    cancel_back_to_back(&mut faces);
     let Some(first) = paired(&mut faces, pool) else {
         return build(&faces, pool);
     };
-    bent_by_merging(&faces, pool)?;
     separate_lumps(&mut faces, &first.0, pool);
     // Each round merges coplanar faces, then zips slivers shut, which can leave coplanar faces
-    // side by side: rounds run until no sliver is zipped. No operation moves a vertex, so the
-    // first round's planes are the pieces' own, of their input faces; later rounds compare
-    // with the planes of the faces merged so far.
+    // side by side: rounds run until no sliver is zipped. Each round compares with the planes
+    // of the faces as they are, collapsed and merged so far.
     let mut paired_faces = Some(first);
     while let Some((twins, planes)) = paired_faces {
         faces = remove_collinear(merge_coplanar(&faces, &planes, &twins, pool), pool);
@@ -150,21 +147,15 @@ fn pair(faces: &Faces, planes: &[(Vector, Vector)], pool: &Pool) -> Option<Vec<u
         if 2 * ahead != sides.len() {
             return None;
         }
-        // Around the edge, sorted by the direction each face leaves it in. The solid lies
-        // clockwise of a forward side (seen along the edge), so its twin is the side just before.
-        let axis = sub(pool.get(v), pool.get(u));
-        let (x, y) = perpendicular(axis);
-        let mut around: Vec<(f64, usize)> = sides
+        // The solid lies clockwise of a forward side (seen along the edge), so its twin is the
+        // side just before.
+        let normals = sides
             .iter()
-            .map(|&h| {
-                let along = if forward(&h) { axis } else { scale(axis, -1.0) };
-                let into = cross(planes[half_edges.face(h)].0, along);
-                (libm::atan2(dot(into, y), dot(into, x)), h)
-            })
-            .collect();
-        around.sort_by(|a, b| a.0.total_cmp(&b.0).then(a.1.cmp(&b.1)));
-        for (i, &(_, h)) in around.iter().enumerate() {
-            let (_, twin) = around[(i + around.len() - 1) % around.len()];
+            .map(|&h| (forward(&h), planes[half_edges.face(h)].0));
+        let order = around_edge(pool.get(u), pool.get(v), normals);
+        let around: Vec<usize> = order.into_iter().map(|i| sides[i]).collect();
+        for (i, &h) in around.iter().enumerate() {
+            let twin = around[(i + around.len() - 1) % around.len()];
             if forward(&h) {
                 if forward(&twin) {
                     return None;
@@ -175,6 +166,28 @@ fn pair(faces: &Faces, planes: &[(Vector, Vector)], pool: &Pool) -> Option<Vec<u
         }
     }
     Some(twins)
+}
+
+/// The sides of the faces along an edge from `u` to `v`, given as whether each runs from `u`
+/// to `v` and its face's normal, in order around the edge: sorted by the direction each face
+/// leaves it in, equal directions by their order given.
+pub(super) fn around_edge(
+    u: Vector,
+    v: Vector,
+    sides: impl Iterator<Item = (bool, Vector)>,
+) -> Vec<usize> {
+    let axis = sub(v, u);
+    let (x, y) = perpendicular(axis);
+    let mut around: Vec<(f64, usize)> = sides
+        .enumerate()
+        .map(|(i, (forward, normal))| {
+            let along = if forward { axis } else { scale(axis, -1.0) };
+            let into = cross(normal, along);
+            (libm::atan2(dot(into, y), dot(into, x)), i)
+        })
+        .collect();
+    around.sort_by(|a, b| a.0.total_cmp(&b.0).then(a.1.cmp(&b.1)));
+    around.into_iter().map(|(_, i)| i).collect()
 }
 
 /// Two unit vectors perpendicular to `axis` and to each other.
