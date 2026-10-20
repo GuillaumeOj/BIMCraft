@@ -1,6 +1,6 @@
 #!/bin/sh
 # Runs the project checks (AGENTS.md §9). CI calls the same sections, so local and remote never drift.
-# Usage: scripts/check-all.sh [section...]   sections: repo rust coverage wasm fuzz corpus ui e2e docs (default: all)
+# Usage: scripts/check-all.sh [section...]   sections: repo rust coverage wasm fuzz corpus ui e2e desktop docs (default: all)
 # A section is skipped only when the code it checks does not exist yet.
 # CHECK_CRATES="a b" limits the Rust sections to those crates, for a quick local run on the crates
 # you changed (AGENTS.md §3a); unset, they cover the whole workspace, as in CI.
@@ -138,6 +138,15 @@ check_e2e() {
   (cd ui && bun install --frozen-lockfile && bunx playwright test)
 }
 
+check_desktop() {
+  has_ui || { step "Desktop: no UI yet, skipped"; return; }
+  step "Desktop program: the window with the bundled UI (UI-01)"
+  require bun
+  (cd ui && bun install --frozen-lockfile && bunx vite build)
+  # tauri/custom-protocol embeds ui/dist, as in a release; without it the window loads the dev server.
+  cargo build --locked --package desktop-app --features tauri/custom-protocol
+}
+
 check_docs() {
   step "User guide and reference book build"
   require mdbook
@@ -145,10 +154,10 @@ check_docs() {
   mdbook build docs/reference
 }
 
-sections=${*:-repo rust coverage wasm fuzz corpus ui e2e docs}
+sections=${*:-repo rust coverage wasm fuzz corpus ui e2e desktop docs}
 for section in $sections; do
   case "$section" in
-    repo|rust|coverage|wasm|fuzz|corpus|ui|e2e|docs) "check_$section" ;;
+    repo|rust|coverage|wasm|fuzz|corpus|ui|e2e|desktop|docs) "check_$section" ;;
     *) echo "check-all: unknown section '$section'" >&2; exit 2 ;;
   esac
 done

@@ -26,8 +26,10 @@ pub struct Outcome<T = Value> {
     pub event: Option<ChangeEvent>,
 }
 
-type CommandFn<Ctx> = dyn Fn(&mut Ctx, Value, &Origin) -> Result<Outcome, ApiError>;
-type QueryFn<Ctx> = dyn Fn(&Ctx, Value) -> Result<Value, ApiError>;
+// Send + Sync so that a server can be shared with the threads a host serves it from, such as the
+// desktop window's IPC handlers.
+type CommandFn<Ctx> = dyn Fn(&mut Ctx, Value, &Origin) -> Result<Outcome, ApiError> + Send + Sync;
+type QueryFn<Ctx> = dyn Fn(&Ctx, Value) -> Result<Value, ApiError> + Send + Sync;
 
 /// A query only borrows the context, so the compiler guarantees it changes nothing.
 enum Handler<Ctx> {
@@ -55,7 +57,7 @@ impl<Ctx> Descriptor<Ctx> {
         version: Version,
         summary: &'static str,
         signature: Signature,
-        handler: impl Fn(&mut Ctx, I, &Origin) -> Result<Outcome<O>, ApiError> + 'static,
+        handler: impl Fn(&mut Ctx, I, &Origin) -> Result<Outcome<O>, ApiError> + Send + Sync + 'static,
     ) -> Self
     where
         Ctx: 'static,
@@ -85,7 +87,7 @@ impl<Ctx> Descriptor<Ctx> {
         version: Version,
         summary: &'static str,
         signature: Signature,
-        handler: impl Fn(&Ctx, I) -> Result<O, ApiError> + 'static,
+        handler: impl Fn(&Ctx, I) -> Result<O, ApiError> + Send + Sync + 'static,
     ) -> Self
     where
         Ctx: 'static,

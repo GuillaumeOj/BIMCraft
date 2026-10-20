@@ -1,0 +1,27 @@
+[package]
+name = "desktop-app"
+version = "0.0.0"
+description = "The BIMCraft desktop program: the web interface in a Tauri window on a document."
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[[bin]]
+name = "bimcraft"
+path = "src/main.rs"
+
+[dependencies]
+host-desktop = { workspace = true }
+# Tauri's default window features, less those nothing uses (dbus, dynamic-acl and
+# common-controls-v6): wry, the webview runtime (WKWebView, WebView2, WebKitGTK); x11, for Linux
+# X11 sessions as well as Wayland; compression of the embedded UI. common-controls-v6 serves native
+# dialogs and menus, and on Windows it stops every test program that links Tauri from starting
+# (STATUS_ENTRYPOINT_NOT_FOUND): only the program carries the manifest those controls need.
+tauri = { workspace = true, features = ["wry", "x11", "compression"] }
+
+[build-dependencies]
+tauri-build = { workspace = true }
+
+[lints]
+workspace = true

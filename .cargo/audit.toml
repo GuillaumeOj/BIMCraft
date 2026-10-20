@@ -3,4 +3,9 @@
 # Keep `ignore` in sync with `[advisories] ignore` in deny.toml, with the reason for each entry.
 
 [advisories]
-ignore = []
+ignore = [
+  # proc-macro-error, unmaintained, via Tauri 2's GTK 3 stack (Linux webview); compile time only.
+  "RUSTSEC-2024-0370",
+  # glib 0.18 VariantStrIter unsoundness, via the same GTK 3 stack; never called.
+  "RUSTSEC-2024-0429",
+]
