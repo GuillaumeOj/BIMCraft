@@ -9,15 +9,17 @@
 //!    it. Where an edge crosses a plane, the vertex is computed once and rounded once, and is
 //!    shared by every face along the edge. Coplanar faces exchange their boundaries.
 //! 3. Vertices within the tolerance merge (merge pass, step 2).
-//! 4. Each face is cut along those segments into pieces. Whether a cut crosses another is
-//!    decided exactly; every piece keeps the plane of its input face.
+//! 4. Each face is cut along those segments into pieces. Every edge and segment is split once
+//!    for all the faces along it, where it crosses another and at the vertices within the
+//!    tolerance of it, so neighbouring pieces share their edges exactly. Whether a cut crosses
+//!    another is decided exactly; every piece keeps the plane of its input face.
 //! 5. Each piece is classified against the other operand: inside, outside, or on one of its
 //!    faces, facing the same way or the opposite way. The operation keeps some classes and drops
 //!    the others; kept pieces of the same face merge back into as few faces as possible.
-//! 6. The kept faces are stitched into a solid: edges split where other faces' vertices lie on
-//!    them, lumps that only touch along an edge or at a point get their own vertices, adjacent
-//!    coplanar faces merge, vertices between collinear edges go, and lumps or voids no thicker
-//!    than the tolerance on average vanish (merge pass, steps 1 to 4).
+//! 6. The kept faces are stitched into a solid: lumps that only touch along an edge or at a
+//!    point get their own vertices, adjacent coplanar faces merge, vertices between collinear
+//!    edges go, and lumps or voids no thicker than the tolerance on average vanish (merge pass,
+//!    steps 1 to 4).
 //!    The result is checked like any solid; an invalid one is an error, never a panic.
 //!
 //! The result is regularised: pieces of zero thickness, such as a face two operands share, are
@@ -148,11 +150,15 @@ fn run(first: &Solid, second: &Solid, operation: Operation) -> Result<Option<Sol
     }
     let split = first.face_count();
     align::align(&mut faces, split, &mut pool);
-    let segments = intersect::segments(&faces, split, &mut pool);
+    let mut segments = intersect::segments(&faces, split, &mut pool);
     let rename = snap::snap(&pool, &(0..pool.len()).collect::<Vec<_>>())?;
     for face in &mut faces {
         face.remap(&rename, &pool);
     }
+    for (u, v) in segments.iter_mut().flatten() {
+        (*u, *v) = (rename[*u], rename[*v]);
+    }
+    let chains = arrange::node(&faces, &segments, &mut pool);
     let mut kept = Vec::new();
     for (index, face) in faces.iter().enumerate() {
         let (operand, other) = if index < split {
@@ -160,11 +166,7 @@ fn run(first: &Solid, second: &Solid, operation: Operation) -> Result<Option<Sol
         } else {
             (Operand::Second, &faces[..split])
         };
-        let cuts: Vec<(usize, usize)> = segments[index]
-            .iter()
-            .map(|&(u, v)| (rename[u], rename[v]))
-            .collect();
-        let pieces = arrange::split(face, &cuts, &mut pool);
+        let pieces = arrange::split(face, index, &chains, &pool);
         let keep = |q: Point2| operation.keeps(operand, classify(face.lift(q), face, other, &pool));
         let mut parts = kept_parts(face, &pieces, keep, &pool);
         if operation.reverses(operand) {
