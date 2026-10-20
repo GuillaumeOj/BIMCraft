@@ -6,7 +6,7 @@
 //! scale byte moves the whole profile to other magnitudes: near the linear tolerance, near the
 //! model extent, or beyond it, and one value makes a coordinate NaN.
 
-use geom::{ArcDirection, Edge, Point2, Vector3};
+use geom::{ArcDirection, Edge, Point2, Solid, Vector3};
 
 /// Most edges per loop: enough for every topology, few enough to keep each input fast.
 pub const MAX_LOOP_EDGES: usize = 16;
@@ -94,4 +94,27 @@ pub fn direction((x, y, z): (i8, i8, i8)) -> Vector3 {
 #[must_use]
 pub fn reversed(edges: &[Edge]) -> Vec<Edge> {
     edges.iter().rev().map(Edge::reversed).collect()
+}
+
+/// The total area of a solid's faces, in square metres: half the length of each face's area
+/// vector, summed by Newell's method over its rings.
+#[must_use]
+pub fn surface_area(solid: &Solid) -> f64 {
+    let points = solid.vertices();
+    solid
+        .to_faces()
+        .iter()
+        .map(|face| {
+            let mut area = [0.0_f64; 3];
+            for ring in std::iter::once(&face.outer).chain(&face.holes) {
+                for (i, &start) in ring.iter().enumerate() {
+                    let (p, q) = (points[start], points[ring[(i + 1) % ring.len()]]);
+                    area[0] += (p.y - q.y) * (p.z + q.z);
+                    area[1] += (p.z - q.z) * (p.x + q.x);
+                    area[2] += (p.x - q.x) * (p.y + q.y);
+                }
+            }
+            area.iter().map(|c| c * c).sum::<f64>().sqrt() / 2.0
+        })
+        .sum()
 }
