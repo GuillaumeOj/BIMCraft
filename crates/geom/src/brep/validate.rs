@@ -9,7 +9,7 @@
 
 use super::{BrepError, Shell, Solid};
 use crate::tolerance::{WITHIN_TOLERANCE, WITHIN_TOLERANCE_SQUARED, is_model_coordinate};
-use crate::vector::{Vector, add, coords, dot, edges, newell, scale, sub};
+use crate::vector::{Vector, add, centroid, coords, dot, edges, newell, sub};
 
 impl Solid {
     /// Checks every validity rule of the module documentation.
@@ -270,14 +270,7 @@ pub(crate) fn face_plane(points: &[Vector], ends: &[usize]) -> Result<(Vector, V
         }
         start = end;
     }
-    #[expect(
-        clippy::cast_precision_loss,
-        reason = "a face has far fewer than 2^52 vertices"
-    )]
-    let centre = scale(
-        points.iter().fold([0.0; 3], |sum, &p| add(sum, p)),
-        1.0 / points.len() as f64,
-    );
+    let centre = centroid(points.iter());
     let limit = WITHIN_TOLERANCE_SQUARED * length_squared;
     if points.iter().any(|&p| {
         let off_plane = dot(normal, sub(p, centre));

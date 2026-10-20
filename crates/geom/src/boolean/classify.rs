@@ -31,7 +31,7 @@ use super::planar::{OUTSIDE, Region, interior_point};
 use crate::Point2;
 use crate::tolerance::{ROUNDING, WITHIN_TOLERANCE, WITHIN_TOLERANCE_SQUARED};
 use crate::vector::{
-    Vector, cross, distance_squared, dot, edges, length, lexicographic, scale, sub, unit,
+    Vector, cross, distance_squared, dot, edges, fan_solid_angle, lexicographic, scale, sub, unit,
 };
 
 /// Where a piece of face lies relative to the other operand.
@@ -520,20 +520,9 @@ fn winding(p: Vector, solid: &[PlanarFace], pool: &Pool) -> f64 {
         .iter()
         .filter(|face| face.distance(p).abs() > ROUNDING);
     for ring in seen.flat_map(|face| &face.rings) {
-        let first = sub(pool.get(ring[0]), p);
-        for pair in ring[1..].windows(2) {
-            total += solid_angle(first, sub(pool.get(pair[0]), p), sub(pool.get(pair[1]), p));
-        }
+        total += fan_solid_angle(p, ring.iter().map(|&v| pool.get(v)));
     }
     total / (4.0 * PI)
-}
-
-/// The signed solid angle of a triangle seen from the origin (Van Oosterom and Strackee, 1983).
-fn solid_angle(a: Vector, b: Vector, c: Vector) -> f64 {
-    let (la, lb, lc) = (length(a), length(b), length(c));
-    let numerator = dot(a, cross(b, c));
-    let denominator = la * lb * lc + dot(a, b) * lc + dot(a, c) * lb + dot(b, c) * la;
-    2.0 * libm::atan2(numerator, denominator)
 }
 
 #[cfg(test)]

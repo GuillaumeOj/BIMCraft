@@ -69,6 +69,59 @@ pub(crate) fn newell(ring: &[Vector]) -> Vector {
     })
 }
 
+/// The axis along which a vector is largest, the first one on a tie.
+pub(crate) fn largest_axis(v: Vector) -> usize {
+    (0..3).fold(0, |best, axis| {
+        if v[axis].abs() > v[best].abs() {
+            axis
+        } else {
+            best
+        }
+    })
+}
+
+/// The centre of points: their average.
+pub(crate) fn centroid<'a>(points: impl Iterator<Item = &'a Vector>) -> Vector {
+    let (sum, count) = points.fold(([0.0; 3], 0_u32), |(sum, count), &p| {
+        (add(sum, p), count + 1)
+    });
+    scale(sum, 1.0 / f64::from(count))
+}
+
+/// The squared distance from a point to a segment.
+pub(crate) fn segment_distance_squared(point: Vector, start: Vector, end: Vector) -> f64 {
+    let along = sub(end, start);
+    let fraction = (dot(sub(point, start), along) / dot(along, along)).clamp(0.0, 1.0);
+    let off = sub(point, add(start, scale(along, fraction)));
+    dot(off, off)
+}
+
+/// The signed solid angle of a triangle seen from the origin (Van Oosterom and Strackee, 1983).
+pub(crate) fn solid_angle(a: Vector, b: Vector, c: Vector) -> f64 {
+    let (la, lb, lc) = (length(a), length(b), length(c));
+    let numerator = dot(a, cross(b, c));
+    let denominator = la * lb * lc + dot(a, b) * lc + dot(a, c) * lb + dot(b, c) * la;
+    2.0 * libm::atan2(numerator, denominator)
+}
+
+/// The signed solid angle a ring subtends at `p`: the sum over the fan of triangles from its
+/// first point, which adds up to the ring's whatever its shape.
+pub(crate) fn fan_solid_angle(p: Vector, ring: impl IntoIterator<Item = Vector>) -> f64 {
+    let mut points = ring.into_iter().map(|q| sub(q, p));
+    let Some(first) = points.next() else {
+        return 0.0;
+    };
+    let mut previous = points.next();
+    let mut total = 0.0;
+    for q in points {
+        if let Some(b) = previous {
+            total += solid_angle(first, b, q);
+        }
+        previous = Some(q);
+    }
+    total
+}
+
 /// The edges of a ring as pairs of consecutive points, closing back to the first.
 pub(crate) fn edges<T: Copy>(ring: &[T]) -> impl Iterator<Item = (T, T)> + '_ {
     ring.iter()
@@ -86,4 +139,23 @@ pub(crate) fn bounds(points: impl IntoIterator<Item = Vector>) -> Option<(Vector
             [0, 1, 2].map(|i| hi[i].max(p[i])),
         )
     }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_ring_subtends_its_fan_and_nothing_without_points() {
+        // The unit square seen from just above its centre covers half the sphere, 2π.
+        let square = [
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [1.0, 1.0, 0.0],
+            [0.0, 1.0, 0.0],
+        ];
+        let angle = fan_solid_angle([0.5, 0.5, -1e-9], square);
+        assert!((angle - 2.0 * core::f64::consts::PI).abs() < 1e-6);
+        assert!(fan_solid_angle([0.0; 3], []).abs() < f64::EPSILON);
+    }
 }

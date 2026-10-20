@@ -375,3 +375,82 @@ fn rejects_face_reduced_to_a_rim_by_its_hole() {
     let err = Solid::from_faces(vertices, &faces);
     assert_eq!(err, Err(BrepError::DegenerateFace { face: 0 }));
 }
+
+#[test]
+fn a_point_is_located_by_its_distance_to_the_faces() {
+    let cube = unit_cube();
+    let locate = |x, y, z| cube.locate(p(x, y, z));
+    assert_eq!(locate(0.5, 0.5, 0.5), Containment::Inside);
+    assert_eq!(locate(2.0, 0.5, 0.5), Containment::Outside);
+    // On a face, a corner, and within the tolerance either side of a face or beyond an edge.
+    assert_eq!(locate(0.5, 0.5, 1.0), Containment::Boundary);
+    assert_eq!(locate(1.0, 1.0, 1.0), Containment::Boundary);
+    assert_eq!(locate(0.5, 0.5, 1.0 + 1e-6), Containment::Boundary);
+    assert_eq!(locate(0.5, 0.5, 1.0 - 1e-6), Containment::Boundary);
+    assert_eq!(
+        locate(1.0 + 0.6e-6, 0.5, 1.0 + 0.6e-6),
+        Containment::Boundary
+    );
+    // Beyond the tolerance, on either side.
+    assert_eq!(locate(0.5, 0.5, 1.0 + 2e-6), Containment::Outside);
+    assert_eq!(locate(0.5, 0.5, 1.0 - 2e-6), Containment::Inside);
+    assert_eq!(
+        locate(1.0 + 0.8e-6, 0.5, 1.0 + 0.8e-6),
+        Containment::Outside
+    );
+    // The distance to the nearest face: over a face, beyond an edge, and from inside.
+    let distance = |x, y, z| cube.boundary_distance(p(x, y, z));
+    assert!((distance(0.5, 0.5, 1.25) - 0.25).abs() < 1e-12);
+    assert!((distance(1.3, 0.5, 1.4) - 0.5).abs() < 1e-12);
+    assert!((distance(0.5, 0.5, 0.9) - 0.1).abs() < 1e-12);
+    assert!(distance(1.0, 1.0, 1.0) < 1e-12);
+}
+
+#[test]
+fn a_point_in_a_void_or_a_through_hole_is_outside() {
+    let mut vertices = box_vertices([0.0; 3], [3.0; 3]);
+    vertices.extend(box_vertices([1.0; 3], [2.0; 3]));
+    let mut faces = box_faces(0);
+    faces.extend(box_faces(8).iter().map(reversed));
+    let hollow = Solid::from_faces(vertices, &faces).unwrap();
+    assert_eq!(hollow.locate(p(1.5, 1.5, 1.5)), Containment::Outside);
+    assert_eq!(hollow.locate(p(0.5, 1.5, 1.5)), Containment::Inside);
+    assert_eq!(hollow.locate(p(1.0, 1.5, 1.5)), Containment::Boundary);
+    let (vertices, faces) = holed_box();
+    let holed = Solid::from_faces(vertices, &faces).unwrap();
+    assert_eq!(holed.locate(p(1.5, 1.5, 0.5)), Containment::Outside);
+    // In the plane of the top face, over the hole: no face there.
+    assert_eq!(holed.locate(p(1.5, 1.5, 1.0)), Containment::Outside);
+    assert_eq!(holed.locate(p(0.5, 1.5, 0.5)), Containment::Inside);
+}
+
+#[test]
+fn a_point_beside_a_concave_face_in_its_plane_is_outside() {
+    use crate::{Edge, Point2, Profile, Vector3};
+    // An L: the notch's corner at (1, 1) is beside the bottom and top faces, in their planes.
+    let corners = [
+        (0.0, 0.0),
+        (2.0, 0.0),
+        (2.0, 1.0),
+        (1.0, 1.0),
+        (1.0, 2.0),
+        (0.0, 2.0),
+    ];
+    let outer = (0..corners.len())
+        .map(|i| {
+            let ((x0, y0), (x1, y1)) = (corners[i], corners[(i + 1) % corners.len()]);
+            Edge::Line {
+                start: Point2::new(x0, y0),
+                end: Point2::new(x1, y1),
+            }
+        })
+        .collect();
+    let profile = Profile::new(outer, vec![]).unwrap();
+    let l = Solid::extrude(&profile, Vector3::new(0.0, 0.0, 1.0)).unwrap();
+    for z in [0.0, 0.5e-6, 1.0, 1.0 - 0.5e-6] {
+        assert_eq!(l.locate(p(1.5, 1.5, z)), Containment::Outside);
+        assert_eq!(l.locate(p(0.5, 0.5, z)), Containment::Boundary);
+    }
+    assert_eq!(l.locate(p(0.5, 1.5, 0.5)), Containment::Inside);
+    assert_eq!(l.locate(p(1.5, 1.5, 0.5)), Containment::Outside);
+}

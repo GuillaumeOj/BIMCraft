@@ -16,12 +16,14 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use super::BooleanError;
 use super::assemble::{Faces, HalfEdges};
-use super::face::{Pool, Projection, area_and_centre, clean_face, segment_distance_squared};
+use super::face::{Pool, Projection, area_and_centre, clean_face};
 use super::planar::faces_of;
 use super::snap::{find, union};
 use crate::brep::{FaceFault, enclosed_volume, face_plane};
 use crate::tolerance::{WITHIN_TOLERANCE, WITHIN_TOLERANCE_SQUARED};
-use crate::vector::{Vector, distance_squared, dot, edges, lexicographic, sub};
+use crate::vector::{
+    Vector, distance_squared, dot, edges, lexicographic, segment_distance_squared, sub,
+};
 
 /// The plane of a face as the solid's checks find it, or the rule of its own it breaks.
 pub(super) fn checked(face: &[Vec<usize>], pool: &Pool) -> Result<(Vector, Vector), FaceFault> {

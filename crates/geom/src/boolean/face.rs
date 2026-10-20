@@ -3,7 +3,9 @@
 
 use crate::predicates::{MIN_COORDINATE, orient2d};
 use crate::tolerance::WITHIN_TOLERANCE;
-use crate::vector::{Vector, add, bounds, coords, cross, dot, length, newell, scale, sub, unit};
+use crate::vector::{
+    Vector, add, bounds, coords, cross, dot, largest_axis, length, newell, scale, sub, unit,
+};
 use crate::{Orientation, Point2, Solid};
 
 /// Every vertex of a boolean: those of the operands first, then the constructed ones.
@@ -69,17 +71,6 @@ impl Pool {
 
 fn flushed(point: Vector) -> Vector {
     point.map(|c| if c.abs() < MIN_COORDINATE { 0.0 } else { c })
-}
-
-/// The axis along which a vector is largest, the first one on a tie.
-pub(super) fn largest_axis(v: Vector) -> usize {
-    (0..3).fold(0, |best, axis| {
-        if v[axis].abs() > v[best].abs() {
-            axis
-        } else {
-            best
-        }
-    })
 }
 
 /// A projection of a plane onto two coordinate axes, keeping the orientation seen from the side
@@ -317,14 +308,6 @@ pub(super) fn ring_contains(ring: impl Iterator<Item = Point2> + Clone, q: Point
         };
         inside ^ crosses
     })
-}
-
-/// The squared distance from a point to a segment.
-pub(super) fn segment_distance_squared(point: Vector, start: Vector, end: Vector) -> f64 {
-    let along = sub(end, start);
-    let fraction = (dot(sub(point, start), along) / dot(along, along)).clamp(0.0, 1.0);
-    let off = sub(point, add(start, scale(along, fraction)));
-    dot(off, off)
 }
 
 /// The unit direction of the line where two planes meet; `None` if they are parallel.
