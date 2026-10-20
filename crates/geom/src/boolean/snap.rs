@@ -4,12 +4,9 @@ use std::collections::BTreeMap;
 
 use super::BooleanError;
 use super::face::Pool;
-use crate::LINEAR_TOLERANCE;
+use crate::MERGE_CHAIN_WIDTH;
 use crate::tolerance::{WITHIN_TOLERANCE, WITHIN_TOLERANCE_SQUARED};
 use crate::vector::{Vector, bounds, distance_squared, lexicographic};
-
-/// The widest a group of merged vertices may be.
-const CHAIN_LIMIT: f64 = 10.0 * LINEAR_TOLERANCE;
 
 /// Groups vertices within the tolerance with a union–find and returns, for each vertex, the
 /// representative of its group: the smallest by x, then y, then z among the group's operand
@@ -49,7 +46,7 @@ pub(super) fn snap(pool: &Pool, among: &[usize]) -> Result<Vec<usize>, BooleanEr
         let Some((lo, hi)) = bounds(group.iter().map(|&v| pool.get(v))) else {
             continue;
         };
-        if (0..3).any(|i| hi[i] - lo[i] > CHAIN_LIMIT) {
+        if (0..3).any(|i| hi[i] - lo[i] > MERGE_CHAIN_WIDTH) {
             return Err(BooleanError::MergeChainTooWide);
         }
         // Operand vertices first, then by position, then by index: one total order.

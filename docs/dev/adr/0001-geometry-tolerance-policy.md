@@ -92,6 +92,7 @@ Each case below becomes a case of the boolean corpus (#55) with its expected vol
 - Predicates, B-rep and booleans can be written and tested against a single rule. The corpus encodes it.
 - Features smaller than 1 µm cannot be modelled. No construction use needs them.
 - Operands whose features lie within a few tolerances of each other in ways the merge pass cannot resolve, such as a vertex of one 1.5 µm from a face of the other near a corner, get `FeaturesTooClose`: a typed error the caller can report, never a result that is silently wrong or invalid.
+- What a boolean may move follows from these rules, and the `extruded_boolean` fuzz target checks no more: a vertex moves by at most the tolerance, or across a group of merged vertices at most ten tolerances wide along each axis; the volume, by at most the tolerance times the operands' area (moving the surface by the tolerance sweeps no more, and a lump that vanishes is no thicker than the tolerance on average). Rounding of constructed points is six orders of magnitude below either bound.
 - Models larger than 10 km in any direction need splitting into separate local frames. A future linear-infrastructure need would require a new record.
 - Changing `LINEAR_TOLERANCE` or `MODEL_EXTENT` changes stored results.
 - The rendering half of GEO-07 (camera-relative origin, `f32` on the GPU, VP-04) is a viewport concern and is out of scope here (#68).

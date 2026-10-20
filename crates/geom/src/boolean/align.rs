@@ -14,9 +14,9 @@
 use std::cmp::Ordering;
 use std::collections::BTreeMap;
 
-use super::face::{PlanarFace, Pool, largest_axis};
+use super::face::{PlanarFace, Pool};
 use super::intersect::candidate_pairs;
-use crate::vector::{Vector, dot, scale, sub};
+use crate::vector::{Vector, dot, largest_axis, scale, sub};
 
 /// Projects the vertices of each face of one operand (`faces[..split]`) or the other onto the
 /// first, in plane order, of the faces of the other operand whose boxes overlap it and on whose
