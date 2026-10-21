@@ -15,8 +15,9 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use super::face::{PlanarFace, Pool, Projection};
 use crate::predicates::orient2d;
+use crate::profile::segments_touch;
 use crate::tolerance::{ROUNDING, WITHIN_TOLERANCE};
-use crate::vector::{Vector, add, distance_squared, dot, edges, scale, sub};
+use crate::vector::{Vector, add, distance_squared, dot, edges, length, scale, sub};
 use crate::{Orientation, Point2};
 
 /// A plane, as a unit normal and a point on it.
@@ -57,6 +58,16 @@ impl Bend<'_> {
     fn off(&self, f: usize, v: usize, pool: &Pool) -> bool {
         self.moved.contains(&v) && self.meant(f).distance(pool.get(v)).abs() > ROUNDING
     }
+
+    /// The edge `u`, `w` of face `f` as its end off the face's plane, then its end on it, if one
+    /// end is off and the other on: the key of the collar point it needs.
+    fn collar_key(&self, f: usize, (u, w): (usize, usize), pool: &Pool) -> Option<(usize, usize)> {
+        match (self.off(f, u, pool), self.off(f, w, pool)) {
+            (true, false) => Some((u, w)),
+            (false, true) => Some((w, u)),
+            _ => None,
+        }
+    }
 }
 
 /// Cuts the faces bent by moving the `moved` vertices into a flat rest and flat triangles along
@@ -70,6 +81,9 @@ pub(super) fn collar(
     moved: &BTreeSet<usize>,
     pool: &mut Pool,
 ) -> (Vec<PlanarFace>, usize) {
+    if moved.is_empty() {
+        return (faces, split);
+    }
     let bend = Bend {
         planes: (faces.iter())
             .map(|face| Plane {
@@ -85,6 +99,11 @@ pub(super) fn collar(
     let mut strips: [Vec<Ring>; 2] = [Vec::new(), Vec::new()];
     for (f, mut face) in faces.into_iter().enumerate() {
         let block = usize::from(f >= split);
+        // Collar points lie only on edges with a moved end.
+        if !face.rings.iter().flatten().any(|v| moved.contains(v)) {
+            blocks[block].push((face, false));
+            continue;
+        }
         let marked: Vec<Vec<(usize, bool)>> = (face.rings.iter())
             .map(|ring| {
                 let mut out = Vec::new();
@@ -99,19 +118,12 @@ pub(super) fn collar(
                 out
             })
             .collect();
-        let changed = face.rings.iter().flatten().any(|v| moved.contains(v))
-            || marked.iter().map(Vec::len).sum::<usize>()
-                != face.rings.iter().map(Vec::len).sum::<usize>();
         // Without a collar point, the strip would reach the next vertex: the face stays whole.
-        let collared = (face.rings.iter().flat_map(|ring| edges(ring))).all(|(v, w)| {
-            match (bend.off(f, v, pool), bend.off(f, w, pool)) {
-                (true, false) => points.contains_key(&(v, w)),
-                (false, true) => points.contains_key(&(w, v)),
-                _ => true,
-            }
-        });
+        let collared = (face.rings.iter().flat_map(|ring| edges(ring)))
+            .filter_map(|edge| bend.collar_key(f, edge, pool))
+            .all(|key| points.contains_key(&key));
         let projection = Projection::along(bend.meant(f).normal);
-        match cut(&marked, pool, projection).filter(|_| collared) {
+        match collared.then(|| cut(&marked, pool, projection)).flatten() {
             Some((rest, triangles)) => {
                 face.rings = rest;
                 strips[block].extend(triangles);
@@ -122,7 +134,7 @@ pub(super) fn collar(
                     .collect();
             }
         }
-        blocks[block].push((face, changed));
+        blocks[block].push((face, true));
     }
     let shift = strips[0].len();
     let renumber = |plane: usize| if plane < split { plane } else { plane + shift };
@@ -156,16 +168,12 @@ fn collar_points(faces: &[PlanarFace], bend: &Bend, pool: &mut Pool) -> Points {
     for (f, face) in faces.iter().enumerate() {
         for (u, w) in face.rings.iter().flat_map(|ring| edges(ring)) {
             along.entry((u.min(w), u.max(w))).or_default().push(f);
-            let length = distance_squared(pool.get(u), pool.get(w)).sqrt();
+            let span = length(sub(pool.get(w), pool.get(u)));
             for v in [u, w] {
                 let s = shortest.entry(v).or_insert(f64::INFINITY);
-                *s = s.min(length);
+                *s = s.min(span);
             }
-            match (bend.off(f, u, pool), bend.off(f, w, pool)) {
-                (true, false) => _ = needed.insert((u, w)),
-                (false, true) => _ = needed.insert((w, u)),
-                _ => {}
-            }
+            needed.extend(bend.collar_key(f, (u, w), pool));
         }
     }
     let mut points = Points::new();
@@ -176,11 +184,8 @@ fn collar_points(faces: &[PlanarFace], bend: &Bend, pool: &mut Pool) -> Points {
             .map(|&g| bend.numbers[g])
             .collect();
         let (pu, pa) = (pool.get(u), pool.get(a));
-        let length = distance_squared(pu, pa).sqrt();
-        let guide = add(
-            pu,
-            scale(sub(pa, pu), shortest[&u].min(length / 3.0) / length),
-        );
+        let span = length(sub(pa, pu));
+        let guide = add(pu, scale(sub(pa, pu), shortest[&u].min(span / 3.0) / span));
         let planes: Vec<Plane> = on.iter().map(|&p| bend.planes[p]).collect();
         if let Some(point) = onto(guide, &planes) {
             points.insert((u, a), (pool.push(point), on));
@@ -252,36 +257,13 @@ fn cut(
     let edges_of_face: Vec<(Point2, Point2, usize, usize)> = (rings.iter())
         .flat_map(|ring| edges(ring).map(|((u, _), (w, _))| (at(u), at(w), u, w)))
         .collect();
-    let inside = triangles.iter().all(|t: &Ring| {
-        let [a, b, c] = [t[0], t[1], t[2]].map(at);
-        orient2d(a, b, c) == Ok(Orientation::Positive)
-            && (rings.iter().flatten())
-                .all(|&(v, _)| t.contains(&v) || !inside_closed(a, b, c, at(v)))
-    });
+    let inside = (triangles.iter()).all(|t| empty(t, rings.iter().flatten().map(|&(v, _)| v), at));
     let clear = collars.iter().all(|&(p, q)| {
         (edges_of_face.iter())
             .filter(|&&(_, _, u, w)| ![u, w].iter().any(|x| *x == p || *x == q))
-            .all(|&(a, b, _, _)| !crosses(at(p), at(q), a, b))
+            .all(|&(a, b, _, _)| !segments_touch(at(p), at(q), a, b))
     });
     (inside && clear).then_some((rest, triangles))
-}
-
-/// Whether two segments share a point, ends included.
-fn crosses(a: Point2, b: Point2, c: Point2, d: Point2) -> bool {
-    let side = |p, q, r| orient2d(p, q, r).unwrap_or(Orientation::Zero);
-    let ends = [(a, b, c), (a, b, d), (c, d, a), (c, d, b)];
-    let sides = ends.map(|(p, q, r)| side(p, q, r));
-    if sides.contains(&Orientation::Zero) {
-        // An end on the other's line: they share a point only if it lies on the other.
-        return (ends.iter().zip(sides))
-            .any(|(&(p, q, r), s)| s == Orientation::Zero && inside_box(p, q, r));
-    }
-    sides[0] != sides[1] && sides[2] != sides[3]
-}
-
-/// Whether `r` lies in the box spanned by `p` and `q`.
-fn inside_box(p: Point2, q: Point2, r: Point2) -> bool {
-    r.x >= p.x.min(q.x) && r.x <= p.x.max(q.x) && r.y >= p.y.min(q.y) && r.y <= p.y.max(q.y)
 }
 
 /// The triangles of a strip, given round its boundary: ears cut off one by one, each time the
@@ -293,23 +275,30 @@ fn strip(mut polygon: Ring, pool: &Pool, at: impl Fn(usize) -> Point2) -> Option
     while polygon.len() > 3 {
         let n = polygon.len();
         let ear = |i: usize| [polygon[(i + n - 1) % n], polygon[i], polygon[(i + 1) % n]];
-        let fits = |i: usize| {
-            let [a, b, c] = ear(i).map(&at);
-            orient2d(a, b, c) == Ok(Orientation::Positive)
-                && (polygon.iter()).all(|v| ear(i).contains(v) || !inside_closed(a, b, c, at(*v)))
-        };
-        let length = |i: usize| {
+        let diagonal = |i: usize| {
             let [a, _, c] = ear(i);
             distance_squared(pool.get(a), pool.get(c))
         };
         let best = (0..n)
-            .filter(|&i| fits(i))
-            .min_by(|&i, &j| length(i).total_cmp(&length(j)))?;
+            .filter(|&i| empty(&ear(i), polygon.iter().copied(), &at))
+            .min_by(|&i, &j| diagonal(i).total_cmp(&diagonal(j)))?;
         triangles.push(ear(best).to_vec());
         polygon.remove(best);
     }
     triangles.push(polygon);
     Some(triangles)
+}
+
+/// Whether a triangle turns the face's way, in its projection, with none of the `others`
+/// vertices but its own inside or on it.
+fn empty(
+    triangle: &[usize],
+    others: impl IntoIterator<Item = usize>,
+    at: impl Fn(usize) -> Point2,
+) -> bool {
+    let [a, b, c] = [triangle[0], triangle[1], triangle[2]].map(&at);
+    orient2d(a, b, c) == Ok(Orientation::Positive)
+        && (others.into_iter()).all(|v| triangle.contains(&v) || !inside_closed(a, b, c, at(v)))
 }
 
 /// Whether `p` lies inside or on the triangle `a`, `b`, `c` turning counter-clockwise.
@@ -453,18 +442,5 @@ mod tests {
             centre: [1.0, 0.0, 0.0],
         };
         assert_eq!(onto(guide, &[floor, wall]), Some([1.0, 2.0, 0.0]));
-    }
-
-    #[test]
-    fn segments_cross_where_they_share_a_point() {
-        let p = |x, y| Point2::new(x, y);
-        let (a, b) = (p(0.0, 0.0), p(2.0, 0.0));
-        assert!(crosses(a, b, p(1.0, -1.0), p(1.0, 1.0)));
-        assert!(!crosses(a, b, p(1.0, 1.0), p(1.0, 2.0)));
-        // An end on the other, and collinear pieces overlapping or apart.
-        assert!(crosses(a, b, p(1.0, 0.0), p(1.0, 1.0)));
-        assert!(!crosses(a, b, p(3.0, 0.0), p(3.0, 1.0)));
-        assert!(crosses(a, b, p(1.0, 0.0), p(3.0, 0.0)));
-        assert!(!crosses(a, b, p(3.0, 0.0), p(4.0, 0.0)));
     }
 }

@@ -25,7 +25,7 @@ mod validate;
 pub use error::BrepError;
 pub use extrude::ExtrusionError;
 pub use locate::Containment;
-pub(crate) use validate::{FaceFault, enclosed_volume, face_plane, longest_edge_squared};
+pub(crate) use validate::{FaceFault, enclosed_volume, face_plane, longest_edge_squared, too_thin};
 
 use crate::Point3;
 
