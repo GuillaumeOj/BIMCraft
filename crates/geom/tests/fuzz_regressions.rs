@@ -1097,3 +1097,24 @@ fn a_cut_on_the_operands_as_they_are_closes() {
     let b = raw_prism(&[(0, -1, 255)], -18, (90, 45, 52)).unwrap();
     assert_eq!(check_booleans(&a, &b), Ok(()));
 }
+
+/// `fuzz/seeds/extruded_boolean/needle-on-a-shallow-lens-a` (`crash-a0435ad1…`, found by the
+/// seeded fuzz run): a lens extruded almost flat, its side faces 1.4° off its bottom, and a
+/// needle standing on its bottom's plane across an edge of it. The needle's bottom lies within
+/// the tolerance of both the lens's bottom and the side face along that edge; it was put onto
+/// the side face's plane, and so lay across the bottom's. Reading pieces along their edges took
+/// the needle's bottom as lying on the lens's bottom all the same, being within the tolerance of
+/// it, so the whole lens was taken to lie on the needle and every operation had an open edge.
+/// Faces now lie in one plane only as the cut sees them: every vertex of one on the other's
+/// plane.
+#[test]
+fn a_face_put_onto_one_plane_lies_across_the_others() {
+    let a = raw_prism(
+        &[(69, -95, 229), (59, 122, 255), (0, 0, 0)],
+        -6,
+        (42, -1, 1),
+    )
+    .unwrap();
+    let b = raw_prism(&[(0, -3, 255)], -18, (82, 45, 39)).unwrap();
+    assert_eq!(check_booleans(&a, &b), Ok(()));
+}

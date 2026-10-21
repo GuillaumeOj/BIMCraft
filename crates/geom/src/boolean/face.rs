@@ -309,18 +309,28 @@ impl PlanarFace {
         }
     }
 
-    /// Whether every vertex of this face lies on the plane of `other`, within the tolerance.
-    pub(super) fn lies_on(&self, other: &Self, pool: &Pool) -> bool {
+    /// Whether every vertex of this face lies on the plane of `other`, within the tolerance:
+    /// only for putting faces onto one plane (merge pass, step 1). The cut reads
+    /// [`Self::coplanar`].
+    pub(super) fn lies_within_tolerance_of(&self, other: &Self, pool: &Pool) -> bool {
         self.rings
             .iter()
             .flatten()
             .all(|&v| other.side(pool.get(v)) == 0)
     }
 
-    /// Whether the faces lie in one plane, within the tolerance: one of them lies on the
-    /// other's plane.
+    /// Whether every vertex of this face is known to lie on the plane of `other`
+    /// ([`Pool::planes`]).
+    fn lies_exactly_on(&self, other: &Self, pool: &Pool) -> bool {
+        (self.rings.iter().flatten()).all(|&v| pool.planes(v).contains(&other.plane))
+    }
+
+    /// Whether the faces lie in one plane as the cut sees them: every vertex of one of them lies
+    /// on the other's plane. Faces within the tolerance of each other lie in one plane only once
+    /// they are put onto it (merge pass, step 1): a face within the tolerance of two planes
+    /// meeting at a shallow angle goes onto one of them, and lies across the other.
     pub(super) fn coplanar(&self, other: &Self, pool: &Pool) -> bool {
-        self.lies_on(other, pool) || other.lies_on(self, pool)
+        self.lies_exactly_on(other, pool) || other.lies_exactly_on(self, pool)
     }
 
     pub(super) const fn min_x(&self) -> f64 {
