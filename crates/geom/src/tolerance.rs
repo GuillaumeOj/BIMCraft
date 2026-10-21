@@ -12,8 +12,8 @@ pub const MODEL_EXTENT: f64 = 1e4;
 pub const LINEAR_TOLERANCE: f64 = 1e-6;
 
 /// The widest a group of vertices merged into one may be along each axis, 10 µm, in metres:
-/// a wider chain of vertices each within the tolerance of the next fails the operation instead
-/// of moving geometry silently (ADR 0001, merge pass step 2).
+/// a wider chain of vertices, each joined to the next by an edge within the tolerance, fails the
+/// operation instead of moving geometry silently (ADR 0001, merge pass step 2).
 pub const MERGE_CHAIN_WIDTH: f64 = 10.0 * LINEAR_TOLERANCE;
 
 /// The largest distance the kernel reads as zero: [`LINEAR_TOLERANCE`] plus 1 nm for rounding.

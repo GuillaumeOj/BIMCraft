@@ -10,13 +10,17 @@
 //! and the vertices where it crosses a plane; the line where two planes meet holds the points
 //! where either face's boundary meets the other's plane. Whether a vertex lies on a line is
 //! later read from these, never from its distance to the line.
+//!
+//! Which side of a plane a vertex lies on is read the same way ([`PlanarFace::side_of`]): on it
+//! if it was made on it or lies within rounding of it, otherwise where its distance puts it,
+//! however near. Every face around a vertex then sees it on the same side, so their cuts agree.
 
 use std::collections::{BTreeMap, BTreeSet};
 
 use super::arrange::{Line, line};
-use super::face::{PlanarFace, Pool, meeting_direction};
-use crate::tolerance::WITHIN_TOLERANCE;
-use crate::vector::{add, dot, edges, length, scale, sub};
+use super::face::{PlanarFace, Pool, edge_planes, meeting_direction};
+use crate::tolerance::{ROUNDING, WITHIN_TOLERANCE};
+use crate::vector::{add, dot, edges, scale, sub};
 
 /// The segments to insert into each face, as vertex pairs of the pool.
 pub(super) type Segments = Vec<Vec<(usize, usize)>>;
@@ -68,26 +72,34 @@ pub(super) fn segments(
     let mut cuts = Cuts::new();
     let mut supports = Supports::new();
     let mut crossings = BTreeMap::new();
-    let mut neighbours = vec![Vec::new(); pool.len()];
-    for (u, v) in faces
-        .iter()
-        .flat_map(|face| &face.rings)
-        .flat_map(|ring| edges(ring))
-    {
-        neighbours[u].push(v);
-        neighbours[v].push(u);
-        let (a, b) = line(u, v);
-        supports
-            .entry(Support::Edge(a, b))
-            .or_default()
-            .extend([a, b]);
+    for face in faces {
+        for (u, v) in face.rings.iter().flat_map(|ring| edges(ring)) {
+            let (a, b) = line(u, v);
+            supports
+                .entry(Support::Edge(a, b))
+                .or_default()
+                .extend([a, b]);
+        }
     }
-    for (f, g) in candidate_pairs(faces, split) {
+    let planes = edge_planes(faces);
+    let pairs = candidate_pairs(faces, split);
+    // A vertex within rounding of a plane lies on it: the side it is read on, and the vertices
+    // made there, which are that vertex if made on three of its planes, must know.
+    for &(f, g) in &pairs {
+        for (face, plane) in [(&faces[f], &faces[g]), (&faces[g], &faces[f])] {
+            for &v in face.rings.iter().flatten() {
+                if plane.distance(pool.get(v)).abs() <= ROUNDING {
+                    pool.lies_on(v, std::iter::once(plane.plane));
+                }
+            }
+        }
+    }
+    for (f, g) in pairs {
         let mut pair = Pair {
             faces,
             pool: &mut *pool,
             crossings: &mut crossings,
-            neighbours: &neighbours,
+            planes: &planes,
         };
         let meeting = pair.meet(f, g);
         if !meeting.points.is_empty() {
@@ -144,15 +156,14 @@ struct Pair<'a> {
     faces: &'a [PlanarFace],
     pool: &'a mut Pool,
     crossings: &'a mut Crossings,
-    /// The vertices joined to each vertex by an edge of either operand: a vertex the operands
-    /// share after snapping has the edges of both.
-    neighbours: &'a [Vec<usize>],
+    /// The planes of the faces along each edge of either operand.
+    planes: &'a BTreeMap<Line, BTreeSet<usize>>,
 }
 
 /// How two faces meet.
 #[derive(Default)]
 struct Meeting {
-    /// Whether they lie in one plane, within the tolerance.
+    /// Whether they lie in one plane.
     coplanar: bool,
     /// The segments to insert into both.
     segments: Vec<(usize, usize)>,
@@ -170,7 +181,7 @@ impl Pair<'_> {
             return Meeting::default();
         }
         let flat = |sides: &[Vec<i8>]| sides.iter().flatten().all(|&s| s == 0);
-        // The same test as `PlanarFace::coplanar`, from the sides already worked out.
+        // Faces put onto one plane share its number, so each lies on the other's plane.
         if flat(&sides_a) || flat(&sides_b) {
             let boundaries = one.rings.iter().chain(&other.rings);
             return Meeting {
@@ -179,13 +190,11 @@ impl Pair<'_> {
                 points: BTreeSet::new(),
             };
         }
-        // Exactly parallel planes with vertices on both sides of the tolerance band share no
-        // line: ordering points along a zero direction would join them at random.
+        // Exactly parallel planes with vertices on both sides share no line: ordering points
+        // along a zero direction would join them at random.
         let Some(direction) = meeting_direction(one, other) else {
             return Meeting::default();
         };
-        let sides_a = self.settled(one, sides_a, other);
-        let sides_b = self.settled(other, sides_b, one);
         let one_points = self.on_plane(first, &sides_a, second);
         let other_points = self.on_plane(second, &sides_b, first);
         let pool = &*self.pool;
@@ -223,44 +232,8 @@ impl Pair<'_> {
     fn sides(&self, face: &PlanarFace, plane: &PlanarFace) -> Vec<Vec<i8>> {
         face.rings
             .iter()
-            .map(|ring| ring.iter().map(|&v| plane.side(self.pool.get(v))).collect())
+            .map(|ring| ring.iter().map(|&v| plane.side_of(v, self.pool)).collect())
             .collect()
-    }
-
-    /// The sides of [`Self::sides`], with each vertex within the tolerance of the plane put on
-    /// the side it actually lies on if one of its edges crosses the plane farther than the
-    /// tolerance from it. Such an edge runs along the plane at a shallow angle, and the cuts of
-    /// the faces along it must agree: a face whose cut stopped at the vertex would leave the
-    /// sliver between the vertex and the crossing open, while a neighbouring face's cut runs on
-    /// to the crossing. The test depends only on the vertex, its edges and the plane, so every
-    /// face around the vertex agrees.
-    fn settled(
-        &self,
-        face: &PlanarFace,
-        mut sides: Vec<Vec<i8>>,
-        plane: &PlanarFace,
-    ) -> Vec<Vec<i8>> {
-        for (ring, sides) in face.rings.iter().zip(&mut sides) {
-            for (&v, side) in ring.iter().zip(sides.iter_mut()) {
-                if *side != 0 {
-                    continue;
-                }
-                let p = self.pool.get(v);
-                let d = plane.distance(p);
-                let crosses_far = self.neighbours[v].iter().any(|&w| {
-                    let q = self.pool.get(w);
-                    let e = plane.distance(q);
-                    // `e` beyond the tolerance is `plane.side(q) != 0`, without a second product.
-                    d * e < 0.0
-                        && e.abs() > WITHIN_TOLERANCE
-                        && d / (d - e) * length(sub(q, p)) > WITHIN_TOLERANCE
-                });
-                if crosses_far {
-                    *side = if d > 0.0 { 1 } else { -1 };
-                }
-            }
-        }
-        sides
     }
 
     /// The points where the boundary of face `f` meets the plane of face `g`: its vertices on
@@ -291,9 +264,10 @@ impl Pair<'_> {
         let plane = &self.faces[face];
         let (from, to) = (self.pool.get(start), self.pool.get(end));
         let (above, below) = (plane.distance(from), plane.distance(to));
-        let vertex = self
-            .pool
-            .push(add(from, scale(sub(to, from), above / (above - below))));
+        let mut planes = self.planes[&(start, end)].clone();
+        planes.insert(plane.plane);
+        let point = add(from, scale(sub(to, from), above / (above - below)));
+        let vertex = self.pool.on_planes(point, &planes);
         self.crossings.insert(key, vertex);
         vertex
     }
@@ -323,8 +297,8 @@ mod tests {
             [0.5, 0.2, high],
         ]);
         let faces = vec![
-            PlanarFace::new(vec![vec![0, 1, 2, 3]], &pool),
-            PlanarFace::new(vec![vec![4, 5, 6, 7]], &pool),
+            PlanarFace::new(vec![vec![0, 1, 2, 3]], &pool, 0),
+            PlanarFace::new(vec![vec![4, 5, 6, 7]], &pool, 1),
         ];
         (faces, pool)
     }

@@ -4,21 +4,24 @@
 //! Every operation runs the same steps:
 //!
 //! 1. Faces of the two operands that lie in one plane within the tolerance are put onto exactly
-//!    one plane (merge pass, step 1).
+//!    one plane, and share its number (merge pass, step 1).
 //! 2. Each face of one operand is intersected with the faces of the other whose boxes overlap
-//!    it. Where an edge crosses a plane, the vertex is computed once and rounded once, and is
-//!    shared by every face along the edge. Which stretches of the line two planes share lie in
-//!    both faces is counted exactly from where their boundaries cross it. Coplanar faces
-//!    exchange their boundaries. Every vertex records the lines it was made on: the edges it
-//!    lies on and the lines where two planes meet (ADR 0001, constructed geometry).
-//! 3. Vertices within the tolerance merge (merge pass, step 2); a merged vertex lies on every
-//!    line any of its group was made on.
+//!    it, on the operands' own coordinates: no vertex is merged with another before the cut
+//!    (ADR 0001, constructed geometry). A vertex lies on a plane if it was made on it, or lies
+//!    within rounding of it; otherwise it lies on the side its distance says, however near. Where
+//!    an edge crosses a plane, the vertex is computed once and rounded once, and is shared by
+//!    every face along the edge. Which stretches of the line two planes share lie in both faces
+//!    is counted exactly from where their boundaries cross it. Coplanar faces exchange their
+//!    boundaries. Every vertex records the planes it lies on and the lines it was made on: the
+//!    edges it lies on and the lines where two planes meet.
+//! 3. Vertices made on three of the same planes, or within rounding of each other, are one
+//!    point: they become one vertex.
 //! 4. Each face is cut along those segments into pieces. Every edge and segment is split once
 //!    for all the faces along it, at the vertices made on it, then where its pieces cross
 //!    another's, so neighbouring pieces share their edges exactly. Whether pieces cross is
-//!    decided exactly, and a crossing within the tolerance of a piece's end is that end; whether
-//!    a piece lies inside its face is read from the face's boundary as split; every piece keeps
-//!    the plane of its input face.
+//!    decided exactly, and a crossing made on three planes a vertex was made on is that vertex;
+//!    whether a piece lies inside its face is read from the face's boundary as split; every piece
+//!    keeps the plane of its input face.
 //! 5. Each piece is classified against the other operand: inside, outside, or on one of its
 //!    faces, facing the same way or the opposite way. The side is read along the edges where
 //!    the other operand's faces cut the pieces, from those faces' planes, and carried across
@@ -26,22 +29,24 @@
 //!    from a point inside them. Pieces of faces of the two operands with exactly the same
 //!    boundary lie on each other. The operation keeps some classes and drops the others; kept
 //!    pieces of the same face merge back into as few faces as possible.
-//! 6. The kept faces are stitched into a solid: lumps that only touch along an edge or at a
-//!    point get their own vertices, adjacent coplanar faces merge, vertices between collinear
-//!    edges go, faces narrower than the tolerance are zipped shut onto the face across their
-//!    longest edge, and lumps or voids no thicker than the tolerance on average vanish (merge
-//!    pass, steps 1 to 4). Each of these operations is applied only if the faces it leaves pass
-//!    the solid's checks, so it never makes a valid result invalid; a feature within the
-//!    tolerance that none can remove is [`BooleanError::FeaturesTooClose`].
-//!    The result is checked like any solid; an invalid one is an error, never a panic.
+//! 6. The kept faces are stitched into a solid (merge pass, steps 1 to 4): lumps that only touch
+//!    along an edge or at a point get their own vertices, edges no longer than the tolerance
+//!    collapse, faces left back to back cancel, adjacent coplanar faces merge, vertices between
+//!    collinear edges go, faces narrower than the tolerance are zipped shut onto the face across
+//!    their longest edge, and lumps or voids no thicker than the tolerance on average vanish.
+//!    Each of these operations is applied only if the faces it leaves pass the solid's checks,
+//!    so it never makes a valid result invalid; a feature within the tolerance that none can
+//!    remove is [`BooleanError::FeaturesTooClose`]. The result is checked like any solid; an
+//!    invalid one is an error, never a panic.
 //!
 //! The result is regularised: pieces of zero thickness, such as a face two operands share, are
 //! dropped.
 //!
-//! Every test reads "within the tolerance" the same way: a distance at most the tolerance, up
-//! to rounding. A feature exactly one tolerance wide is then within it at every step, whichever
-//! way its coordinates round; a step that read it differently from the next would leave a face
-//! bent or open.
+//! Once coplanar faces share a plane (step 1), the cut decides on the operands as they are:
+//! which side of a plane a vertex lies on and whether pieces cross never depend on the tolerance,
+//! so two of its decisions cannot disagree about a feature within it. The merge pass reads
+//! "within the tolerance" the same way everywhere: a distance at most the tolerance, up to
+//! rounding.
 
 mod align;
 mod arrange;
@@ -159,13 +164,20 @@ fn run(first: &Solid, second: &Solid, operation: Operation) -> Result<Option<Sol
                 .chain(face.holes)
                 .map(|ring| ring.into_iter().map(|v| v + offset).collect())
                 .collect();
-            faces.push(PlanarFace::new(rings, &pool));
+            let number = faces.len();
+            faces.push(PlanarFace::new(rings, &pool, number));
         }
     }
     let split = first.face_count();
     align::align(&mut faces, split, &mut pool);
+    for face in &faces {
+        for &v in face.rings.iter().flatten() {
+            pool.lies_on(v, std::iter::once(face.plane));
+        }
+    }
+    pool.place_all();
     let (mut segments, cuts, supports) = intersect::segments(&faces, split, &mut pool);
-    let rename = snap::snap(&pool, &(0..pool.len()).collect::<Vec<_>>())?;
+    let rename = snap::coincident(&mut pool);
     for face in &mut faces {
         face.remap(&rename, &pool);
     }

@@ -27,12 +27,10 @@ use std::f64::consts::{PI, TAU};
 use super::arrange::{Line, Pieces, line};
 use super::face::{PlanarFace, Pool};
 use super::intersect::Cuts;
-use super::planar::{OUTSIDE, Region, interior_point};
+use super::planar::{self, OUTSIDE, Region, interior_point};
 use crate::Point2;
-use crate::tolerance::{ROUNDING, WITHIN_TOLERANCE, WITHIN_TOLERANCE_SQUARED};
-use crate::vector::{
-    Vector, cross, distance_squared, dot, edges, fan_solid_angle, lexicographic, scale, sub, unit,
-};
+use crate::tolerance::{ROUNDING, WITHIN_TOLERANCE};
+use crate::vector::{Vector, cross, dot, edges, fan_solid_angle, lexicographic, scale, sub, unit};
 
 /// Where a piece of face lies relative to the other operand.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -44,11 +42,6 @@ pub(super) enum Class {
     /// On a face of the other operand whose outside is on the opposite side.
     OnOpposite,
 }
-
-/// The square of the shortest edge a side is read along: twice the tolerance. Both ends of a
-/// shorter edge may lie within the tolerance of one vertex of the other operand, where the
-/// faces holding the edge say little about which side of them a piece lies on.
-const READABLE_SQUARED: f64 = 4.0 * WITHIN_TOLERANCE_SQUARED;
 
 /// How a face holds an edge of the pieces.
 #[derive(Clone, Copy, Debug)]
@@ -235,29 +228,12 @@ fn coincident(operands: Operands, pieces: &[Pieces], numbering: &Numbering) -> V
     on
 }
 
-/// A region's rings, run the other way round if `reversed`, in a form that does not depend on
-/// where each starts or on their order: each rotated to its smallest rotation, sorted. Only
-/// rotations starting at the smallest vertex can be smallest, and a ring passing through it
-/// twice is compared from both passes.
+/// A region's rings, run the other way round if `reversed`, in [`planar::canonical`]'s form.
 fn canonical(region: &Region, reversed: bool) -> Vec<Vec<usize>> {
-    let mut out: Vec<Vec<usize>> = std::iter::once(&region.outer)
-        .chain(&region.holes)
-        .map(|ring| {
-            let mut ring = ring.clone();
-            if reversed {
-                ring.reverse();
-            }
-            let least = ring.iter().copied().min().unwrap_or_default();
-            let rotated = |start: usize| ring[start..].iter().chain(&ring[..start]).copied();
-            let first = (0..ring.len())
-                .filter(|&i| ring[i] == least)
-                .min_by(|&i, &j| rotated(i).cmp(rotated(j)))
-                .unwrap_or(0);
-            rotated(first).collect()
-        })
-        .collect();
-    out.sort();
-    out
+    planar::canonical(
+        std::iter::once(&region.outer).chain(&region.holes),
+        reversed,
+    )
 }
 
 /// Reads the edges of `count` pieces: for each piece, the side read along its edges, and the
@@ -285,7 +261,6 @@ fn read_sides(
         // the edge, so it has a direction wherever the edge is long enough to be read along.
         let (start, end) = along_edge.first().copied().unwrap_or(edge);
         let axis = unit(sub(pool.get(end), pool.get(start))).unwrap_or_default();
-        let readable = distance_squared(pool.get(edge.0), pool.get(edge.1)) > READABLE_SQUARED;
         for operand in [false, true] {
             let mine: Vec<Side> = (sides.iter().copied())
                 .filter(|side| operands.second(side.face) == operand)
@@ -301,9 +276,6 @@ fn read_sides(
                         joined[pair[1].piece].push(pair[0].piece);
                     }
                 }
-                continue;
-            }
-            if !readable || !surface(&theirs) {
                 continue;
             }
             // A piece on both sides of the edge is not bounded by it: a cut ending inside it.
@@ -365,19 +337,6 @@ fn holds(
         }
     }
     (near, holds)
-}
-
-/// Whether the faces of one operand holding an edge are a surface the side of a piece can be
-/// read from: one face across the edge, or the two faces along an edge of the operand, running
-/// it opposite ways. Near a vertex where edges of the operand meet at a small angle, an edge may
-/// run within the tolerance of several of them at once; the faces holding it then bound no
-/// single region, and the side is left to other edges.
-fn surface(holds: &[(usize, Hold)]) -> bool {
-    match holds {
-        [(_, Hold::Across)] => true,
-        [(_, Hold::Boundary(p, q)), (_, Hold::Boundary(r, s))] => (p, q) == (s, r),
-        _ => false,
-    }
 }
 
 /// Gives every item reached through links from the labelled items `from`, in order, the label
@@ -566,8 +525,8 @@ mod tests {
             [0.0, 1.0, -1.0],
         ]);
         let faces = [
-            PlanarFace::new(vec![vec![0, 1, 2, 3]], &pool),
-            PlanarFace::new(vec![vec![4, 5, 6, 7]], &pool),
+            PlanarFace::new(vec![vec![0, 1, 2, 3]], &pool, 0),
+            PlanarFace::new(vec![vec![4, 5, 6, 7]], &pool, 1),
         ];
         let across = [(1, Hold::Across)];
         // On the left of +y, seen from above, lies −x.
@@ -598,12 +557,11 @@ mod tests {
             [0.0, 1.0, -1.0],
         ]);
         let faces = [
-            PlanarFace::new(vec![vec![0, 1, 2, 3]], &pool),
-            PlanarFace::new(vec![vec![4, 5, 6, 7]], &pool),
-            PlanarFace::new(vec![vec![8, 4, 7, 9]], &pool),
+            PlanarFace::new(vec![vec![0, 1, 2, 3]], &pool, 2),
+            PlanarFace::new(vec![vec![4, 5, 6, 7]], &pool, 3),
+            PlanarFace::new(vec![vec![8, 4, 7, 9]], &pool, 4),
         ];
         let along_edge = [(1, Hold::Boundary(7, 4)), (2, Hold::Boundary(4, 7))];
-        assert!(surface(&along_edge));
         // On the left of +y lies the half towards −x, +z: outside.
         assert_eq!(
             reading(&faces, &pool, [0.0, 1.0, 0.0], &along_edge),
@@ -625,8 +583,8 @@ mod tests {
             [1.0, -1.0, 0.0],
         ]);
         let faces = [
-            PlanarFace::new(vec![vec![0, 1, 2, 3]], &pool),
-            PlanarFace::new(vec![vec![4, 5, 6, 7]], &pool),
+            PlanarFace::new(vec![vec![0, 1, 2, 3]], &pool, 5),
+            PlanarFace::new(vec![vec![4, 5, 6, 7]], &pool, 6),
         ];
         assert_eq!(
             reading(
@@ -647,17 +605,6 @@ mod tests {
             classify(point, &faces[0], operands.other(0), &pool),
             Class::OnOpposite
         );
-    }
-
-    #[test]
-    fn only_one_face_across_or_two_along_an_edge_are_read() {
-        let across = (0, Hold::Across);
-        let (forward, back) = ((1, Hold::Boundary(4, 5)), (2, Hold::Boundary(5, 4)));
-        assert!(surface(&[across]));
-        assert!(surface(&[forward, back]));
-        assert!(!surface(&[forward, forward]));
-        assert!(!surface(&[across, forward]));
-        assert!(!surface(&[forward, back, (3, Hold::Boundary(5, 6))]));
     }
 
     #[test]
@@ -704,8 +651,8 @@ mod tests {
             [0.0, 0.9, 0.0],
         ]);
         let faces = [
-            PlanarFace::new(vec![vec![0, 1, 2, 3]], &pool),
-            PlanarFace::new(vec![vec![4, 5, 6, 7]], &pool),
+            PlanarFace::new(vec![vec![0, 1, 2, 3]], &pool, 7),
+            PlanarFace::new(vec![vec![4, 5, 6, 7]], &pool, 8),
         ];
         let operands = Operands {
             faces: &faces,
@@ -751,9 +698,9 @@ mod tests {
             [1.0, 1.0, 0.0],
         ]);
         let faces = [
-            PlanarFace::new(vec![vec![0, 1, 3, 2]], &pool),
-            PlanarFace::new(vec![vec![0, 1, 3, 2]], &pool),
-            PlanarFace::new(vec![vec![0, 2, 3, 1]], &pool),
+            PlanarFace::new(vec![vec![0, 1, 3, 2]], &pool, 9),
+            PlanarFace::new(vec![vec![0, 1, 3, 2]], &pool, 10),
+            PlanarFace::new(vec![vec![0, 2, 3, 1]], &pool, 11),
         ];
         let operands = Operands {
             faces: &faces,
