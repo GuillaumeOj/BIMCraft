@@ -1163,3 +1163,21 @@ fn a_merge_does_not_leave_a_lump_too_thin() {
         assert_eq!(check_booleans(&b, &a), Ok(()), "needle {needle:?} first");
     }
 }
+
+/// `fuzz/seeds/extruded_boolean/needle-past-a-corner-hole` (`crash-716e61ec…`, found by CI on
+/// #279): a needle starting 0.95 µm beside a corner of a steeply extruded lens. It leaves a hole
+/// in a lens face whose vertex at the needle's start lies just outside the face. Merging a small
+/// coplanar triangle into the face rebuilt the hole from that vertex, and a hole was given to the
+/// outer ring holding its first vertex: none, so the hole was dropped and the difference had an
+/// open edge. A hole now goes to the outer ring holding the most of its vertices.
+#[test]
+fn a_hole_reaching_past_its_face_stays_in_it() {
+    let a = raw_prism(
+        &[(65, 41, 165), (35, 122, 26), (0, 0, 0)],
+        -6,
+        (42, -111, 28),
+    )
+    .unwrap();
+    let b = raw_prism(&[(0, -1, 255)], -18, (90, 104, 51)).unwrap();
+    assert_eq!(check_booleans(&a, &b), Ok(()));
+}

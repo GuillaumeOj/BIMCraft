@@ -118,7 +118,8 @@ fn area(ring: &[usize], at: &impl Fn(usize) -> Point2) -> f64 {
 }
 
 /// Groups rings into regions: each ring with a positive area is an outer ring; every other ring
-/// is a hole of the smallest outer ring of another connected part that contains it.
+/// is a hole of the outer ring of another connected part that contains the most of its
+/// vertices, the smallest of those.
 pub(super) fn regions(rings: Vec<Vec<usize>>, at: impl Fn(usize) -> Point2) -> Regions {
     let part = connected_parts(&rings);
     let areas: Vec<f64> = rings.iter().map(|ring| area(ring, &at)).collect();
@@ -128,16 +129,21 @@ pub(super) fn regions(rings: Vec<Vec<usize>>, at: impl Fn(usize) -> Point2) -> R
         region_of[r] = region;
     }
     for r in (0..rings.len()).filter(|&r| areas[r] <= 0.0) {
-        let probe = at(rings[r][0]);
+        // Every vertex of the hole votes: one may lie just outside the outer ring, within the
+        // tolerance of it, as where a vertex of one operand passes a corner of the other.
+        let held = |o: usize| {
+            (rings[r].iter())
+                .filter(|&&v| ring_contains(rings[o].iter().map(|&w| at(w)), at(v)))
+                .count()
+        };
         region_of[r] = outers
             .iter()
             .enumerate()
-            .filter(|&(_, &o)| {
-                part[&rings[o][0]] != part[&rings[r][0]]
-                    && ring_contains(rings[o].iter().map(|&v| at(v)), probe)
-            })
-            .min_by(|&(_, &o), &(_, &p)| areas[o].total_cmp(&areas[p]))
-            .map_or(OUTSIDE, |(region, _)| region);
+            .filter(|&(_, &o)| part[&rings[o][0]] != part[&rings[r][0]])
+            .map(|(region, &o)| (region, o, held(o)))
+            .filter(|&(_, _, held)| held > 0)
+            .max_by(|&(_, o, a), &(_, p, b)| a.cmp(&b).then(areas[p].total_cmp(&areas[o])))
+            .map_or(OUTSIDE, |(region, _, _)| region);
     }
     let mut left = BTreeMap::new();
     for (r, ring) in rings.iter().enumerate() {
@@ -275,6 +281,26 @@ mod tests {
         assert_eq!(found.left[&(1, 0)], OUTSIDE);
         let (_, point) = interior_point(band, at).unwrap();
         assert!(point.x < 1.0 || point.x > 3.0 || point.y < 1.0 || point.y > 3.0);
+    }
+
+    #[test]
+    fn a_hole_starting_just_outside_its_face_stays_its_hole() {
+        // The hole's first vertex lies 0.1 µm outside the square, as a needle passing a corner
+        // leaves it; its other vertices are inside, so it is still the square's hole.
+        let points = [
+            Point2::new(0.0, 0.0),
+            Point2::new(4.0, 0.0),
+            Point2::new(4.0, 4.0),
+            Point2::new(0.0, 4.0),
+            Point2::new(-1e-7, 1.0),
+            Point2::new(1.0, 3.0),
+            Point2::new(3.0, 3.0),
+            Point2::new(3.0, 1.0),
+        ];
+        let hole = vec![4, 5, 6, 7];
+        let found = regions(vec![vec![0, 1, 2, 3], hole.clone()], |v| points[v]);
+        assert_eq!(found.regions.len(), 1);
+        assert_eq!(found.regions[0].holes, [hole]);
     }
 
     #[test]
