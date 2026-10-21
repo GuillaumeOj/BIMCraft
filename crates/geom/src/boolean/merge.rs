@@ -28,7 +28,8 @@ use crate::MERGE_CHAIN_WIDTH;
 use crate::brep::{FaceFault, enclosed_volume, face_plane};
 use crate::tolerance::{WITHIN_TOLERANCE, WITHIN_TOLERANCE_SQUARED};
 use crate::vector::{
-    Vector, bounds, distance_squared, dot, edges, lexicographic, segment_distance_squared, sub,
+    Vector, bounds, distance_squared, dot, edges, length, lexicographic, segment_distance_squared,
+    sub,
 };
 
 /// The plane of a face as the solid's checks find it, or the rule of its own it breaks.
@@ -369,7 +370,98 @@ pub(super) fn cancel_back_to_back(faces: &mut Faces) {
         .collect();
 }
 
-/// Merges adjacent faces that lie in the same plane within the tolerance and face the same way.
+/// The lumps of the faces, as the root of each face's: faces sharing a vertex are in one.
+fn lumps(faces: &Faces) -> Vec<usize> {
+    let mut lump: Vec<usize> = (0..faces.len()).collect();
+    let mut owner: BTreeMap<usize, usize> = BTreeMap::new();
+    for (f, face) in faces.iter().enumerate() {
+        for &v in face.iter().flatten() {
+            let g = *owner.entry(v).or_insert(f);
+            union(&mut lump, f, g);
+        }
+    }
+    for f in 0..faces.len() {
+        lump[f] = find(&mut lump, f);
+    }
+    lump
+}
+
+/// How thick each lump is on average, as the solid's checks read it (`enclosed_volume`): six
+/// times its volume, as cones from the centre of its first face, and twice its area. Merging
+/// faces or dropping a vertex moves the surface by up to the tolerance, so it can leave a lump
+/// just thicker than the tolerance on average thinner than that, which the checks reject; such a
+/// change is refused.
+struct Thickness {
+    lump: Vec<usize>,
+    apex: BTreeMap<usize, Vector>,
+    total: BTreeMap<usize, (f64, f64)>,
+}
+
+impl Thickness {
+    fn new(faces: &Faces, pool: &Pool) -> Self {
+        let lump = lumps(faces);
+        let mut apex = BTreeMap::new();
+        for (face, root) in faces.iter().zip(&lump) {
+            apex.entry(*root)
+                .or_insert_with(|| area_and_centre(face, pool).1);
+        }
+        let mut total: BTreeMap<usize, (f64, f64)> = BTreeMap::new();
+        for (face, root) in faces.iter().zip(&lump) {
+            let (volume, area) = measure([face], apex[root], pool);
+            let sum = total.entry(*root).or_default();
+            *sum = (sum.0 + volume, sum.1 + area);
+        }
+        Self { lump, apex, total }
+    }
+
+    /// Whether the lump of face `f` may have the faces `gone` replaced by `made`: it must not
+    /// become too thin if it was not; if so, its measure is updated.
+    fn allows<'a>(
+        &mut self,
+        f: usize,
+        gone: impl IntoIterator<Item = &'a Vec<Vec<usize>>>,
+        made: impl IntoIterator<Item = &'a Vec<Vec<usize>>>,
+        pool: &Pool,
+    ) -> bool {
+        let root = self.lump[f];
+        let before = self.total[&root];
+        let (lost, new) = (
+            measure(gone, self.apex[&root], pool),
+            measure(made, self.apex[&root], pool),
+        );
+        let after = (before.0 - lost.0 + new.0, before.1 - lost.1 + new.1);
+        if too_thin(after) && !too_thin(before) {
+            return false;
+        }
+        self.total.insert(root, after);
+        true
+    }
+}
+
+/// Six times the volume and twice the area of the faces, as cones from `apex`.
+fn measure<'a>(
+    faces: impl IntoIterator<Item = &'a Vec<Vec<usize>>>,
+    apex: Vector,
+    pool: &Pool,
+) -> (f64, f64) {
+    faces.into_iter().fold((0.0, 0.0), |(volume, area), face| {
+        let (vector, centre) = area_and_centre(face, pool);
+        (
+            volume + dot(vector, sub(centre, apex)),
+            area + length(vector),
+        )
+    })
+}
+
+/// Whether a lump of six times this volume and twice this area is no thicker than the
+/// tolerance on average.
+fn too_thin((six_volume, twice_area): (f64, f64)) -> bool {
+    4.0 * (six_volume / 6.0).abs() <= WITHIN_TOLERANCE * twice_area
+}
+
+/// Merges adjacent faces that lie in the same plane within the tolerance and face the same way,
+/// where the merged face passes the solid's checks and its lump stays thick enough
+/// ([`Thickness`]).
 pub(super) fn merge_coplanar(
     faces: &Faces,
     planes: &[(Vector, Vector)],
@@ -405,6 +497,7 @@ pub(super) fn merge_coplanar(
         boundary[half_edges.face(h)].insert(h);
     }
     let mut merged: Vec<Option<Faces>> = vec![None; faces.len()];
+    let mut thickness = Thickness::new(faces, pool);
     // Groups refused once are refused again along their other shared edges, until one of them
     // grows: keyed by both roots and their sizes.
     let mut refused = BTreeSet::new();
@@ -440,6 +533,11 @@ pub(super) fn merge_coplanar(
             refused.insert(key);
             continue;
         }
+        let gone = [rf, rg].map(|r| merged[r].clone().unwrap_or_else(|| vec![faces[r].clone()]));
+        if !thickness.allows(f, gone.iter().flatten(), &made, pool) {
+            refused.insert(key);
+            continue;
+        }
         let (root, other) = (rf.min(rg), rf.max(rg));
         group[other] = root;
         let moved = std::mem::take(&mut members[other]);
@@ -467,8 +565,10 @@ pub(super) fn merge_coplanar(
 /// by no more than the tolerance; one between two faces left unmerged at a fold stays, or the
 /// faces would bend. The test depends only on the vertex and its neighbours, so both faces
 /// along the edge agree. Vertices are taken in order of position, so the operands' order does
-/// not matter, and one goes only if both its faces still pass the solid's checks without it.
+/// not matter, and one goes only if both its faces still pass the solid's checks without it and
+/// its lump stays thick enough ([`Thickness`]).
 pub(super) fn remove_collinear(mut faces: Faces, pool: &Pool) -> Faces {
+    let mut thickness = Thickness::new(&faces, pool);
     let mut neighbours: BTreeMap<usize, BTreeSet<usize>> = BTreeMap::new();
     let mut owners: BTreeMap<usize, BTreeSet<usize>> = BTreeMap::new();
     for (f, face) in faces.iter().enumerate() {
@@ -504,7 +604,14 @@ pub(super) fn remove_collinear(mut faces: Faces, pool: &Pool) -> Faces {
                 (f, face)
             })
             .collect();
-        if !without.iter().all(|(_, face)| holds(face, pool)) {
+        if !without.iter().all(|(_, face)| holds(face, pool))
+            || !thickness.allows(
+                without[0].0,
+                without.iter().map(|&(f, _)| &faces[f]),
+                without.iter().map(|(_, face)| face),
+                pool,
+            )
+        {
             continue;
         }
         for (f, face) in without {
@@ -732,17 +839,10 @@ pub(super) fn sliver_remains(faces: &Faces, pool: &Pool) -> Result<(), BooleanEr
 /// steps 1 and 4). Lumps share no vertex by now, so faces sharing one belong to the same lump,
 /// and removing one leaves the others as they were.
 pub(super) fn drop_thin_lumps(faces: Faces, pool: &Pool) -> Faces {
-    let mut lump: Vec<usize> = (0..faces.len()).collect();
-    let mut owner: BTreeMap<usize, usize> = BTreeMap::new();
-    for (f, face) in faces.iter().enumerate() {
-        for &v in face.iter().flatten() {
-            let g = *owner.entry(v).or_insert(f);
-            union(&mut lump, f, g);
-        }
-    }
+    let lump = lumps(&faces);
     let mut members: BTreeMap<usize, Vec<usize>> = BTreeMap::new();
-    for f in 0..faces.len() {
-        members.entry(find(&mut lump, f)).or_default().push(f);
+    for (f, &root) in lump.iter().enumerate() {
+        members.entry(root).or_default().push(f);
     }
     let thin: BTreeSet<usize> = members
         .values()

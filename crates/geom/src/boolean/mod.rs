@@ -33,8 +33,9 @@
 //! 6. The kept faces are stitched into a solid (merge pass, steps 1 to 4): lumps that only touch
 //!    along an edge or at a point get their own vertices, edges no longer than the tolerance
 //!    collapse, faces left back to back cancel, adjacent coplanar faces merge, vertices between
-//!    collinear edges go, faces narrower than the tolerance are zipped shut onto the face across
-//!    their longest edge, and lumps or voids no thicker than the tolerance on average vanish.
+//!    collinear edges go unless that leaves a lump too thin, faces narrower than the tolerance
+//!    are zipped shut onto the face across their longest edge, and lumps or voids no thicker
+//!    than the tolerance on average vanish.
 //!    Each of these operations is applied only if the faces it leaves pass the solid's checks,
 //!    so it never makes a valid result invalid; a feature within the tolerance that none can
 //!    remove is [`BooleanError::FeaturesTooClose`]. The result is checked like any solid; an

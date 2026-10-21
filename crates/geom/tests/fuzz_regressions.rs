@@ -1139,3 +1139,22 @@ fn a_face_bent_by_a_moved_vertex_is_cut_along_a_collar() {
     let b = raw_prism(&[(-1, -1, 239)], -18, (90, -68, 42)).unwrap();
     assert_eq!(check_booleans(&a, &b), Ok(()));
 }
+
+/// A triangle extruded almost flat and a needle on its corner, the needle just thicker than the
+/// tolerance on average. Its bottom goes onto a side plane of the triangle 1.1° off, and the
+/// collar keeps its sides flat. Merging the collar's triangles back into the sides, or dropping
+/// the collar's points between collinear edges, bent the sides again and took 7 % off the
+/// needle's volume, enough to leave it thinner than the tolerance on average: it was dropped,
+/// and its vertices lay 24 µm outside the union. Faces merge, and vertices go, only where every
+/// lump stays thicker than that if it was. The first needle is thinned by dropping the collar's
+/// points, the second, taken first, by merging its triangles.
+#[test]
+fn a_merge_does_not_leave_a_lump_too_thin() {
+    for (corner, needle) in [((35, 41), (90, 45, 9)), ((3, 41), (30, 45, 5))] {
+        let (x, y) = corner;
+        let a = raw_prism(&[(x, y, 0), (-95, 65, 0), (0, 0, 0)], -6, (42, 30, 1)).unwrap();
+        let b = raw_prism(&[(0, -1, 255)], -18, needle).unwrap();
+        assert_eq!(check_booleans(&a, &b), Ok(()), "needle {needle:?}");
+        assert_eq!(check_booleans(&b, &a), Ok(()), "needle {needle:?} first");
+    }
+}
