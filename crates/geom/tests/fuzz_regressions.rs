@@ -1138,6 +1138,11 @@ fn a_face_bent_by_a_moved_vertex_is_cut_along_a_collar() {
     .unwrap();
     let b = raw_prism(&[(-1, -1, 239)], -18, (90, -68, 42)).unwrap();
     assert_eq!(check_booleans(&a, &b), Ok(()));
+    // `…-c` (`crash-2c33e073…`, found by CI on #278): the needle of `…-a` on a lens of an arc
+    // and a line extruded almost flat; its side faces bent by up to 0.13 µm.
+    let a = raw_prism(&[(69, -95, 255), (0, 0, 0)], -6, (42, -3, 1)).unwrap();
+    let b = raw_prism(&[(0, -3, 255)], -18, (82, 45, 39)).unwrap();
+    assert_eq!(check_booleans(&a, &b), Ok(()));
 }
 
 /// A triangle extruded almost flat and a needle on its corner, the needle just thicker than the
