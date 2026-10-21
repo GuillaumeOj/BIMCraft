@@ -29,7 +29,7 @@ use super::face::{PlanarFace, Pool};
 use super::intersect::Cuts;
 use super::planar::{self, OUTSIDE, Region, interior_point};
 use crate::Point2;
-use crate::tolerance::{ROUNDING, WITHIN_TOLERANCE};
+use crate::tolerance::ROUNDING;
 use crate::vector::{Vector, cross, dot, edges, fan_solid_angle, lexicographic, scale, sub, unit};
 
 /// Where a piece of face lies relative to the other operand.
@@ -438,17 +438,16 @@ fn sector(
 
 /// Classifies a point of `face` against the faces of a solid.
 ///
-/// A point inside a face of the solid coplanar with `face`, within the tolerance, lies on it.
-/// Being near a face is not enough: a thin piece of face may run along an edge of the solid
-/// without lying on either face there. Otherwise
+/// A point inside a face of the solid lying in one plane with `face`, as the cut sees it
+/// ([`PlanarFace::coplanar`]), lies on it. Being near a face is not enough: a thin piece of face
+/// may run along an edge of the solid without lying on either face there. Otherwise
 /// the winding number of the solid's boundary around the point decides: about 1 inside, about 0
 /// outside, and far from ambiguous once the point is more than the tolerance from every face.
 fn classify(p: Vector, face: &PlanarFace, solid: &[PlanarFace], pool: &Pool) -> Class {
     let on = solid.iter().find(|other| {
         other.reaches(p)
-            && other.distance(p).abs() <= WITHIN_TOLERANCE
-            && other.contains(pool, other.projection.apply(p))
             && face.coplanar(other, pool)
+            && other.contains(pool, other.projection.apply(p))
     });
     if let Some(other) = on {
         return if dot(other.normal, face.normal) > 0.0 {
@@ -575,16 +574,20 @@ mod tests {
 
     #[test]
     fn a_piece_reaching_into_a_coplanar_face_lies_on_it() {
-        // Back to back with the square: the half x > 0 of its plane, facing down.
-        let pool = pool_with(&[
+        // Back to back with the square: the half x > 0 of its plane, facing down, put onto the
+        // square's plane (merge pass, step 1), so its vertices record it.
+        let mut pool = pool_with(&[
             [0.0, -1.0, 0.0],
             [0.0, 1.0, 0.0],
             [1.0, 1.0, 0.0],
             [1.0, -1.0, 0.0],
         ]);
+        for v in 0..8 {
+            pool.lies_on(v, std::iter::once(5));
+        }
         let faces = [
             PlanarFace::new(vec![vec![0, 1, 2, 3]], &pool, 5),
-            PlanarFace::new(vec![vec![4, 5, 6, 7]], &pool, 6),
+            PlanarFace::new(vec![vec![4, 5, 6, 7]], &pool, 5),
         ];
         assert_eq!(
             reading(
@@ -604,6 +607,36 @@ mod tests {
         assert_eq!(
             classify(point, &faces[0], operands.other(0), &pool),
             Class::OnOpposite
+        );
+    }
+
+    #[test]
+    fn a_face_within_the_tolerance_of_a_plane_but_not_on_it_lies_across_it() {
+        // The half x > 0, facing down, rising 0.5 µm across its width: within the tolerance of
+        // the square's plane, but not put onto it, as when it went onto another plane a shallow
+        // angle away. It runs along the edge above the square, so the square lies outside it.
+        let mut pool = pool_with(&[
+            [0.0, -1.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [1.0, 1.0, 5e-7],
+            [1.0, -1.0, 5e-7],
+        ]);
+        for v in 4..8 {
+            pool.lies_on(v, std::iter::once(6));
+        }
+        let faces = [
+            PlanarFace::new(vec![vec![0, 1, 2, 3]], &pool, 5),
+            PlanarFace::new(vec![vec![4, 5, 6, 7]], &pool, 6),
+        ];
+        assert!(!faces[0].coplanar(&faces[1], &pool));
+        assert_eq!(
+            reading(
+                &faces,
+                &pool,
+                [0.0, -1.0, 0.0],
+                &[(1, Hold::Boundary(4, 5))]
+            ),
+            Some(Class::Outside)
         );
     }
 
