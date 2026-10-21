@@ -242,7 +242,7 @@ fn boxes_apart(a: [f64; 4], b: [f64; 4]) -> bool {
 }
 
 /// Exact test of whether the closed segments `a0 a1` and `b0 b1` share a point.
-fn segments_touch(a0: Point2, a1: Point2, b0: Point2, b1: Point2) -> bool {
+pub(crate) fn segments_touch(a0: Point2, a1: Point2, b0: Point2, b1: Point2) -> bool {
     let (o1, o2) = (orient(a0, a1, b0), orient(a0, a1, b1));
     if o1 == Orientation::Zero && o2 == Orientation::Zero {
         let (a_low, a_high) = ordered(a0, a1);

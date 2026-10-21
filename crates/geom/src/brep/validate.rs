@@ -294,9 +294,14 @@ pub(crate) fn enclosed_volume(planes: &[(Vector, Vector)]) -> (f64, bool) {
             a + dot(normal, normal).sqrt(),
         )
     });
-    let volume = six_volume / 6.0;
+    (six_volume / 6.0, too_thin(six_volume, twice_area))
+}
+
+/// Whether a shell of six times this volume and twice this area is no thicker than the
+/// tolerance on average.
+pub(crate) fn too_thin(six_volume: f64, twice_area: f64) -> bool {
     // Twice the volume over the area is the mean thickness: a slab's area counts both sides.
-    (volume, 4.0 * volume.abs() <= WITHIN_TOLERANCE * twice_area)
+    4.0 * (six_volume / 6.0).abs() <= WITHIN_TOLERANCE * twice_area
 }
 
 /// The genus G from the Euler–Poincaré formula of one shell, V − E + F − H = 2 − 2G, where H

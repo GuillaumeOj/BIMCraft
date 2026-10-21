@@ -25,7 +25,7 @@ use super::face::{Pool, Projection, area_and_centre, clean_face, plane};
 use super::planar::{canonical, faces_of};
 use super::snap::{find, union};
 use crate::MERGE_CHAIN_WIDTH;
-use crate::brep::{FaceFault, enclosed_volume, face_plane};
+use crate::brep::{FaceFault, enclosed_volume, face_plane, too_thin};
 use crate::tolerance::{WITHIN_TOLERANCE, WITHIN_TOLERANCE_SQUARED};
 use crate::vector::{
     Vector, bounds, distance_squared, dot, edges, length, lexicographic, segment_distance_squared,
@@ -393,25 +393,22 @@ fn lumps(faces: &Faces) -> Vec<usize> {
 /// change is refused.
 struct Thickness {
     lump: Vec<usize>,
-    apex: BTreeMap<usize, Vector>,
-    total: BTreeMap<usize, (f64, f64)>,
+    /// By lump: its apex, and six times its volume and twice its area.
+    total: BTreeMap<usize, (Vector, (f64, f64))>,
 }
 
 impl Thickness {
     fn new(faces: &Faces, pool: &Pool) -> Self {
         let lump = lumps(faces);
-        let mut apex = BTreeMap::new();
+        let mut total: BTreeMap<usize, (Vector, (f64, f64))> = BTreeMap::new();
         for (face, root) in faces.iter().zip(&lump) {
-            apex.entry(*root)
-                .or_insert_with(|| area_and_centre(face, pool).1);
-        }
-        let mut total: BTreeMap<usize, (f64, f64)> = BTreeMap::new();
-        for (face, root) in faces.iter().zip(&lump) {
-            let (volume, area) = measure([face], apex[root], pool);
-            let sum = total.entry(*root).or_default();
+            let (apex, sum) = total
+                .entry(*root)
+                .or_insert_with(|| (area_and_centre(face, pool).1, (0.0, 0.0)));
+            let (volume, area) = measure([face], *apex, pool);
             *sum = (sum.0 + volume, sum.1 + area);
         }
-        Self { lump, apex, total }
+        Self { lump, total }
     }
 
     /// Whether the lump of face `f` may have the faces `gone` replaced by `made`: it must not
@@ -423,17 +420,14 @@ impl Thickness {
         made: impl IntoIterator<Item = &'a Vec<Vec<usize>>>,
         pool: &Pool,
     ) -> bool {
-        let root = self.lump[f];
-        let before = self.total[&root];
-        let (lost, new) = (
-            measure(gone, self.apex[&root], pool),
-            measure(made, self.apex[&root], pool),
-        );
+        let (apex, before) = self.total[&self.lump[f]];
+        let lost = measure(gone, apex, pool);
+        let new = measure(made, apex, pool);
         let after = (before.0 - lost.0 + new.0, before.1 - lost.1 + new.1);
-        if too_thin(after) && !too_thin(before) {
+        if too_thin(after.0, after.1) && !too_thin(before.0, before.1) {
             return false;
         }
-        self.total.insert(root, after);
+        self.total.insert(self.lump[f], (apex, after));
         true
     }
 }
@@ -451,12 +445,6 @@ fn measure<'a>(
             area + length(vector),
         )
     })
-}
-
-/// Whether a lump of six times this volume and twice this area is no thicker than the
-/// tolerance on average.
-fn too_thin((six_volume, twice_area): (f64, f64)) -> bool {
-    4.0 * (six_volume / 6.0).abs() <= WITHIN_TOLERANCE * twice_area
 }
 
 /// Merges adjacent faces that lie in the same plane within the tolerance and face the same way,
