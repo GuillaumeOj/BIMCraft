@@ -533,8 +533,12 @@ pub(super) fn merge_coplanar(
             refused.insert(key);
             continue;
         }
-        let gone = [rf, rg].map(|r| merged[r].clone().unwrap_or_else(|| vec![faces[r].clone()]));
-        if !thickness.allows(f, gone.iter().flatten(), &made, pool) {
+        let gone = [rf, rg].map(|r| {
+            merged[r]
+                .as_deref()
+                .unwrap_or(std::slice::from_ref(&faces[r]))
+        });
+        if !thickness.allows(f, gone.into_iter().flatten(), &made, pool) {
             refused.insert(key);
             continue;
         }

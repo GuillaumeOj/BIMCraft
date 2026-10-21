@@ -61,9 +61,9 @@ impl Bend<'_> {
 
 /// Cuts the faces bent by moving the `moved` vertices into a flat rest and flat triangles along
 /// a collar where it can be made and fits ([`cut`]), and works out the planes of every face
-/// whose vertices moved again. Each face still
-/// has the plane it keeps as before the move. The triangles are new faces after those of their
-/// operand, each on a plane of its own; returns the faces and where the second operand's start.
+/// whose vertices moved again. Each face still has the plane it keeps as before the move. The
+/// triangles are new faces after those of their operand, each on a plane of its own; returns
+/// the faces and where the second operand's start.
 pub(super) fn collar(
     faces: Vec<PlanarFace>,
     split: usize,
@@ -189,11 +189,11 @@ fn collar_points(faces: &[PlanarFace], bend: &Bend, pool: &mut Pool) -> Points {
     points
 }
 
-/// The point nearest `guide` lying on every given plane (at most two, along one edge); `None`
-/// if that moves it farther than the tolerance, as for nearly parallel planes.
+/// The point nearest `guide` lying on every given plane: one or two, those of the faces along
+/// one edge, one of which always keeps its plane beyond the point. `None` if that moves it
+/// farther than the tolerance, as for nearly parallel planes.
 fn onto(guide: Vector, planes: &[Plane]) -> Option<Vector> {
     let point = match planes {
-        [] => guide,
         [p] => sub(guide, scale(p.normal, p.distance(guide))),
         [p, q] => {
             let c = dot(p.normal, q.normal);
@@ -212,8 +212,10 @@ fn onto(guide: Vector, planes: &[Plane]) -> Option<Vector> {
 }
 
 /// The rest of a face and the triangles of its strips, from its rings with each vertex marked
-/// whether it lies on the face's plane; `None` if some ring has no vertex on it, a strip has
-/// more than two vertices off it, or a strip would not lie inside the face, in its projection.
+/// whether it lies on the face's plane; `None` if some ring has no vertex on it, or a strip has
+/// no ear left ([`strip`]) or would not lie inside the face, in its projection: a triangle
+/// holding another vertex of the face, or a collar sharing a point with an edge of the face.
+/// Two collars then cannot cross either: one would leave the face or hold the other's end.
 fn cut(
     rings: &[Vec<(usize, bool)>],
     pool: &Pool,
@@ -384,12 +386,12 @@ mod tests {
         // side face alone.
         let (faces, _, pool) = collared(&[(7, [0.3e-6, 0.3e-6, 0.3e-6]), (5, [0.0, 0.0, 0.5e-6])]);
         assert!(faces.iter().all(|face| flat(face, &pool)));
-        let side = &faces[5];
-        assert!(
-            side.rings[0]
-                .iter()
-                .all(|&v| side.distance(pool.get(v)).abs() <= ROUNDING)
-        );
+        // The side x = 1, [1, 3, 7, 5], keeps [1, 3, a point, the collar point, 5]; that one
+        // stays above the top's plane, as the edge from 7 to 5 does there.
+        let side = &faces[5].rings[0];
+        let point = side[side.iter().position(|&v| v == 5).unwrap() - 1];
+        assert!(point >= 8);
+        assert!((pool.get(point)[2] - 1.0 - 0.37e-6).abs() < 0.01e-6);
     }
 
     #[test]
@@ -441,7 +443,7 @@ mod tests {
         };
         let floor = plane([0.0, 0.0, 1.0], 0.0);
         let guide = [1.0, 2.0, 0.5e-6];
-        assert_eq!(onto(guide, &[]), Some(guide));
+        assert_eq!(onto(guide, &[]), None);
         assert_eq!(onto(guide, &[floor]), Some([1.0, 2.0, 0.0]));
         assert_eq!(onto(guide, &[plane([0.0, 0.0, 1.0], 2e-6)]), None);
         assert_eq!(onto(guide, &[floor, floor]), None);
