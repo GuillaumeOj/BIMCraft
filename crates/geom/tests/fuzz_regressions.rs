@@ -1118,3 +1118,24 @@ fn a_face_put_onto_one_plane_lies_across_the_others() {
     let b = raw_prism(&[(0, -3, 255)], -18, (82, 45, 39)).unwrap();
     assert_eq!(check_booleans(&a, &b), Ok(()));
 }
+
+/// `fuzz/seeds/extruded_boolean/needle-on-a-shallow-lens-b` (`crash-6dd328b8…`, found by the
+/// seeded fuzz run): a lens extruded almost flat and a needle whose bottom lies within the
+/// tolerance of a lens face 1.4° off it. The bottom went onto that face's plane, which moved its
+/// vertices by up to half a micrometre and bent the needle's long side faces: their far ends
+/// stayed put, so the moved vertices lay 0.1 µm off the planes refitted to them, yet were taken
+/// to lie on them. Where the needle's sides meet the lens at a shallow angle too, that put the
+/// lines they meet along a micrometre astray, and every operation had an open edge. A face bent
+/// so is now cut along a collar near the moved vertices: small flat triangles there, and the
+/// rest on its plane.
+#[test]
+fn a_face_bent_by_a_moved_vertex_is_cut_along_a_collar() {
+    let a = raw_prism(
+        &[(65, -95, 165), (63, 122, 231), (0, 0, 0)],
+        -16,
+        (-1, 28, 1),
+    )
+    .unwrap();
+    let b = raw_prism(&[(-1, -1, 239)], -18, (90, -68, 42)).unwrap();
+    assert_eq!(check_booleans(&a, &b), Ok(()));
+}

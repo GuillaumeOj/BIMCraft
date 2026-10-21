@@ -4,7 +4,8 @@
 //! Every operation runs the same steps:
 //!
 //! 1. Faces of the two operands that lie in one plane within the tolerance are put onto exactly
-//!    one plane, and share its number (merge pass, step 1).
+//!    one plane, and share its number (merge pass, step 1). The other faces around a moved
+//!    vertex are cut along a collar near it, so that each part lies flat on a plane.
 //! 2. Each face of one operand is intersected with the faces of the other whose boxes overlap
 //!    it, on the operands' own coordinates: no vertex is merged with another before the cut
 //!    (ADR 0001, constructed geometry). A vertex lies on a plane if it was made on it, or lies
@@ -52,6 +53,7 @@ mod align;
 mod arrange;
 mod assemble;
 mod classify;
+mod collar;
 mod error;
 mod face;
 mod intersect;
@@ -157,7 +159,7 @@ impl Solid {
 /// Runs an operation; `None` if nothing is left.
 fn run(first: &Solid, second: &Solid, operation: Operation) -> Result<Option<Solid>, BooleanError> {
     let mut pool = Pool::new(first, second);
-    let mut faces = Vec::with_capacity(first.face_count() + second.face_count());
+    let mut faces: Vec<PlanarFace> = Vec::with_capacity(first.face_count() + second.face_count());
     for (solid, offset) in [(first, 0), (second, first.vertices().len())] {
         for face in solid.to_faces() {
             let rings = std::iter::once(face.outer)
@@ -168,8 +170,7 @@ fn run(first: &Solid, second: &Solid, operation: Operation) -> Result<Option<Sol
             faces.push(PlanarFace::new(rings, &pool, number));
         }
     }
-    let split = first.face_count();
-    align::align(&mut faces, split, &mut pool);
+    let (mut faces, split) = align::align(faces, first.face_count(), &mut pool);
     for face in &faces {
         for &v in face.rings.iter().flatten() {
             pool.lies_on(v, std::iter::once(face.plane));
