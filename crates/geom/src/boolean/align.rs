@@ -38,7 +38,7 @@ pub(super) fn align(faces: &mut [PlanarFace], split: usize, pool: &mut Pool) {
         };
         // Only the moving face's vertices are known to be within the tolerance of the other
         // plane; the other way round, a large face could move far more than the tolerance.
-        if !faces[later].lies_on(&faces[first], pool) {
+        if !faces[later].lies_within_tolerance_of(&faces[first], pool) {
             continue;
         }
         let best = target[later]
@@ -49,7 +49,9 @@ pub(super) fn align(faces: &mut [PlanarFace], split: usize, pool: &mut Pool) {
     // A target that itself moves is followed to where it goes, as far as the face still lies on
     // that plane, so faces judged coplanar end on one plane. Plane order falls at each step.
     let resolve = |face: usize, mut t: usize| {
-        while let Some(next) = target[t].filter(|&next| faces[face].lies_on(&faces[next], pool)) {
+        while let Some(next) =
+            target[t].filter(|&next| faces[face].lies_within_tolerance_of(&faces[next], pool))
+        {
             t = next;
         }
         t

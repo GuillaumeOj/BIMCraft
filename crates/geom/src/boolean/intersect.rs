@@ -180,9 +180,8 @@ impl Pair<'_> {
         if apart(&sides_a) || apart(&sides_b) {
             return Meeting::default();
         }
-        let flat = |sides: &[Vec<i8>]| sides.iter().flatten().all(|&s| s == 0);
         // Faces put onto one plane share its number, so each lies on the other's plane.
-        if flat(&sides_a) || flat(&sides_b) {
+        if one.coplanar(other, self.pool) {
             let boundaries = one.rings.iter().chain(&other.rings);
             return Meeting {
                 coplanar: true,
