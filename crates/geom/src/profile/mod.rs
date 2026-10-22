@@ -10,7 +10,7 @@ use core::fmt;
 pub(crate) use edge::Curve;
 pub use edge::{ArcDirection, Edge};
 use mass::{Moments, loop_moments};
-pub(crate) use validate::encloses;
+pub(crate) use validate::{encloses, segments_touch};
 
 use crate::Point2;
 

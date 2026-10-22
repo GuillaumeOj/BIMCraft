@@ -9,11 +9,13 @@
 //! the planes, so swapping the operands gives the same result. Each projection moves a vertex
 //! by at most the tolerance, along the normal, and a corner of one operand lying within the
 //! tolerance of the planes around a corner of the other lands on it, where the vertex merge
-//! finds it.
+//! finds it. The other faces around a moved vertex keep their planes: [`collar`] cuts them
+//! where they would bend.
 
 use std::cmp::Ordering;
 use std::collections::BTreeMap;
 
+use super::collar;
 use super::face::{PlanarFace, Pool};
 use super::intersect::candidate_pairs;
 use super::snap::{find, union};
@@ -21,13 +23,17 @@ use crate::vector::{Vector, dot, largest_axis, scale, sub};
 
 /// Projects the vertices of each face of one operand (`faces[..split]`) or the other onto the
 /// first, in plane order, of the faces of the other operand whose boxes overlap it and on whose
-/// plane it lies, if that plane comes before its own; then works out the moved faces' planes
-/// again.
-pub(super) fn align(faces: &mut [PlanarFace], split: usize, pool: &mut Pool) {
+/// plane it lies, if that plane comes before its own; then cuts the faces bent by the move along
+/// collars ([`collar::collar`]). Returns the faces and where the second operand's start.
+pub(super) fn align(
+    mut faces: Vec<PlanarFace>,
+    split: usize,
+    pool: &mut Pool,
+) -> (Vec<PlanarFace>, usize) {
     let mut target: Vec<Option<usize>> = vec![None; faces.len()];
     // Faces already on exactly one plane share its number.
     let mut same: Vec<usize> = (0..faces.len()).collect();
-    for (f, g) in candidate_pairs(faces, split) {
+    for (f, g) in candidate_pairs(&faces, split) {
         let (first, later) = match plane_order(&faces[f], &faces[g]) {
             Ordering::Less => (f, g),
             Ordering::Greater => (g, f),
@@ -80,11 +86,8 @@ pub(super) fn align(faces: &mut [PlanarFace], split: usize, pool: &mut Pool) {
             pool.set(v, sub(p, scale(faces[t].normal, faces[t].distance(p))));
         }
     }
-    for face in faces.iter_mut() {
-        if face.rings.iter().flatten().any(|v| planes.contains_key(v)) {
-            *face = PlanarFace::new(std::mem::take(&mut face.rings), pool, face.plane);
-        }
-    }
+    let moved = planes.into_keys().collect();
+    collar::collar(faces, split, &moved, pool)
 }
 
 /// A fixed order of nearly parallel planes: by their offset along the normal turned towards

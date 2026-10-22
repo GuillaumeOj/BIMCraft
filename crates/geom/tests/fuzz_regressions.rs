@@ -1118,3 +1118,66 @@ fn a_face_put_onto_one_plane_lies_across_the_others() {
     let b = raw_prism(&[(0, -3, 255)], -18, (82, 45, 39)).unwrap();
     assert_eq!(check_booleans(&a, &b), Ok(()));
 }
+
+/// `fuzz/seeds/extruded_boolean/needle-on-a-shallow-lens-b` (`crash-6dd328b8…`, found by the
+/// seeded fuzz run): a lens extruded almost flat and a needle whose bottom lies within the
+/// tolerance of a lens face 1.4° off it. The bottom went onto that face's plane, which moved its
+/// vertices by up to half a micrometre and bent the needle's long side faces: their far ends
+/// stayed put, so the moved vertices lay 0.1 µm off the planes refitted to them, yet were taken
+/// to lie on them. Where the needle's sides meet the lens at a shallow angle too, that put the
+/// lines they meet along a micrometre astray, and every operation had an open edge. A face bent
+/// so is now cut along a collar near the moved vertices: small flat triangles there, and the
+/// rest on its plane.
+#[test]
+fn a_face_bent_by_a_moved_vertex_is_cut_along_a_collar() {
+    let a = raw_prism(
+        &[(65, -95, 165), (63, 122, 231), (0, 0, 0)],
+        -16,
+        (-1, 28, 1),
+    )
+    .unwrap();
+    let b = raw_prism(&[(-1, -1, 239)], -18, (90, -68, 42)).unwrap();
+    assert_eq!(check_booleans(&a, &b), Ok(()));
+    // `…-c` (`crash-2c33e073…`, found by CI on #278): the needle of `…-a` on a lens of an arc
+    // and a line extruded almost flat; its side faces bent by up to 0.13 µm.
+    let a = raw_prism(&[(69, -95, 255), (0, 0, 0)], -6, (42, -3, 1)).unwrap();
+    let b = raw_prism(&[(0, -3, 255)], -18, (82, 45, 39)).unwrap();
+    assert_eq!(check_booleans(&a, &b), Ok(()));
+}
+
+/// A triangle extruded almost flat and a needle on its corner, the needle just thicker than the
+/// tolerance on average. Its bottom goes onto a side plane of the triangle 1.1° off, and the
+/// collar keeps its sides flat. Merging the collar's triangles back into the sides, or dropping
+/// the collar's points between collinear edges, bent the sides again and took 7 % off the
+/// needle's volume, enough to leave it thinner than the tolerance on average: it was dropped,
+/// and its vertices lay 24 µm outside the union. Faces merge, and vertices go, only where every
+/// lump stays thicker than that if it was. The first needle is thinned by dropping the collar's
+/// points, the second, taken first, by merging its triangles.
+#[test]
+fn a_merge_does_not_leave_a_lump_too_thin() {
+    for (corner, needle) in [((35, 41), (90, 45, 9)), ((3, 41), (30, 45, 5))] {
+        let (x, y) = corner;
+        let a = raw_prism(&[(x, y, 0), (-95, 65, 0), (0, 0, 0)], -6, (42, 30, 1)).unwrap();
+        let b = raw_prism(&[(0, -1, 255)], -18, needle).unwrap();
+        assert_eq!(check_booleans(&a, &b), Ok(()), "needle {needle:?}");
+        assert_eq!(check_booleans(&b, &a), Ok(()), "needle {needle:?} first");
+    }
+}
+
+/// `fuzz/seeds/extruded_boolean/needle-past-a-corner-hole` (`crash-716e61ec…`, found by CI on
+/// #279): a needle starting 0.95 µm beside a corner of a steeply extruded lens. It leaves a hole
+/// in a lens face whose vertex at the needle's start lies just outside the face. Merging a small
+/// coplanar triangle into the face rebuilt the hole from that vertex, and a hole was given to the
+/// outer ring holding its first vertex: none, so the hole was dropped and the difference had an
+/// open edge. A hole now goes to the outer ring holding the most of its vertices.
+#[test]
+fn a_hole_reaching_past_its_face_stays_in_it() {
+    let a = raw_prism(
+        &[(65, 41, 165), (35, 122, 26), (0, 0, 0)],
+        -6,
+        (42, -111, 28),
+    )
+    .unwrap();
+    let b = raw_prism(&[(0, -1, 255)], -18, (90, 104, 51)).unwrap();
+    assert_eq!(check_booleans(&a, &b), Ok(()));
+}
