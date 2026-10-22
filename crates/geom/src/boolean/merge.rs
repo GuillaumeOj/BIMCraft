@@ -13,9 +13,10 @@
 //! Only a collapse moves a vertex's place in a face, by no more than the tolerance, and no
 //! operation is applied if a face it touches would then break a rule of the solid's checks it
 //! did not break before (bent beyond the tolerance, no wider than it), or if the faces along an
-//! edge it touches would no longer pair. So the pass never makes a valid result invalid. An
-//! edge no longer than the tolerance or a face narrower than it that no operation removes is
-//! reported as [`BooleanError::FeaturesTooClose`].
+//! edge it touches would no longer pair, or could no longer be pulled apart where a lump touches
+//! itself along it. So the pass never makes a valid result invalid. An edge no longer than the
+//! tolerance or a face narrower than it that no operation removes is reported as
+//! [`BooleanError::FeaturesTooClose`].
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -62,11 +63,13 @@ fn holds(face: &[Vec<usize>], pool: &Pool) -> bool {
 /// vertex kept is an operand vertex if the group has one, then the smallest by x, then y, then
 /// z, so the choice depends only on positions. A collapse is applied only if every face it
 /// changes is left without a fault of its own the solid's checks find (bent, degenerate) or
-/// vanishes, and the faces along every edge it touches still pair ([`still_paired`]). A group
-/// that cannot collapse whole is collapsed edge by edge where that holds, either end staying.
-/// Groups and edges are taken in order of position, and tried again until none collapses. A group
-/// wider than [`MERGE_CHAIN_WIDTH`] along an axis is [`BooleanError::MergeChainTooWide`]. An edge
-/// no collapse removes is left to the other operations, or to [`sliver_remains`].
+/// vanishes, the faces along every edge it touches still pair ([`still_paired`]), and no edge
+/// it joins with another is left carried by faces no fan around its ends tells apart
+/// ([`fuses`]). A group that cannot collapse whole is collapsed edge by edge where that holds,
+/// either end staying. Groups and edges are taken in order of position, and tried again until
+/// none collapses. A group wider than [`MERGE_CHAIN_WIDTH`] along an axis is
+/// [`BooleanError::MergeChainTooWide`]. An edge no collapse removes is left to the other
+/// operations, or to [`sliver_remains`].
 pub(super) fn collapse_short_edges(faces: &mut Faces, pool: &Pool) -> Result<(), BooleanError> {
     if !faces
         .iter()
@@ -242,8 +245,8 @@ impl Collapsing {
 }
 
 /// The faces around the vertices `gone` once `keep` takes their place, if the collapse is
-/// allowed: each is left without a fault of its own the solid's checks find, or vanishes, and
-/// the edges still pair ([`still_paired`]).
+/// allowed: each is left without a fault of its own the solid's checks find, or vanishes, the
+/// edges still pair ([`still_paired`]), and none is left fused ([`fuses`]).
 fn collapsed(
     faces: &Faces,
     state: &Collapsing,
@@ -276,7 +279,157 @@ fn collapsed(
             after.is_ok() || after == checked(&faces[*f], pool)
         }
     });
-    (no_fault && still_paired(&state.along, &changed, faces, pool)).then_some(changed)
+    (no_fault
+        && still_paired(&state.along, &changed, faces, pool)
+        && !fuses(state, &changed, faces, pool))
+    .then_some(changed)
+}
+
+/// Whether the faces `changed` leave an edge [`fused`] that was not: where a collapse joins two
+/// edges into one, the lump touches itself along it, and giving each fan of faces around its
+/// ends its own vertex must still pull the faces apart, or the solid's checks reject the edge.
+fn fuses(
+    state: &Collapsing,
+    changed: &[(usize, Vec<Vec<usize>>)],
+    faces: &Faces,
+    pool: &Pool,
+) -> bool {
+    let new: BTreeMap<usize, &Vec<Vec<usize>>> =
+        changed.iter().map(|(f, face)| (*f, face)).collect();
+    let vertices: BTreeSet<usize> = (changed.iter())
+        .flat_map(|(f, face)| faces[*f].iter().chain(face))
+        .flatten()
+        .copied()
+        .collect();
+    // Every face at a vertex once the faces change either had it before or is one of them.
+    let around = |v: usize| -> BTreeSet<usize> {
+        (state.owners.get(&v).into_iter().flatten())
+            .chain(new.keys())
+            .copied()
+            .collect()
+    };
+    let before = |g: usize| faces[g].as_slice();
+    let after = |g: usize| {
+        new.get(&g)
+            .map_or(faces[g].as_slice(), |face| face.as_slice())
+    };
+    !fused(&vertices, around, after, pool).is_subset(&fused(&vertices, around, before, pool))
+}
+
+/// The edges at `vertices` along which the faces pair, as the solid's checks pair them, into
+/// pairs no fan of faces around either end tells apart: two pairs whose corners lie in one fan
+/// at both ends, no face along it lying flat together with one running the other way. Giving
+/// each fan its own vertex, as lumps touching along an edge get, cannot split such an edge, and
+/// no merge of coplanar faces removes it. `around` gives the faces that may have a vertex,
+/// `face` each face.
+fn fused<'a>(
+    vertices: &BTreeSet<usize>,
+    around: impl Fn(usize) -> BTreeSet<usize>,
+    face: impl Fn(usize) -> &'a [Vec<usize>],
+    pool: &Pool,
+) -> BTreeSet<(usize, usize)> {
+    let fans = |v: usize| fans_at(v, around(v), &face, pool);
+    let mut fused = BTreeSet::new();
+    for &v in vertices {
+        for (edge, pairs) in fans(v) {
+            let other = if edge.0 == v { edge.1 } else { edge.0 };
+            let far = fans(other).remove(&edge).unwrap_or_default();
+            let ends = |g: &usize| (pairs.get(g), far.get(g));
+            let keys: Vec<usize> = pairs.keys().copied().collect();
+            if (keys.iter().enumerate()).any(|(i, g)| keys[..i].iter().any(|h| ends(g) == ends(h)))
+            {
+                fused.insert(edge);
+            }
+        }
+    }
+    fused
+}
+
+/// For each edge, the fan of each pair of faces along it, keyed by the face running from the
+/// edge's smaller vertex.
+type Fans = BTreeMap<(usize, usize), BTreeMap<usize, usize>>;
+
+/// The fans of faces around vertex `v`, from the faces `around` it: for each edge at `v` along
+/// which more than one pair of faces runs, with its smaller vertex first, the fan of each pair,
+/// keyed by the face running from the smaller vertex. Edges along which a face lies flat
+/// together with one running the other way ([`flat_together`]) are left out. Two corners at
+/// `v` are in one fan when the faces they belong to pair along an edge at `v`, around the edge
+/// as the solid's checks pair them (the side just before each one running from the smaller
+/// vertex).
+fn fans_at<'a>(
+    v: usize,
+    around: BTreeSet<usize>,
+    face: impl Fn(usize) -> &'a [Vec<usize>],
+    pool: &Pool,
+) -> Fans {
+    // Each corner of a face at v: its face, and the vertices before and after it.
+    let mut corners: Vec<(usize, usize, usize)> = Vec::new();
+    for g in around {
+        for ring in face(g) {
+            for (i, _) in ring.iter().enumerate().filter(|&(_, &x)| x == v) {
+                let count = ring.len();
+                corners.push((g, ring[(i + count - 1) % count], ring[(i + 1) % count]));
+            }
+        }
+    }
+    // The sides along each edge at v: a corner, and whether its face leaves v along the edge.
+    let mut sides: BTreeMap<usize, Vec<(usize, bool)>> = BTreeMap::new();
+    for (c, &(_, before, after)) in corners.iter().enumerate() {
+        sides.entry(after).or_default().push((c, true));
+        sides.entry(before).or_default().push((c, false));
+    }
+    let mut fan: Vec<usize> = (0..corners.len()).collect();
+    // The corner at v of each side running from the smaller vertex, by edge.
+    let mut forward_corners: Vec<((usize, usize), usize)> = Vec::new();
+    let mut dissolved = BTreeSet::new();
+    for (other, sides) in sides {
+        let edge = (v.min(other), v.max(other));
+        // A side runs from the smaller vertex if it leaves v and v is the smaller.
+        let forward = |&(_, leaves): &(usize, bool)| leaves == (v == edge.0);
+        let order = around_edge(
+            pool.get(edge.0),
+            pool.get(edge.1),
+            (sides.iter()).map(|side| (forward(side), plane(face(corners[side.0].0), pool).0)),
+        );
+        for (i, &k) in order.iter().enumerate() {
+            let twin = order[(i + order.len() - 1) % order.len()];
+            if forward(&sides[k]) && !forward(&sides[twin]) {
+                union(&mut fan, sides[k].0, sides[twin].0);
+                forward_corners.push((edge, sides[k].0));
+            }
+        }
+        // Faces along the edge either way that lie flat together merge (step 3), the edge then
+        // in the middle of the merged face: it is left to the others.
+        let face_of = |&(c, _): &(usize, bool)| face(corners[c].0);
+        if (sides.iter().filter(|side| forward(side))).any(|one| {
+            (sides.iter().filter(|side| !forward(side)))
+                .any(|other| flat_together(face_of(one), face_of(other), pool))
+        }) {
+            dissolved.insert(edge);
+        }
+    }
+    let mut fans = Fans::new();
+    for (edge, c) in forward_corners
+        .into_iter()
+        .filter(|(edge, _)| !dissolved.contains(edge))
+    {
+        fans.entry(edge)
+            .or_default()
+            .insert(corners[c].0, find(&mut fan, c));
+    }
+    fans.retain(|_, pairs| pairs.len() > 1);
+    fans
+}
+
+/// Whether two faces face the same way and lie within the tolerance of the plane of one of
+/// them, as adjacent faces [`merge_coplanar`] merges do.
+fn flat_together(one: &[Vec<usize>], other: &[Vec<usize>], pool: &Pool) -> bool {
+    let planes = [plane(one, pool), plane(other, pool)];
+    dot(planes[0].0, planes[1].0) > 0.0
+        && planes.into_iter().any(|(normal, centre)| {
+            (one.iter().chain(other).flatten())
+                .all(|&v| dot(normal, sub(pool.get(v), centre)).abs() <= WITHIN_TOLERANCE)
+        })
 }
 
 /// The faces running along each directed edge.

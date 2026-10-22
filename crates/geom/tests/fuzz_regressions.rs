@@ -1181,3 +1181,43 @@ fn a_hole_reaching_past_its_face_stays_in_it() {
     let b = raw_prism(&[(0, -1, 255)], -18, (90, 104, 51)).unwrap();
     assert_eq!(check_booleans(&a, &b), Ok(()));
 }
+
+/// `fuzz/seeds/extruded_boolean/needle-on-a-lens-corner-fused-a` (`crash-fca97ff2…`, found by
+/// the seeded fuzz run): a needle starting at a corner of a lens. The cut left two edges from the
+/// corner, each between two faces, to vertices 0.7 µm apart. Collapsing the short edge between
+/// those vertices joined the two into one edge carried by four faces, no two of them coplanar:
+/// they paired around it, but met in one fan of faces at both its ends, so giving each fan its
+/// own vertex could not pull them apart, and the difference had a non-manifold edge. A collapse
+/// may no longer leave such an edge; nothing else removes the short edge, so the difference is
+/// too close. `…-b` (`ci-pr279-crash-b`, found by CI on #279): the same with a lens a thousand
+/// times smaller.
+#[test]
+fn a_collapse_does_not_fuse_two_edges_into_one() {
+    let cases = [
+        (
+            [(-91, 1, 193), (-95, 122, 5), (0, 0, 1)],
+            -6,
+            (34, 4, 28),
+            (-1, -1, 255),
+            (76, 51, 51),
+        ),
+        (
+            [(65, -95, 165), (63, 122, 231), (0, 0, 0)],
+            -16,
+            (126, 60, 1),
+            (-1, -1, 239),
+            (90, -68, 42),
+        ),
+    ];
+    for (lens, exponent, direction, needle, needle_direction) in cases {
+        let a = raw_prism(&lens, exponent, direction).unwrap();
+        let b = raw_prism(&[needle], -18, needle_direction).unwrap();
+        assert_eq!(
+            check_each(&a, &b),
+            [Ok(()), Err(BooleanError::FeaturesTooClose), Ok(())],
+            "lens {lens:?}"
+        );
+        let [union, _, shared] = check_each(&b, &a);
+        assert_eq!((union, shared), (Ok(()), Ok(())), "lens {lens:?} second");
+    }
+}
