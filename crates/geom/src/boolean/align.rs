@@ -27,7 +27,8 @@ use crate::vector::{Vector, add, dot, largest_axis, scale, sub, unit};
 
 /// Projects the vertices of each face of one operand (`faces[..split]`) or the other onto the
 /// first, in plane order, of the faces of the other operand whose boxes overlap it and on whose
-/// plane it lies, if that plane comes before its own; then cuts the faces bent by the move along
+/// plane it lies, if that plane comes before its own, keeping a vertex on the planes both
+/// operands share where it can ([`onto_plane`]); then cuts the faces bent by the move along
 /// collars ([`collar::collar`]). Returns the faces and where the second operand's start.
 pub(super) fn align(
     mut faces: Vec<PlanarFace>,
@@ -89,22 +90,24 @@ pub(super) fn align(
         let held = held.get(&v).map_or(&[][..], Vec::as_slice);
         for &t in planes.iter() {
             let p = pool.get(v);
-            pool.set(v, add(p, onto_plane(&faces[t], p, held)));
+            let basis = basis(&faces, held, faces[t].plane);
+            pool.set(v, add(p, onto_plane(&faces[t], p, &basis)));
         }
     }
     let moved = planes.into_keys().collect();
     collar::collar(faces, split, &moved, pool)
 }
 
-/// For each moved vertex, an orthonormal basis of the normals of the planes it stays on: those of
-/// its faces that do not move and that a face of the other operand lies on too. Moving off such a
-/// plane would leave a sliver of its face beside the other operand's, a shallow angle off it.
+/// For each moved vertex, the faces whose planes it stays on, one per plane, in plane order:
+/// those of its faces that do not move and that a face of the other operand lies on too. Moving
+/// off such a plane would leave a sliver of its face beside the other operand's, a shallow angle
+/// off it.
 fn held_planes(
     faces: &[PlanarFace],
     split: usize,
     target: &[Option<usize>],
     moved: &BTreeMap<usize, Vec<usize>>,
-) -> BTreeMap<usize, Vec<Vector>> {
+) -> BTreeMap<usize, Vec<usize>> {
     let mut operands: BTreeMap<usize, [bool; 2]> = BTreeMap::new();
     for (f, face) in faces.iter().enumerate() {
         operands.entry(face.plane).or_default()[usize::from(f >= split)] = true;
@@ -120,19 +123,24 @@ fn held_planes(
             }
         }
     }
-    held.into_iter()
-        .map(|(v, mut on)| {
-            on.sort_by_key(|&f| faces[f].plane);
-            on.dedup_by_key(|f| faces[*f].plane);
-            let mut basis: Vec<Vector> = Vec::new();
-            for f in on {
-                if let Some(e) = unit(across(faces[f].normal, &basis)) {
-                    basis.push(e);
-                }
-            }
-            (v, basis)
-        })
-        .collect()
+    // By plane order, not by number or index, so that swapping the operands gives the same move.
+    for on in held.values_mut() {
+        on.sort_by(|&f, &g| plane_order(&faces[f], &faces[g]));
+        on.dedup_by_key(|f| faces[*f].plane);
+    }
+    held
+}
+
+/// An orthonormal basis of the normals of the `held` faces' planes, leaving out plane number
+/// `onto`: a vertex goes onto that plane, and already lies on it if it holds it.
+fn basis(faces: &[PlanarFace], held: &[usize], onto: usize) -> Vec<Vector> {
+    let mut basis: Vec<Vector> = Vec::new();
+    for &f in held.iter().filter(|&&f| faces[f].plane != onto) {
+        if let Some(e) = unit(across(faces[f].normal, &basis)) {
+            basis.push(e);
+        }
+    }
+    basis
 }
 
 /// `normal` less its components along the orthonormal `basis`.
@@ -199,6 +207,17 @@ mod tests {
         // Held by no plane, it moves along the face's normal, off z = 0.
         let moved = add(p, onto_plane(&tilted(1.0), p, &[]));
         assert!((moved[2] + 0.25e-6).abs() < 1e-15, "{moved:?}");
+    }
+
+    #[test]
+    fn a_vertex_going_onto_a_plane_it_holds_is_not_held_off_it() {
+        // Two held faces on planes 0 and 1: going onto plane 1, only plane 0 holds the vertex.
+        let mut faces = vec![tilted(1.0), tilted(-1.0)];
+        faces[1].plane = 1;
+        let held = basis(&faces, &[0, 1], 1);
+        assert_eq!(held.len(), 1);
+        assert!(length(sub(held[0], faces[0].normal)) < 1e-15, "{held:?}");
+        assert_eq!(basis(&faces, &[0, 1], 2).len(), 2);
     }
 
     #[test]
