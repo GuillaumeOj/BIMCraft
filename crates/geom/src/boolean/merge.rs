@@ -315,12 +315,19 @@ fn fuses(
         new.get(&g)
             .map_or(faces[g].as_slice(), |face| face.as_slice())
     };
+    let now = fused(&vertices, around, after, pool);
+    if now.is_empty() {
+        return false;
+    }
     // An edge already fused keeps being so under its new name.
     let renamed = |v: usize| if gone.contains(&v) { keep } else { v };
     let was: BTreeSet<(usize, usize)> = (fused(&vertices, around, before, pool).into_iter())
-        .map(|(a, b)| (renamed(a).min(renamed(b)), renamed(a).max(renamed(b))))
+        .map(|(a, b)| {
+            let (a, b) = (renamed(a), renamed(b));
+            (a.min(b), a.max(b))
+        })
         .collect();
-    !fused(&vertices, around, after, pool).is_subset(&was)
+    !now.is_subset(&was)
 }
 
 /// The edges at `vertices` along which the faces pair, as `assemble` pairs them, into pairs no
@@ -375,8 +382,8 @@ fn fans_at<'a>(
     let mut corners: Vec<(usize, usize, usize)> = Vec::new();
     for g in around {
         for ring in face(g) {
-            for (i, _) in ring.iter().enumerate().filter(|&(_, &x)| x == v) {
-                let count = ring.len();
+            let count = ring.len();
+            for i in (0..count).filter(|&i| ring[i] == v) {
                 corners.push((g, ring[(i + count - 1) % count], ring[(i + 1) % count]));
             }
         }
@@ -391,7 +398,7 @@ fn fans_at<'a>(
     if sides.values().all(|sides| sides.len() < 4) {
         return Fans::new();
     }
-    let mut normals: BTreeMap<usize, Vector> = BTreeMap::new();
+    let mut planes: BTreeMap<usize, (Vector, Vector)> = BTreeMap::new();
     let mut fan: Vec<usize> = (0..corners.len()).collect();
     // The corner at v of each side running from the smaller vertex that stays, by edge.
     let mut forward_corners: Vec<((usize, usize), usize)> = Vec::new();
@@ -399,22 +406,29 @@ fn fans_at<'a>(
         let edge = (v.min(other), v.max(other));
         // A side runs from the smaller vertex if it leaves v and v is the smaller.
         let forward = |&(_, leaves): &(usize, bool)| leaves == (v == edge.0);
+        let face_of = |&(c, _): &(usize, bool)| corners[c].0;
+        for side in &sides {
+            let g = face_of(side);
+            planes.entry(g).or_insert_with(|| plane(face(g), pool));
+        }
         let along: Vec<(bool, Vector)> = (sides.iter())
-            .map(|side| {
-                let g = corners[side.0].0;
-                let normal = *normals.entry(g).or_insert_with(|| plane(face(g), pool).0);
-                (forward(side), normal)
-            })
+            .map(|side| (forward(side), planes[&face_of(side)].0))
             .collect();
         // Sides that do not pair join no fans; `still_paired` refuses such an edge.
         let twins = twins_around(pool.get(edge.0), pool.get(edge.1), &along).unwrap_or_default();
         let mut merging: BTreeSet<usize> = BTreeSet::new();
         for (k, twin) in twins {
             union(&mut fan, sides[k].0, sides[twin].0);
+            let one = face_of(&sides[k]);
             let flat = (sides.iter().enumerate()).find(|&(j, side)| {
+                let other = face_of(side);
                 !forward(side)
                     && !merging.contains(&j)
-                    && flat_together(face(corners[sides[k].0].0), face(corners[side.0].0), pool)
+                    && flat_together(
+                        [planes[&one], planes[&other]],
+                        [face(one), face(other)],
+                        pool,
+                    )
             });
             match flat {
                 Some((j, _)) => {
@@ -434,10 +448,13 @@ fn fans_at<'a>(
     fans
 }
 
-/// Whether two faces face the same way and lie within the tolerance of the plane of one of
-/// them, as adjacent faces [`merge_coplanar`] merges do.
-fn flat_together(one: &[Vec<usize>], other: &[Vec<usize>], pool: &Pool) -> bool {
-    let planes = [plane(one, pool), plane(other, pool)];
+/// Whether two faces, with their planes, face the same way and lie within the tolerance of the
+/// plane of one of them, as adjacent faces [`merge_coplanar`] merges do.
+fn flat_together(
+    planes: [(Vector, Vector); 2],
+    [one, other]: [&[Vec<usize>]; 2],
+    pool: &Pool,
+) -> bool {
     dot(planes[0].0, planes[1].0) > 0.0
         && (planes.into_iter())
             .any(|plane| within_plane(plane, one.iter().chain(other).flatten().copied(), pool))
@@ -634,7 +651,7 @@ pub(super) fn merge_coplanar(
     // face tilted by a rounding error next to a large one. Groups are tested whole, not face by
     // face: a face a few tolerances wide may lie within the tolerance of two neighbours that are
     // not coplanar, and would otherwise join them into one bent face.
-    let flat_together = |groups: [&[usize]; 2]| {
+    let groups_flat = |groups: [&[usize]; 2]| {
         groups.into_iter().flatten().any(|&f| {
             let vertices = (groups.into_iter().flatten()).flat_map(|&g| faces[g].iter().flatten());
             within_plane(planes[f], vertices.copied(), pool)
@@ -668,7 +685,7 @@ pub(super) fn merge_coplanar(
         if rf == rg || dot(planes[f].0, planes[g].0) <= 0.0 || refused.contains(&key) {
             continue;
         }
-        if !flat_together([&members[rf], &members[rg]]) {
+        if !groups_flat([&members[rf], &members[rg]]) {
             refused.insert(key);
             continue;
         }
