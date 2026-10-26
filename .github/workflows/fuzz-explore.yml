@@ -43,14 +43,18 @@ jobs:
       - name: Explore
         env:
           RUNS: ${{ inputs.runs }}
+          # A new seed each run, so nights on an unchanged main explore different inputs; libFuzzer
+          # prints it, and a finding replays from its crash file.
+          FUZZ_SEED: ${{ github.run_number }}
         run: |
           case "$RUNS" in
             "") scripts/check-all.sh fuzz-explore ;;
             *[!0-9]*) echo "runs must be a whole number" >&2; exit 2 ;;
             *) FUZZ_RUNS="$RUNS" scripts/check-all.sh fuzz-explore ;;
           esac
+      # Also when the run hits its time limit, so crashes found before it are kept.
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        if: failure()
+        if: failure() || cancelled()
         with:
           name: fuzz-explore-crashes
           path: fuzz/artifacts

@@ -101,15 +101,16 @@ check_fuzz() {
     for target in $(cargo fuzz list --fuzz-dir .); do
       # -runs=0 runs the inputs already there and stops; new ones would land in the scratch corpus.
       corpus=$(mktemp -d)
-      cargo fuzz run --fuzz-dir . "$target" "$corpus" "seeds/$target" -- -runs=0
+      cargo fuzz run --fuzz-dir . "$target" "$corpus" "seeds/$target" -- -runs=0 -timeout=10
       rm -rf "$corpus"
     done
   )
 }
 
 # Not blocking: CI runs it on a schedule and on pull requests that touch the kernel or the targets.
-# Bounded and seeded, so a finding can be replayed; every target runs, and crashes stay in
-# fuzz/artifacts/. Longer runs: docs/dev/quality.md.
+# Bounded and seeded (FUZZ_SEED, 1 by default; the nightly run changes it so each night explores
+# anew), so a run can be repeated; every target runs, and crashes stay in fuzz/artifacts/.
+# Longer runs: docs/dev/quality.md.
 check_fuzz_explore() {
   has_fuzz || { step "Fuzzing exploration: no fuzz targets yet, skipped"; return; }
   step "Fuzzing exploration: new inputs for the parsers and the geometry kernel (ENG-02)"
@@ -123,10 +124,10 @@ check_fuzz_explore() {
       [ "$target" = extruded_boolean ] && runs=50000
       corpus=$(mktemp -d)
       cargo fuzz run --fuzz-dir . "$target" "$corpus" "seeds/$target" -- \
-        -runs="${FUZZ_RUNS:-$runs}" -seed=1 -timeout=10 || failed="$failed $target"
+        -runs="${FUZZ_RUNS:-$runs}" -seed="${FUZZ_SEED:-1}" -timeout=10 || failed="$failed $target"
       rm -rf "$corpus"
     done
-    [ -z "$failed" ] || { echo "check-all: fuzzing found crashes in:$failed (fuzz/artifacts/)" >&2; exit 1; }
+    [ -z "$failed" ] || { echo "check-all: fuzzing failed for:$failed (crash files, if any, in fuzz/artifacts/)" >&2; exit 1; }
   )
 }
 

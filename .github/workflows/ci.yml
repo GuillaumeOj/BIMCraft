@@ -39,7 +39,7 @@ jobs:
         run: |
           if ls crates/*/Cargo.toml >/dev/null 2>&1; then echo "rust=true" >> "$GITHUB_OUTPUT"; fi
           if [ -f ui/package.json ]; then echo "ui=true" >> "$GITHUB_OUTPUT"; fi
-          if [ "$GITHUB_EVENT_NAME" = pull_request ] && git diff --name-only HEAD^1 HEAD -- crates/geom fuzz | grep -q .; then
+          if [ "$GITHUB_EVENT_NAME" = pull_request ] && ! git diff --quiet HEAD^1 HEAD -- crates/geom fuzz; then
             echo "kernel=true" >> "$GITHUB_OUTPUT"
           fi
 
