@@ -1242,3 +1242,23 @@ fn an_edge_lying_on_a_plane_is_split_where_the_line_there_is() {
     assert_eq!(check_booleans(&a, &b), Ok(()));
     assert_eq!(check_booleans(&b, &a), Ok(()));
 }
+
+/// `fuzz/seeds/extruded_boolean/needle-across-a-tiny-lens-corner` (`crash-b00b3dda…`, found by the
+/// seeded fuzz run): a needle across a corner of a lens only micrometres wide. The difference
+/// leaves a lens face notched by the needle, the notch's tip 0.95 µm from the face's corner; the
+/// tip collapses onto the corner, and the face is left as two parts touching only there, a
+/// small closed lump on one side. No segment inside the face joins them, so the face stayed
+/// pinched and the difference had a degenerate ring. Such a face is now split at the vertex, and
+/// the lumps that only touched through it get their own vertices there.
+#[test]
+fn a_face_pinched_at_a_vertex_into_two_parts_becomes_two_faces() {
+    let a = raw_prism(
+        &[(65, -95, 38), (35, 122, 255), (0, 0, 0)],
+        -21,
+        (42, -1, 28),
+    )
+    .unwrap();
+    let b = raw_prism(&[(0, -1, 255)], -18, (90, 126, 56)).unwrap();
+    assert_eq!(check_booleans(&a, &b), Ok(()));
+    assert_eq!(check_booleans(&b, &a), Ok(()));
+}

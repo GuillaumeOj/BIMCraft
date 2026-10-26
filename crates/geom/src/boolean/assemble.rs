@@ -48,10 +48,12 @@ pub(super) fn assemble(mut faces: Faces, pool: &mut Pool) -> Result<Option<Solid
     // of the faces as they are, collapsed and merged so far.
     let mut paired_faces = Some(first);
     while let Some((twins, planes)) = paired_faces {
-        faces = remove_collinear(merge_coplanar(&faces, &planes, &twins, pool), pool);
+        let merged = remove_collinear(merge_coplanar(&faces, &planes, &twins, pool), pool);
+        faces = split_pinched(merged, pool);
         // Where the solid touches itself along an edge in the middle of a face, merging the
         // face's pieces from both sides left the edge to the faces that meet there; the lumps
         // that only touched through it may now touch at a vertex, so they are separated again.
+        // So may lumps that only touched through a face pinched at a vertex, now split there.
         paired_faces = paired(&mut faces, pool);
         let Some((twins, _)) = &paired_faces else {
             break;
@@ -267,11 +269,14 @@ fn split_pinched(faces: Faces, pool: &Pool) -> Faces {
                 .enumerate()
                 .find_map(|(r, ring)| Some((r, repeat(ring)?)))
             {
-                let Some(chord) = chord(&rings, r, repeat, pool, at) else {
-                    break;
-                };
+                let chord = chord(&rings, r, repeat, pool, at);
                 let ring = rings.swap_remove(r);
-                rings.extend(split_ring(&ring, chord));
+                match chord {
+                    Some(chord) => rings.extend(split_ring(&ring, chord)),
+                    // No segment inside the face joins the two parts: they only touch at the
+                    // vertex, so each is a face of its own there.
+                    None => rings.extend(loops_at(&ring, repeat)),
+                }
             }
             regions(rings, at)
                 .regions
@@ -378,6 +383,18 @@ fn split_ring(ring: &[usize], (k, l): (usize, usize)) -> [Vec<usize>; 2] {
     [walk(k, l), walk(l, k)]
 }
 
+/// The two loops of a ring passing a vertex at positions `first` and `second`, each passing it
+/// once; a loop too short to bound anything, out along an edge and back, goes.
+fn loops_at(ring: &[usize], (first, second): (usize, usize)) -> impl Iterator<Item = Vec<usize>> {
+    let inner = ring[first..second].to_vec();
+    let outer = ring[second..]
+        .iter()
+        .chain(&ring[..first])
+        .copied()
+        .collect();
+    [inner, outer].into_iter().filter(|ring| ring.len() >= 3)
+}
+
 /// Numbers the used vertices in order and builds the solid, which validates it.
 fn build(faces: &Faces, pool: &Pool) -> Result<Option<Solid>, BooleanError> {
     let used: BTreeSet<usize> = faces.iter().flatten().flatten().copied().collect();
@@ -464,9 +481,9 @@ mod tests {
     }
 
     #[test]
-    fn lobes_touching_at_a_vertex_have_no_chord() {
-        // Two triangles meeting at vertex 0: every segment between them leaves the face, so the
-        // face is left for the solid's checks to report.
+    fn lobes_touching_at_a_vertex_become_faces_of_their_own() {
+        // Two triangles meeting at vertex 0: every segment between them leaves the face, so they
+        // only touch there, and each is a face.
         let pool = Pool::of(vec![
             [0.0, 0.0, 0.0],
             [2.0, -1.0, 0.0],
@@ -474,8 +491,22 @@ mod tests {
             [-2.0, 1.0, 0.0],
             [-2.0, -1.0, 0.0],
         ]);
-        let face = vec![vec![0, 1, 2, 0, 3, 4]];
-        assert_eq!(split_pinched(vec![face.clone()], &pool), [face]);
+        let mut faces = split_pinched(vec![vec![vec![0, 1, 2, 0, 3, 4]]], &pool);
+        faces.sort();
+        assert_eq!(faces, [vec![vec![0, 1, 2]], vec![vec![0, 3, 4]]]);
+    }
+
+    #[test]
+    fn a_spike_out_and_back_goes() {
+        // A triangle whose ring runs out to vertex 3 and back from its corner 0.
+        let pool = Pool::of(vec![
+            [0.0, 0.0, 0.0],
+            [2.0, 0.0, 0.0],
+            [0.0, 2.0, 0.0],
+            [-1.0, -1.0, 0.0],
+        ]);
+        let faces = split_pinched(vec![vec![vec![0, 1, 2, 0, 3]]], &pool);
+        assert_eq!(faces, [vec![vec![0, 1, 2]]]);
     }
 
     #[test]
