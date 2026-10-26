@@ -1,6 +1,7 @@
 #!/bin/sh
 # Runs the project checks (AGENTS.md §9). CI calls the same sections, so local and remote never drift.
-# Usage: scripts/check-all.sh [section...]   sections: repo rust coverage wasm fuzz corpus ui e2e docs (default: all)
+# Usage: scripts/check-all.sh [section...]   sections: repo rust coverage wasm fuzz fuzz-explore corpus ui e2e docs
+# (default: all but fuzz-explore, which CI runs on a schedule)
 # A section is skipped only when the code it checks does not exist yet.
 # CHECK_CRATES="a b" limits the Rust sections to those crates, for a quick local run on the crates
 # you changed (AGENTS.md §3a); unset, they cover the whole workspace, as in CI.
@@ -81,10 +82,25 @@ check_wasm() {
   cargo test --package geom --test golden --target wasm32-wasip1 --locked -- --nocapture
 }
 
-# Bounded and seeded, so a run is reproducible and fits in CI; longer runs: docs/dev/quality.md.
+# Runs every fuzz target from fuzz/, on its seeds, with the libFuzzer flags `$1 <target>` prints;
+# fails after the last target, naming each one that failed. New inputs go to a scratch corpus.
+fuzz_each() {
+  failed=
+  for target in $(cargo fuzz list --fuzz-dir .); do
+    corpus=$(mktemp -d)
+    # Unquoted on purpose: one word per flag.
+    cargo fuzz run --fuzz-dir . "$target" "$corpus" "seeds/$target" -- -timeout=10 $("$1" "$target") ||
+      failed="$failed $target"
+    rm -rf "$corpus"
+  done
+  [ -z "$failed" ] || { echo "check-all: fuzzing failed for:$failed (crash files, if any, in fuzz/artifacts/)" >&2; exit 1; }
+}
+
+# The blocking check: a replay of the seeds gives the same answer on every machine, unlike a fuzzing
+# run (docs/dev/quality.md#fuzzing).
 check_fuzz() {
   has_fuzz || { step "Fuzzing: no fuzz targets yet, skipped"; return; }
-  step "Fuzzing: parsers and the geometry kernel survive hostile input (ENG-02)"
+  step "Fuzzing: every seed of the parsers and the geometry kernel still passes (ENG-02)"
   require cargo-fuzz; require cargo-deny; require cargo-audit
   # From the root, where .cargo/audit.toml lives.
   cargo audit --deny warnings --file fuzz/Cargo.lock
@@ -95,16 +111,24 @@ check_fuzz() {
     # --no-deps: the crates under test are linted on stable by the rust section.
     cargo clippy --all-targets --locked --no-deps -- -D warnings
     cargo deny --locked check
-    for target in $(cargo fuzz list --fuzz-dir .); do
-      # Booleans of prisms run a few hundred inputs a second: fewer runs keep the job in minutes.
-      runs=200000
-      [ "$target" = extruded_boolean ] && runs=50000
-      corpus=$(mktemp -d)
-      cargo fuzz run --fuzz-dir . "$target" "$corpus" "seeds/$target" -- \
-        -runs="${FUZZ_RUNS:-$runs}" -seed=1 -timeout=10
-      rm -rf "$corpus"
-    done
+    fuzz_each replay_flags
   )
+}
+replay_flags() { echo -runs=0; }
+
+# Not blocking: CI runs it nightly and on pull requests that touch the kernel or the targets
+# (docs/dev/quality.md#fuzzing).
+check_fuzz_explore() {
+  has_fuzz || { step "Fuzzing exploration: no fuzz targets yet, skipped"; return; }
+  step "Fuzzing exploration: new inputs for the parsers and the geometry kernel (ENG-02)"
+  require cargo-fuzz
+  (cd fuzz && fuzz_each explore_flags)
+}
+explore_flags() {
+  # Booleans of prisms run a few hundred inputs a second: fewer runs keep the job in minutes.
+  runs=200000
+  [ "$1" = extruded_boolean ] && runs=50000
+  echo "-runs=${FUZZ_RUNS:-$runs} -seed=${FUZZ_SEED:-1}"
 }
 
 check_corpus() {
@@ -147,6 +171,7 @@ sections=${*:-repo rust coverage wasm fuzz corpus ui e2e docs}
 for section in $sections; do
   case "$section" in
     repo|rust|coverage|wasm|fuzz|corpus|ui|e2e|docs) "check_$section" ;;
+    fuzz-explore) check_fuzz_explore ;;
     *) echo "check-all: unknown section '$section'" >&2; exit 2 ;;
   esac
 done
