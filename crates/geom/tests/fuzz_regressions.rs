@@ -1221,3 +1221,24 @@ fn a_collapse_does_not_fuse_two_edges_into_one() {
         assert_eq!((union, shared), (Ok(()), Ok(())), "lens {lens:?} second");
     }
 }
+
+/// `fuzz/seeds/extruded_boolean/needle-on-a-shallow-lens-d` (`crash-07989d25…`, found by the
+/// seeded fuzz run): a needle at a corner of a lens extruded almost flat, its bottom put onto the
+/// plane of a lens side face. A side face of the needle meets that plane along its own bottom
+/// edge, and the lens's edge between two of its side faces, 0.1° apart, crosses the needle side's
+/// plane between that edge's ends. The edge was not split at the crossing, so the faces on the
+/// plane were cut along a sliver between the edge and the crossing, taken as lying on the needle's
+/// side face, and the union had an open edge. A point the line two planes share holds between the
+/// ends of an edge lying on both is now made on the edge.
+#[test]
+fn an_edge_lying_on_a_plane_is_split_where_the_line_there_is() {
+    let a = raw_prism(
+        &[(69, 43, 122), (-95, -1, 229), (0, 0, 8)],
+        -6,
+        (42, -17, 1),
+    )
+    .unwrap();
+    let b = raw_prism(&[(9, -3, 255)], -18, (82, 45, 39)).unwrap();
+    assert_eq!(check_booleans(&a, &b), Ok(()));
+    assert_eq!(check_booleans(&b, &a), Ok(()));
+}

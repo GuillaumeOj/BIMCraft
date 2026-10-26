@@ -6,8 +6,9 @@
 //! where two planes cross remembers the two faces it lies in, so that the pieces along it can
 //! later be told which side of each face they lie on.
 //!
-//! Every vertex is recorded on the lines it was made on, its supports: an edge holds its ends
-//! and the vertices where it crosses a plane; the line where two planes meet holds the points
+//! Every vertex is recorded on the lines it was made on, its supports: an edge holds its ends,
+//! the vertices where it crosses a plane and, where both its ends lie on a plane, the points the
+//! line it then runs along holds between them; the line where two planes meet holds the points
 //! where either face's boundary meets the other's plane. Whether a vertex lies on a line is
 //! later read from these, never from its distance to the line.
 //!
@@ -105,6 +106,12 @@ pub(super) fn segments(
         if !meeting.points.is_empty() {
             supports.insert(Support::Meet(f, g), meeting.points);
         }
+        for ((a, b), vertex) in meeting.on_edges {
+            supports
+                .entry(Support::Edge(a, b))
+                .or_default()
+                .insert(vertex);
+        }
         for (u, v) in meeting.segments {
             out[f].push((u, v));
             out[g].push((u, v));
@@ -170,6 +177,9 @@ struct Meeting {
     /// The points where the boundary of either meets the plane of the other, all on the line
     /// the planes share.
     points: BTreeSet<usize>,
+    /// The points made on an edge of either face lying on the other's plane: the edge runs along
+    /// the line the planes share, so the points between its ends lie on it.
+    on_edges: Vec<(Line, usize)>,
 }
 
 impl Pair<'_> {
@@ -187,6 +197,7 @@ impl Pair<'_> {
                 coplanar: true,
                 segments: boundaries.flat_map(|ring| edges(ring)).collect(),
                 points: BTreeSet::new(),
+                on_edges: Vec::new(),
             };
         }
         // Exactly parallel planes with vertices on both sides share no line: ordering points
@@ -205,6 +216,7 @@ impl Pair<'_> {
             .map(|(v, toggles)| (dot(direction, pool.get(v)), v, toggles))
             .collect();
         points.sort_by(|p, q| p.0.total_cmp(&q.0).then(p.1.cmp(&q.1)));
+        let on_edges = along_edges([one, other], [&sides_a, &sides_b], &points);
         let mut inside = [false; 4];
         let mut segments = Vec::new();
         for (i, &(_, v, toggles)) in points.iter().enumerate() {
@@ -224,6 +236,7 @@ impl Pair<'_> {
             coplanar: false,
             segments,
             points: points.iter().map(|p| p.1).collect(),
+            on_edges,
         }
     }
 
@@ -270,6 +283,36 @@ impl Pair<'_> {
         self.crossings.insert(key, vertex);
         vertex
     }
+}
+
+/// The points along the line two faces share, in order, that lie between the ends of an edge of
+/// either face whose ends both lie on the other's plane, with that edge (ends in increasing
+/// order). Such an edge runs along the line, so a point the line holds between its ends, such as
+/// where the other face's boundary crosses the edge's plane, is made on the edge: the edge is
+/// split there, as is every face along it.
+fn along_edges(
+    faces: [&PlanarFace; 2],
+    sides: [&[Vec<i8>]; 2],
+    points: &[(f64, usize, [bool; 4])],
+) -> Vec<(Line, usize)> {
+    let position: BTreeMap<usize, usize> = (points.iter().enumerate())
+        .map(|(i, &(_, v, _))| (v, i))
+        .collect();
+    let mut on = Vec::new();
+    for (face, sides) in faces.into_iter().zip(sides) {
+        for (ring, sides) in face.rings.iter().zip(sides) {
+            for ((u, v), (su, sv)) in edges(ring).zip(edges(sides)) {
+                if su != 0 || sv != 0 {
+                    continue;
+                }
+                // Every vertex on the other's plane is a point of the line.
+                let (i, j) = (position[&u], position[&v]);
+                let between = &points[i.min(j) + 1..i.max(j)];
+                on.extend(between.iter().map(|&(_, w, _)| (line(u, v), w)));
+            }
+        }
+    }
+    on
 }
 
 /// Whether every vertex lies strictly on the same side.
