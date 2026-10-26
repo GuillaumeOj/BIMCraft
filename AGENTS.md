@@ -125,13 +125,14 @@ Users are architects and engineers, not developers. For every user-facing featur
 | Check | Command |
 | --- | --- |
 | One-time setup (hooks + tool check) | `scripts/setup.sh` |
-| Everything CI runs that applies (rarely needed locally, section 3a) | `scripts/check-all.sh` (or one section: `repo rust coverage wasm fuzz corpus ui e2e docs`; `CHECK_CRATES="a b"` limits the Rust sections) |
+| Everything CI runs that applies (rarely needed locally, section 3a) | `scripts/check-all.sh` (or one section: `repo rust coverage wasm fuzz fuzz-explore corpus ui e2e docs`; `CHECK_CRATES="a b"` limits the Rust sections) |
 | Commit messages + user-docs rule for a branch | `scripts/check-pr.sh main` |
 | Rust format | `cargo fmt --all --check` |
 | Rust lint | `cargo clippy --workspace --all-targets --all-features -- -D warnings` |
 | Rust tests + coverage | `cargo llvm-cov --workspace --fail-under-lines 90` |
 | Dependency audit | `cargo deny check` |
-| Fuzz targets (bounded, seeded run) | `scripts/check-all.sh fuzz` (details: [quality.md](docs/dev/quality.md#fuzzing)) |
+| Fuzz targets: lint and replay every seed (blocking in CI) | `scripts/check-all.sh fuzz` (details: [quality.md](docs/dev/quality.md#fuzzing)) |
+| Fuzz exploration (bounded, seeded run; nightly in CI, not blocking) | `scripts/check-all.sh fuzz-explore` |
 | IFC round-trip on the public sample corpus | `scripts/check-all.sh corpus` (details: [quality.md](docs/dev/quality.md#ifc-sample-corpus)) |
 | TOML format | `taplo fmt --check` |
 | Spelling | `typos` |

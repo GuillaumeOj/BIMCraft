@@ -1,0 +1,57 @@
+# Explores the fuzz targets on main every night, and on demand (ENG-02). Not a gate: the Fuzzing job
+# of ci.yml replays the seeds on every pull request; this run looks for new failing inputs and keeps
+# them as artifacts. A failed run is a finding: minimise its input, commit it as a seed and fix the
+# cause (docs/dev/quality.md#fuzzing).
+name: Fuzz exploration
+
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+    inputs:
+      runs:
+        description: Inputs per target (empty for the defaults of scripts/check-all.sh)
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fuzz-explore
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: -D warnings
+
+jobs:
+  explore:
+    name: Fuzzing (exploration)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-rust
+        with:
+          directory: fuzz
+      - name: Install cargo-fuzz
+        working-directory: fuzz
+        run: cargo install --locked "cargo-fuzz@$CARGO_FUZZ_VERSION"
+      - name: Explore
+        env:
+          RUNS: ${{ inputs.runs }}
+        run: |
+          case "$RUNS" in
+            "") scripts/check-all.sh fuzz-explore ;;
+            *[!0-9]*) echo "runs must be a whole number" >&2; exit 2 ;;
+            *) FUZZ_RUNS="$RUNS" scripts/check-all.sh fuzz-explore ;;
+          esac
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: failure()
+        with:
+          name: fuzz-explore-crashes
+          path: fuzz/artifacts
+          if-no-files-found: ignore

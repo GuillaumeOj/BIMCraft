@@ -28,14 +28,20 @@ jobs:
     outputs:
       rust: ${{ steps.detect.outputs.rust }}
       ui: ${{ steps.detect.outputs.ui }}
+      kernel: ${{ steps.detect.outputs.kernel }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          # A pull request is checked out as its merge into the base: HEAD^1 is the base.
+          fetch-depth: 2
       - id: detect
         run: |
           if ls crates/*/Cargo.toml >/dev/null 2>&1; then echo "rust=true" >> "$GITHUB_OUTPUT"; fi
           if [ -f ui/package.json ]; then echo "ui=true" >> "$GITHUB_OUTPUT"; fi
+          if [ "$GITHUB_EVENT_NAME" = pull_request ] && git diff --name-only HEAD^1 HEAD -- crates/geom fuzz | grep -q .; then
+            echo "kernel=true" >> "$GITHUB_OUTPUT"
+          fi
 
   repo:
     name: Repository checks
@@ -133,7 +139,7 @@ jobs:
     needs: detect
     if: needs.detect.outputs.rust == 'true'
     runs-on: ubuntu-24.04
-    # Runs are bounded by count (scripts/check-all.sh); this bounds a hang, about 15 minutes being normal.
+    # Replays the seeds (scripts/check-all.sh); building the targets takes most of it. This bounds a hang.
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -150,6 +156,42 @@ jobs:
         working-directory: fuzz
         run: cargo install --locked "cargo-fuzz@$CARGO_FUZZ_VERSION"
       - run: scripts/check-all.sh fuzz
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: failure()
+        with:
+          name: fuzz-replay-crashes
+          path: fuzz/artifacts
+          if-no-files-found: ignore
+
+  # Not a gate: libFuzzer explores along the binary's coverage map, so the same seeded run finds
+  # different inputs on each platform and cannot be reproduced at will. It shows reviewers of the
+  # kernel or the targets what a run finds; fuzz-explore.yml runs it on main every night. A crash is
+  # fixed with its input committed as a seed, which the Fuzzing job then replays on every PR.
+  fuzz-explore:
+    name: Fuzzing (exploration)
+    needs: detect
+    if: needs.detect.outputs.kernel == 'true'
+    continue-on-error: true
+    runs-on: ubuntu-24.04
+    # Runs are bounded by count (scripts/check-all.sh); this bounds a hang, about 15 minutes being normal.
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-rust
+        with:
+          directory: fuzz
+      - name: Install cargo-fuzz
+        working-directory: fuzz
+        run: cargo install --locked "cargo-fuzz@$CARGO_FUZZ_VERSION"
+      - run: scripts/check-all.sh fuzz-explore
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: failure()
+        with:
+          name: fuzz-explore-crashes
+          path: fuzz/artifacts
+          if-no-files-found: ignore
 
   # The corpus does not depend on the host: Linux is enough.
   corpus:
