@@ -13,7 +13,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use super::BooleanError;
-use super::face::{Pool, Projection, clean_face, plane, ring_contains};
+use super::face::{Pool, Projection, clean_face, clean_ring, plane, ring_contains};
 use super::merge::{
     cancel_back_to_back, collapse_short_edges, drop_thin_lumps, merge_coplanar, remove_collinear,
     remove_slivers, sliver_remains,
@@ -257,6 +257,9 @@ fn separate_lumps(faces: &mut Faces, twins: &[usize], pool: &mut Pool) {
 /// It cannot keep the notch as a hole either: a hole touching the outer ring leaves the face a
 /// disc, not a ring, and the Euler–Poincaré count of the shell would be off by one.
 fn split_pinched(faces: Faces, pool: &Pool) -> Faces {
+    if faces.iter().flatten().all(|ring| repeat(ring).is_none()) {
+        return faces;
+    }
     faces
         .into_iter()
         .flat_map(|face| {
@@ -271,15 +274,14 @@ fn split_pinched(faces: Faces, pool: &Pool) -> Faces {
                 .enumerate()
                 .find_map(|(r, ring)| Some((r, repeat(ring)?)))
             {
-                let parts = match chord(&rings, r, repeat, pool, at) {
-                    Some(chord) => split_ring(&rings[r], chord).to_vec(),
-                    // No segment inside the face joins the two parts: where both run the face's
-                    // way round, they only touch at the vertex, so each is a face of its own
-                    // there. A hole touching the outer ring stays for the solid's checks.
-                    None => match lobes(&rings[r], repeat, at) {
-                        Some(lobes) => lobes,
-                        None => break,
-                    },
+                // Where no segment inside the face joins the two parts and both run the face's
+                // way round, they only touch at the vertex, so each is a face of its own there.
+                // A hole touching the outer ring stays for the solid's checks.
+                let Some(parts) = chord(&rings, r, repeat, pool, at)
+                    .map(|chord| split_ring(&rings[r], chord).to_vec())
+                    .or_else(|| lobes(&rings[r], repeat, at))
+                else {
+                    break;
                 };
                 rings.swap_remove(r);
                 rings.extend(parts);
@@ -389,23 +391,18 @@ fn split_ring(ring: &[usize], (k, l): (usize, usize)) -> [Vec<usize>; 2] {
     [walk(k, l), walk(l, k)]
 }
 
-/// The two loops of a ring passing a vertex at positions `first` and `second`, each passing it
-/// once, if each bounds some of the face, running round its way; a loop too short to bound
-/// anything, out along an edge and back, goes. `None` if a loop runs the other way: a hole.
+/// The two loops of a ring passing a vertex twice, at the given positions, if each bounds some
+/// of the face, running round its way; a loop too short to bound anything, out along an edge and
+/// back, goes. `None` if a loop runs the other way: a hole.
 fn lobes(
     ring: &[usize],
-    (first, second): (usize, usize),
+    repeat: (usize, usize),
     at: impl Fn(usize) -> Point2,
 ) -> Option<Vec<Vec<usize>>> {
-    let inner = ring[first..second].to_vec();
-    let outer = ring[second..]
-        .iter()
-        .chain(&ring[..first])
-        .copied()
-        .collect();
-    let lobes: Vec<Vec<usize>> = [inner, outer]
+    let lobes: Vec<Vec<usize>> = split_ring(ring, repeat)
         .into_iter()
-        .filter(|ring| ring.len() >= 3)
+        .map(|lobe| clean_ring(lobe.into_iter()))
+        .filter(|lobe| !lobe.is_empty())
         .collect();
     lobes
         .iter()
@@ -511,7 +508,7 @@ mod tests {
         ]);
         let mut faces = split_pinched(vec![vec![vec![0, 1, 2, 0, 3, 4]]], &pool);
         faces.sort();
-        assert_eq!(faces, [vec![vec![0, 1, 2]], vec![vec![0, 3, 4]]]);
+        assert_eq!(faces, [vec![vec![1, 2, 0]], vec![vec![3, 4, 0]]]);
     }
 
     #[test]
@@ -531,7 +528,7 @@ mod tests {
         assert_eq!(lobes(&[0, 1, 2, 0, 4, 3], (0, 3), at), None);
         assert_eq!(
             lobes(&[0, 1, 2, 0, 3, 4], (0, 3), at),
-            Some(vec![vec![0, 1, 2], vec![0, 3, 4]])
+            Some(vec![vec![1, 2, 0], vec![3, 4, 0]])
         );
     }
 
@@ -545,7 +542,7 @@ mod tests {
             [-1.0, -1.0, 0.0],
         ]);
         let faces = split_pinched(vec![vec![vec![0, 1, 2, 0, 3]]], &pool);
-        assert_eq!(faces, [vec![vec![0, 1, 2]]]);
+        assert_eq!(faces, [vec![vec![1, 2, 0]]]);
     }
 
     #[test]

@@ -73,6 +73,7 @@ pub(super) fn segments(
     let mut cuts = Cuts::new();
     let mut supports = Supports::new();
     let mut crossings = BTreeMap::new();
+    let mut on_edges = Vec::new();
     for face in faces {
         for (u, v) in face.rings.iter().flat_map(|ring| edges(ring)) {
             let (a, b) = line(u, v);
@@ -106,12 +107,7 @@ pub(super) fn segments(
         if !meeting.points.is_empty() {
             supports.insert(Support::Meet(f, g), meeting.points);
         }
-        for ((a, b), vertex) in meeting.on_edges {
-            supports
-                .entry(Support::Edge(a, b))
-                .or_default()
-                .insert(vertex);
-        }
+        on_edges.extend(meeting.on_edges);
         for (u, v) in meeting.segments {
             out[f].push((u, v));
             out[g].push((u, v));
@@ -121,7 +117,8 @@ pub(super) fn segments(
             }
         }
     }
-    for (&((a, b), _), &vertex) in &crossings {
+    let crossed = crossings.iter().map(|(&(edge, _), &vertex)| (edge, vertex));
+    for ((a, b), vertex) in crossed.chain(on_edges) {
         supports
             .entry(Support::Edge(a, b))
             .or_default()
@@ -330,15 +327,25 @@ mod tests {
     /// The unit square in z = 0 facing up, then a square in x = 0.5 from y = 0.2 to 0.8,
     /// facing +x, from height `low` to `high`.
     fn square_and_wall(low: f64, high: f64) -> (Vec<PlanarFace>, Pool) {
+        square_and_wall_across(low, high, 0.2, 0.8)
+    }
+
+    /// [`square_and_wall`] with the wall from `y = start` to `end`.
+    fn square_and_wall_across(
+        low: f64,
+        high: f64,
+        start: f64,
+        end: f64,
+    ) -> (Vec<PlanarFace>, Pool) {
         let pool = Pool::of(vec![
             [0.0, 0.0, 0.0],
             [1.0, 0.0, 0.0],
             [1.0, 1.0, 0.0],
             [0.0, 1.0, 0.0],
-            [0.5, 0.2, low],
-            [0.5, 0.8, low],
-            [0.5, 0.8, high],
-            [0.5, 0.2, high],
+            [0.5, start, low],
+            [0.5, end, low],
+            [0.5, end, high],
+            [0.5, start, high],
         ]);
         let faces = vec![
             PlanarFace::new(vec![vec![0, 1, 2, 3]], &pool, 0),
@@ -381,20 +388,7 @@ mod tests {
         // The wall in x = 0.5 stands on the square from y = -0.5 to 0.5: its foot, edge 4–5,
         // lies on the square's plane, and the square's edge along y = 0 crosses the wall's plane
         // at (0.5, 0, 0), between the foot's ends, which the foot is then split at.
-        let mut pool = Pool::of(vec![
-            [0.0, 0.0, 0.0],
-            [1.0, 0.0, 0.0],
-            [1.0, 1.0, 0.0],
-            [0.0, 1.0, 0.0],
-            [0.5, -0.5, 0.0],
-            [0.5, 0.5, 0.0],
-            [0.5, 0.5, 1.0],
-            [0.5, -0.5, 1.0],
-        ]);
-        let faces = vec![
-            PlanarFace::new(vec![vec![0, 1, 2, 3]], &pool, 0),
-            PlanarFace::new(vec![vec![4, 5, 6, 7]], &pool, 1),
-        ];
+        let (faces, mut pool) = square_and_wall_across(0.0, 1.0, -0.5, 0.5);
         let (_, _, supports) = segments(&faces, 1, &mut pool);
         let foot = &supports[&Support::Edge(4, 5)];
         assert_eq!(foot.len(), 3);

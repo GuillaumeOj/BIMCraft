@@ -406,6 +406,17 @@ fn check_needles(cases: &[NeedleCase]) {
     }
 }
 
+/// [`check_needles`] with each lens and needle also taken in the other order.
+fn check_needles_both_ways(cases: &[NeedleCase]) {
+    check_needles(cases);
+    for &(lens, exponent, direction, needle, needle_exponent, needle_direction) in cases {
+        let prism = raw_prism(&lens, exponent, direction);
+        let needle = raw_prism(&[needle], needle_exponent, needle_direction);
+        let checked = needle.zip(prism).map(|(b, a)| check_booleans(&b, &a));
+        assert_eq!(checked, Some(Ok(())), "lens {lens:?} second");
+    }
+}
+
 /// `fuzz/seeds/extruded_boolean/needle-on-a-lens-corner-h` to `…-o`: needles on lens corners
 /// again. Lines were split at every vertex within the tolerance of them, though only a vertex
 /// made on a line lies on it: one up to the tolerance off it bent the line there, after the
@@ -1232,15 +1243,14 @@ fn a_collapse_does_not_fuse_two_edges_into_one() {
 /// ends of an edge lying on both is now made on the edge.
 #[test]
 fn an_edge_lying_on_a_plane_is_split_where_the_line_there_is() {
-    let a = raw_prism(
-        &[(69, 43, 122), (-95, -1, 229), (0, 0, 8)],
+    check_needles_both_ways(&[(
+        [(69, 43, 122), (-95, -1, 229), (0, 0, 8)],
         -6,
         (42, -17, 1),
-    )
-    .unwrap();
-    let b = raw_prism(&[(9, -3, 255)], -18, (82, 45, 39)).unwrap();
-    assert_eq!(check_booleans(&a, &b), Ok(()));
-    assert_eq!(check_booleans(&b, &a), Ok(()));
+        (9, -3, 255),
+        -18,
+        (82, 45, 39),
+    )]);
 }
 
 /// `fuzz/seeds/extruded_boolean/needle-across-a-tiny-lens-corner` (`crash-b00b3dda…`, found by the
@@ -1252,13 +1262,12 @@ fn an_edge_lying_on_a_plane_is_split_where_the_line_there_is() {
 /// the lumps that only touched through it get their own vertices there.
 #[test]
 fn a_face_pinched_at_a_vertex_into_two_parts_becomes_two_faces() {
-    let a = raw_prism(
-        &[(65, -95, 38), (35, 122, 255), (0, 0, 0)],
+    check_needles_both_ways(&[(
+        [(65, -95, 38), (35, 122, 255), (0, 0, 0)],
         -21,
         (42, -1, 28),
-    )
-    .unwrap();
-    let b = raw_prism(&[(0, -1, 255)], -18, (90, 126, 56)).unwrap();
-    assert_eq!(check_booleans(&a, &b), Ok(()));
-    assert_eq!(check_booleans(&b, &a), Ok(()));
+        (0, -1, 255),
+        -18,
+        (90, 126, 56),
+    )]);
 }
