@@ -1272,3 +1272,24 @@ fn a_face_pinched_at_a_vertex_into_two_parts_becomes_two_faces() {
         (90, 126, 56),
     )]);
 }
+
+/// `fuzz/seeds/extruded_boolean/needle-beside-a-lens-side` (`stage10-fuzz-crash-ci281fix`, found
+/// by the seeded fuzz run on #281): two triangles 30 µm wide extruded along the same direction,
+/// sharing a corner and so the edge along it, their bottoms and tops in the same planes. A side of
+/// the needle lies 0.6° off the lens side along that edge, within the tolerance of it, and went onto
+/// its plane: the needle's far corners moved along that plane's normal, 35 nm off the bottom and top
+/// planes both operands lie on. The needle's bottom and top were cut along collars into triangles a
+/// fraction of a degree off them; vertices made on those triangles' nearly parallel planes were
+/// taken as one point 60 nm apart, and the difference had an open edge. A vertex put onto a plane
+/// now stays on the planes of its faces that stay put and that both operands share.
+#[test]
+fn a_vertex_moved_onto_a_plane_stays_on_the_planes_both_operands_share() {
+    check_needles_both_ways(&[(
+        [(99, 41, 161), (67, -1, 122), (28, -1, 255)],
+        -18,
+        (90, 45, 54),
+        (28, -1, 255),
+        -18,
+        (90, 45, 54),
+    )]);
+}
