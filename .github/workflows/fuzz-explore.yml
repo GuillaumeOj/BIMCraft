@@ -1,25 +1,27 @@
-# Explores the fuzz targets on main every night, and on demand (ENG-02). Not a gate: the Fuzzing job
-# of ci.yml replays the seeds on every pull request; this run looks for new failing inputs and keeps
-# them as artifacts. A failed run is a finding: minimise its input, commit it as a seed and fix the
-# cause (docs/dev/quality.md#fuzzing).
+# Fuzzing exploration (ENG-02): nightly on main, on pull requests that touch the kernel or the
+# targets, and on demand. Not a required check: why, and what to do with a crash, in
+# docs/dev/quality.md#fuzzing.
 name: Fuzz exploration
 
 on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths: ["crates/geom/**", "fuzz/**"]
   schedule:
     - cron: "17 3 * * *"
   workflow_dispatch:
     inputs:
       runs:
         description: Inputs per target (empty for the defaults of scripts/check-all.sh)
+        type: number
         required: false
-        default: ""
 
 permissions:
   contents: read
 
 concurrency:
-  group: fuzz-explore
-  cancel-in-progress: false
+  group: fuzz-explore-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   CARGO_TERM_COLOR: always
@@ -37,21 +39,16 @@ jobs:
       - uses: ./.github/actions/setup-rust
         with:
           directory: fuzz
+          # The targets the Fuzzing job of ci.yml builds: start from its cache.
+          shared-key: fuzz
       - name: Install cargo-fuzz
         working-directory: fuzz
         run: cargo install --locked "cargo-fuzz@$CARGO_FUZZ_VERSION"
-      - name: Explore
+      - run: scripts/check-all.sh fuzz-explore
         env:
-          RUNS: ${{ inputs.runs }}
-          # A new seed each run, so nights on an unchanged main explore different inputs; libFuzzer
-          # prints it, and a finding replays from its crash file.
+          FUZZ_RUNS: ${{ inputs.runs }}
+          # A new seed each run, so nights on an unchanged main explore new inputs.
           FUZZ_SEED: ${{ github.run_number }}
-        run: |
-          case "$RUNS" in
-            "") scripts/check-all.sh fuzz-explore ;;
-            *[!0-9]*) echo "runs must be a whole number" >&2; exit 2 ;;
-            *) FUZZ_RUNS="$RUNS" scripts/check-all.sh fuzz-explore ;;
-          esac
       # Also when the run hits its time limit, so crashes found before it are kept.
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: failure() || cancelled()

@@ -7,6 +7,9 @@ inputs:
   directory:
     description: Cargo workspace whose rust-toolchain.toml and target directory to use.
     default: .
+  shared-key:
+    description: Cache key shared by jobs that build the same workspace the same way (default per job).
+    default: ""
 
 runs:
   using: composite
@@ -21,3 +24,4 @@ runs:
     - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
       with:
         workspaces: ${{ inputs.directory }}
+        shared-key: ${{ inputs.shared-key }}

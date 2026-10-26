@@ -125,7 +125,7 @@ Users are architects and engineers, not developers. For every user-facing featur
 | Check | Command |
 | --- | --- |
 | One-time setup (hooks + tool check) | `scripts/setup.sh` |
-| Everything CI runs on a pull request that applies (rarely needed locally, section 3a) | `scripts/check-all.sh` (or one section: `repo rust coverage wasm fuzz fuzz-explore corpus ui e2e docs`; `CHECK_CRATES="a b"` limits the Rust sections) |
+| Every required CI check that applies (rarely needed locally, section 3a) | `scripts/check-all.sh` (or one section: `repo rust coverage wasm fuzz fuzz-explore corpus ui e2e docs`; `CHECK_CRATES="a b"` limits the Rust sections) |
 | Commit messages + user-docs rule for a branch | `scripts/check-pr.sh main` |
 | Rust format | `cargo fmt --all --check` |
 | Rust lint | `cargo clippy --workspace --all-targets --all-features -- -D warnings` |
