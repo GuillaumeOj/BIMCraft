@@ -1,10 +1,13 @@
 //! The working set of a boolean: vertices of both operands plus constructed ones, and faces with
 //! the plane they keep from their input face.
 
+use std::collections::{BTreeMap, BTreeSet};
+
 use crate::predicates::{MIN_COORDINATE, orient2d};
-use crate::tolerance::{WITHIN_TOLERANCE, WITHIN_TOLERANCE_SQUARED};
+use crate::tolerance::{ROUNDING, WITHIN_TOLERANCE, WITHIN_TOLERANCE_SQUARED};
 use crate::vector::{
-    Vector, add, bounds, coords, cross, distance_squared, dot, edges, length, newell, scale, sub,
+    Vector, add, bounds, coords, cross, distance_squared, dot, edges, largest_axis, length, newell,
+    scale, sub, unit,
 };
 use crate::{Orientation, Point2, Solid};
 
@@ -12,6 +15,16 @@ use crate::{Orientation, Point2, Solid};
 pub(super) struct Pool {
     points: Vec<Vector>,
     inputs: usize,
+    /// The planes each vertex lies on by how it was made, as the plane numbers of
+    /// [`PlanarFace::plane`]: an operand vertex lies on the planes of its faces, a crossing on
+    /// those of the lines that cross.
+    planes: Vec<BTreeSet<usize>>,
+    /// The vertices lying on each three planes, smallest plane first.
+    on_three: BTreeMap<[usize; 3], Vec<usize>>,
+    /// The vertices placed so far in each cell of a grid one rounding allowance wide.
+    cells: BTreeMap<[i64; 3], Vec<usize>>,
+    /// The copies made of operand vertices ([`Self::duplicate`]), which are operand vertices too.
+    copies: BTreeSet<usize>,
 }
 
 impl Pool {
@@ -22,17 +35,17 @@ impl Pool {
             .chain(b.vertices())
             .map(|&p| coords(p))
             .collect();
-        Self {
-            inputs: points.len(),
-            points,
-        }
+        Self::of(points)
     }
 
     /// A pool of given points, all from operands.
-    #[cfg(test)]
     pub(super) fn of(points: Vec<Vector>) -> Self {
         Self {
             inputs: points.len(),
+            planes: vec![BTreeSet::new(); points.len()],
+            on_three: BTreeMap::new(),
+            cells: BTreeMap::new(),
+            copies: BTreeSet::new(),
             points,
         }
     }
@@ -45,15 +58,87 @@ impl Pool {
         self.points.len()
     }
 
-    /// Whether a vertex comes from an operand rather than from an intersection.
-    pub(super) const fn is_input(&self, vertex: usize) -> bool {
-        vertex < self.inputs
+    /// Whether a vertex comes from an operand rather than from an intersection, as itself or as
+    /// a copy, so that which copy keeps the original number does not matter.
+    pub(super) fn is_input(&self, vertex: usize) -> bool {
+        vertex < self.inputs || self.copies.contains(&vertex)
     }
 
     /// Adds a constructed vertex, flushed like a moved one.
     pub(super) fn push(&mut self, point: Vector) -> usize {
         self.points.push(flushed(point));
+        self.planes.push(BTreeSet::new());
         self.points.len() - 1
+    }
+
+    /// The vertex lying on the given planes: one already made on three of them, if any lies
+    /// within the tolerance of `point`, else a new one there. Three planes meet at one point
+    /// unless they share a line, so a vertex made on them is that point, however rounding put
+    /// it; the distance only tells the two apart where they share a line.
+    pub(super) fn on_planes(&mut self, point: Vector, planes: &BTreeSet<usize>) -> usize {
+        if let Some(vertex) = self.made_on(point, planes).or_else(|| self.at(point)) {
+            self.lies_on(vertex, planes.iter().copied());
+            return vertex;
+        }
+        let vertex = self.push(point);
+        self.place(vertex);
+        self.lies_on(vertex, planes.iter().copied());
+        vertex
+    }
+
+    /// Puts every vertex so far in the grid that [`Self::at`] searches, once their positions are
+    /// final.
+    pub(super) fn place_all(&mut self) {
+        for vertex in 0..self.points.len() {
+            self.place(vertex);
+        }
+    }
+
+    fn place(&mut self, vertex: usize) {
+        let cell = rounding_cell(self.points[vertex]);
+        self.cells.entry(cell).or_default().push(vertex);
+    }
+
+    /// The first vertex placed within rounding of `point`: below it, two computations of one
+    /// point cannot be told apart, so they are one.
+    pub(super) fn at(&self, point: Vector) -> Option<usize> {
+        let cell = rounding_cell(point);
+        let near = (-1..=1)
+            .flat_map(|dx| (-1..=1).flat_map(move |dy| (-1..=1).map(move |dz| [dx, dy, dz])));
+        near.filter_map(|[dx, dy, dz]| self.cells.get(&[cell[0] + dx, cell[1] + dy, cell[2] + dz]))
+            .flatten()
+            .copied()
+            .filter(|&v| distance_squared(self.points[v], point) <= ROUNDING * ROUNDING)
+            .min()
+    }
+
+    /// The first vertex made on three of the given planes within the tolerance of `point`.
+    pub(super) fn made_on(&self, point: Vector, planes: &BTreeSet<usize>) -> Option<usize> {
+        let planes: Vec<usize> = planes.iter().copied().collect();
+        threes(&planes)
+            .filter_map(|three| self.on_three.get(&three))
+            .flatten()
+            .copied()
+            .filter(|&v| distance_squared(self.points[v], point) <= WITHIN_TOLERANCE_SQUARED)
+            .min()
+    }
+
+    /// Records that a vertex lies on the given planes.
+    pub(super) fn lies_on(&mut self, vertex: usize, planes: impl Iterator<Item = usize>) {
+        for plane in planes {
+            if !self.planes[vertex].insert(plane) {
+                continue;
+            }
+            let all: Vec<usize> = self.planes[vertex].iter().copied().collect();
+            for three in threes(&all).filter(|three| three.contains(&plane)) {
+                self.on_three.entry(three).or_default().push(vertex);
+            }
+        }
+    }
+
+    /// The planes a vertex lies on by how it was made.
+    pub(super) fn planes(&self, vertex: usize) -> &BTreeSet<usize> {
+        &self.planes[vertex]
     }
 
     /// Moves a vertex. Components too small for the exact predicates are flushed to zero: they
@@ -65,23 +150,53 @@ impl Pool {
     /// Adds a copy of a vertex, for a solid that touches itself there.
     pub(super) fn duplicate(&mut self, vertex: usize) -> usize {
         self.points.push(self.points[vertex]);
-        self.points.len() - 1
+        self.planes.push(self.planes[vertex].clone());
+        let copy = self.points.len() - 1;
+        if self.is_input(vertex) {
+            self.copies.insert(copy);
+        }
+        copy
     }
+}
+
+/// Every three of the given planes, in increasing order, each with its planes in increasing
+/// order: the keys of [`Pool::on_three`].
+fn threes(planes: &[usize]) -> impl Iterator<Item = [usize; 3]> + '_ {
+    (0..planes.len()).flat_map(move |i| {
+        (i + 1..planes.len()).flat_map(move |j| {
+            planes[j + 1..]
+                .iter()
+                .map(move |&c| [planes[i], planes[j], c])
+        })
+    })
+}
+
+/// The planes of the faces along each edge of the given faces, by the edge's ends in increasing
+/// order.
+pub(super) fn edge_planes(faces: &[PlanarFace]) -> BTreeMap<(usize, usize), BTreeSet<usize>> {
+    let mut planes: BTreeMap<(usize, usize), BTreeSet<usize>> = BTreeMap::new();
+    for face in faces {
+        for (u, v) in face.rings.iter().flat_map(|ring| edges(ring)) {
+            planes
+                .entry((u.min(v), u.max(v)))
+                .or_default()
+                .insert(face.plane);
+        }
+    }
+    planes
+}
+
+/// The cell one rounding allowance wide holding a point.
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "model coordinates over the rounding allowance stay within ±1e13"
+)]
+fn rounding_cell(p: Vector) -> [i64; 3] {
+    p.map(|c| (c / ROUNDING).floor() as i64)
 }
 
 fn flushed(point: Vector) -> Vector {
     point.map(|c| if c.abs() < MIN_COORDINATE { 0.0 } else { c })
-}
-
-/// The axis along which a vector is largest, the first one on a tie.
-pub(super) fn largest_axis(v: Vector) -> usize {
-    (0..3).fold(0, |best, axis| {
-        if v[axis].abs() > v[best].abs() {
-            axis
-        } else {
-            best
-        }
-    })
 }
 
 /// A projection of a plane onto two coordinate axes, keeping the orientation seen from the side
@@ -120,10 +235,13 @@ pub(super) struct PlanarFace {
     pub(super) projection: Projection,
     min: Vector,
     max: Vector,
+    /// The number of its plane: its own index among the faces of the boolean, or that of the
+    /// face whose plane it was put onto (ADR 0001, merge pass step 1).
+    pub(super) plane: usize,
 }
 
 impl PlanarFace {
-    pub(super) fn new(rings: Vec<Vec<usize>>, pool: &Pool) -> Self {
+    pub(super) fn new(rings: Vec<Vec<usize>>, pool: &Pool, number: usize) -> Self {
         let (normal, centre) = plane(&rings, pool);
         let mut face = Self {
             rings,
@@ -132,6 +250,7 @@ impl PlanarFace {
             projection: Projection::along(normal),
             min: [0.0; 3],
             max: [0.0; 3],
+            plane: number,
         };
         face.update_bounds(pool);
         face
@@ -176,18 +295,42 @@ impl PlanarFace {
         }
     }
 
-    /// Whether every vertex of this face lies on the plane of `other`, within the tolerance.
-    pub(super) fn lies_on(&self, other: &Self, pool: &Pool) -> bool {
+    /// Which side of the plane a vertex lies on, positive outside: on it if it is known to lie
+    /// on it ([`Pool::planes`]), otherwise the side its distance says. Decisions of the cut take
+    /// a vertex's side from here, never from a tolerance: a vertex a micrometre off a plane lies
+    /// off it, and the merge pass removes what that leaves within the tolerance.
+    pub(super) fn side_of(&self, vertex: usize, pool: &Pool) -> i8 {
+        if pool.planes(vertex).contains(&self.plane) {
+            0
+        } else if self.distance(pool.get(vertex)) > 0.0 {
+            1
+        } else {
+            -1
+        }
+    }
+
+    /// Whether every vertex of this face lies on the plane of `other`, within the tolerance:
+    /// only for putting faces onto one plane (merge pass, step 1). The cut reads
+    /// [`Self::coplanar`].
+    pub(super) fn lies_within_tolerance_of(&self, other: &Self, pool: &Pool) -> bool {
         self.rings
             .iter()
             .flatten()
             .all(|&v| other.side(pool.get(v)) == 0)
     }
 
-    /// Whether the faces lie in one plane, within the tolerance: one of them lies on the
-    /// other's plane.
+    /// Whether every vertex of this face is known to lie on the plane of `other`
+    /// ([`Pool::planes`]).
+    fn lies_exactly_on(&self, other: &Self, pool: &Pool) -> bool {
+        (self.rings.iter().flatten()).all(|&v| pool.planes(v).contains(&other.plane))
+    }
+
+    /// Whether the faces lie in one plane as the cut sees them: every vertex of one of them lies
+    /// on the other's plane. Faces within the tolerance of each other lie in one plane only once
+    /// they are put onto it (merge pass, step 1): a face within the tolerance of two planes
+    /// meeting at a shallow angle goes onto one of them, and lies across the other.
     pub(super) fn coplanar(&self, other: &Self, pool: &Pool) -> bool {
-        self.lies_on(other, pool) || other.lies_on(self, pool)
+        self.lies_exactly_on(other, pool) || other.lies_exactly_on(self, pool)
     }
 
     pub(super) const fn min_x(&self) -> f64 {
@@ -234,17 +377,6 @@ impl PlanarFace {
             inside ^ ring_contains(ring.iter().map(|&v| at(v)), q)
         })
     }
-
-    /// Whether a point lies inside the face or within the tolerance of its boundary.
-    pub(super) fn covers(&self, pool: &Pool, p: Vector) -> bool {
-        self.contains(pool, self.projection.apply(p))
-            || self.rings.iter().any(|ring| {
-                edges(ring).any(|(a, b)| {
-                    segment_distance_squared(p, pool.get(a), pool.get(b))
-                        <= WITHIN_TOLERANCE_SQUARED
-                })
-            })
-    }
 }
 
 /// The area vector of a face given as rings of pool vertices (normal to it, twice its area
@@ -280,41 +412,6 @@ pub(super) fn clean_face(rings: &mut Vec<Vec<usize>>) {
         rings.clear();
     }
     rings.retain(|ring| !ring.is_empty());
-}
-
-/// Vertices sorted by `x`, without repeats, for [`vertices_on_edge`].
-pub(super) fn sorted_by_x(pool: &Pool, vertices: impl IntoIterator<Item = usize>) -> Vec<usize> {
-    let mut sorted: Vec<usize> = vertices.into_iter().collect();
-    sorted.sort_by(|&v, &w| pool.get(v)[0].total_cmp(&pool.get(w)[0]).then(v.cmp(&w)));
-    sorted.dedup();
-    sorted
-}
-
-/// The vertices among `by_x` (sorted by [`sorted_by_x`]) that lie on the edge from `u` to `v`,
-/// within the tolerance, and farther than it from both ends: where the edge must be split. They
-/// come in order along the edge, and only those within the edge's span in `x` are looked at.
-pub(super) fn vertices_on_edge(pool: &Pool, by_x: &[usize], (u, v): (usize, usize)) -> Vec<usize> {
-    let (p, q) = (pool.get(u), pool.get(v));
-    let lo = p[0].min(q[0]) - WITHIN_TOLERANCE;
-    let hi = p[0].max(q[0]) + WITHIN_TOLERANCE;
-    let start = by_x.partition_point(|&w| pool.get(w)[0] < lo);
-    let along = sub(q, p);
-    let mut on: Vec<(f64, usize)> = by_x[start..]
-        .iter()
-        .copied()
-        .take_while(|&w| pool.get(w)[0] <= hi)
-        .filter(|&w| {
-            let point = pool.get(w);
-            w != u
-                && w != v
-                && distance_squared(point, p) > WITHIN_TOLERANCE_SQUARED
-                && distance_squared(point, q) > WITHIN_TOLERANCE_SQUARED
-                && segment_distance_squared(point, p, q) <= WITHIN_TOLERANCE_SQUARED
-        })
-        .map(|w| (dot(sub(pool.get(w), p), along), w))
-        .collect();
-    on.sort_by(|a, b| a.0.total_cmp(&b.0).then(a.1.cmp(&b.1)));
-    on.into_iter().map(|(_, w)| w).collect()
 }
 
 /// A ring with repeated vertices (`u`, `u`) and spikes (`u`, `v`, `u`) removed, all around
@@ -367,19 +464,9 @@ pub(super) fn ring_contains(ring: impl Iterator<Item = Point2> + Clone, q: Point
     })
 }
 
-/// The squared distance from a point to a segment.
-pub(super) fn segment_distance_squared(point: Vector, start: Vector, end: Vector) -> f64 {
-    let along = sub(end, start);
-    let fraction = (dot(sub(point, start), along) / dot(along, along)).clamp(0.0, 1.0);
-    let off = sub(point, add(start, scale(along, fraction)));
-    dot(off, off)
-}
-
 /// The unit direction of the line where two planes meet; `None` if they are parallel.
 pub(super) fn meeting_direction(a: &PlanarFace, b: &PlanarFace) -> Option<Vector> {
-    let d = cross(a.normal, b.normal);
-    let l = length(d);
-    (l > 0.0).then(|| scale(d, 1.0 / l))
+    unit(cross(a.normal, b.normal))
 }
 
 #[cfg(test)]
@@ -408,9 +495,9 @@ mod tests {
             [0.0, 1.0, 1.0],
             [0.0, 0.0, 2.0],
         ]);
-        let floor = PlanarFace::new(vec![vec![0, 1, 2]], &pool);
-        let roof = PlanarFace::new(vec![vec![3, 4, 5]], &pool);
-        let wall = PlanarFace::new(vec![vec![0, 3, 6, 4, 1]], &pool);
+        let floor = PlanarFace::new(vec![vec![0, 1, 2]], &pool, 0);
+        let roof = PlanarFace::new(vec![vec![3, 4, 5]], &pool, 1);
+        let wall = PlanarFace::new(vec![vec![0, 3, 6, 4, 1]], &pool, 2);
         assert_eq!(meeting_direction(&floor, &roof), None);
         assert!(meeting_direction(&floor, &wall).is_some());
     }
@@ -418,8 +505,54 @@ mod tests {
     #[test]
     fn a_face_whose_vertices_merge_loses_its_rings() {
         let pool = Pool::of(vec![[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]]);
-        let mut face = PlanarFace::new(vec![vec![0, 1, 2]], &pool);
+        let mut face = PlanarFace::new(vec![vec![0, 1, 2]], &pool, 0);
         face.remap(&[0, 0, 2], &pool);
         assert!(face.rings.is_empty());
+    }
+
+    #[test]
+    fn a_vertex_made_on_three_planes_again_is_the_same() {
+        let mut pool = Pool::of(vec![[0.0, 0.0, 0.0]]);
+        pool.lies_on(0, [1, 2, 3].into_iter());
+        pool.place_all();
+        // Made on three of its planes, 0.5 µm off by rounding of nearly parallel planes: vertex
+        // 0. On only two of them, it is another, unless it lies within rounding of vertex 0.
+        let near = [0.5e-6, 0.0, 0.0];
+        assert_eq!(pool.on_planes(near, &[1, 2, 3, 4].into()), 0);
+        assert_eq!(pool.planes(0), &[1, 2, 3, 4].into());
+        let other = pool.on_planes(near, &[1, 2, 5].into());
+        assert_eq!(other, 1);
+        assert_eq!(pool.on_planes([0.5e-9, 0.0, 0.0], &[6, 7, 8].into()), 0);
+        assert_eq!(pool.at([0.5e-6, 1e-12, 0.0]), Some(1));
+        assert_eq!(pool.at([2.0e-6, 0.0, 0.0]), None);
+    }
+
+    #[test]
+    fn a_vertex_lies_on_a_plane_only_if_it_is_known_to() {
+        // The square z = 0 facing up; vertex 4 is 0.1 µm above it, vertex 5 as far below but
+        // known to lie on it.
+        let mut pool = Pool::of(vec![
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [1.0, 1.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [0.5, 0.5, 0.1e-6],
+            [0.5, 0.5, -0.1e-6],
+        ]);
+        let face = PlanarFace::new(vec![vec![0, 1, 2, 3]], &pool, 7);
+        pool.lies_on(5, std::iter::once(7));
+        assert_eq!(face.side_of(4, &pool), 1);
+        assert_eq!(face.side_of(5, &pool), 0);
+    }
+
+    #[test]
+    fn a_copy_of_an_operand_vertex_is_one_too() {
+        // Lumps touching at a vertex get copies of it; which one keeps the original number
+        // depends on the operands' order, so the copy must count alike.
+        let mut pool = Pool::of(vec![[0.0, 0.0, 0.0]]);
+        let made = pool.push([1.0, 0.0, 0.0]);
+        let (copy, copy_of_made) = (pool.duplicate(0), pool.duplicate(made));
+        assert!(pool.is_input(copy));
+        assert!(!pool.is_input(copy_of_made));
     }
 }

@@ -6,7 +6,10 @@
 //! scale byte moves the whole profile to other magnitudes: near the linear tolerance, near the
 //! model extent, or beyond it, and one value makes a coordinate NaN.
 
-use geom::{ArcDirection, Edge, Point2, Vector3};
+use geom::{
+    ArcDirection, BooleanError, Containment, Edge, LINEAR_TOLERANCE, MERGE_CHAIN_WIDTH, Point2,
+    Point3, Solid, Vector3,
+};
 
 /// Most edges per loop: enough for every topology, few enough to keep each input fast.
 pub const MAX_LOOP_EDGES: usize = 16;
@@ -94,4 +97,76 @@ pub fn direction((x, y, z): (i8, i8, i8)) -> Vector3 {
 #[must_use]
 pub fn reversed(edges: &[Edge]) -> Vec<Edge> {
     edges.iter().rev().map(Edge::reversed).collect()
+}
+
+/// The total area of a solid's faces, in square metres: half the length of each face's area
+/// vector, summed by Newell's method over its rings.
+#[must_use]
+pub fn surface_area(solid: &Solid) -> f64 {
+    let points = solid.vertices();
+    solid
+        .to_faces()
+        .iter()
+        .map(|face| {
+            let mut area = [0.0_f64; 3];
+            for ring in std::iter::once(&face.outer).chain(&face.holes) {
+                for (i, &start) in ring.iter().enumerate() {
+                    let (p, q) = (points[start], points[ring[(i + 1) % ring.len()]]);
+                    area[0] += (p.y - q.y) * (p.z + q.z);
+                    area[1] += (p.z - q.z) * (p.x + q.x);
+                    area[2] += (p.x - q.x) * (p.y + q.y);
+                }
+            }
+            area.iter().map(|c| c * c).sum::<f64>().sqrt() / 2.0
+        })
+        .sum()
+}
+
+/// How far a boolean's volume may lie from the bounds its operands set: the tolerance times
+/// their area. The merge pass moves each vertex by at most the tolerance, which sweeps at most
+/// the tolerance times the area of the faces around it, and removes only lumps no thicker than
+/// the tolerance on average (ADR 0001). Rounding of constructed vertices, about 1e-12 m within
+/// the model extent, is six orders of magnitude below it.
+#[must_use]
+pub fn volume_slack(a: &Solid, b: &Solid) -> f64 {
+    LINEAR_TOLERANCE * (surface_area(a) + surface_area(b))
+}
+
+/// The result of a boolean the fuzz targets check, or `None` if the operation refused the
+/// operands with [`BooleanError::FeaturesTooClose`], the one error valid operands may get
+/// (ADR 0001, merge pass).
+///
+/// # Panics
+///
+/// On any other error: the operation failed where it must not.
+#[must_use]
+pub fn unless_too_close(
+    result: Result<Option<Solid>, BooleanError>,
+    operation: &str,
+) -> Option<Option<Solid>> {
+    match result {
+        Err(BooleanError::FeaturesTooClose) => None,
+        Err(error) => panic!("{operation}: {error:?}"),
+        Ok(solid) => Some(solid),
+    }
+}
+
+/// The farthest the merge pass may move a vertex, in metres: across the box of a group of
+/// vertices merged into one, at most [`MERGE_CHAIN_WIDTH`] wide along each axis, or the
+/// operation fails with [`BooleanError::MergeChainTooWide`] (ADR 0001, merge pass step 2).
+pub const MERGE_REACH: f64 = MERGE_CHAIN_WIDTH * SQRT_3;
+
+/// √3: the diagonal of a cube over its side.
+const SQRT_3: f64 = 1.732_050_807_568_877_2;
+
+/// Whether every point lies with respect to `solid` as `allowed` says, or within
+/// [`MERGE_REACH`] of its boundary, where a vertex merge may have moved the point from.
+pub fn all_located(
+    points: &[Point3],
+    solid: &Solid,
+    allowed: impl Fn(Containment) -> bool,
+) -> bool {
+    points
+        .iter()
+        .all(|&p| allowed(solid.locate(p)) || solid.boundary_distance(p) <= MERGE_REACH)
 }

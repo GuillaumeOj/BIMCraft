@@ -19,11 +19,13 @@
 mod build;
 mod error;
 mod extrude;
+mod locate;
 mod validate;
 
 pub use error::BrepError;
 pub use extrude::ExtrusionError;
-pub(crate) use validate::enclosed_volume;
+pub use locate::Containment;
+pub(crate) use validate::{FaceFault, enclosed_volume, face_plane, longest_edge_squared, too_thin};
 
 use crate::Point3;
 
