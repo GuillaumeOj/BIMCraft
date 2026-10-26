@@ -295,22 +295,24 @@ fn along_edges(
     sides: [&[Vec<i8>]; 2],
     points: &[(f64, usize, [bool; 4])],
 ) -> Vec<(Line, usize)> {
+    let lying: Vec<(usize, usize)> = (faces.into_iter().zip(sides))
+        .flat_map(|(face, sides)| face.rings.iter().zip(sides))
+        .flat_map(|(ring, sides)| edges(ring).zip(edges(sides)))
+        .filter(|&(_, (su, sv))| su == 0 && sv == 0)
+        .map(|(edge, _)| edge)
+        .collect();
+    if lying.is_empty() {
+        return Vec::new();
+    }
     let position: BTreeMap<usize, usize> = (points.iter().enumerate())
         .map(|(i, &(_, v, _))| (v, i))
         .collect();
     let mut on = Vec::new();
-    for (face, sides) in faces.into_iter().zip(sides) {
-        for (ring, sides) in face.rings.iter().zip(sides) {
-            for ((u, v), (su, sv)) in edges(ring).zip(edges(sides)) {
-                if su != 0 || sv != 0 {
-                    continue;
-                }
-                // Every vertex on the other's plane is a point of the line.
-                let (i, j) = (position[&u], position[&v]);
-                let between = &points[i.min(j) + 1..i.max(j)];
-                on.extend(between.iter().map(|&(_, w, _)| (line(u, v), w)));
-            }
-        }
+    for (u, v) in lying {
+        // Every vertex on the other's plane is a point of the line.
+        let (i, j) = (position[&u], position[&v]);
+        let between = &points[i.min(j) + 1..i.max(j)];
+        on.extend(between.iter().map(|&(_, w, _)| (line(u, v), w)));
     }
     on
 }
@@ -372,6 +374,32 @@ mod tests {
         // square, the wall meets it along its top edge.
         assert_eq!(cut(0.0, 1.0), [(4, 5)]);
         assert_eq!(cut(-1.0, 0.0), [(7, 6)]);
+    }
+
+    #[test]
+    fn a_foot_on_a_face_is_split_where_the_face_ends_along_it() {
+        // The wall in x = 0.5 stands on the square from y = -0.5 to 0.5: its foot, edge 4–5,
+        // lies on the square's plane, and the square's edge along y = 0 crosses the wall's plane
+        // at (0.5, 0, 0), between the foot's ends, which the foot is then split at.
+        let mut pool = Pool::of(vec![
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [1.0, 1.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [0.5, -0.5, 0.0],
+            [0.5, 0.5, 0.0],
+            [0.5, 0.5, 1.0],
+            [0.5, -0.5, 1.0],
+        ]);
+        let faces = vec![
+            PlanarFace::new(vec![vec![0, 1, 2, 3]], &pool, 0),
+            PlanarFace::new(vec![vec![4, 5, 6, 7]], &pool, 1),
+        ];
+        let (_, _, supports) = segments(&faces, 1, &mut pool);
+        let foot = &supports[&Support::Edge(4, 5)];
+        assert_eq!(foot.len(), 3);
+        let made = foot.iter().find(|&&v| v > 7).copied();
+        assert_eq!(made.map(|v| pool.get(v)), Some([0.5, 0.0, 0.0]));
     }
 
     #[test]

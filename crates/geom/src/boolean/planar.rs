@@ -110,7 +110,7 @@ pub(super) fn canonical<'a>(
 }
 
 /// Twice the signed area of a ring (shoelace formula).
-fn area(ring: &[usize], at: &impl Fn(usize) -> Point2) -> f64 {
+pub(super) fn area(ring: &[usize], at: &impl Fn(usize) -> Point2) -> f64 {
     let points: Vec<Point2> = ring.iter().map(|&v| at(v)).collect();
     crate::vector::edges(&points)
         .map(|(p, q)| p.x * q.y - q.x * p.y)

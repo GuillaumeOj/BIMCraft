@@ -6,7 +6,9 @@
 //! - The merge pass's local operations then run on the paired faces (see `merge`): edges no
 //!   longer than the tolerance collapse first, then the rest.
 //! - A face whose boundary passes through a vertex twice, such as one notched up to a corner,
-//!   is split in two along a segment inside it.
+//!   is split in two along a segment inside it, or at the vertex where its two parts only touch
+//!   there. Pinched faces are split in each round of merges, before lumps are separated, so
+//!   lumps that only touched through such a face get their own copies of the vertex.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -16,7 +18,7 @@ use super::merge::{
     cancel_back_to_back, collapse_short_edges, drop_thin_lumps, merge_coplanar, remove_collinear,
     remove_slivers, sliver_remains,
 };
-use super::planar::regions;
+use super::planar::{area, regions};
 use crate::brep::longest_edge_squared;
 use crate::predicates::orient2d;
 use crate::vector::{Vector, cross, dot, edges, length, newell, scale, sub};
@@ -269,14 +271,18 @@ fn split_pinched(faces: Faces, pool: &Pool) -> Faces {
                 .enumerate()
                 .find_map(|(r, ring)| Some((r, repeat(ring)?)))
             {
-                let chord = chord(&rings, r, repeat, pool, at);
-                let ring = rings.swap_remove(r);
-                match chord {
-                    Some(chord) => rings.extend(split_ring(&ring, chord)),
-                    // No segment inside the face joins the two parts: they only touch at the
-                    // vertex, so each is a face of its own there.
-                    None => rings.extend(loops_at(&ring, repeat)),
-                }
+                let parts = match chord(&rings, r, repeat, pool, at) {
+                    Some(chord) => split_ring(&rings[r], chord).to_vec(),
+                    // No segment inside the face joins the two parts: where both run the face's
+                    // way round, they only touch at the vertex, so each is a face of its own
+                    // there. A hole touching the outer ring stays for the solid's checks.
+                    None => match lobes(&rings[r], repeat, at) {
+                        Some(lobes) => lobes,
+                        None => break,
+                    },
+                };
+                rings.swap_remove(r);
+                rings.extend(parts);
             }
             regions(rings, at)
                 .regions
@@ -384,15 +390,27 @@ fn split_ring(ring: &[usize], (k, l): (usize, usize)) -> [Vec<usize>; 2] {
 }
 
 /// The two loops of a ring passing a vertex at positions `first` and `second`, each passing it
-/// once; a loop too short to bound anything, out along an edge and back, goes.
-fn loops_at(ring: &[usize], (first, second): (usize, usize)) -> impl Iterator<Item = Vec<usize>> {
+/// once, if each bounds some of the face, running round its way; a loop too short to bound
+/// anything, out along an edge and back, goes. `None` if a loop runs the other way: a hole.
+fn lobes(
+    ring: &[usize],
+    (first, second): (usize, usize),
+    at: impl Fn(usize) -> Point2,
+) -> Option<Vec<Vec<usize>>> {
     let inner = ring[first..second].to_vec();
     let outer = ring[second..]
         .iter()
         .chain(&ring[..first])
         .copied()
         .collect();
-    [inner, outer].into_iter().filter(|ring| ring.len() >= 3)
+    let lobes: Vec<Vec<usize>> = [inner, outer]
+        .into_iter()
+        .filter(|ring| ring.len() >= 3)
+        .collect();
+    lobes
+        .iter()
+        .all(|lobe| area(lobe, &at) > 0.0)
+        .then_some(lobes)
 }
 
 /// Numbers the used vertices in order and builds the solid, which validates it.
@@ -494,6 +512,27 @@ mod tests {
         let mut faces = split_pinched(vec![vec![vec![0, 1, 2, 0, 3, 4]]], &pool);
         faces.sort();
         assert_eq!(faces, [vec![vec![0, 1, 2]], vec![vec![0, 3, 4]]]);
+    }
+
+    #[test]
+    fn a_hole_touching_the_outer_ring_is_not_a_lobe() {
+        // A triangle whose ring runs from its corner 0 round a thin hole the other way.
+        let pool = Pool::of(vec![
+            [0.0, 0.0, 0.0],
+            [4.0, 0.0, 0.0],
+            [0.0, 4.0, 0.0],
+            [1.0, 1.0, 0.0],
+            [1.0, 1.001, 0.0],
+        ]);
+        let at = |v: usize| {
+            let [x, y, _] = pool.get(v);
+            Point2::new(x, y)
+        };
+        assert_eq!(lobes(&[0, 1, 2, 0, 4, 3], (0, 3), at), None);
+        assert_eq!(
+            lobes(&[0, 1, 2, 0, 3, 4], (0, 3), at),
+            Some(vec![vec![0, 1, 2], vec![0, 3, 4]])
+        );
     }
 
     #[test]
