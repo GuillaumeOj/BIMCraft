@@ -52,6 +52,11 @@ pub(crate) fn lexicographic(a: Vector, b: Vector) -> std::cmp::Ordering {
         .then(a[2].total_cmp(&b[2]))
 }
 
+/// The part of a vector across a unit axis.
+pub(crate) fn across(v: Vector, axis: Vector) -> Vector {
+    sub(v, scale(axis, dot(v, axis)))
+}
+
 /// The squared distance between two points.
 pub(crate) fn distance_squared(a: Vector, b: Vector) -> f64 {
     let d = sub(a, b);

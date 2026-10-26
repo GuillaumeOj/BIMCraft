@@ -23,7 +23,7 @@ use super::face::{PlanarFace, Pool};
 use super::intersect::candidate_pairs;
 use super::snap::{find, union};
 use crate::tolerance::WITHIN_TOLERANCE;
-use crate::vector::{Vector, add, dot, largest_axis, scale, sub, unit};
+use crate::vector::{Vector, across, add, dot, largest_axis, scale, unit};
 
 /// Projects the vertices of each face of one operand (`faces[..split]`) or the other onto the
 /// first, in plane order, of the faces of the other operand whose boxes overlap it and on whose
@@ -83,7 +83,7 @@ pub(super) fn align(
     for (f, face) in faces.iter_mut().enumerate() {
         face.plane = find(&mut same, onto[f]);
     }
-    let held = held_planes(&faces, split, &target, &planes);
+    let held = held_planes(&faces, split, &onto);
     for (&v, planes) in &mut planes {
         planes.sort_by(|&f, &g| plane_order(&faces[f], &faces[g]).then(f.cmp(&g)));
         planes.dedup();
@@ -98,27 +98,19 @@ pub(super) fn align(
     collar::collar(faces, split, &moved, pool)
 }
 
-/// For each moved vertex, the faces whose planes it stays on, one per plane, in plane order:
+/// For each vertex, the faces whose planes it stays on if it moves, one per plane, in plane order:
 /// those of its faces that do not move and that a face of the other operand lies on too. Moving
 /// off such a plane would leave a sliver of its face beside the other operand's, a shallow angle
 /// off it.
-fn held_planes(
-    faces: &[PlanarFace],
-    split: usize,
-    target: &[Option<usize>],
-    moved: &BTreeMap<usize, Vec<usize>>,
-) -> BTreeMap<usize, Vec<usize>> {
-    let mut operands: BTreeMap<usize, [bool; 2]> = BTreeMap::new();
+fn held_planes(faces: &[PlanarFace], split: usize, onto: &[usize]) -> BTreeMap<usize, Vec<usize>> {
+    let mut operands = vec![[false; 2]; faces.len()];
     for (f, face) in faces.iter().enumerate() {
-        operands.entry(face.plane).or_default()[usize::from(f >= split)] = true;
+        operands[face.plane][usize::from(f >= split)] = true;
     }
     let mut held: BTreeMap<usize, Vec<usize>> = BTreeMap::new();
     for (f, face) in faces.iter().enumerate() {
-        if target[f].is_some() || operands[&face.plane] != [true, true] {
-            continue;
-        }
-        for &v in face.rings.iter().flatten() {
-            if moved.contains_key(&v) {
+        if onto[f] == f && operands[face.plane] == [true, true] {
+            for &v in face.rings.iter().flatten() {
                 held.entry(v).or_default().push(f);
             }
         }
@@ -136,7 +128,7 @@ fn held_planes(
 fn basis(faces: &[PlanarFace], held: &[usize], onto: usize) -> Vec<Vector> {
     let mut basis: Vec<Vector> = Vec::new();
     for &f in held.iter().filter(|&&f| faces[f].plane != onto) {
-        if let Some(e) = unit(across(faces[f].normal, &basis)) {
+        if let Some(e) = unit(off_basis(faces[f].normal, &basis)) {
             basis.push(e);
         }
     }
@@ -144,18 +136,16 @@ fn basis(faces: &[PlanarFace], held: &[usize], onto: usize) -> Vec<Vector> {
 }
 
 /// `normal` less its components along the orthonormal `basis`.
-fn across(normal: Vector, basis: &[Vector]) -> Vector {
-    basis
-        .iter()
-        .fold(normal, |n, &e| sub(n, scale(e, dot(n, e))))
+fn off_basis(normal: Vector, basis: &[Vector]) -> Vector {
+    basis.iter().fold(normal, |n, &e| across(n, e))
 }
 
 /// The shortest move putting `p` on the plane of `face` while keeping it on the planes whose
-/// normals `held` spans, if it is no longer than the tolerance; otherwise the move along the
-/// face's normal.
-fn onto_plane(face: &PlanarFace, p: Vector, held: &[Vector]) -> Vector {
+/// normals the orthonormal `basis` spans, if it is no longer than the tolerance; otherwise the
+/// move along the face's normal.
+fn onto_plane(face: &PlanarFace, p: Vector, basis: &[Vector]) -> Vector {
     let distance = face.distance(p);
-    let along = across(face.normal, held);
+    let along = off_basis(face.normal, basis);
     let squared = dot(along, along);
     if squared > 0.0 && distance.abs() <= WITHIN_TOLERANCE * squared.sqrt() {
         scale(along, -distance / squared)
@@ -185,7 +175,7 @@ fn towards_positive(n: Vector) -> Vector {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::vector::length;
+    use crate::vector::{length, sub};
 
     /// A square face in the plane `slope · x + z = 0`.
     fn tilted(slope: f64) -> PlanarFace {

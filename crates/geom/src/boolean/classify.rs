@@ -30,7 +30,9 @@ use super::intersect::Cuts;
 use super::planar::{self, OUTSIDE, Region, interior_point};
 use crate::Point2;
 use crate::tolerance::ROUNDING;
-use crate::vector::{Vector, cross, dot, edges, fan_solid_angle, lexicographic, scale, sub, unit};
+use crate::vector::{
+    Vector, across, cross, dot, edges, fan_solid_angle, lexicographic, scale, sub, unit,
+};
 
 /// Where a piece of face lies relative to the other operand.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -369,11 +371,6 @@ fn component(links: &[Vec<usize>], piece: usize, seen: &mut [bool]) -> Vec<usize
         }
     }
     reached
-}
-
-/// The part of a vector across a unit axis.
-fn across(v: Vector, axis: Vector) -> Vector {
-    sub(v, scale(axis, dot(v, axis)))
 }
 
 /// The side of the other operand that a piece of face `f` lies on next to an edge with unit
