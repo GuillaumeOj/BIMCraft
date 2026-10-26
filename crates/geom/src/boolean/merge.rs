@@ -21,7 +21,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use super::BooleanError;
-use super::assemble::{Faces, HalfEdges, around_edge};
+use super::assemble::{Faces, HalfEdges, twins_around};
 use super::face::{Pool, Projection, area_and_centre, clean_face, plane};
 use super::planar::{canonical, faces_of};
 use super::snap::{find, union};
@@ -281,15 +281,17 @@ fn collapsed(
     });
     (no_fault
         && still_paired(&state.along, &changed, faces, pool)
-        && !fuses(state, &changed, faces, pool))
+        && !fuses(state, (keep, gone), &changed, faces, pool))
     .then_some(changed)
 }
 
-/// Whether the faces `changed` leave an edge [`fused`] that was not: where a collapse joins two
-/// edges into one, the lump touches itself along it, and giving each fan of faces around its
-/// ends its own vertex must still pull the faces apart, or the solid's checks reject the edge.
+/// Whether the faces `changed`, once `keep` takes the place of `gone`, leave an edge [`fused`]
+/// that was not: where a collapse joins two edges into one, the lump touches itself along it,
+/// and giving each fan of faces around its ends its own vertex must still pull the faces apart,
+/// or the solid's checks reject the edge.
 fn fuses(
     state: &Collapsing,
+    (keep, gone): (usize, &[usize]),
     changed: &[(usize, Vec<Vec<usize>>)],
     faces: &Faces,
     pool: &Pool,
@@ -313,15 +315,19 @@ fn fuses(
         new.get(&g)
             .map_or(faces[g].as_slice(), |face| face.as_slice())
     };
-    !fused(&vertices, around, after, pool).is_subset(&fused(&vertices, around, before, pool))
+    // An edge already fused keeps being so under its new name.
+    let renamed = |v: usize| if gone.contains(&v) { keep } else { v };
+    let was: BTreeSet<(usize, usize)> = (fused(&vertices, around, before, pool).into_iter())
+        .map(|(a, b)| (renamed(a).min(renamed(b)), renamed(a).max(renamed(b))))
+        .collect();
+    !fused(&vertices, around, after, pool).is_subset(&was)
 }
 
-/// The edges at `vertices` along which the faces pair, as the solid's checks pair them, into
-/// pairs no fan of faces around either end tells apart: two pairs whose corners lie in one fan
-/// at both ends, no face along it lying flat together with one running the other way. Giving
-/// each fan its own vertex, as lumps touching along an edge get, cannot split such an edge, and
-/// no merge of coplanar faces removes it. `around` gives the faces that may have a vertex,
-/// `face` each face.
+/// The edges at `vertices` along which the faces pair, as `assemble` pairs them, into pairs no
+/// fan of faces around either end tells apart: two pairs whose corners lie in one fan at both
+/// ends, besides those a merge of coplanar faces takes out ([`fans_at`]). Giving each fan its own
+/// vertex, as lumps touching along an edge get, cannot split such an edge. `around` gives the
+/// faces that may have a vertex, `face` each face.
 fn fused<'a>(
     vertices: &BTreeSet<usize>,
     around: impl Fn(usize) -> BTreeSet<usize>,
@@ -332,12 +338,15 @@ fn fused<'a>(
     let mut fused = BTreeSet::new();
     for &v in vertices {
         for (edge, pairs) in fans(v) {
+            if fused.contains(&edge) {
+                continue;
+            }
             let other = if edge.0 == v { edge.1 } else { edge.0 };
+            // Edges with more than one pair are rare: the far end's fans are found afresh.
             let far = fans(other).remove(&edge).unwrap_or_default();
-            let ends = |g: &usize| (pairs.get(g), far.get(g));
-            let keys: Vec<usize> = pairs.keys().copied().collect();
-            if (keys.iter().enumerate()).any(|(i, g)| keys[..i].iter().any(|h| ends(g) == ends(h)))
-            {
+            let ends: BTreeSet<(usize, Option<&usize>)> =
+                (pairs.iter()).map(|(g, &fan)| (fan, far.get(g))).collect();
+            if ends.len() < pairs.len() {
                 fused.insert(edge);
             }
         }
@@ -351,11 +360,11 @@ type Fans = BTreeMap<(usize, usize), BTreeMap<usize, usize>>;
 
 /// The fans of faces around vertex `v`, from the faces `around` it: for each edge at `v` along
 /// which more than one pair of faces runs, with its smaller vertex first, the fan of each pair,
-/// keyed by the face running from the smaller vertex. Edges along which a face lies flat
-/// together with one running the other way ([`flat_together`]) are left out. Two corners at
-/// `v` are in one fan when the faces they belong to pair along an edge at `v`, around the edge
-/// as the solid's checks pair them (the side just before each one running from the smaller
-/// vertex).
+/// keyed by the face running from the smaller vertex. Two corners at `v` are in one fan when
+/// the faces they belong to pair along an edge at `v` ([`twins_around`]). A face lying flat
+/// together with one running the other way ([`flat_together`]) merges with it (step 3), taking
+/// one pair off the edge, which is then in the middle of the merged face: such pairs are left
+/// out, one per face running the other way.
 fn fans_at<'a>(
     v: usize,
     around: BTreeSet<usize>,
@@ -378,41 +387,45 @@ fn fans_at<'a>(
         sides.entry(after).or_default().push((c, true));
         sides.entry(before).or_default().push((c, false));
     }
+    // Two pairs along an edge need four sides; most vertices have none.
+    if sides.values().all(|sides| sides.len() < 4) {
+        return Fans::new();
+    }
+    let mut normals: BTreeMap<usize, Vector> = BTreeMap::new();
     let mut fan: Vec<usize> = (0..corners.len()).collect();
-    // The corner at v of each side running from the smaller vertex, by edge.
+    // The corner at v of each side running from the smaller vertex that stays, by edge.
     let mut forward_corners: Vec<((usize, usize), usize)> = Vec::new();
-    let mut dissolved = BTreeSet::new();
     for (other, sides) in sides {
         let edge = (v.min(other), v.max(other));
         // A side runs from the smaller vertex if it leaves v and v is the smaller.
         let forward = |&(_, leaves): &(usize, bool)| leaves == (v == edge.0);
-        let order = around_edge(
-            pool.get(edge.0),
-            pool.get(edge.1),
-            (sides.iter()).map(|side| (forward(side), plane(face(corners[side.0].0), pool).0)),
-        );
-        for (i, &k) in order.iter().enumerate() {
-            let twin = order[(i + order.len() - 1) % order.len()];
-            if forward(&sides[k]) && !forward(&sides[twin]) {
-                union(&mut fan, sides[k].0, sides[twin].0);
-                forward_corners.push((edge, sides[k].0));
+        let along: Vec<(bool, Vector)> = (sides.iter())
+            .map(|side| {
+                let g = corners[side.0].0;
+                let normal = *normals.entry(g).or_insert_with(|| plane(face(g), pool).0);
+                (forward(side), normal)
+            })
+            .collect();
+        // Sides that do not pair join no fans; `still_paired` refuses such an edge.
+        let twins = twins_around(pool.get(edge.0), pool.get(edge.1), &along).unwrap_or_default();
+        let mut merging: BTreeSet<usize> = BTreeSet::new();
+        for (k, twin) in twins {
+            union(&mut fan, sides[k].0, sides[twin].0);
+            let flat = (sides.iter().enumerate()).find(|&(j, side)| {
+                !forward(side)
+                    && !merging.contains(&j)
+                    && flat_together(face(corners[sides[k].0].0), face(corners[side.0].0), pool)
+            });
+            match flat {
+                Some((j, _)) => {
+                    merging.insert(j);
+                }
+                None => forward_corners.push((edge, sides[k].0)),
             }
-        }
-        // Faces along the edge either way that lie flat together merge (step 3), the edge then
-        // in the middle of the merged face: it is left to the others.
-        let face_of = |&(c, _): &(usize, bool)| face(corners[c].0);
-        if (sides.iter().filter(|side| forward(side))).any(|one| {
-            (sides.iter().filter(|side| !forward(side)))
-                .any(|other| flat_together(face_of(one), face_of(other), pool))
-        }) {
-            dissolved.insert(edge);
         }
     }
     let mut fans = Fans::new();
-    for (edge, c) in forward_corners
-        .into_iter()
-        .filter(|(edge, _)| !dissolved.contains(edge))
-    {
+    for (edge, c) in forward_corners {
         fans.entry(edge)
             .or_default()
             .insert(corners[c].0, find(&mut fan, c));
@@ -426,10 +439,18 @@ fn fans_at<'a>(
 fn flat_together(one: &[Vec<usize>], other: &[Vec<usize>], pool: &Pool) -> bool {
     let planes = [plane(one, pool), plane(other, pool)];
     dot(planes[0].0, planes[1].0) > 0.0
-        && planes.into_iter().any(|(normal, centre)| {
-            (one.iter().chain(other).flatten())
-                .all(|&v| dot(normal, sub(pool.get(v), centre)).abs() <= WITHIN_TOLERANCE)
-        })
+        && (planes.into_iter())
+            .any(|plane| within_plane(plane, one.iter().chain(other).flatten().copied(), pool))
+}
+
+/// Whether the vertices lie within the tolerance of the plane through `centre` with unit
+/// `normal`.
+fn within_plane(
+    (normal, centre): (Vector, Vector),
+    vertices: impl IntoIterator<Item = usize>,
+    pool: &Pool,
+) -> bool {
+    (vertices.into_iter()).all(|v| dot(normal, sub(pool.get(v), centre)).abs() <= WITHIN_TOLERANCE)
 }
 
 /// The faces running along each directed edge.
@@ -487,11 +508,7 @@ fn still_paired(
             .chain(backward.iter().map(|&g| (false, g)))
             .map(|(ahead, g)| (ahead, normal(g)))
             .collect();
-        let order = around_edge(pool.get(a), pool.get(b), sides.iter().copied());
-        (0..order.len()).all(|i| {
-            let before = order[(i + order.len() - 1) % order.len()];
-            !(sides[order[i]].0 && sides[before].0)
-        })
+        twins_around(pool.get(a), pool.get(b), &sides).is_some()
     })
 }
 
@@ -619,10 +636,8 @@ pub(super) fn merge_coplanar(
     // not coplanar, and would otherwise join them into one bent face.
     let flat_together = |groups: [&[usize]; 2]| {
         groups.into_iter().flatten().any(|&f| {
-            let (normal, centre) = planes[f];
-            (groups.into_iter().flatten())
-                .flat_map(|&g| faces[g].iter().flatten())
-                .all(|&v| dot(normal, sub(pool.get(v), centre)).abs() <= WITHIN_TOLERANCE)
+            let vertices = (groups.into_iter().flatten()).flat_map(|&g| faces[g].iter().flatten());
+            within_plane(planes[f], vertices.copied(), pool)
         })
     };
     let at = |f: usize| {

@@ -147,23 +147,37 @@ fn pair(faces: &Faces, planes: &[(Vector, Vector)], pool: &Pool) -> Option<Vec<u
         if 2 * ahead != sides.len() {
             return None;
         }
-        // The solid lies clockwise of a forward side (seen along the edge), so its twin is the
-        // side just before.
-        let normals = sides
-            .iter()
-            .map(|&h| (forward(&h), planes[half_edges.face(h)].0));
-        let order = around_edge(pool.get(u), pool.get(v), normals);
-        let around: Vec<usize> = order.into_iter().map(|i| sides[i]).collect();
-        for (i, &h) in around.iter().enumerate() {
-            let twin = around[(i + around.len() - 1) % around.len()];
-            if forward(&h) {
-                if forward(&twin) {
-                    return None;
-                }
-                twins[h] = twin;
-                twins[twin] = h;
-            }
+        let normals: Vec<(bool, Vector)> = (sides.iter())
+            .map(|&h| (forward(&h), planes[half_edges.face(h)].0))
+            .collect();
+        for (k, twin) in twins_around(pool.get(u), pool.get(v), &normals)? {
+            twins[sides[k]] = sides[twin];
+            twins[sides[twin]] = sides[k];
         }
+    }
+    Some(twins)
+}
+
+/// The twin of each side running from `u` to `v`, the sides given as for [`around_edge`]: as
+/// pairs of positions in `sides`, the forward side first. The solid lies clockwise of a forward
+/// side (seen along the edge), so its twin is the side just before; `None` if that side runs
+/// forward too.
+pub(super) fn twins_around(
+    u: Vector,
+    v: Vector,
+    sides: &[(bool, Vector)],
+) -> Option<Vec<(usize, usize)>> {
+    let order = around_edge(u, v, sides.iter().copied());
+    let mut twins = Vec::new();
+    for (i, &k) in order.iter().enumerate() {
+        if !sides[k].0 {
+            continue;
+        }
+        let twin = order[(i + order.len() - 1) % order.len()];
+        if sides[twin].0 {
+            return None;
+        }
+        twins.push((k, twin));
     }
     Some(twins)
 }
