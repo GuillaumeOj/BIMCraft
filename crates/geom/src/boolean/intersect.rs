@@ -21,7 +21,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use super::arrange::{Line, line};
 use super::face::{PlanarFace, Pool, edge_planes, meeting_direction};
 use crate::tolerance::{ROUNDING, WITHIN_TOLERANCE};
-use crate::vector::{add, dot, edges, scale, sub};
+use crate::vector::{add, dot, edges, scale, segment_distance_squared, sub};
 
 /// The segments to insert into each face, as vertex pairs of the pool.
 pub(super) type Segments = Vec<Vec<(usize, usize)>>;
@@ -213,7 +213,7 @@ impl Pair<'_> {
             .map(|(v, toggles)| (dot(direction, pool.get(v)), v, toggles))
             .collect();
         points.sort_by(|p, q| p.0.total_cmp(&q.0).then(p.1.cmp(&q.1)));
-        let on_edges = along_edges([one, other], [&sides_a, &sides_b], &points);
+        let on_edges = along_edges([one, other], [&sides_a, &sides_b], &points, pool);
         let mut inside = [false; 4];
         let mut segments = Vec::new();
         for (i, &(_, v, toggles)) in points.iter().enumerate() {
@@ -283,14 +283,17 @@ impl Pair<'_> {
 }
 
 /// The points along the line two faces share, in order, that lie between the ends of an edge of
-/// either face whose ends both lie on the other's plane, with that edge (ends in increasing
-/// order). Such an edge runs along the line, so a point the line holds between its ends, such as
-/// where the other face's boundary crosses the edge's plane, is made on the edge: the edge is
-/// split there, as is every face along it.
+/// either face whose ends both lie on the other's plane, and within rounding of the edge, with
+/// that edge (ends in increasing order). Such an edge runs along the line, so a point the line
+/// holds between its ends, such as where the other face's boundary crosses the edge's plane, is
+/// made on the edge: the edge is split there, as is every face along it. Where the two planes
+/// meet at a small angle, points within rounding of both lie up to micrometres across the line
+/// they share; the edge passes through only those within rounding of it.
 fn along_edges(
     faces: [&PlanarFace; 2],
     sides: [&[Vec<i8>]; 2],
     points: &[(f64, usize, [bool; 4])],
+    pool: &Pool,
 ) -> Vec<(Line, usize)> {
     let lying: Vec<(usize, usize)> = (faces.into_iter().zip(sides))
         .flat_map(|(face, sides)| face.rings.iter().zip(sides))
@@ -308,8 +311,11 @@ fn along_edges(
     for (u, v) in lying {
         // Every vertex on the other's plane is a point of the line.
         let (i, j) = (position[&u], position[&v]);
-        let between = &points[i.min(j) + 1..i.max(j)];
-        on.extend(between.iter().map(|&(_, w, _)| (line(u, v), w)));
+        let between = points[i.min(j) + 1..i.max(j)].iter().map(|&(_, w, _)| w);
+        let (start, end) = (pool.get(u), pool.get(v));
+        let near =
+            |&w: &usize| segment_distance_squared(pool.get(w), start, end) <= ROUNDING * ROUNDING;
+        on.extend(between.filter(near).map(|w| (line(u, v), w)));
     }
     on
 }

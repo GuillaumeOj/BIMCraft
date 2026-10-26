@@ -1240,17 +1240,18 @@ fn a_collapse_does_not_fuse_two_edges_into_one() {
 /// plane between that edge's ends. The edge was not split at the crossing, so the faces on the
 /// plane were cut along a sliver between the edge and the crossing, taken as lying on the needle's
 /// side face, and the union had an open edge. A point the line two planes share holds between the
-/// ends of an edge lying on both is now made on the edge.
+/// ends of an edge lying on both is now made on the edge, if it lies within rounding of the edge.
+/// `…-f` (`crash-aa8670fa…`, found by CI on #281): the same lens four times smaller, where the
+/// needle's bottom lies on one of two lens faces 0.1° apart: their shared edge was split at the
+/// needle's corners, up to 3 µm off it, as points of the line the two planes share, and faces were
+/// left bent.
 #[test]
 fn an_edge_lying_on_a_plane_is_split_where_the_line_there_is() {
-    check_needles_both_ways(&[(
-        [(69, 43, 122), (-95, -1, 229), (0, 0, 8)],
-        -6,
-        (42, -17, 1),
-        (9, -3, 255),
-        -18,
-        (82, 45, 39),
-    )]);
+    let lens = [(69, 43, 122), (-95, -1, 229), (0, 0, 8)];
+    check_needles_both_ways(&[
+        (lens, -6, (42, -17, 1), (9, -3, 255), -18, (82, 45, 39)),
+        (lens, -8, (42, -17, 1), (9, -3, 255), -18, (82, 45, 39)),
+    ]);
 }
 
 /// `fuzz/seeds/extruded_boolean/needle-across-a-tiny-lens-corner` (`crash-b00b3dda…`, found by the
