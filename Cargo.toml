@@ -20,13 +20,13 @@ core-txn = { path = "crates/core-txn" }
 criterion = { version = "=0.8.2", default-features = false }
 express = { path = "crates/express" }
 # Without the default features, which fetch remote and file `$ref`s over HTTP and TLS.
-jsonschema = { version = "=0.58.5", default-features = false }
+jsonschema = { version = "=0.58.6", default-features = false }
 libm = "=0.2.16"
 num-rational = { version = "=0.4.2", default-features = false, features = [
   "num-bigint-std",
 ] }
 platform = { path = "crates/platform" }
-proptest = "=1.11.0"
+proptest = "=1.12.0"
 rayon = "=1.12.0"
 robust = "=1.2.0"
 # Without the default `cache` feature, which only adds a statement cache and its dependencies.
@@ -40,10 +40,10 @@ rust-names = { path = "crates/rust-names" }
 serde = { version = "=1.0.229", features = ["derive"] }
 # float_roundtrip: parse every finite f64 back to the exact value it was written from, which
 # replaying serialised commands relies on (CORE-11).
-serde_json = { version = "=1.0.151", features = ["float_roundtrip"] }
+serde_json = { version = "=1.0.154", features = ["float_roundtrip"] }
 tempfile = "=3.27.0"
 thiserror = "=2.0.21"
-toml = "=1.1.6"
+toml = "=1.1.8"
 
 # Member crates opt in with `[lints] workspace = true`.
 [workspace.lints.rust]
