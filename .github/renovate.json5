@@ -13,22 +13,24 @@
   // Pins are exact, so a bump rewrites the requirement itself (`=1.0.228` -> `=1.0.229`).
   rangeStrategy: "bump",
   semanticCommits: "enabled",
-  semanticCommitType: "build",
   semanticCommitScope: "deps",
   // .githooks/commit-msg, run in CI by scripts/check-pr.sh, requires a DCO sign-off on every commit.
   commitBody: "Signed-off-by: renovate[bot] <29139614+renovate[bot]@users.noreply.github.com>",
   packageRules: [
+    // A package rule, not a top-level option: config:recommended types dependencies `fix` and the
+    // rest `chore` through package rules, which override top-level options.
+    {
+      matchPackageNames: ["*"],
+      semanticCommitType: "build",
+    },
+    // One group for both workspaces: fuzz/ path-depends on the root crates and shares exact pins
+    // with them (libm, serde_json), so bumping one workspace alone leaves the other unresolvable.
+    // The hosted app cannot run `cargo update`, so a root bump leaves fuzz/Cargo.lock stale and the
+    // Fuzzing check fails `--locked`: run `cargo update -w` in fuzz/ and commit it on the PR.
     {
       matchManagers: ["cargo"],
-      matchFileNames: ["!fuzz/**"],
       matchUpdateTypes: ["minor", "patch"],
       groupName: "rust-minor-patch",
-    },
-    {
-      matchManagers: ["cargo"],
-      matchFileNames: ["fuzz/**"],
-      matchUpdateTypes: ["minor", "patch"],
-      groupName: "fuzz-minor-patch",
     },
     {
       matchManagers: ["bun"],
@@ -46,10 +48,16 @@
       matchUpdateTypes: ["minor", "patch"],
       groupName: "tools",
     },
-    // BUN_VERSION and ui/package.json `packageManager` must stay equal (scripts/setup.sh warns otherwise).
+    // BUN_VERSION (installed by CI and scripts/setup.sh) and ui/package.json `packageManager` must stay equal.
     {
       matchDepNames: ["bun"],
       groupName: "bun",
+    },
+    // The tauri crates and the @tauri-apps/api package must move together; after the cargo and bun
+    // groups so it overrides them.
+    {
+      matchPackageNames: ["/^tauri(-|$)/", "@tauri-apps/**"],
+      groupName: "tauri",
     },
     {
       matchManagers: ["rust-toolchain"],
