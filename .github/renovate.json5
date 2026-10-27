@@ -1,0 +1,77 @@
+// Versions are pinned exactly (AGENTS.md §4); Renovate proposes the bumps.
+// Run by the Mend Renovate GitHub App: no workflow, no secret.
+{
+  $schema: "https://docs.renovatebot.com/renovate-schema.json",
+  // Keeps actions pinned to a full commit SHA with a `# vX.Y.Z` comment (check-pinned-deps.ts).
+  extends: ["config:recommended", "helpers:pinGitHubActionDigestsToSemver"],
+  timezone: "Europe/Paris",
+  schedule: ["before 6am on monday"],
+  // Minimum release age (AGENTS.md §4). "strict" opens no branch before the age is reached;
+  // vulnerability fixes skip the wait, as the rule allows.
+  minimumReleaseAge: "14 days",
+  internalChecksFilter: "strict",
+  // Pins are exact, so a bump rewrites the requirement itself (`=1.0.228` -> `=1.0.229`).
+  rangeStrategy: "bump",
+  semanticCommits: "enabled",
+  semanticCommitType: "build",
+  semanticCommitScope: "deps",
+  // .githooks/commit-msg, run in CI by scripts/check-pr.sh, requires a DCO sign-off on every commit.
+  commitBody: "Signed-off-by: renovate[bot] <29139614+renovate[bot]@users.noreply.github.com>",
+  packageRules: [
+    {
+      matchManagers: ["cargo"],
+      matchFileNames: ["!fuzz/**"],
+      matchUpdateTypes: ["minor", "patch"],
+      groupName: "rust-minor-patch",
+    },
+    {
+      matchManagers: ["cargo"],
+      matchFileNames: ["fuzz/**"],
+      matchUpdateTypes: ["minor", "patch"],
+      groupName: "fuzz-minor-patch",
+    },
+    {
+      matchManagers: ["bun"],
+      matchUpdateTypes: ["minor", "patch"],
+      groupName: "ui-minor-patch",
+    },
+    {
+      matchManagers: ["github-actions"],
+      groupName: "actions",
+      semanticCommitType: "ci",
+      semanticCommitScope: null,
+    },
+    {
+      matchFileNames: ["scripts/tool-versions.env"],
+      matchUpdateTypes: ["minor", "patch"],
+      groupName: "tools",
+    },
+    // BUN_VERSION and ui/package.json `packageManager` must stay equal (scripts/setup.sh warns otherwise).
+    {
+      matchDepNames: ["bun"],
+      groupName: "bun",
+    },
+    {
+      matchManagers: ["rust-toolchain"],
+      matchFileNames: ["rust-toolchain.toml"],
+      groupName: "rust-toolchain",
+    },
+    // A new nightly ships every day; monthly is enough for the fuzz targets.
+    {
+      matchManagers: ["rust-toolchain"],
+      matchFileNames: ["fuzz/rust-toolchain.toml"],
+      groupName: "fuzz-toolchain",
+      schedule: ["before 6am on the first day of the month"],
+    },
+  ],
+  customManagers: [
+    {
+      // Each pin carries a `# renovate: datasource=… depName=…` comment on the line above.
+      customType: "regex",
+      managerFilePatterns: ["/^scripts/tool-versions\\.env$/"],
+      matchStrings: [
+        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)( extractVersion=(?<extractVersion>\\S+))?\\n[A-Z_]+=(?<currentValue>\\S+)",
+      ],
+    },
+  ],
+}

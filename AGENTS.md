@@ -62,7 +62,7 @@ CI runs every check on every pull request, on Linux, macOS and Windows. Locally,
 - **Toolchains**: Rust in `rust-toolchain.toml`, Bun in `ui/package.json` (`packageManager`) and CI, every CLI tool version in CI and `scripts/setup.sh`.
 - **Release age**: only adopt versions published at least 14 days ago (supply-chain protection), unless a security fix requires otherwise.
 - **New dependency?** Prefer the standard library or existing dependencies. Justify a new one in the commit body: purpose, maintenance status, licence (must pass `deny.toml`), size, and whether it builds for `wasm32-unknown-unknown` when used by a core crate.
-- `scripts/check-pinned-deps.ts` enforces this locally and in CI. Dependabot proposes version bumps.
+- `scripts/check-pinned-deps.ts` enforces this locally and in CI. Renovate proposes version bumps (`.github/renovate.json5`), toolchains and the CLI tools in `scripts/tool-versions.env` included.
 
 ## 5. Tests and coverage
 
@@ -163,5 +163,5 @@ Users are architects and engineers, not developers. For every user-facing featur
 | `ui/` | Web frontend (Bun, React, TypeScript) |
 | `scripts/` | Repository tooling |
 | `.githooks/` | Git hooks shared by everyone (enable with `scripts/setup.sh`) |
-| `.github/` | CI workflows, templates, Dependabot |
+| `.github/` | CI workflows, templates, Renovate config |
 | `.claude/` | Claude Code settings, hooks and skills |

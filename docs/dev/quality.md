@@ -31,7 +31,7 @@ While working, agents and contributors run the narrowest check that covers their
 
 ## Exact versions
 
-Ranges let a build change without a commit, which breaks reproducibility and opens the door to supply-chain attacks (a compromised patch release is pulled automatically). Exact versions plus committed lockfiles mean every change of dependency is a reviewed diff. The 14-day minimum release age gives the ecosystem time to detect malicious releases. Actions are pinned by commit SHA because tags can be moved. Dependabot keeps pins current.
+Ranges let a build change without a commit, which breaks reproducibility and opens the door to supply-chain attacks (a compromised patch release is pulled automatically). Exact versions plus committed lockfiles mean every change of dependency is a reviewed diff. The 14-day minimum release age gives the ecosystem time to detect malicious releases. Actions are pinned by commit SHA because tags can be moved. Renovate keeps pins current.
 
 ## Coverage thresholds
 

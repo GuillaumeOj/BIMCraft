@@ -13,7 +13,8 @@ Settings to apply once the GitHub repository exists. They make CI the final gate
 ## Security
 
 - Enable private vulnerability reporting (Settings → Security → Private vulnerability reporting).
-- Enable Dependabot alerts and security updates, and secret scanning with push protection.
+- Enable Dependabot alerts and secret scanning with push protection. Leave Dependabot security and version updates off: Renovate opens those pull requests, security fixes included, from the alerts.
+- Install the [Renovate GitHub App](https://github.com/apps/renovate) for this repository only, once `.github/renovate.json5` is on `main` (Renovate then skips its onboarding pull request). It keeps a “Dependency Dashboard” issue listing pending and held-back updates.
 - Actions: allow only actions pinned to a full commit SHA (Settings → Actions → General → “Require actions to be pinned to a full-length commit SHA”); set the default workflow permissions to read-only; do not allow Actions to create or approve pull requests.
 
 ## Labels
