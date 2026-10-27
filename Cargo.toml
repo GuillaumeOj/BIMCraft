@@ -19,6 +19,7 @@ core-model = { path = "crates/core-model" }
 core-txn = { path = "crates/core-txn" }
 criterion = { version = "=0.8.2", default-features = false }
 express = { path = "crates/express" }
+host-desktop = { path = "crates/host-desktop" }
 # Without the default features, which fetch remote and file `$ref`s over HTTP and TLS.
 jsonschema = { version = "=0.58.5", default-features = false }
 libm = "=0.2.16"
@@ -41,6 +42,10 @@ serde = { version = "=1.0.229", features = ["derive"] }
 # float_roundtrip: parse every finite f64 back to the exact value it was written from, which
 # replaying serialised commands relies on (CORE-11).
 serde_json = { version = "=1.0.151", features = ["float_roundtrip"] }
+# The desktop window and its IPC (UI-01, API-04). Without the default features: desktop-app
+# adds the webview runtime (wry), so host-desktop's IPC builds and tests without a webview.
+tauri = { version = "=2.12.1", default-features = false }
+tauri-build = { version = "=2.7.1", default-features = false }
 tempfile = "=3.27.0"
 thiserror = "=2.0.21"
 toml = "=1.1.6"

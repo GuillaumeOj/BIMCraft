@@ -1,0 +1,21 @@
+{
+  "app.name": "BIMCraft",
+  "app.monogram": "B",
+  "language.label": "Langue",
+  "language.system": "Langue du système",
+  "language.en": "English",
+  "language.fr": "Français",
+  "shell.skipToViewport": "Aller à la vue",
+  "shell.viewport": "Vue",
+  "shell.openViews": "Vues ouvertes",
+  "shell.noOpenViews": "Aucune vue ouverte",
+  "panel.project": "Projet",
+  "panel.projectEmpty": "Aucun projet ouvert",
+  "panel.properties": "Propriétés",
+  "panel.propertiesEmpty": "Aucune sélection",
+  "panel.history": "Historique",
+  "panel.historyEmpty": "Aucune modification pour l’instant",
+  "panel.console": "Console",
+  "panel.consoleEmpty": "La console exécutera des scripts Python dans une version ultérieure.",
+  "panel.closeConsole": "Fermer la console"
+}

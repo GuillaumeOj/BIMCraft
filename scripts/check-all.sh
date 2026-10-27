@@ -1,6 +1,6 @@
 #!/bin/sh
 # Runs the project checks (AGENTS.md §9). CI calls the same sections, so local and remote never drift.
-# Usage: scripts/check-all.sh [section...]   sections: repo rust coverage wasm fuzz fuzz-explore corpus ui e2e docs
+# Usage: scripts/check-all.sh [section...]   sections: repo rust coverage wasm fuzz fuzz-explore corpus ui e2e desktop docs
 # (default: all but fuzz-explore, which CI runs on a schedule)
 # A section is skipped only when the code it checks does not exist yet.
 # CHECK_CRATES="a b" limits the Rust sections to those crates, for a quick local run on the crates
@@ -18,19 +18,21 @@ require() {
 }
 has_rust() { ls crates/*/Cargo.toml >/dev/null 2>&1; }
 has_ui() { [ -f ui/package.json ]; }
+has_e2e() { [ -f ui/playwright.config.ts ]; }
 has_fuzz() { [ -f fuzz/Cargo.toml ]; }
 in_scope() { [ -z "${CHECK_CRATES:-}" ] || case " $CHECK_CRATES " in *" $1 "*) true ;; *) false ;; esac; }
 packages() { if [ -n "${CHECK_CRATES:-}" ]; then printf -- '--package %s ' $CHECK_CRATES; else echo --workspace; fi; }
 existing_crates() { while read -r crate; do [ -f "crates/$crate/Cargo.toml" ] && echo "$crate"; done < "$1"; }
 
 check_repo() {
-  step "Repository: spelling, TOML, secrets, pinned versions, crate layering"
+  step "Repository: spelling, TOML, secrets, pinned versions, crate layering, generated API types"
   require bun; require typos; require taplo; require gitleaks
   typos
   taplo fmt --check
   gitleaks git --no-banner --redact
   bun scripts/check-pinned-deps.ts
   bun scripts/check-architecture.ts
+  bun scripts/generate-api-types.ts --check
   (cd scripts && bun test)
   if command -v actionlint >/dev/null 2>&1; then actionlint; fi
 }
@@ -148,16 +150,26 @@ check_ui() {
     cd ui
     bun install --frozen-lockfile
     bunx biome ci .
-    bunx tsc --noEmit
+    # Everything, then the app code alone without Node types (it runs in the browser).
+    bun run typecheck
     bunx vitest run --coverage
     bun audit
   )
 }
 
 check_e2e() {
-  has_ui || { step "E2E: no UI yet, skipped"; return; }
+  has_e2e || { step "E2E: no Playwright tests yet, skipped"; return; }
   step "UI: end-to-end tests"
   (cd ui && bun install --frozen-lockfile && bunx playwright test)
+}
+
+check_desktop() {
+  has_ui || { step "Desktop: no UI yet, skipped"; return; }
+  step "Desktop program: the window with the bundled UI (UI-01)"
+  require bun
+  (cd ui && bun install --frozen-lockfile && bunx vite build)
+  # tauri/custom-protocol embeds ui/dist, as in a release; without it the window loads the dev server.
+  cargo build --locked --package desktop-app --features tauri/custom-protocol
 }
 
 check_docs() {
@@ -167,10 +179,10 @@ check_docs() {
   mdbook build docs/reference
 }
 
-sections=${*:-repo rust coverage wasm fuzz corpus ui e2e docs}
+sections=${*:-repo rust coverage wasm fuzz corpus ui e2e desktop docs}
 for section in $sections; do
   case "$section" in
-    repo|rust|coverage|wasm|fuzz|corpus|ui|e2e|docs) "check_$section" ;;
+    repo|rust|coverage|wasm|fuzz|corpus|ui|e2e|desktop|docs) "check_$section" ;;
     fuzz-explore) check_fuzz_explore ;;
     *) echo "check-all: unknown section '$section'" >&2; exit 2 ;;
   esac

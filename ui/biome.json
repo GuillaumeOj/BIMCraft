@@ -3,7 +3,14 @@
   "vcs": { "enabled": true, "clientKind": "git", "useIgnoreFile": true, "root": ".." },
   "files": {
     "ignoreUnknown": true,
-    "includes": ["**", "!**/dist", "!**/coverage", "!**/playwright-report", "!**/test-results"]
+    "includes": [
+      "**",
+      "!**/dist",
+      "!**/*.gen.ts",
+      "!**/coverage",
+      "!**/playwright-report",
+      "!**/test-results"
+    ]
   },
   "formatter": {
     "enabled": true,
@@ -16,6 +23,7 @@
     "enabled": true,
     "actions": { "source": { "organizeImports": "on", "useSortedKeys": "off" } }
   },
+  "plugins": ["./lint/no-literal-text-attributes.grit"],
   "linter": {
     "enabled": true,
     "rules": {
@@ -28,6 +36,18 @@
         "useHookAtTopLevel": "error"
       },
       "style": {
+        "noJsxLiterals": "error",
+        "noRestrictedImports": {
+          "level": "error",
+          "options": {
+            "patterns": [
+              {
+                "group": ["@tauri-apps/**"],
+                "message": "UI-01: reach the core through the API client in src/api/, never through Tauri directly."
+              }
+            ]
+          }
+        },
         "noNonNullAssertion": "error",
         "useConst": "error",
         "useImportType": "error"
@@ -41,8 +61,14 @@
   "javascript": { "formatter": { "quoteStyle": "double", "semicolons": "always" } },
   "overrides": [
     {
+      "includes": ["src/api/**"],
+      "linter": { "rules": { "style": { "noRestrictedImports": "off" } } }
+    },
+    {
       "includes": ["**/*.test.ts", "**/*.test.tsx", "e2e/**"],
-      "linter": { "rules": { "suspicious": { "noConsole": "off" } } }
+      "linter": {
+        "rules": { "style": { "noJsxLiterals": "off" }, "suspicious": { "noConsole": "off" } }
+      }
     }
   ]
 }
