@@ -41,14 +41,14 @@ rust-names = { path = "crates/rust-names" }
 serde = { version = "=1.0.229", features = ["derive"] }
 # float_roundtrip: parse every finite f64 back to the exact value it was written from, which
 # replaying serialised commands relies on (CORE-11).
-serde_json = { version = "=1.0.151", features = ["float_roundtrip"] }
+serde_json = { version = "=1.0.154", features = ["float_roundtrip"] }
 # The desktop window and its IPC (UI-01, API-04). Without the default features: desktop-app
 # adds the webview runtime (wry), so host-desktop's IPC builds and tests without a webview.
 tauri = { version = "=2.12.1", default-features = false }
 tauri-build = { version = "=2.7.1", default-features = false }
 tempfile = "=3.27.0"
 thiserror = "=2.0.21"
-toml = "=1.1.6"
+toml = "=1.1.8"
 
 # Member crates opt in with `[lints] workspace = true`.
 [workspace.lints.rust]

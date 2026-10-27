@@ -27,7 +27,7 @@ persist = { path = "../crates/persist" }
 schema = { path = "../crates/schema" }
 schema-gen = { path = "../crates/schema-gen" }
 # Already in the lockfile through api: reads the server's answers back.
-serde_json = "=1.0.151"
+serde_json = "=1.0.154"
 
 # A native test tool, not a core crate: libFuzzer's harness writes crash files, which the ARCH-02
 # lints of clippy.toml would flag inside `fuzz_target!`.
