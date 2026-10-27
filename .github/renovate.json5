@@ -1,0 +1,81 @@
+// Versions are pinned exactly (AGENTS.md §4); Renovate proposes the bumps.
+// Run by the Mend Renovate GitHub App: no workflow, no secret.
+{
+  $schema: "https://docs.renovatebot.com/renovate-schema.json",
+  extends: [
+    "config:recommended",
+    // Keeps actions pinned to a full commit SHA with a `# vX.Y.Z` comment (check-pinned-deps.ts).
+    "helpers:pinGitHubActionDigestsToSemver",
+    // .githooks/commit-msg, run in CI by scripts/check-pr.sh, requires a DCO sign-off on every commit.
+    ":gitSignOff",
+    // After config:recommended, which types dependency bumps `fix` and the rest `chore`.
+    ":semanticCommitTypeAll(build)",
+  ],
+  timezone: "Europe/Paris",
+  schedule: ["before 6am on monday"],
+  // Open branches are updated in the schedule window too, not each time a new release comes of age.
+  updateNotScheduled: false,
+  // Minimum release age (AGENTS.md §4). Vulnerability fixes skip the wait, as the rule allows.
+  minimumReleaseAge: "14 days",
+  // Pins are exact, so a bump rewrites the requirement itself (`=1.0.228` -> `=1.0.229`).
+  rangeStrategy: "bump",
+  semanticCommits: "enabled",
+  packageRules: [
+    // One group for both workspaces: fuzz/ path-depends on the root crates and shares exact pins
+    // with them (libm, serde_json), so bumping one workspace alone leaves the other unresolvable.
+    // Renovate refreshes only the lockfiles of the manifests it edits; fuzz/Cargo.lock needs a
+    // hand-made refresh (docs/dev/quality.md#fuzzing).
+    {
+      matchManagers: ["cargo"],
+      matchUpdateTypes: ["minor", "patch"],
+      groupName: "rust-minor-patch",
+    },
+    {
+      matchManagers: ["bun"],
+      matchUpdateTypes: ["minor", "patch"],
+      groupName: "ui-minor-patch",
+    },
+    {
+      matchManagers: ["github-actions"],
+      groupName: "actions",
+      semanticCommitType: "ci",
+      semanticCommitScope: null,
+    },
+    // The CLI tools and the Rust toolchain. Bun is in it because BUN_VERSION and ui/package.json
+    // `packageManager` must stay equal; after the bun group so it overrides it.
+    {
+      matchFileNames: ["scripts/tool-versions.env", "rust-toolchain.toml"],
+      groupName: "toolchains",
+    },
+    {
+      matchDepNames: ["bun"],
+      groupName: "toolchains",
+    },
+    // CI checks their release tarballs against a SHA-256 that Renovate cannot update.
+    {
+      matchDepNames: ["gitleaks/gitleaks", "rhysd/actionlint"],
+      groupName: null,
+      prBodyNotes: ["Update the SHA-256 of the release tarball in `.github/workflows/ci.yml`."],
+    },
+    // The tauri crates and the @tauri-apps/api package must move together; after the cargo and bun
+    // groups so it overrides them.
+    {
+      extends: ["monorepo:tauri"],
+      groupName: "tauri",
+    },
+    // A new nightly ships every day; monthly is enough for the fuzz targets.
+    {
+      matchFileNames: ["fuzz/rust-toolchain.toml"],
+      schedule: ["before 6am on the first day of the month"],
+    },
+  ],
+  customManagers: [
+    {
+      customType: "regex",
+      managerFilePatterns: ["scripts/tool-versions.env"],
+      matchStrings: [
+        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)( extractVersion=(?<extractVersion>\\S+))?\\n[A-Z_]+=(?<currentValue>\\S+)",
+      ],
+    },
+  ],
+}
