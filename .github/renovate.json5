@@ -2,31 +2,29 @@
 // Run by the Mend Renovate GitHub App: no workflow, no secret.
 {
   $schema: "https://docs.renovatebot.com/renovate-schema.json",
-  // Keeps actions pinned to a full commit SHA with a `# vX.Y.Z` comment (check-pinned-deps.ts).
-  extends: ["config:recommended", "helpers:pinGitHubActionDigestsToSemver"],
+  extends: [
+    "config:recommended",
+    // Keeps actions pinned to a full commit SHA with a `# vX.Y.Z` comment (check-pinned-deps.ts).
+    "helpers:pinGitHubActionDigestsToSemver",
+    // .githooks/commit-msg, run in CI by scripts/check-pr.sh, requires a DCO sign-off on every commit.
+    ":gitSignOff",
+    // After config:recommended, which types dependency bumps `fix` and the rest `chore`.
+    ":semanticCommitTypeAll(build)",
+  ],
   timezone: "Europe/Paris",
   schedule: ["before 6am on monday"],
-  // Minimum release age (AGENTS.md §4). "strict" opens no branch before the age is reached;
-  // vulnerability fixes skip the wait, as the rule allows.
+  // Open branches are updated in the schedule window too, not each time a new release comes of age.
+  updateNotScheduled: false,
+  // Minimum release age (AGENTS.md §4). Vulnerability fixes skip the wait, as the rule allows.
   minimumReleaseAge: "14 days",
-  internalChecksFilter: "strict",
   // Pins are exact, so a bump rewrites the requirement itself (`=1.0.228` -> `=1.0.229`).
   rangeStrategy: "bump",
   semanticCommits: "enabled",
-  semanticCommitScope: "deps",
-  // .githooks/commit-msg, run in CI by scripts/check-pr.sh, requires a DCO sign-off on every commit.
-  commitBody: "Signed-off-by: renovate[bot] <29139614+renovate[bot]@users.noreply.github.com>",
   packageRules: [
-    // A package rule, not a top-level option: config:recommended types dependencies `fix` and the
-    // rest `chore` through package rules, which override top-level options.
-    {
-      matchPackageNames: ["*"],
-      semanticCommitType: "build",
-    },
     // One group for both workspaces: fuzz/ path-depends on the root crates and shares exact pins
     // with them (libm, serde_json), so bumping one workspace alone leaves the other unresolvable.
-    // The hosted app cannot run `cargo update`, so a root bump leaves fuzz/Cargo.lock stale and the
-    // Fuzzing check fails `--locked`: run `cargo update -w` in fuzz/ and commit it on the PR.
+    // Renovate refreshes only the lockfiles of the manifests it edits; fuzz/Cargo.lock needs a
+    // hand-made refresh (docs/dev/quality.md#fuzzing).
     {
       matchManagers: ["cargo"],
       matchUpdateTypes: ["minor", "patch"],
@@ -43,40 +41,38 @@
       semanticCommitType: "ci",
       semanticCommitScope: null,
     },
+    // The CLI tools and the Rust toolchain. Bun is in it because BUN_VERSION and ui/package.json
+    // `packageManager` must stay equal; after the bun group so it overrides it.
     {
-      matchFileNames: ["scripts/tool-versions.env"],
-      matchUpdateTypes: ["minor", "patch"],
-      groupName: "tools",
+      matchFileNames: ["scripts/tool-versions.env", "rust-toolchain.toml"],
+      groupName: "toolchains",
     },
-    // BUN_VERSION (installed by CI and scripts/setup.sh) and ui/package.json `packageManager` must stay equal.
     {
       matchDepNames: ["bun"],
-      groupName: "bun",
+      groupName: "toolchains",
+    },
+    // CI checks their release tarballs against a SHA-256 that Renovate cannot update.
+    {
+      matchDepNames: ["gitleaks/gitleaks", "rhysd/actionlint"],
+      groupName: null,
+      prBodyNotes: ["Update the SHA-256 of the release tarball in `.github/workflows/ci.yml`."],
     },
     // The tauri crates and the @tauri-apps/api package must move together; after the cargo and bun
     // groups so it overrides them.
     {
-      matchPackageNames: ["/^tauri(-|$)/", "@tauri-apps/**"],
+      extends: ["monorepo:tauri"],
       groupName: "tauri",
-    },
-    {
-      matchManagers: ["rust-toolchain"],
-      matchFileNames: ["rust-toolchain.toml"],
-      groupName: "rust-toolchain",
     },
     // A new nightly ships every day; monthly is enough for the fuzz targets.
     {
-      matchManagers: ["rust-toolchain"],
       matchFileNames: ["fuzz/rust-toolchain.toml"],
-      groupName: "fuzz-toolchain",
       schedule: ["before 6am on the first day of the month"],
     },
   ],
   customManagers: [
     {
-      // Each pin carries a `# renovate: datasource=… depName=…` comment on the line above.
       customType: "regex",
-      managerFilePatterns: ["/^scripts/tool-versions\\.env$/"],
+      managerFilePatterns: ["scripts/tool-versions.env"],
       matchStrings: [
         "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)( extractVersion=(?<extractVersion>\\S+))?\\n[A-Z_]+=(?<currentValue>\\S+)",
       ],
