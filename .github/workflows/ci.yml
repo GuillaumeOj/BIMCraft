@@ -51,7 +51,7 @@ jobs:
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: ${{ env.BUN_VERSION }}
-      - uses: taiki-e/install-action@f7e5d7c961414b23f5b25b2da9294395d08513ad # v2.87.26
+      - uses: taiki-e/install-action@1168f6810a3cb30a3514bf5756a3b7f0422c6df8 # v2.87.28
         with:
           tool: taplo@${{ env.TAPLO_VERSION }},typos@${{ env.TYPOS_VERSION }},mdbook@${{ env.MDBOOK_VERSION }}
       - name: Install gitleaks and actionlint (checksum-verified)
@@ -85,7 +85,7 @@ jobs:
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup-rust
-      - uses: taiki-e/install-action@f7e5d7c961414b23f5b25b2da9294395d08513ad # v2.87.26
+      - uses: taiki-e/install-action@1168f6810a3cb30a3514bf5756a3b7f0422c6df8 # v2.87.28
         with:
           tool: cargo-audit@${{ env.CARGO_AUDIT_VERSION }},cargo-cyclonedx@${{ env.CARGO_CYCLONEDX_VERSION }},cargo-deny@${{ env.CARGO_DENY_VERSION }}
       - name: Install the desktop window's Linux libraries (GTK 3, WebKitGTK)
@@ -112,7 +112,7 @@ jobs:
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup-rust
-      - uses: taiki-e/install-action@f7e5d7c961414b23f5b25b2da9294395d08513ad # v2.87.26
+      - uses: taiki-e/install-action@1168f6810a3cb30a3514bf5756a3b7f0422c6df8 # v2.87.28
         with:
           tool: wasmtime@${{ env.WASMTIME_VERSION }}
       - run: scripts/check-all.sh wasm
@@ -127,13 +127,13 @@ jobs:
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup-rust
-      - uses: taiki-e/install-action@f7e5d7c961414b23f5b25b2da9294395d08513ad # v2.87.26
+      - uses: taiki-e/install-action@1168f6810a3cb30a3514bf5756a3b7f0422c6df8 # v2.87.28
         with:
           tool: cargo-llvm-cov@${{ env.CARGO_LLVM_COV_VERSION }}
       - name: Install the desktop window's Linux libraries (GTK 3, WebKitGTK)
         run: scripts/linux-desktop-deps.sh
       - run: scripts/check-all.sh coverage
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: rust-coverage
@@ -156,7 +156,7 @@ jobs:
           directory: fuzz
           # fuzz-explore.yml builds the same targets: it starts from the cache this job saves on main.
           shared-key: fuzz
-      - uses: taiki-e/install-action@f7e5d7c961414b23f5b25b2da9294395d08513ad # v2.87.26
+      - uses: taiki-e/install-action@1168f6810a3cb30a3514bf5756a3b7f0422c6df8 # v2.87.28
         with:
           tool: cargo-audit@${{ env.CARGO_AUDIT_VERSION }},cargo-deny@${{ env.CARGO_DENY_VERSION }}
       # From fuzz/, so it builds with the nightly installed above, not the root toolchain.
@@ -164,7 +164,7 @@ jobs:
         working-directory: fuzz
         run: cargo install --locked "cargo-fuzz@$CARGO_FUZZ_VERSION"
       - run: scripts/check-all.sh fuzz
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: failure()
         with:
           name: fuzz-replay-crashes
@@ -199,7 +199,7 @@ jobs:
         with:
           bun-version: ${{ env.BUN_VERSION }}
       - run: scripts/check-all.sh ui
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: ui-coverage
@@ -224,7 +224,7 @@ jobs:
         working-directory: ui
         run: bun install --frozen-lockfile && bunx playwright install --with-deps chromium
       - run: scripts/check-all.sh e2e
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: failure()
         with:
           name: playwright-report
