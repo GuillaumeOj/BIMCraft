@@ -24,7 +24,7 @@ const isConsoleShortcut = (event: globalThis.KeyboardEvent) =>
 
 /**
  * The empty application shell (UI-02, UI-06): title bar, viewport and the panel slots, from the
- * "Workspace" boards of the Penpot design. F6 and Shift+F6 move focus between the regions;
+ * "Workspace" boards of the FigCraft design. F6 and Shift+F6 move focus between the regions;
  * Ctrl+` opens and closes the console.
  */
 export function Shell() {

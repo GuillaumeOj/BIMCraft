@@ -1,4 +1,4 @@
-/* Layout and sizes from the "Workspace — plan view" board of the Penpot design (1440 × 900). */
+/* Layout and sizes from the "Workspace — plan view" board of the FigCraft design (1440 × 900). */
 .shell {
   display: grid;
   grid-template-rows: auto 1fr;

@@ -1,4 +1,4 @@
-/* Colour tokens from the Penpot library (Light/… and Dark/… colours). contrast.test.ts checks
+/* Colour tokens from the `Mode` variables of the FigCraft design (Light and Dark). contrast.test.ts checks
    them against WCAG 2.2 AA, so keep every value a #rrggbb literal. */
 :root {
   color-scheme: light dark;

@@ -1,4 +1,4 @@
-//! Location lines and points against the worked example of the design (Penpot board 3.3) and
+//! Location lines and points against the worked example of the design (FigCraft board 3.3) and
 //! hand-calculated sections (ENG-03).
 
 use super::*;
