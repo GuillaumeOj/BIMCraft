@@ -28,7 +28,7 @@ Every feature or fix is done only when all of these hold. Check them before sayi
 
 ## 3. Workflow
 
-1. Understand the task; find its issue ([docs/dev/project-management.md](docs/dev/project-management.md)), the relevant spec section and requirement IDs and, for UI work, the matching board in the Penpot design ([docs/dev/ui-design.md](docs/dev/ui-design.md)).
+1. Understand the task; find its issue ([docs/dev/project-management.md](docs/dev/project-management.md)), the relevant spec section and requirement IDs and, for UI work, the matching board in the FigCraft design ([docs/dev/ui-design.md](docs/dev/ui-design.md)).
 2. Write or update tests first when practical, then implement.
 3. Keep changes small and focused: one concern per commit, one feature per PR.
 4. Run the targeted checks for what you changed (section 3a), not the whole suite.
