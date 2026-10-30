@@ -91,4 +91,4 @@ Resolution uses only addition, subtraction, multiplication and division, so it i
 - Specification: ARC-30, STR-14, GEO-13, INT-10, MAT-03, GEO-11, ENG-04.
 - [ADR 0001](0001-geometry-tolerance-policy.md): tolerance policy. [ADR 0002](0002-schema-definition-format.md): schema definition format. [ADR 0004](0004-units-and-quantities.md): units.
 - IFC 4.3: `IfcMaterialLayerSetUsage`, `IfcMaterialProfileSetUsage`, `IfcCardinalPointReference`.
-- Penpot design, Flow 3, board 3.3 "Wall type — layers and location line".
+- FigCraft design, page "3 · Architecture modelling", board 3.3 "Wall type — layers and location line".
