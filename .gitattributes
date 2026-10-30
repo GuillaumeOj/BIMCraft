@@ -7,3 +7,4 @@ bun.lock linguist-generated=true -diff
 # Vendored unchanged under CC BY-ND 4.0: keep its bytes exactly as published.
 crates/interop-ifc/schema/*.exp -text
 *.bim binary
+*.figcraft filter=lfs diff=lfs merge=lfs -text
