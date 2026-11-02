@@ -10,15 +10,12 @@
       "Bash(git commit -n:*)",
       "Read(./.env)",
       "Read(./.env.*)",
-      "Edit(.githooks/**)",
-      "Edit(scripts/mark-reviewed.sh)"
+      "Edit(.githooks/**)"
     ],
     "ask": [
       "Bash(git push:*)",
       "Bash(git push)",
       "Bash(gh pr create:*)",
-      "Bash(scripts/mark-reviewed.sh:*)",
-      "Bash(./scripts/mark-reviewed.sh:*)",
       "Bash(git remote add:*)",
       "Bash(git tag:*)",
       "Edit(.github/workflows/**)",
@@ -32,17 +29,6 @@
           {
             "type": "command",
             "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/session-start.sh"
-          }
-        ]
-      }
-    ],
-    "PreToolUse": [
-      {
-        "matcher": "Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/guard-bash.sh"
           }
         ]
       }
