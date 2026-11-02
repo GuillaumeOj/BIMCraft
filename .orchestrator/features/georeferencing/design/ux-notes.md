@@ -107,7 +107,7 @@ Copy formats (plain text, tab-separated so it pastes into a spreadsheet cells; l
 | Fields | ↑ ↓ | Nudge by 1 m (Shift: 0.1 m… lengths) / 1° for rotation — optional |
 | Panel | Tab order | Header (Pick, menu), Model x y z, Copy, Map E N H, Copy, Geographic format toggle, lat lon h, Copy |
 | Panel | Enter in a field | Convert now (skips debounce) |
-| Panel | Ctrl/Cmd+C in a focused block's Copy button | Copies that block (button Space/Enter) |
+| Panel | Space / Enter on a Copy button | Copies that block |
 
 Focus: opening F1 focuses the CRS combobox (empty) or the first field (filled); closing returns focus to the opener. Focus ring: 2 px verdigris, offset 2.
 
@@ -115,7 +115,7 @@ Focus: opening F1 focuses the CRS combobox (empty) or the first field (filled); 
 
 1. **Dialog** (modal shell: title, body, footer, focus trap, Esc/Enter) — also for later dialogs.
 2. **TextField** (label, suffix unit, help button, error message, states: default, hover, focus, disabled, read-only, error).
-3. **NumberField** (TextField + locale parsing, decimals, ↑↓ nudge; variants: length m, angle °, scale).
+3. **NumberField** (TextField + locale parsing, decimals; variants: length m, angle °, scale).
 4. **AngleField** (NumberField degrees ⇄ DMS toggle).
 5. **Combobox / SearchSelect** (input + listbox, row = code, name, area; loading/empty/error).
 6. **FieldGroup** (numbered section header + help + group error).
