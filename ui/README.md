@@ -2,7 +2,7 @@
 
 The web frontend (Bun, React, TypeScript), shared by the desktop (Tauri) and browser hosts. See spec §13.
 
-The interface is designed in Penpot; see [docs/dev/ui-design.md](../docs/dev/ui-design.md) before building a screen.
+The interface is designed in FigCraft (`docs/BIMCraft.figcraft`); see [docs/dev/ui-design.md](../docs/dev/ui-design.md) before building a screen.
 
 ## Commands
 
