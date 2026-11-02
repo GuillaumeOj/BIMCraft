@@ -11,17 +11,17 @@ Text twin of the FigCraft page "UX flows" in `georeferencing.figcraft`. Frames: 
 5. True north is read-only, next to the rotation field, with a small north-arrow visual: grid north, true north, project north, with angles. It is not computed in the UI (`derived.true_north`); before Apply it shows "–".
 6. Panel lives in the right tab group as a third tab "Coordinates". Three blocks always visible: Model, Map (CRS name), Geographic (datum name). Typing in a block makes it the source ("Edited" badge + 2 px verdigris left rule); the others show "Computed from …". Copy per block. Decimal/DMS toggle only affects the Geographic block (and the angle field in F1 has its own).
 7. "Pick from view" button is present but disabled, with tooltip, in the panel header. No pointer picking now.
-8. Numbers: lengths 3 decimals (m), angles 4 decimals (°) or DMS; thousands separator is a narrow no-break space, decimal separator by locale; input accepts `,` and `.`.
+8. Numbers: lengths 3 decimals (m), angles 4 decimals (°) or DMS; thousands separator is a narrow no-break space, decimal separator by locale; input accepts `,` and `.` as the decimal separator: a single separator is the decimal one, when both appear the last one is, and spaces (including the narrow no-break space) are ignored as grouping.
 9. Every field: visible label (never placeholder-only), units suffix inside field, help via an info button with a popover (keyboard reachable) and the same text as `aria-describedby`.
 10. French strings are ~30 % longer: labels wrap to two lines above the field rather than truncate; buttons grow, never truncate.
 
 ## F1 — Project location dialog
 
-Entry: title-bar/project menu "Project location…", shortcut **Ctrl/Cmd+Alt+L** (proposal, documented; no palette exists yet; if one exists the entry is "Project location…"). From the panel's button.
+Entry: title-bar/project menu "Project location…", shortcut **Ctrl/Cmd+Alt+L** (proposal, documented; Ctrl+Alt is AltGr on Windows AZERTY and other European layouts, so the UI must check that the final combination does not swallow typing in fields; no palette exists yet; if one exists the entry is "Project location…"). From the panel's button.
 
 States (frames):
-- **F1-A not georeferenced**: guidance sentence, CRS combobox focused, other sections disabled until a CRS is chosen (they enable on choice), Derived shows a placeholder, no "Remove". Apply disabled until a CRS is chosen and all numbers parse.
-- **F1-B georeferenced**: filled from `georef.get`; CRS row shows code, name and area of use; true north, derived lat/lon (named datum), convergence, scale factor, survey point in model coordinates. "Remove georeference" visible. Apply disabled until something changes (dirty).
+- **F1-A not georeferenced**: guidance sentence, CRS combobox focused, other sections disabled until a CRS is chosen (they enable on choice), Derived shows a placeholder, no "Remove". Apply stays enabled (decision 4): with no CRS or an unparsable number it focuses the first invalid field and shows the inline error.
+- **F1-B georeferenced**: filled from `georef.get`; CRS row shows code, name and area of use; true north, derived lat/lon (named datum), convergence, scale factor, survey point in model coordinates. "Remove georeference" visible. Apply stays enabled (decision 4): when nothing changed it just closes, with no `georef.set` and no history entry.
 - **F1-C errors**: unknown/empty CRS; non-numeric; scale ≤ 0 (Advanced auto-opens); outside CRS area/domain (`outside_domain`); server error banner. Apply focuses the first error.
 - **F1-D remove confirmation**.
 - **F1-E CRS list open**: combobox/listbox; loading, empty-result and error states; geographic CRSs not listed.
@@ -29,7 +29,7 @@ States (frames):
 
 Flow: open → (get) → choose CRS → base point → rotation → [Advanced/Survey] → Apply → `georef.set` → ok: close, toast "Project location applied" (undo available) → error: stay, map `data.reason` to inline message. Remove → confirm → `georef.clear` → close, panel returns to F2-A.
 
-Reason mapping: `unknown_crs`, `not_projected` → CRS field; `invalid_scale` → Scale; `outside_domain` → Base point group (error on Northing/Easting group, not a single field; the message names the area of use, not the typed values — SEC-03); `not_georeferenced` n/a in F1; `multiple_sites` → banner; anything else → banner.
+Reason mapping: `unknown_crs`, `not_projected` → CRS field; `invalid_scale` → Scale; `outside_domain` → Base point group (error on the Easting/Northing group, not a single field; the message never repeats the typed values — SEC-03 — and the CRS row above it already shows the area of use); `not_georeferenced` n/a in F1; `multiple_sites` → banner; anything else → banner.
 
 ## F2 — Coordinates panel
 
@@ -56,7 +56,7 @@ Copy formats (plain text, tab-separated so it pastes into a spreadsheet cells; l
 | `rotation.label` | Grid rotation | Rotation de la grille |
 | `rotation.help` | The angle between the map grid and your project grid, counter-clockwise. 0 means the project axes follow the map. | L'angle entre la grille de la carte et la grille du projet, dans le sens trigonométrique. 0 signifie que les axes du projet suivent la carte. |
 | `trueNorth.label` | True north | Nord géographique |
-| `trueNorth.help` | Computed: the rotation plus the meridian convergence at the base point. | Calculé : la rotation plus la convergence des méridiens au point de base. |
+| `trueNorth.help` | Computed from the meridian convergence at the base point and the grid rotation. | Calculé à partir de la convergence des méridiens au point de base et de la rotation de la grille. |
 | `scale.label` | Scale | Échelle |
 | `scale.help` | Leave at 1 unless your surveyor gave you a project scale. | Laissez 1 sauf si votre géomètre vous a donné une échelle de projet. |
 | `survey.title` | Survey point (optional) | Point de repère topographique (facultatif) |
@@ -71,7 +71,7 @@ Copy formats (plain text, tab-separated so it pastes into a spreadsheet cells; l
 | `remove.keep` | Keep georeference | Conserver la géoréférence |
 | `applied` | Project location applied | Localisation du projet appliquée |
 | `error.required` | Choose a coordinate system. | Choisissez un système de coordonnées. |
-| `error.number` | Enter a number, e.g. 652 000,000. | Saisissez un nombre, p. ex. 652 000,000. |
+| `error.number` | Enter a number, e.g. 652000.000. | Saisissez un nombre, p. ex. 652 000,000. |
 | `error.unknown_crs` | This coordinate system is not available. | Ce système de coordonnées n'est pas disponible. |
 | `error.not_projected` | Choose a projected system (map coordinates in metres), not latitude/longitude. | Choisissez un système projeté (coordonnées en mètres), pas latitude/longitude. |
 | `error.invalid_scale` | The scale must be greater than 0. | L'échelle doit être supérieure à 0. |
@@ -92,7 +92,7 @@ Copy formats (plain text, tab-separated so it pastes into a spreadsheet cells; l
 | `convert.outside` | This point is too far from the projection to convert. | Ce point est trop éloigné de la projection pour être converti. |
 | `convert.failed` | Conversion failed. Try again. | La conversion a échoué. Réessayez. |
 
-(Messages never repeat typed or model values — SEC-03. French typographic spaces before `:`, `?`, `!`, `»` are narrow no-break spaces.)
+(Messages never repeat model values — SEC-03; `crs.empty` echoes only the search text the user just typed. French typographic spaces before `:`, `?`, `!`, `»` are narrow no-break spaces.)
 
 ## Keyboard map
 

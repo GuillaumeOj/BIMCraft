@@ -50,8 +50,8 @@ Returns the project's georeference and the values derived from it.
     "value": Georeference,
     "crs": CrsSummary,
     "derived": {
-      "true_north": 0.0123,               // rad: angle from the local y-axis to true north at the base point, counter-clockwise
-      "convergence": 0.0123,              // rad: meridian convergence at the base point
+      "true_north": 0.0123,               // rad: angle from the local y-axis to true north at the base point, counter-clockwise (= convergence - grid_rotation)
+      "convergence": 0.0123,              // rad: meridian convergence at the base point, angle from true north to grid north, positive clockwise (east of the central meridian)
       "point_scale_factor": 0.99995,      // projection scale factor at the base point
       "base_point_geographic": [0.8527, 0.0409, 35.0], // latitude, longitude (rad), ellipsoidal height approx = orthogonal height
       "survey_point_local": null | [x, y, z]
@@ -68,6 +68,7 @@ Converts points from one system to the other two. The UI uses it for the coordin
 
 - params: `{ "from": "local" | "projected" | "geographic", "points": Point[] }`. At most 1000 points, the same bound as `MAX_PAGE_SIZE`. A geographic point is `[lat, lon, h]` in rad, rad and m, on the CRS's base geodetic CRS.
 - result: `{ "points": [{ "local": Point, "projected": Point, "geographic": Point }] }`, in the input order.
+- Heights: no vertical datum or geoid yet (GEOREF-05), so the geographic height equals the projected `H` and the local `z` plus `H₀`; the UI labels it as approximate.
 - Errors: `-32000` `data.reason = "not_georeferenced"`; `-32602` for non-finite numbers or too many points; `-32000` `data.reason = "outside_domain"` (with the index of the first bad point) when a point cannot be projected, for example a latitude out of range or a point too far from the central meridian for the method.
 
 ## Commands (undoable, recorded with their origin, API-05)
