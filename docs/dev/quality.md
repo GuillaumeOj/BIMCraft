@@ -7,7 +7,7 @@
 | Layer | What | Binds |
 | --- | --- | --- |
 | Instructions | `AGENTS.md` (and `CLAUDE.md`, which imports it) | Every coding agent and human |
-| Git hooks | `.githooks/`, enabled by `scripts/setup.sh`: fast checks on staged files, commit messages, the review stamp | Everyone committing or pushing from a clone |
+| Git hooks | `.githooks/`, enabled by `scripts/setup.sh`: fast checks on staged files and commit messages | Everyone committing from a clone |
 | Agent guardrails | `.claude/settings.json` deny/ask rules and hooks | Claude Code |
 | CI | `.github/workflows/` running `scripts/check-all.sh` and `scripts/check-pr.sh` | Every pull request; required by branch protection |
 
@@ -17,15 +17,13 @@ Instructions can be forgotten, hooks can be skipped on a misconfigured clone; CI
 
 Coding agents produce plausible code fast; the cost of a bad change on `main` is paid by everyone. So:
 
-- Agents commit locally and push only when the user says so in the conversation: `.claude/settings.json` asks the user before each `git push` and `gh pr create`, and denies merges and releases. `.claude/hooks/guard-bash.sh` blocks, anywhere in a command line, what AGENTS.md §1 says an agent never does; its tests (`scripts/guard-bash.test.ts`) list each form.
-- The `pre-push` hook refuses any `HEAD` not stamped by `scripts/mark-reviewed.sh`. The stamp is the commit SHA, stored in `.git/bimcraft-review-stamp` (never committed), so any new commit invalidates it. An agent can therefore push only commits the user has reviewed.
-- Branches are kept up to date by rebasing, never by merging `main` into them, because branch protection requires a linear history ([AGENTS.md §3b](../../AGENTS.md#3b-keeping-a-branch-up-to-date-auto-fix-included)). A rebase rewrites the branch, so the agent may force-push it, but only with `--force-with-lease --force-if-includes`, as `scripts/push-pr.ts --force` does: together they refuse to overwrite remote commits of the branch that were never in the local branch. A lease alone is refreshed by any `git fetch` and then protects nothing, so `.claude/hooks/guard-bash.sh` rejects it without `--force-if-includes`. The rebased `HEAD` is a new commit and needs a new stamp, which lets the user review the conflict resolutions.
-- The stamp is written only after the user has run a code review (correctness) and a simplification pass (reuse, clarity). In Claude Code these are `/code-review` and `/simplify`; the `ship` skill walks through the steps. `scripts/mark-reviewed.sh` asks the user to confirm both at a terminal and refuses when its input is not one, as in an agent's shell. This is the gate for every way of stamping, so tools that stamp, such as `scripts/push-pr.ts`, need no name-based block.
-- `scripts/push-pr.ts` chains the commit checks (`scripts/check-pr.sh`), the stamp, the push and the pull request; every step that changes anything runs after the stamp, so without the user at a terminal it pushes nothing. Agents may run it with `--dry-run`. For a stack of branches it stamps the top one and pushes them all in one atomic push: the hook checks `HEAD`, and the review of the top covers every commit below it. Each pull request is based on the branch below and lists the stack in its description.
+- Agents commit locally and push only when the user says so in the conversation: `.claude/settings.json` asks the user before each `git push` and `gh pr create`, and denies merges and releases. That prompt is the approval gate; no hook checks the push.
+- Branches are kept up to date by rebasing, never by merging `main` into them, because branch protection requires a linear history ([AGENTS.md §3b](../../AGENTS.md#3b-keeping-a-branch-up-to-date-auto-fix-included)). A rebase rewrites the branch, so it may be force-pushed, but only with `--force-with-lease --force-if-includes`, as `scripts/push-pr.ts --force` does: together they refuse to overwrite remote commits of the branch that were never in the local branch. A lease alone is refreshed by any `git fetch` and then protects nothing.
+- `scripts/push-pr.ts` chains the commit checks (`scripts/check-pr.sh`), the push and the pull request. For a stack of branches it pushes them all in one atomic push. Each pull request is based on the branch below and lists the stack in its description.
 
 ## CI is the gate; local checks are targeted
 
-The full suite lints and tests every crate, measures coverage of each critical crate, builds for wasm, fuzzes the parsers and runs the UI and end-to-end tests. It grows with the workspace and keeps a desktop's CPU busy for minutes, while CI runs it in parallel on Linux, macOS and Windows for every pull request. So the full suite runs in CI alone, and the `pre-push` hook only checks the review stamp.
+The full suite lints and tests every crate, measures coverage of each critical crate, builds for wasm, fuzzes the parsers and runs the UI and end-to-end tests. It grows with the workspace and keeps a desktop's CPU busy for minutes, while CI runs it in parallel on Linux, macOS and Windows for every pull request. So the full suite runs in CI alone.
 
 While working, agents and contributors run the narrowest check that covers their change ([AGENTS.md §3a](../../AGENTS.md#3a-local-checks-while-working)): the tests and lints of the crates or UI files they touched, plus the repository checks, which take seconds. A whole section runs locally only when nothing narrower can check the change, such as a workspace manifest or toolchain change. A check skipped locally costs a red CI run, never a bad merge. After the push, the agent tracks CI and fixes failures ([AGENTS.md §3](../../AGENTS.md#3-workflow), step 8).
 

@@ -1,17 +1,14 @@
 #!/usr/bin/env bun
-// Stamps HEAD as reviewed, pushes the branch (or the whole stack of branches ending at HEAD) and
+// Pushes the branch (or the whole stack of branches ending at HEAD) and
 // opens or updates one pull request per branch, each based on the branch below it (AGENTS.md §1).
-// Only the user can ship: the stamp asks them to confirm the review at a terminal. Run with --help for
-// the options.
+// Run with --help for the options.
 
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 const USAGE = `Usage: bun scripts/push-pr.ts [options] [--branch <name> [pr options]]...
 
-Stamps HEAD as reviewed (scripts/mark-reviewed.sh), pushes, then opens or updates the pull request.
-Run it only after /code-review and /simplify (or equivalent reviews) on these changes; the stamp
-asks you to confirm that at the terminal.
+Pushes, then opens or updates the pull request.
 
 Stack options (anywhere):
   --stack               ship every local branch between <remote>/<base> and HEAD, bottom first;
@@ -20,8 +17,8 @@ Stack options (anywhere):
   --base <branch>       base of the bottom pull request (default: main)
   --remote <name>       remote to push to (default: origin)
   --force               push with --force-with-lease --force-if-includes (after a rebase or a restack)
-  --no-pr               stamp and push only
-  --dry-run             print the commands that would change anything, run none, stamp nothing
+  --no-pr               push only
+  --dry-run             print the commands that would change anything, run none
   -h, --help            show this help
 
 Pull request options (before any --branch: every PR; after --branch <name>: that PR only):
@@ -448,8 +445,7 @@ function ship(args: Args, run: Run): number {
     const sha = must(run, ["git", "rev-parse", "--short", p.branch]);
     console.log(`  ${p.branch} (${sha})${args.noPr ? "" : ` → pull request into ${p.base}`}`);
   }
-  if (args.dryRun) console.log("dry run: nothing is stamped, pushed or published.");
-  else if (run([join(SCRIPTS, "mark-reviewed.sh")], { inherit: true }).code !== 0) throw new Error("not stamped; nothing pushed");
+  if (args.dryRun) console.log("dry run: nothing is pushed or published.");
 
   exec(["git", "push", "--atomic", ...(args.force ? ["--force-with-lease", "--force-if-includes"] : []), "-u", args.remote, ...branches], {
     inherit: true,

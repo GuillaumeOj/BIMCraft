@@ -359,12 +359,10 @@ describe("main", () => {
   let checkPrFails: boolean;
   let output: string[];
   let errors: string[];
-  let reviewed: boolean;
 
   let template: string;
 
   const git = (...args: string[]): string => gitIn(dir, ...args).trim();
-  const stampFile = (): string => join(dir, ".git", "bimcraft-review-stamp");
   const commit = (message: string): void => {
     writeFileSync(join(dir, `${message.replace(/\W/g, "_")}.txt`), message);
     git("add", "-A");
@@ -374,23 +372,11 @@ describe("main", () => {
     calls.push(cmd);
     if (cmd[0] === "gh") return gh.handle(cmd, options.input);
     if (cmd[0]?.endsWith("check-pr.sh")) return { code: checkPrFails ? 1 : 0, stdout: "", stderr: "" };
-    // The real script needs a terminal; `reviewed` stands for the user's answer to its question.
-    if (cmd[0]?.endsWith("mark-reviewed.sh")) {
-      if (reviewed) writeFileSync(stampFile(), `${git("rev-parse", "HEAD")}\n`);
-      return { code: reviewed ? 0 : 1, stdout: "", stderr: "" };
-    }
     return makeRun(dir, gitEnv())(cmd, { ...options, inherit: false });
   };
   const ship = (...argv: string[]): number => main(argv, run);
   const ran = (command: string): string[][] => calls.filter((cmd) => cmd.slice(0, 3).join(" ") === command);
   const wouldRun = (command: string): string[] => output.filter((line) => line.startsWith(`would run: ${command}`));
-  const stamp = (): string => {
-    try {
-      return readFileSync(stampFile(), "utf8").trim();
-    } catch {
-      return "";
-    }
-  };
   const remoteBranches = (): string[] =>
     gitIn(remote, "for-each-ref", "--format=%(refname:short)", "refs/heads").split("\n").filter(Boolean);
 
@@ -417,7 +403,6 @@ describe("main", () => {
     gh = new FakeGitHub();
     calls = [];
     checkPrFails = false;
-    reviewed = true;
     output = [];
     errors = [];
     spyOn(console, "log").mockImplementation((line: string) => output.push(line));
@@ -445,10 +430,9 @@ describe("main", () => {
     expect(output.join("\n")).toContain("Usage: bun scripts/push-pr.ts");
   });
 
-  test("ships a single branch: stamp, push, pull request", () => {
+  test("ships a single branch: push, pull request", () => {
     featureBranch("feat: add thing");
     expect(ship("--title", "Add thing", "--body", "Why", "--label", "geometry", "--assignee", "@me")).toBe(0);
-    expect(stamp()).toBe(git("rev-parse", "HEAD"));
     expect(remoteBranches()).toContain("feature");
     expect(gh.prs).toHaveLength(1);
     expect(gh.prs[0]).toMatchObject({ head: "feature", base: "main", title: "Add thing", body: "Why" });
@@ -507,7 +491,7 @@ describe("main", () => {
     expect(gh.prs.map((p) => p.head)).toEqual(["feature", "feature"]);
   });
 
-  test("--no-pr stamps and pushes only", () => {
+  test("--no-pr pushes only", () => {
     featureBranch("feat: add thing");
     expect(ship("--no-pr")).toBe(0);
     expect(remoteBranches()).toContain("feature");
@@ -517,7 +501,6 @@ describe("main", () => {
   test("--dry-run changes nothing", () => {
     stackOfThree();
     expect(ship("--stack", "--dry-run")).toBe(0);
-    expect(stamp()).toBe("");
     expect(remoteBranches()).toEqual(["main"]);
     expect(gh.prs).toHaveLength(0);
     expect(output).toContain("would run: git push --atomic -u origin one two three");
@@ -581,11 +564,11 @@ describe("main", () => {
       expect(wouldRun("gh pr create")[0]).toEndWith("--milestone 'Phase 0' --project BIMCraft");
     });
 
-    test("stop before stamping when an issue cannot be read", () => {
+    test("stop before pushing when an issue cannot be read", () => {
       stackOfThree();
       expect(ship("--stack", "--branch", "two", "--body", "Closes #99")).toBe(1);
       expect(errors.join("\n")).toContain("gh issue view 99 --json number,id,milestone,projectItems failed: no issue #99");
-      expect(stamp()).toBe("");
+      expect(remoteBranches()).toEqual(["main"]);
       expect(remoteBranches()).toEqual(["main"]);
     });
 
@@ -623,21 +606,11 @@ describe("main", () => {
     expect(env).toEqual({ NO_USER_DOCS: "true" });
   });
 
-  test("pushes nothing when the stamp is refused", () => {
-    featureBranch("feat: add thing");
-    reviewed = false;
-    expect(ship()).toBe(1);
-    expect(errors).toContain("push-pr: not stamped; nothing pushed");
-    expect(stamp()).toBe("");
-    expect(remoteBranches()).toEqual(["main"]);
-    expect(gh.prs).toHaveLength(0);
-  });
-
   describe("refuses", () => {
     const refuses = (message: string, ...argv: string[]): void => {
       expect(ship(...argv)).toBe(1);
       expect(errors.join("\n")).toContain(message);
-      expect(stamp()).toBe("");
+      expect(remoteBranches()).toEqual(["main"]);
     };
 
     test("a dirty tree", () => {
@@ -713,15 +686,13 @@ describe("main", () => {
       refuses("there is no local branch tow", "--only", "one,tow,three");
     });
 
-    test("a branch whose pull request was already merged, before stamping", () => {
+    test("a branch whose pull request was already merged", () => {
       stackOfThree();
       expect(ship("--stack")).toBe(0);
       (gh.prs[0] as { state: string }).state = "MERGED";
-      const stamped = stamp();
       commit("feat: more");
       expect(ship("--stack")).toBe(1);
       expect(errors.join("\n")).toContain("one was already merged in #100; rebase the branches above it onto main and delete it");
-      expect(stamp()).toBe(stamped);
       expect(gh.prs).toHaveLength(3);
     });
   });
