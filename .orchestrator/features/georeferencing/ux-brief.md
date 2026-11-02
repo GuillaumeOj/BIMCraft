@@ -11,7 +11,7 @@ Most of them are not geodesists. Terms like CRS, easting/northing, grid north vs
 
 ## What exists today
 
-The UI is only the shell (`ui/src/shell/Shell.tsx`): a title bar, a left "Project" panel area, the viewport area (no renderer yet), right tabs (Properties and History) and a console. The design system lives in the Penpot file (`docs/dev/ui-design.md`). No dialogs or forms exist yet, so this feature introduces the first form controls: text and number fields, a searchable select, validation messages. Design them as reusable components.
+The UI is only the shell (`ui/src/shell/Shell.tsx`): a title bar, a left "Project" panel area, the viewport area (no renderer yet), right tabs (Properties and History) and a console. **Designs are made in FigCraft**, not in Penpot. Use the FigCraft MCP: `figcraft-app` when the FigCraft app is running (127.0.0.1:7979), otherwise the headless `figcraft` server. Read its `prompts/list` workflows and `list_commands` first. The existing Penpot file (`docs/dev/ui-design.md`) is only a reference for the shell screens that already exist. The source of the design tokens (colours, spacing, type) is the code: `ui/src/shell/theme.css` and `shell.css`. Rebuild them as FigCraft variables and styles, so the designs match what is shipped. No dialogs or forms exist yet, so this feature introduces the first form controls: text and number fields, a searchable select, validation messages. Design them as reusable components.
 
 ## Flows to design
 
@@ -51,5 +51,7 @@ A dockable panel, proposed in the right tab group next to Properties and History
 
 ## Deliverables
 
-- **UX (T4)**: flows F1 and F2 as wireframes or annotated flows in the Penpot file (a new page "Georeferencing"), states and error copy (EN and FR), keyboard map and a list of reusable components. Hand off to `ui`.
-- **UI (T5)**: high-fidelity boards in Penpot for the dialog (empty, filled, error, remove-confirmation) and the panel (not georeferenced, filled, editing), using and extending the design system. Export each board as PNG to `.orchestrator/features/georeferencing/design/` (e.g. `location-dialog-filled.png`), with a `design/README.md` listing the boards, their Penpot page and board names, and the new components. Commit them on your task branch.
+Everything goes into one FigCraft document, saved in the repository at `.orchestrator/features/georeferencing/design/georeferencing.figcraft` (FigCraft `save_file`). Each designer commits it on their task branch, so the file passes from `ux` to `ui` through the integration branch.
+
+- **UX (T4)**: flows F1 and F2 as wireframes and annotated flows on a FigCraft page "UX flows": states, error copy (EN and FR), keyboard map, and a list of the reusable components. Write a short `design/ux-notes.md` with the same content as text, for agents that cannot open the file. Commit both and hand off to `ui`.
+- **UI (T5)**: high-fidelity frames on a FigCraft page "UI": the dialog (empty, filled, error, remove-confirmation) and the panel (not georeferenced, filled, editing), with components, variables and styles built from the shipped tokens. Check them with `inspect_document` and `screenshot`. Export each frame as PNG at 2x (`export` with `path`) to `.orchestrator/features/georeferencing/design/` (e.g. `location-dialog-filled.png`). Add a `design/README.md` listing each frame with its page and frame name, the new components and the variables. Update `docs/dev/ui-design.md` to say new designs are made in FigCraft: how to open the file and which MCP server to use, with the Penpot file kept as the reference for older screens. Commit all of it on your task branch.
