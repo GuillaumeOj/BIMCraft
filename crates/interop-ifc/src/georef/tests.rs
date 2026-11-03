@@ -7,14 +7,22 @@ use super::*;
 use crate::step::test_support::typed;
 use crate::step::{Limits, StepReader, StepWriter};
 
-/// The model context and the site of the fixture.
+/// The model context, the site and the metre unit of the fixture.
 const TARGETS: Targets = Targets {
     context: 4,
     site: Some(9),
+    metre_unit: Some(3),
+};
+/// The same, for a file with no metre unit to reuse.
+const FRESH: Targets = Targets {
+    context: 4,
+    site: Some(9),
+    metre_unit: None,
 };
 const NO_SITE: Targets = Targets {
     context: 4,
     site: None,
+    metre_unit: None,
 };
 
 const FIXTURE: &str = include_str!("../../tests/fixtures/georeferenced.ifc");
@@ -70,7 +78,7 @@ fn set_parameter(instances: &mut [Instance], id: u64, index: usize, value: Param
 }
 
 fn import(instances: &[Instance]) -> Result<Option<Imported>, GeorefImportError> {
-    read_georeference(instances, 1.0, SurveyPoint::Read)
+    read_georeference(instances, 1.0)
 }
 
 fn import_ok(instances: &[Instance]) -> Imported {
@@ -101,14 +109,19 @@ fn reads_the_georeference_of_the_fixture() {
 }
 
 #[test]
-fn ignores_the_survey_point_when_asked() {
-    let instances = edited(&[(10, "")], "");
-    let imported = read_georeference(&instances, 1.0, SurveyPoint::Ignore)
-        .unwrap()
-        .unwrap();
+fn an_invalid_survey_point_does_not_fail_the_import() {
+    let imported = import_ok(&edited(&[(10, "")], ""));
     assert_eq!(imported.georeference.survey_point(), None);
+    assert_eq!(
+        imported.survey_error,
+        Some(SurveyPointError::Dangling { reference: 10 })
+    );
     assert_eq!(imported.targets.site, None);
-    assert_eq!(imported.mapped, BTreeSet::from([7, 8]));
+    assert_eq!(imported.kept.survey_global_ids, None);
+    // The set and its relationship are replaced by an export, not kept next to a new set; the
+    // properties may be shared, so they stay.
+    assert_eq!(imported.mapped, BTreeSet::from([7, 8, 13, 14]));
+    assert_eq!(import_ok(&fixture()).survey_error, None);
 }
 
 #[test]
@@ -133,6 +146,24 @@ fn a_file_without_conversion_from_the_model_context_is_not_georeferenced() {
     for line in elsewhere {
         assert_eq!(import(&edited(&[(8, line)], extra)), Ok(None), "{line}");
     }
+    // Not from the model context, so not ours, and not decoded: a conversion that is malformed
+    // is left to `Preserved`.
+    let malformed = [
+        "#8=IFCMAPCONVERSION(#16,#7,0.,0.,0.);",
+        "#8=IFCMAPCONVERSIONSCALED(#18,#7);",
+        "#8=IFCMAPCONVERSION(#98,#7,0.,0.,0.,$,$,$);",
+        "#8=IFCMAPCONVERSION($,#7,0.,0.,0.,$,$,$);",
+        "#8=IFCMAPCONVERSION(#8,#7,0.,0.,0.,$,$,$);",
+        "#8=IFCMAPCONVERSION(#23,#7,0.,0.,0.,$,$,$);",
+    ];
+    let extra =
+        format!("{extra}\n#23=IFCGEOMETRICREPRESENTATIONCONTEXT($,'Model',3.5,1.E-05,#5,$);");
+    for line in malformed {
+        assert_eq!(import(&edited(&[(8, line)], &extra)), Ok(None), "{line}");
+    }
+    // A valid conversion from the model context is still read next to a malformed one.
+    let extra = "#18=IFCMAPCONVERSION(#16,#7,0.);";
+    assert!(import_ok(&edited(&[], extra)).mapped.contains(&8));
     let untyped = "#8=IFCMAPCONVERSION(#22,#7,0.,0.,0.,$,$,$);";
     let context = "#22=IFCGEOMETRICREPRESENTATIONCONTEXT($,$,3,$,#5,$);";
     assert_eq!(import(&edited(&[(8, untyped)], context)), Ok(None));
@@ -171,7 +202,7 @@ fn converts_lengths_from_the_file_and_map_units() {
     let mut edits = vec![(7, crs), (8, conversion)];
     edits.extend(survey);
     let instances = edited(&edits, "");
-    let georef = read_georeference(&instances, 0.001, SurveyPoint::Read)
+    let georef = read_georeference(&instances, 0.001)
         .unwrap()
         .unwrap()
         .georeference;
@@ -185,7 +216,7 @@ fn converts_lengths_from_the_file_and_map_units() {
 
     // A map in metres for a model in millimetres: the scale converts millimetres to metres.
     let conversion = "#8=IFCMAPCONVERSION(#4,#7,652000.,6862000.,35.,$,$,0.001);";
-    let georef = read_georeference(&edited(&[(8, conversion)], ""), 0.001, SurveyPoint::Ignore)
+    let georef = read_georeference(&edited(&[(8, conversion)], ""), 0.001)
         .unwrap()
         .unwrap()
         .georeference;
@@ -200,19 +231,32 @@ fn converts_lengths_from_the_file_and_map_units() {
 fn accepts_decimal_multiples_of_the_metre_as_map_unit() {
     let cases = [
         ("$", 1.0),
+        (".EXA.", 1e18),
+        (".PETA.", 1e15),
+        (".TERA.", 1e12),
+        (".GIGA.", 1e9),
+        (".MEGA.", 1e6),
         (".KILO.", 1e3),
+        (".HECTO.", 1e2),
+        (".DECA.", 1e1),
         (".DECI.", 1e-1),
         (".CENTI.", 1e-2),
         (".MILLI.", 1e-3),
+        (".MICRO.", 1e-6),
+        (".NANO.", 1e-9),
+        (".PICO.", 1e-12),
+        (".FEMTO.", 1e-15),
+        (".ATTO.", 1e-18),
     ];
     for (prefix, size) in cases {
         let unit = format!("#3=IFCSIUNIT(*,.LENGTHUNIT.,{prefix},.METRE.);");
-        let georef = read_georeference(&edited(&[(3, &unit)], ""), 1.0, SurveyPoint::Ignore)
+        let georef = read_georeference(&edited(&[(3, &unit)], ""), 1.0)
             .unwrap()
             .unwrap()
             .georeference;
+        let eastings = georef.base_point().eastings;
         assert!(
-            (georef.base_point().eastings - 652_000.0 * size).abs() < 1e-6,
+            (eastings / (652_000.0 * size) - 1.0).abs() < 1e-12,
             "{prefix}"
         );
         assert!((georef.scale() - 0.9996 * size).abs() < 1e-12, "{prefix}");
@@ -222,7 +266,6 @@ fn accepts_decimal_multiples_of_the_metre_as_map_unit() {
 #[test]
 fn rejects_unsupported_map_units() {
     let units = [
-        "#3=IFCSIUNIT(*,.LENGTHUNIT.,.MEGA.,.METRE.);",
         "#3=IFCSIUNIT(*,.AREAUNIT.,$,.SQUARE_METRE.);",
         "#3=IFCSIUNIT(*,.LENGTHUNIT.,$,.SQUARE_METRE.);",
         "#3=IFCCONVERSIONBASEDUNIT(#23,.LENGTHUNIT.,'FOOT',#24);",
@@ -298,11 +341,6 @@ fn rejects_wrong_or_missing_instances() {
         error(&edited(&[(7, "")], "")),
         GeorefImportError::Dangling { reference: 7 }
     );
-    let source = "#8=IFCMAPCONVERSION(#98,#7,0.,0.,0.,$,$,$);";
-    assert_eq!(
-        error(&edited(&[(8, source)], "")),
-        GeorefImportError::Dangling { reference: 98 }
-    );
     let arity = "#8=IFCMAPCONVERSION(#4,#7,0.,0.,0.,$,$);";
     assert!(matches!(
         error(&edited(&[(8, arity)], "")),
@@ -317,11 +355,6 @@ fn rejects_wrong_or_missing_instances() {
     assert!(matches!(
         error(&edited(&[(7, crs_arity)], "")),
         GeorefImportError::Decode { instance: 7, .. }
-    ));
-    let context = "#4=IFCGEOMETRICREPRESENTATIONCONTEXT($,'Model',3.5,1.E-05,#5,$);";
-    assert!(matches!(
-        error(&edited(&[(4, context)], "")),
-        GeorefImportError::Decode { instance: 4, .. }
     ));
 }
 
@@ -399,14 +432,17 @@ fn rejects_invalid_values() {
     }
     for length_unit in [0.0, -1.0, f64::NAN, f64::INFINITY] {
         assert_eq!(
-            read_georeference(&fixture(), length_unit, SurveyPoint::Read),
+            read_georeference(&fixture(), length_unit),
             Err(GeorefImportError::InvalidLengthUnit)
         );
     }
 }
 
-fn survey_error(edits: &[(u64, &str)], extra: &str) -> GeorefImportError {
-    error(&edited(edits, extra))
+/// Why the survey point of the edited fixture is not valid. The import itself succeeds.
+fn survey_error(edits: &[(u64, &str)], extra: &str) -> SurveyPointError {
+    import_ok(&edited(edits, extra))
+        .survey_error
+        .expect("the survey point is not valid")
 }
 
 const SET: &str = "IFCPROPERTYSET('1kTvXnbbzCWw8lcMd1dR4o',$,'BIMCraft_SurveyPoint',$,";
@@ -421,7 +457,7 @@ fn rejects_a_second_survey_point() {
     for extra in extras {
         assert_eq!(
             survey_error(&[], &extra),
-            GeorefImportError::SurveyPoint(SurveyPointError::MultipleSets),
+            SurveyPointError::MultipleSets,
             "{extra}"
         );
     }
@@ -438,11 +474,7 @@ fn rejects_a_survey_point_not_on_one_site() {
     ];
     for (parameters, expected) in cases {
         let line = format!("#14={REL}{parameters});");
-        assert_eq!(
-            survey_error(&[(14, &line)], ""),
-            GeorefImportError::SurveyPoint(expected),
-            "{parameters}"
-        );
+        assert_eq!(survey_error(&[(14, &line)], ""), expected, "{parameters}");
     }
 }
 
@@ -460,11 +492,7 @@ fn rejects_malformed_survey_point_sets() {
     ];
     for (properties, expected) in sets {
         let line = format!("#13={SET}{properties};");
-        assert_eq!(
-            survey_error(&[(13, &line)], ""),
-            GeorefImportError::SurveyPoint(expected),
-            "{properties}"
-        );
+        assert_eq!(survey_error(&[(13, &line)], ""), expected, "{properties}");
     }
 }
 
@@ -476,16 +504,30 @@ fn rejects_malformed_survey_point_properties() {
         ("'Northings',$,IFCREAL(1.),$", E::NotALength(P::Northings)),
         ("'Northings',$,$,$", E::NotALength(P::Northings)),
         (
-            "'Northings',$,IFCLENGTHMEASURE(1.),#3",
-            E::NotALength(P::Northings),
+            "'Northings',$,IFCLENGTHMEASURE(1.),#17",
+            E::UnsupportedUnit(P::Northings),
+        ),
+        (
+            "'Northings',$,IFCLENGTHMEASURE(1.),#18",
+            E::UnsupportedUnit(P::Northings),
+        ),
+        (
+            "'Northings',$,IFCLENGTHMEASURE(1.),#19",
+            E::UnsupportedUnit(P::Northings),
+        ),
+        (
+            "'Northings',$,IFCLENGTHMEASURE(1.),#97",
+            E::Dangling { reference: 97 },
         ),
         ("'Width',$,IFCLENGTHMEASURE(1.),$", E::Malformed),
     ];
+    let units = "#18=IFCSIUNIT(*,.AREAUNIT.,$,.SQUARE_METRE.);\n\
+                 #19=IFCSIUNIT(*,.LENGTHUNIT.,$,.SQUARE_METRE.);";
     for (parameters, expected) in northings {
         let line = format!("#11=IFCPROPERTYSINGLEVALUE({parameters});");
         assert_eq!(
-            survey_error(&[(11, &line)], ""),
-            GeorefImportError::SurveyPoint(expected),
+            survey_error(&[(11, &line)], units),
+            expected,
             "{parameters}"
         );
     }
@@ -498,16 +540,101 @@ fn rejects_malformed_survey_point_properties() {
             typed("IFCLENGTHMEASURE", Parameter::Real(bad)),
         );
         assert_eq!(
-            error(&instances),
-            GeorefImportError::SurveyPoint(E::NonFinite(P::OrthogonalHeight))
+            import_ok(&instances).survey_error,
+            Some(E::NonFinite(P::OrthogonalHeight))
         );
     }
     let complex = "#12=(IFCPROPERTY('OrthogonalHeight',$)IFCSIMPLEPROPERTY()\
                    IFCPROPERTYSINGLEVALUE(IFCLENGTHMEASURE(1.),$));";
+    assert_eq!(survey_error(&[(12, complex)], ""), E::Malformed);
+}
+
+#[test]
+fn survey_point_lengths_are_in_their_unit_or_in_the_project_unit() {
+    let property = |name, value, unit| {
+        format!("IFCPROPERTYSINGLEVALUE('{name}',$,IFCLENGTHMEASURE({value}),{unit});")
+    };
+    let units = "#18=IFCSIUNIT(*,.LENGTHUNIT.,.MILLI.,.METRE.);\n\
+                 #19=IFCSIUNIT(*,.LENGTHUNIT.,.KILO.,.METRE.);";
+    let edits = [
+        (
+            10,
+            format!("#10={}", property("Eastings", "652010500.", "#18")),
+        ),
+        (
+            11,
+            format!("#11={}", property("Northings", "6862.02025", "#19")),
+        ),
+        (
+            12,
+            format!("#12={}", property("OrthogonalHeight", "36125.", "$")),
+        ),
+    ];
+    let edits: Vec<(u64, &str)> = edits
+        .iter()
+        .map(|(id, line)| (*id, line.as_str()))
+        .collect();
+    // A project in millimetres: the last property has no unit, so it is in millimetres.
+    let instances = edited(&edits, units);
+    let imported = read_georeference(&instances, 0.001).unwrap().unwrap();
+    assert_eq!(imported.survey_error, None);
+    let survey = imported.georeference.survey_point().unwrap();
+    assert!((survey.eastings - 652_010.5).abs() < 1e-6);
+    assert!((survey.northings - 6_862_020.25).abs() < 1e-6);
+    assert!((survey.height - 36.125).abs() < 1e-9);
+    // The same file in metres reads the last property in metres.
+    let survey = import_ok(&instances).georeference.survey_point().unwrap();
+    assert!((survey.height - 36_125.0).abs() < 1e-9);
+    // A length that overflows once converted is refused, not turned into infinity.
+    let huge = [(
+        10,
+        "#10=IFCPROPERTYSINGLEVALUE('Eastings',$,IFCLENGTHMEASURE(1.E300),#20);",
+    )];
+    let exa = "#20=IFCSIUNIT(*,.LENGTHUNIT.,.EXA.,.METRE.);";
     assert_eq!(
-        survey_error(&[(12, complex)], ""),
-        GeorefImportError::SurveyPoint(E::Malformed)
+        survey_error(&huge, exa),
+        SurveyPointError::NonFinite(SurveyProperty::Eastings)
     );
+}
+
+#[test]
+fn a_malformed_survey_point_is_replaced_not_kept() {
+    // The set and its relationship are mapped, so an export that writes a survey point does
+    // not leave a second set behind.
+    let one_missing = edited(&[(13, &format!("#13={SET}(#10,#11));"))], "");
+    let imported = import_ok(&one_missing);
+    assert_eq!(
+        imported.survey_error,
+        Some(SurveyPointError::Missing(SurveyProperty::OrthogonalHeight))
+    );
+    assert!(imported.mapped.is_superset(&BTreeSet::from([13, 14])));
+    assert!(!imported.mapped.contains(&10));
+    // Two sets: both go.
+    let extra = "#18=IFCRELDEFINESBYPROPERTIES('3kTvXnbbzCWw8lcMd1dR4o',$,$,$,(#9),#13);";
+    let imported = import_ok(&edited(&[], extra));
+    assert_eq!(imported.survey_error, Some(SurveyPointError::MultipleSets));
+    assert!(imported.mapped.is_superset(&BTreeSet::from([13, 14, 18])));
+}
+
+#[test]
+fn the_metre_unit_of_the_crs_is_reused() {
+    assert_eq!(import_ok(&fixture()).targets.metre_unit, Some(3));
+    let cases = [
+        // No map unit: the file's unit is not necessarily the metre.
+        ("#7=IFCPROJECTEDCRS('EPSG:2154',$,$,$,$,$,$);", None),
+        // A prefixed metre is read but not reused as the metre.
+        ("#7=IFCPROJECTEDCRS('EPSG:2154',$,$,$,$,$,#18);", None),
+        ("#7=IFCPROJECTEDCRS('EPSG:2154',$,$,$,$,$,#19);", Some(19)),
+    ];
+    let units = "#18=IFCSIUNIT(*,.LENGTHUNIT.,.MILLI.,.METRE.);\n\
+                 #19=IFCSIUNIT(*,.LENGTHUNIT.,$,.METRE.);";
+    for (crs, metre_unit) in cases {
+        assert_eq!(
+            import_ok(&edited(&[(7, crs)], units)).targets.metre_unit,
+            metre_unit,
+            "{crs}"
+        );
+    }
 }
 
 #[test]
@@ -554,7 +681,7 @@ fn written(instances: &[Instance]) -> String {
 fn writes_the_crs_and_the_conversion() {
     let instances = write_georeference(
         &sample(None),
-        TARGETS,
+        FRESH,
         &Kept::default(),
         1.0,
         100,
@@ -563,39 +690,58 @@ fn writes_the_crs_and_the_conversion() {
     .unwrap();
     assert_eq!(
         written(&instances),
-        "#100=IFCPROJECTEDCRS('EPSG:2154',$,$,$,$,$,$);\n\
-         #101=IFCMAPCONVERSION(#4,#100,652000.0,6862000.0,35.0,1.0,0.0,0.9996);\n"
+        "#100=IFCPROJECTEDCRS('EPSG:2154',$,$,$,$,$,#102);\n\
+         #101=IFCMAPCONVERSION(#4,#100,652000.0,6862000.0,35.0,1.0,0.0,0.9996);\n\
+         #102=IFCSIUNIT(*,.LENGTHUNIT.,$,.METRE.);\n"
     );
 }
 
 #[test]
-fn writes_the_survey_point_on_the_site() {
+fn writes_the_map_unit_and_the_survey_point_in_metres_whatever_the_project_unit() {
     let survey = Some(ProjectedPoint::new(652_010.5, 6_862_020.25, 36.125));
     let mut ids = SeededIdSource::new(7);
     let mut expected_ids = SeededIdSource::new(7);
     let set_id = expected_ids.next_id().to_global_id();
     let relationship_id = expected_ids.next_id().to_global_id();
-    let instances = write_georeference(
-        &sample(survey),
-        TARGETS,
-        &Kept::default(),
-        0.001,
-        1,
-        &mut ids,
-    )
-    .unwrap();
+    // A unit that is a power of two keeps the scale, 0.9996 * 0.5, exact in the text.
+    let instances =
+        write_georeference(&sample(survey), FRESH, &Kept::default(), 0.5, 1, &mut ids).unwrap();
     assert_eq!(
         written(&instances),
         format!(
-            "#1=IFCPROJECTEDCRS('EPSG:2154',$,$,$,$,$,$);\n\
-             #2=IFCMAPCONVERSION(#4,#1,652000000.0,6862000000.0,35000.0,1.0,0.0,0.9996);\n\
-             #3=IFCPROPERTYSINGLEVALUE('Eastings',$,IFCLENGTHMEASURE(652010500.0),$);\n\
-             #4=IFCPROPERTYSINGLEVALUE('Northings',$,IFCLENGTHMEASURE(6862020250.0),$);\n\
-             #5=IFCPROPERTYSINGLEVALUE('OrthogonalHeight',$,IFCLENGTHMEASURE(36125.0),$);\n\
-             #6=IFCPROPERTYSET('{set_id}',$,'BIMCraft_SurveyPoint',$,(#3,#4,#5));\n\
-             #7=IFCRELDEFINESBYPROPERTIES('{relationship_id}',$,$,$,(#9),#6);\n"
+            "#1=IFCPROJECTEDCRS('EPSG:2154',$,$,$,$,$,#3);\n\
+             #2=IFCMAPCONVERSION(#4,#1,652000.0,6862000.0,35.0,1.0,0.0,0.4998);\n\
+             #3=IFCSIUNIT(*,.LENGTHUNIT.,$,.METRE.);\n\
+             #4=IFCPROPERTYSINGLEVALUE('Eastings',$,IFCLENGTHMEASURE(652010.5),#3);\n\
+             #5=IFCPROPERTYSINGLEVALUE('Northings',$,IFCLENGTHMEASURE(6862020.25),#3);\n\
+             #6=IFCPROPERTYSINGLEVALUE('OrthogonalHeight',$,IFCLENGTHMEASURE(36.125),#3);\n\
+             #7=IFCPROPERTYSET('{set_id}',$,'BIMCraft_SurveyPoint',$,(#4,#5,#6));\n\
+             #8=IFCRELDEFINESBYPROPERTIES('{relationship_id}',$,$,$,(#9),#7);\n"
         )
     );
+}
+
+#[test]
+fn reuses_the_metre_unit_it_is_given() {
+    let survey = Some(ProjectedPoint::new(1.0, 2.0, 3.0));
+    let targets = Targets {
+        metre_unit: Some(77),
+        ..FRESH
+    };
+    let instances = write_georeference(
+        &sample(survey),
+        targets,
+        &Kept::default(),
+        1.0,
+        10,
+        &mut SeededIdSource::new(1),
+    )
+    .unwrap();
+    let text = written(&instances);
+    assert!(!text.contains("IFCSIUNIT"));
+    assert!(text.starts_with("#10=IFCPROJECTEDCRS('EPSG:2154',$,$,$,$,$,#77);\n"));
+    assert_eq!(text.matches(",#77)").count(), 4);
+    assert_eq!(instances.len(), 7);
 }
 
 #[test]
@@ -609,18 +755,11 @@ fn writes_back_what_it_kept() {
         ])
     );
     let ids = &mut SeededIdSource::new(1);
-    let instances = write_georeference(
-        &imported.georeference,
-        TARGETS,
-        &imported.kept,
-        1.0,
-        100,
-        ids,
-    )
-    .unwrap();
+    let instances =
+        write_georeference(&imported.georeference, FRESH, &imported.kept, 1.0, 100, ids).unwrap();
     let text = written(&instances);
     assert!(text.starts_with(
-        "#100=IFCPROJECTEDCRS('EPSG:2154','RGF93 v1 / Lambert-93','RGF93 v1',$,$,$,$);\n"
+        "#100=IFCPROJECTEDCRS('EPSG:2154','RGF93 v1 / Lambert-93','RGF93 v1',$,$,$,#102);\n"
     ));
     assert!(text.contains("IFCPROPERTYSET('1kTvXnbbzCWw8lcMd1dR4o',"));
     assert!(text.contains("IFCRELDEFINESBYPROPERTIES('2kTvXnbbzCWw8lcMd1dR4o',"));
@@ -634,66 +773,69 @@ fn writes_back_what_it_kept() {
         None,
     )
     .unwrap();
-    let instances = write_georeference(&other, TARGETS, &imported.kept, 1.0, 100, ids).unwrap();
-    assert!(written(&instances).starts_with("#100=IFCPROJECTEDCRS('EPSG:3946',$,$,$,$,$,$);\n"));
+    let instances = write_georeference(&other, FRESH, &imported.kept, 1.0, 100, ids).unwrap();
+    assert!(written(&instances).starts_with("#100=IFCPROJECTEDCRS('EPSG:3946',$,$,$,$,$,#102);\n"));
+}
+
+fn scaled(scale: f64) -> Georeference {
+    Georeference::new(
+        EpsgCode::new(2154).unwrap(),
+        ProjectedPoint::new(0.0, 0.0, 0.0),
+        0.0,
+        scale,
+        None,
+    )
+    .unwrap()
 }
 
 #[test]
 fn rejects_what_it_cannot_write() {
     let survey = Some(ProjectedPoint::new(1.0, 2.0, 3.0));
     let ids = &mut SeededIdSource::new(1);
+    let write = |georeference: &Georeference, targets, length_unit, first_id, ids: &mut _| {
+        write_georeference(
+            georeference,
+            targets,
+            &Kept::default(),
+            length_unit,
+            first_id,
+            ids,
+        )
+    };
     assert_eq!(
-        write_georeference(&sample(survey), NO_SITE, &Kept::default(), 1.0, 1, ids),
+        write(&sample(survey), NO_SITE, 1.0, 1, ids),
         Err(GeorefExportError::SurveyPointWithoutSite)
     );
     for length_unit in [0.0, -1.0, f64::NAN, f64::INFINITY] {
         assert_eq!(
-            write_georeference(
-                &sample(None),
-                NO_SITE,
-                &Kept::default(),
-                length_unit,
-                1,
-                ids
-            ),
+            write(&sample(None), NO_SITE, length_unit, 1, ids),
             Err(GeorefExportError::InvalidLengthUnit)
         );
     }
+    // The scale times the unit overflows, or underflows to zero.
+    for (scale, length_unit) in [(1e10, 1e300), (1e-300, 1e-300)] {
+        assert_eq!(
+            write(&scaled(scale), NO_SITE, length_unit, 1, ids),
+            Err(GeorefExportError::ScaleOutOfRange),
+            "{scale} {length_unit}"
+        );
+    }
+    // The CRS, the conversion and the metre unit take 3 ids; with a survey point, 8.
     assert_eq!(
-        write_georeference(&sample(None), NO_SITE, &Kept::default(), 1e-320, 1, ids),
-        Err(GeorefExportError::NonFinite)
-    );
-    assert_eq!(
-        write_georeference(&sample(None), NO_SITE, &Kept::default(), 1.0, u64::MAX, ids),
+        write(&sample(None), NO_SITE, 1.0, u64::MAX - 1, ids),
         Err(GeorefExportError::IdOverflow)
     );
-    assert!(
-        write_georeference(
-            &sample(None),
-            NO_SITE,
-            &Kept::default(),
-            1.0,
-            u64::MAX - 1,
-            ids
-        )
-        .is_ok()
-    );
+    assert!(write(&sample(None), NO_SITE, 1.0, u64::MAX - 2, ids).is_ok());
+    let reuse = Targets {
+        metre_unit: Some(3),
+        ..NO_SITE
+    };
+    assert!(write(&sample(None), reuse, 1.0, u64::MAX - 1, ids).is_ok());
     assert_eq!(
-        write_georeference(
-            &sample(survey),
-            TARGETS,
-            &Kept::default(),
-            1.0,
-            u64::MAX - 1,
-            ids
-        ),
+        write(&sample(survey), FRESH, 1.0, u64::MAX - 6, ids),
         Err(GeorefExportError::IdOverflow)
     );
-    let far = Some(ProjectedPoint::new(1e300, 2.0, 3.0));
-    assert_eq!(
-        write_georeference(&sample(far), TARGETS, &Kept::default(), 1e-10, 1, ids),
-        Err(GeorefExportError::NonFinite)
-    );
+    assert!(write(&sample(survey), FRESH, 1.0, u64::MAX - 7, ids).is_ok());
 }
 
 #[test]
@@ -706,16 +848,17 @@ fn messages_never_quote_values() {
         GeorefImportError::UnknownCrsName.to_string(),
         GeorefImportError::UnsupportedMapUnit.to_string(),
         GeorefImportError::UnsupportedScaledConversion.to_string(),
-        GeorefImportError::SurveyPoint(SurveyPointError::MultipleSets).to_string(),
+        SurveyPointError::MultipleSets.to_string(),
         SurveyPointError::NotOnSite.to_string(),
         SurveyPointError::Dangling { reference: 2 }.to_string(),
         SurveyPointError::Missing(SurveyProperty::Eastings).to_string(),
         SurveyPointError::Duplicate(SurveyProperty::Northings).to_string(),
         SurveyPointError::NotALength(SurveyProperty::OrthogonalHeight).to_string(),
+        SurveyPointError::UnsupportedUnit(SurveyProperty::Northings).to_string(),
         SurveyPointError::NonFinite(SurveyProperty::Eastings).to_string(),
         SurveyPointError::Malformed.to_string(),
         GeorefExportError::InvalidLengthUnit.to_string(),
-        GeorefExportError::NonFinite.to_string(),
+        GeorefExportError::ScaleOutOfRange.to_string(),
         GeorefExportError::SurveyPointWithoutSite.to_string(),
         GeorefExportError::IdOverflow.to_string(),
     ];
@@ -735,10 +878,11 @@ fn messages_never_quote_values() {
             "the survey point has no Eastings property",
             "the survey point has more than one Northings property",
             "the OrthogonalHeight property of the survey point is not a length",
+            "the Northings property of the survey point has an unsupported unit",
             "the Eastings property of the survey point is not finite",
             "the survey point property set is malformed",
             "the length unit must be a finite number greater than zero",
-            "a georeference value is too large for the length unit",
+            "the scale does not fit the length unit",
             "the survey point needs a site",
             "no instance ids are left",
         ]
@@ -771,11 +915,9 @@ mod properties {
             for (id, index, value) in edits {
                 set_parameter(&mut instances, id, index, value);
             }
-            for survey in [SurveyPoint::Read, SurveyPoint::Ignore] {
-                if let Ok(Some(imported)) = read_georeference(&instances, length_unit, survey) {
-                    prop_assert!(imported.georeference.scale() > 0.0);
-                    prop_assert!(imported.mapped.contains(&imported.crs));
-                }
+            if let Ok(Some(imported)) = read_georeference(&instances, length_unit) {
+                prop_assert!(imported.georeference.scale() > 0.0);
+                prop_assert!(imported.mapped.contains(&imported.crs));
             }
         }
     }
