@@ -19,6 +19,7 @@ core-model = { path = "crates/core-model" }
 core-txn = { path = "crates/core-txn" }
 criterion = { version = "=0.8.2", default-features = false }
 express = { path = "crates/express" }
+georef = { path = "crates/georef" }
 host-desktop = { path = "crates/host-desktop" }
 # Without the default features, which fetch remote and file `$ref`s over HTTP and TLS.
 jsonschema = { version = "=0.58.5", default-features = false }

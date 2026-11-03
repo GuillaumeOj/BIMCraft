@@ -1,0 +1,18 @@
+[package]
+name = "georef"
+version = "0.0.0"
+description = "Georeferencing: project CRS, base point, survey point and the IFC map conversion."
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+libm = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+proptest = { workspace = true }
+
+[lints]
+workspace = true
