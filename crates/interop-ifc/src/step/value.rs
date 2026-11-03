@@ -46,6 +46,20 @@ pub struct Instance {
     pub body: InstanceBody,
 }
 
+impl Instance {
+    /// The simple instance `#id=NAME(parameters);`.
+    #[must_use]
+    pub fn simple(id: u64, name: &str, parameters: Vec<Parameter>) -> Self {
+        Self {
+            id,
+            body: InstanceBody::Simple(Record {
+                name: name.to_owned(),
+                parameters,
+            }),
+        }
+    }
+}
+
 /// The content of an [`Instance`].
 #[derive(Clone, Debug, PartialEq)]
 pub enum InstanceBody {

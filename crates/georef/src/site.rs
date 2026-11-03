@@ -184,14 +184,11 @@ pub fn read(model: &Model) -> Result<Option<(EntityId, Georeference)>, SiteError
         real_or(BASE_POINT_NORTHINGS, 0.0)?,
         real_or(BASE_POINT_HEIGHT, 0.0)?,
     );
-    let survey = [
-        SURVEY_POINT_EASTINGS,
-        SURVEY_POINT_NORTHINGS,
-        SURVEY_POINT_HEIGHT,
-    ]
-    .map(|attribute| real(model, site, attribute));
-    let [eastings, northings, height] = survey;
-    let survey_point = match (eastings?, northings?, height?) {
+    let survey_point = match (
+        real(model, site, SURVEY_POINT_EASTINGS)?,
+        real(model, site, SURVEY_POINT_NORTHINGS)?,
+        real(model, site, SURVEY_POINT_HEIGHT)?,
+    ) {
         (Some(eastings), Some(northings), Some(height)) => {
             Some(ProjectedPoint::new(eastings, northings, height))
         }
@@ -212,24 +209,29 @@ pub fn read(model: &Model) -> Result<Option<(EntityId, Georeference)>, SiteError
 /// [`ATTRIBUTES`]; with `None`, every attribute is unset.
 #[must_use]
 pub fn values(georeference: Option<&Georeference>) -> [(&'static str, Option<AttributeValue>); 9] {
+    let Some(g) = georeference else {
+        return ATTRIBUTES.map(|attribute| (attribute, None));
+    };
     let real = |value: f64| Some(AttributeValue::Real(value));
-    let numbers: [Option<AttributeValue>; 9] = georeference.map_or_else(Default::default, |g| {
-        let base = g.base_point();
-        let survey = g.survey_point();
-        [
+    let base = g.base_point();
+    let survey = g.survey_point();
+    let survey_real = |coordinate: fn(ProjectedPoint) -> f64| {
+        survey.map(|point| AttributeValue::Real(coordinate(point)))
+    };
+    [
+        (
+            CRS_EPSG,
             Some(AttributeValue::Integer(i64::from(g.crs().get()))),
-            real(base.eastings),
-            real(base.northings),
-            real(base.height),
-            real(g.grid_rotation()),
-            real(g.scale()),
-            survey.and_then(|point| real(point.eastings)),
-            survey.and_then(|point| real(point.northings)),
-            survey.and_then(|point| real(point.height)),
-        ]
-    });
-    let mut numbers = numbers.into_iter();
-    ATTRIBUTES.map(|attribute| (attribute, numbers.next().flatten()))
+        ),
+        (BASE_POINT_EASTINGS, real(base.eastings)),
+        (BASE_POINT_NORTHINGS, real(base.northings)),
+        (BASE_POINT_HEIGHT, real(base.height)),
+        (GRID_ROTATION, real(g.grid_rotation())),
+        (SCALE, real(g.scale())),
+        (SURVEY_POINT_EASTINGS, survey_real(|point| point.eastings)),
+        (SURVEY_POINT_NORTHINGS, survey_real(|point| point.northings)),
+        (SURVEY_POINT_HEIGHT, survey_real(|point| point.height)),
+    ]
 }
 
 /// Writes `georeference` on the project's `Site`, which is created with the id `new_site` when

@@ -7,7 +7,7 @@
 #![no_main]
 
 use core_model::SeededIdSource;
-use interop_ifc::georef::{SurveyPoint, Targets, read_georeference, write_georeference};
+use interop_ifc::georef::{SurveyPoint, read_georeference, write_georeference};
 use interop_ifc::step::{Instance, Limits, StepReader};
 use libfuzzer_sys::fuzz_target;
 
@@ -26,13 +26,9 @@ fuzz_target!(|data: &[u8]| {
     let Ok(Some(imported)) = read_georeference(&instances, 1.0, SurveyPoint::Read) else {
         return;
     };
-    let targets = Targets {
-        context: imported.context,
-        site: imported.site,
-    };
     let written = write_georeference(
         &imported.georeference,
-        targets,
+        imported.targets,
         &imported.kept,
         1.0,
         1,

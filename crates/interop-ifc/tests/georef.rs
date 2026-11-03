@@ -70,14 +70,10 @@ fn read_write_read_is_lossless_and_keeps_the_other_instances() {
         .unwrap();
     let (mapped, preserved) = Preserved::split_ids(instances.clone(), &imported.mapped);
     assert_eq!(mapped.len(), imported.mapped.len());
-    let targets = Targets {
-        context: imported.context,
-        site: imported.site,
-    };
     let exported = export(
         &preserved,
         &imported.georeference,
-        targets,
+        imported.targets,
         &imported.kept,
         imported.crs,
         1.0,
@@ -143,28 +139,17 @@ fn writes_back_the_same_bytes_twice() {
         .unwrap()
         .unwrap();
     let (_, preserved) = Preserved::split_ids(instances, &imported.mapped);
-    let targets = Targets {
-        context: imported.context,
-        site: imported.site,
-    };
-    let first = export(
-        &preserved,
-        &imported.georeference,
-        targets,
-        &imported.kept,
-        imported.crs,
-        1.0,
-    )
-    .unwrap();
-    let second = export(
-        &preserved,
-        &imported.georeference,
-        targets,
-        &imported.kept,
-        imported.crs,
-        1.0,
-    )
-    .unwrap();
+    let [first, second] = [(); 2].map(|()| {
+        export(
+            &preserved,
+            &imported.georeference,
+            imported.targets,
+            &imported.kept,
+            imported.crs,
+            1.0,
+        )
+        .unwrap()
+    });
     assert_eq!(
         write(&(header.clone(), first)).unwrap(),
         write(&(header, second)).unwrap()

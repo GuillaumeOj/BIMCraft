@@ -4,7 +4,18 @@ use core_model::SeededIdSource;
 use georef::{Field, GeoreferenceError, XAxisError};
 
 use super::*;
+use crate::step::test_support::typed;
 use crate::step::{Limits, StepReader, StepWriter};
+
+/// The model context and the site of the fixture.
+const TARGETS: Targets = Targets {
+    context: 4,
+    site: Some(9),
+};
+const NO_SITE: Targets = Targets {
+    context: 4,
+    site: None,
+};
 
 const FIXTURE: &str = include_str!("../../tests/fixtures/georeferenced.ifc");
 
@@ -42,7 +53,7 @@ fn edited(edits: &[(u64, &str)], extra: &str) -> Vec<Instance> {
     parse(&text)
 }
 
-/// Sets parameter `index` of instance `id`.
+/// Sets parameter `index` of instance `id`, or adds one past the last.
 fn set_parameter(instances: &mut [Instance], id: u64, index: usize, value: Parameter) {
     let instance = instances
         .iter_mut()
@@ -51,7 +62,11 @@ fn set_parameter(instances: &mut [Instance], id: u64, index: usize, value: Param
     let InstanceBody::Simple(record) = &mut instance.body else {
         panic!("complex");
     };
-    record.parameters[index] = value;
+    if index < record.parameters.len() {
+        record.parameters[index] = value;
+    } else {
+        record.parameters.push(value);
+    }
 }
 
 fn import(instances: &[Instance]) -> Result<Option<Imported>, GeorefImportError> {
@@ -82,15 +97,7 @@ fn reads_the_georeference_of_the_fixture() {
         Some(ProjectedPoint::new(652_010.5, 6_862_020.25, 36.125))
     );
     assert_eq!(imported.mapped, BTreeSet::from([7, 8, 10, 11, 12, 13, 14]));
-    assert_eq!(
-        (
-            imported.context,
-            imported.crs,
-            imported.conversion,
-            imported.site
-        ),
-        (4, 7, 8, Some(9))
-    );
+    assert_eq!((imported.targets, imported.crs), (TARGETS, 7));
 }
 
 #[test]
@@ -100,7 +107,7 @@ fn ignores_the_survey_point_when_asked() {
         .unwrap()
         .unwrap();
     assert_eq!(imported.georeference.survey_point(), None);
-    assert_eq!(imported.site, None);
+    assert_eq!(imported.targets.site, None);
     assert_eq!(imported.mapped, BTreeSet::from([7, 8]));
 }
 
@@ -347,7 +354,7 @@ fn scaled_conversions_from_other_contexts_or_crss_are_left_alone() {
     for source in ["#16", "#7"] {
         let extra = format!("#18=IFCMAPCONVERSIONSCALED({source},#7,0.,0.,0.,$,$,$,2.,2.,1.);");
         let imported = import_ok(&edited(&[], &extra));
-        assert_eq!(imported.conversion, 8, "{source}");
+        assert!(imported.mapped.contains(&8), "{source}");
         assert!(!imported.mapped.contains(&18), "{source}");
     }
 }
@@ -488,10 +495,7 @@ fn rejects_malformed_survey_point_properties() {
             &mut instances,
             12,
             2,
-            Parameter::Typed {
-                type_name: "IFCLENGTHMEASURE".into(),
-                value: Box::new(Parameter::Real(bad)),
-            },
+            typed("IFCLENGTHMEASURE", Parameter::Real(bad)),
         );
         assert_eq!(
             error(&instances),
@@ -522,7 +526,7 @@ fn other_property_sets_and_relationships_are_not_the_survey_point() {
     // Without a survey point property set, there is no survey point.
     let imported = import_ok(&edited(&[(14, "")], ""));
     assert_eq!(imported.georeference.survey_point(), None);
-    assert_eq!(imported.site, None);
+    assert_eq!(imported.targets.site, None);
 }
 
 fn sample(survey: Option<ProjectedPoint>) -> Georeference {
@@ -548,13 +552,9 @@ fn written(instances: &[Instance]) -> String {
 
 #[test]
 fn writes_the_crs_and_the_conversion() {
-    let targets = Targets {
-        context: 4,
-        site: Some(9),
-    };
     let instances = write_georeference(
         &sample(None),
-        targets,
+        TARGETS,
         &Kept::default(),
         1.0,
         100,
@@ -570,10 +570,6 @@ fn writes_the_crs_and_the_conversion() {
 
 #[test]
 fn writes_the_survey_point_on_the_site() {
-    let targets = Targets {
-        context: 4,
-        site: Some(9),
-    };
     let survey = Some(ProjectedPoint::new(652_010.5, 6_862_020.25, 36.125));
     let mut ids = SeededIdSource::new(7);
     let mut expected_ids = SeededIdSource::new(7);
@@ -581,7 +577,7 @@ fn writes_the_survey_point_on_the_site() {
     let relationship_id = expected_ids.next_id().to_global_id();
     let instances = write_georeference(
         &sample(survey),
-        targets,
+        TARGETS,
         &Kept::default(),
         0.001,
         1,
@@ -612,14 +608,10 @@ fn writes_back_what_it_kept() {
             "2kTvXnbbzCWw8lcMd1dR4o".to_owned()
         ])
     );
-    let targets = Targets {
-        context: 4,
-        site: Some(9),
-    };
     let ids = &mut SeededIdSource::new(1);
     let instances = write_georeference(
         &imported.georeference,
-        targets,
+        TARGETS,
         &imported.kept,
         1.0,
         100,
@@ -642,27 +634,23 @@ fn writes_back_what_it_kept() {
         None,
     )
     .unwrap();
-    let instances = write_georeference(&other, targets, &imported.kept, 1.0, 100, ids).unwrap();
+    let instances = write_georeference(&other, TARGETS, &imported.kept, 1.0, 100, ids).unwrap();
     assert!(written(&instances).starts_with("#100=IFCPROJECTEDCRS('EPSG:3946',$,$,$,$,$,$);\n"));
 }
 
 #[test]
 fn rejects_what_it_cannot_write() {
     let survey = Some(ProjectedPoint::new(1.0, 2.0, 3.0));
-    let no_site = Targets {
-        context: 4,
-        site: None,
-    };
     let ids = &mut SeededIdSource::new(1);
     assert_eq!(
-        write_georeference(&sample(survey), no_site, &Kept::default(), 1.0, 1, ids),
+        write_georeference(&sample(survey), NO_SITE, &Kept::default(), 1.0, 1, ids),
         Err(GeorefExportError::SurveyPointWithoutSite)
     );
     for length_unit in [0.0, -1.0, f64::NAN, f64::INFINITY] {
         assert_eq!(
             write_georeference(
                 &sample(None),
-                no_site,
+                NO_SITE,
                 &Kept::default(),
                 length_unit,
                 1,
@@ -672,17 +660,17 @@ fn rejects_what_it_cannot_write() {
         );
     }
     assert_eq!(
-        write_georeference(&sample(None), no_site, &Kept::default(), 1e-320, 1, ids),
+        write_georeference(&sample(None), NO_SITE, &Kept::default(), 1e-320, 1, ids),
         Err(GeorefExportError::NonFinite)
     );
     assert_eq!(
-        write_georeference(&sample(None), no_site, &Kept::default(), 1.0, u64::MAX, ids),
+        write_georeference(&sample(None), NO_SITE, &Kept::default(), 1.0, u64::MAX, ids),
         Err(GeorefExportError::IdOverflow)
     );
     assert!(
         write_georeference(
             &sample(None),
-            no_site,
+            NO_SITE,
             &Kept::default(),
             1.0,
             u64::MAX - 1,
@@ -690,14 +678,10 @@ fn rejects_what_it_cannot_write() {
         )
         .is_ok()
     );
-    let site = Targets {
-        context: 4,
-        site: Some(9),
-    };
     assert_eq!(
         write_georeference(
             &sample(survey),
-            site,
+            TARGETS,
             &Kept::default(),
             1.0,
             u64::MAX - 1,
@@ -707,7 +691,7 @@ fn rejects_what_it_cannot_write() {
     );
     let far = Some(ProjectedPoint::new(1e300, 2.0, 3.0));
     assert_eq!(
-        write_georeference(&sample(far), site, &Kept::default(), 1e-10, 1, ids),
+        write_georeference(&sample(far), TARGETS, &Kept::default(), 1e-10, 1, ids),
         Err(GeorefExportError::NonFinite)
     );
 }
@@ -785,20 +769,12 @@ mod properties {
         ) {
             let mut instances = fixture();
             for (id, index, value) in edits {
-                let instance = instances.iter_mut().find(|instance| instance.id == id).unwrap();
-                let InstanceBody::Simple(record) = &mut instance.body else {
-                    unreachable!("the fixture has simple instances only");
-                };
-                if index < record.parameters.len() {
-                    record.parameters[index] = value;
-                } else {
-                    record.parameters.push(value);
-                }
+                set_parameter(&mut instances, id, index, value);
             }
             for survey in [SurveyPoint::Read, SurveyPoint::Ignore] {
                 if let Ok(Some(imported)) = read_georeference(&instances, length_unit, survey) {
                     prop_assert!(imported.georeference.scale() > 0.0);
-                    prop_assert!(imported.mapped.contains(&imported.conversion));
+                    prop_assert!(imported.mapped.contains(&imported.crs));
                 }
             }
         }

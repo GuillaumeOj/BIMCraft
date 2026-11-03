@@ -18,10 +18,7 @@ pub(crate) fn record(name: &str, parameters: Vec<Parameter>) -> Record {
 }
 
 pub(crate) fn simple(id: u64, name: &str, parameters: Vec<Parameter>) -> Instance {
-    Instance {
-        id,
-        body: InstanceBody::Simple(record(name, parameters)),
-    }
+    Instance::simple(id, name, parameters)
 }
 
 pub(super) fn text(value: &str) -> Parameter {
