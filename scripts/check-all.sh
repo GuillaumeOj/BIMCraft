@@ -78,10 +78,10 @@ check_wasm() {
     fi
     cargo build --package "$crate" --target wasm32-unknown-unknown --all-features --locked
   done
-  step "wasm32: geometry results match the native golden output (ENG-04)"
+  step "wasm32: geometry and projection results match the native golden output (ENG-04)"
   require wasmtime
   # wasm32 aborts on panic, which hides captured output; --nocapture keeps the diverging value.
-  cargo test --package geom --test golden --target wasm32-wasip1 --locked -- --nocapture
+  cargo test --package geom --package georef --test golden --target wasm32-wasip1 --locked -- --nocapture
 }
 
 # Runs every fuzz target from fuzz/, on its seeds, with the libFuzzer flags `$1 <target>` prints;

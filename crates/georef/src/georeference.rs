@@ -23,7 +23,7 @@ impl ProjectedPoint {
         }
     }
 
-    fn is_finite(self) -> bool {
+    pub(crate) fn is_finite(self) -> bool {
         self.eastings.is_finite() && self.northings.is_finite() && self.height.is_finite()
     }
 }

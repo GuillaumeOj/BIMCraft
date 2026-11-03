@@ -4,6 +4,7 @@ extend-exclude = [
   "target/",
   "ui/node_modules/",
   "crates/geom/tests/golden.txt",
+  "crates/georef/tests/golden.txt",
   # Vendored unchanged from buildingSMART.
   "crates/interop-ifc/schema/*.exp",
   # Translated interface strings (UI-04); typos checks English only.
