@@ -45,9 +45,12 @@ fn airy() -> Ellipsoid {
     Ellipsoid::new(6_377_563.396, 299.324_964_6).unwrap()
 }
 
-fn tmerc(ellipsoid: &Ellipsoid, central: f64, false_northing: f64) -> Projection {
-    TransverseMercator::new(
-        ellipsoid,
+/// A projection case: the projection and the ellipsoid it is on.
+type Case = (Projection, Ellipsoid);
+
+fn tmerc(ellipsoid: Ellipsoid, central: f64, false_northing: f64) -> Case {
+    let projection = TransverseMercator::new(
+        &ellipsoid,
         &TransverseMercatorParameters {
             latitude_of_origin: 0.0,
             longitude_of_origin: central * DEG,
@@ -56,22 +59,16 @@ fn tmerc(ellipsoid: &Ellipsoid, central: f64, false_northing: f64) -> Projection
             false_northing,
         },
     )
-    .unwrap()
-    .into()
+    .unwrap();
+    (projection.into(), ellipsoid)
 }
 
-fn utm(ellipsoid: &Ellipsoid, zone: u16, false_northing: f64) -> Projection {
+fn utm(ellipsoid: Ellipsoid, zone: u16, false_northing: f64) -> Case {
     tmerc(ellipsoid, f64::from(zone) * 6.0 - 183.0, false_northing)
 }
 
-fn lcc(
-    origin: f64,
-    first: f64,
-    second: f64,
-    false_easting: f64,
-    false_northing: f64,
-) -> Projection {
-    LambertConformalConic::two_standard_parallels(
+fn lcc(origin: f64, first: f64, second: f64, false_easting: f64, false_northing: f64) -> Case {
+    let projection = LambertConformalConic::two_standard_parallels(
         &grs80(),
         &LambertConic2SpParameters {
             latitude_of_origin: origin * DEG,
@@ -82,12 +79,12 @@ fn lcc(
             false_northing,
         },
     )
-    .unwrap()
-    .into()
+    .unwrap();
+    (projection.into(), grs80())
 }
 
-/// The projection of each `project` case of the reference file, by name.
-fn projections() -> BTreeMap<String, Projection> {
+/// The projection of each `project` case of the reference file, with its ellipsoid, by name.
+fn projections() -> BTreeMap<String, Case> {
     let mut cases = BTreeMap::new();
     cases.insert(
         "epsg:2154".to_owned(),
@@ -100,18 +97,18 @@ fn projections() -> BTreeMap<String, Projection> {
         cases.insert(format!("epsg:{}", 3900 + zone), projection);
     }
     for zone in 28_u16..=38 {
-        cases.insert(format!("epsg:{}", 25800 + zone), utm(&grs80(), zone, 0.0));
+        cases.insert(format!("epsg:{}", 25800 + zone), utm(grs80(), zone, 0.0));
     }
     for zone in [1_u16, 31, 60] {
-        cases.insert(format!("epsg:{}", 32600 + zone), utm(&wgs84(), zone, 0.0));
+        cases.insert(format!("epsg:{}", 32600 + zone), utm(wgs84(), zone, 0.0));
     }
     for zone in [1_u16, 33, 60] {
         cases.insert(
             format!("epsg:{}", 32700 + zone),
-            utm(&wgs84(), zone, 10_000_000.0),
+            utm(wgs84(), zone, 10_000_000.0),
         );
     }
-    cases.insert("tmerc_wide".to_owned(), tmerc(&grs80(), 3.0, 0.0));
+    cases.insert("tmerc_wide".to_owned(), tmerc(grs80(), 3.0, 0.0));
     cases
 }
 
@@ -168,7 +165,7 @@ fn lines() -> impl Iterator<Item = Line<'static>> {
         })
 }
 
-fn check_projection(line: &Line<'_>, projection: &Projection) {
+fn check_projection(line: &Line<'_>, (projection, ellipsoid): &Case) {
     let [longitude, latitude, eastings, northings, convergence, scale] = line.values;
     let at = |what: &str| format!("line {} ({} {what})", line.number, line.case);
     let point = geographic_degrees(longitude, latitude, 0.0);
@@ -181,7 +178,7 @@ fn check_projection(line: &Line<'_>, projection: &Projection) {
     let back = projection
         .inverse(ProjectedPoint::new(eastings, northings, 0.0))
         .unwrap();
-    let error = ground_distance(&grs80(), back, point);
+    let error = ground_distance(ellipsoid, back, point);
     assert!(error < TOLERANCE, "{}: {error} m from PROJ", at("inverse"));
     let factors = projection.factors(point).unwrap();
     let error = (factors.convergence - convergence * DEG).abs();

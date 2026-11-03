@@ -64,7 +64,8 @@ impl Rng {
     }
 }
 
-/// One line per result: `<case>[<index>] <bits as 16 hex digits>…`, or the error.
+/// One line per result: `<case>[<index>] <bits as 16 hex digits>…` (`nan` for NaN), or the
+/// error.
 #[derive(Default)]
 struct Output(String);
 
@@ -74,7 +75,12 @@ impl Output {
         match values {
             Ok(values) => {
                 for value in values {
-                    let _ = write!(self.0, " {:016x}", value.to_bits());
+                    // NaN bits are unspecified across targets (ADR 0003).
+                    if value.is_nan() {
+                        self.0.push_str(" nan");
+                    } else {
+                        let _ = write!(self.0, " {:016x}", value.to_bits());
+                    }
                 }
             }
             Err(error) => {

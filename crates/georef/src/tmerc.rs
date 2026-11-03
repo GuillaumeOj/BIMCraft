@@ -10,7 +10,11 @@
 //! algorithm for the transverse Mercator mapping (almost)", ICC 2007.
 
 use crate::ProjectedPoint;
-use crate::geodesy::{Ellipsoid, GeodesyError, GeographicPoint, Parameter, finite, wrap_angle};
+use std::f64::consts::FRAC_PI_2;
+
+use crate::geodesy::{
+    Ellipsoid, GeodesyError, GeographicPoint, Parameter, finite, is_pole, wrap_angle,
+};
 use crate::projection::Factors;
 
 /// The order of the series.
@@ -71,7 +75,7 @@ impl TransverseMercator {
         parameters: &TransverseMercatorParameters,
     ) -> Result<Self, GeodesyError> {
         let phi0 = finite(parameters.latitude_of_origin, Parameter::LatitudeOfOrigin)?;
-        if phi0.abs() > std::f64::consts::FRAC_PI_2 {
+        if phi0.abs() > FRAC_PI_2 {
             return Err(GeodesyError::InvalidParameter {
                 parameter: Parameter::LatitudeOfOrigin,
             });
@@ -127,6 +131,18 @@ impl TransverseMercator {
         }
     }
 
+    /// The ellipsoidal coordinates (ξ, η) of `spherical`, through the Krüger series, if the
+    /// series reach them.
+    fn ellipsoidal(&self, spherical: &Spherical) -> Result<(f64, f64), GeodesyError> {
+        let Spherical { xi, eta, .. } = *spherical;
+        let (d_xi, d_eta) = clenshaw_complex_sin(&self.gtu, 2.0 * xi, 2.0 * eta);
+        let (xi, eta) = (xi + d_xi, eta + d_eta);
+        if eta.is_nan() || eta.abs() > MAX_ETA {
+            return Err(GeodesyError::OutsideDomain);
+        }
+        Ok((xi, eta))
+    }
+
     /// The projected coordinates of `point`; the height passes through unchanged.
     ///
     /// # Errors
@@ -136,12 +152,7 @@ impl TransverseMercator {
     /// for the series (about 90° of longitude on the equator).
     pub fn forward(&self, point: GeographicPoint) -> Result<ProjectedPoint, GeodesyError> {
         let point = point.checked()?;
-        let Spherical { xi, eta, .. } = self.spherical(point);
-        let (d_xi, d_eta) = clenshaw_complex_sin(&self.gtu, 2.0 * xi, 2.0 * eta);
-        let (xi, eta) = (xi + d_xi, eta + d_eta);
-        if eta.is_nan() || eta.abs() > MAX_ETA {
-            return Err(GeodesyError::OutsideDomain);
-        }
+        let (xi, eta) = self.ellipsoidal(&self.spherical(point))?;
         Ok(ProjectedPoint::new(
             self.qn * eta + self.false_easting,
             self.qn * xi + self.zb + self.false_northing,
@@ -154,14 +165,17 @@ impl TransverseMercator {
     /// # Errors
     ///
     /// [`GeodesyError::NonFinite`] for a non-finite coordinate, and
-    /// [`GeodesyError::OutsideDomain`] when the point is beyond the reach of the series.
+    /// [`GeodesyError::OutsideDomain`] when the point is beyond the reach of the series or
+    /// beyond a pole: the series are periodic in northing, so such a point would otherwise come
+    /// back as a wrong but plausible one.
     pub fn inverse(&self, point: ProjectedPoint) -> Result<GeographicPoint, GeodesyError> {
         if !point.is_finite() {
             return Err(GeodesyError::NonFinite);
         }
         let xi = (point.northings - self.false_northing - self.zb) / self.qn;
         let eta = (point.eastings - self.false_easting) / self.qn;
-        if eta.is_nan() || eta.abs() > MAX_ETA {
+        // ξ is the rectifying latitude on the central meridian: ±π/2 at the poles.
+        if eta.abs() > MAX_ETA || xi.abs() > FRAC_PI_2 + 1e-12 {
             return Err(GeodesyError::OutsideDomain);
         }
         let (d_xi, d_eta) = clenshaw_complex_sin(&self.utg, 2.0 * xi, 2.0 * eta);
@@ -181,15 +195,21 @@ impl TransverseMercator {
     ///
     /// # Errors
     ///
-    /// As [`TransverseMercator::forward`].
+    /// As [`TransverseMercator::forward`], and [`GeodesyError::OutsideDomain`] at the poles,
+    /// where the convergence is not defined.
     pub fn factors(&self, point: GeographicPoint) -> Result<Factors, GeodesyError> {
-        self.forward(point)?;
+        let point = point.checked()?;
+        if is_pole(point.latitude) {
+            return Err(GeodesyError::OutsideDomain);
+        }
+        let spherical = self.spherical(point);
+        self.ellipsoidal(&spherical)?;
         let Spherical {
             lambda,
             chi,
             xi,
             eta,
-        } = self.spherical(point);
+        } = spherical;
         let (sin_chi, cos_chi) = libm::sincos(chi);
         let (sin_lambda, cos_lambda) = libm::sincos(lambda);
         let (sin_lat, cos_lat) = libm::sincos(point.latitude);
@@ -213,6 +233,7 @@ impl TransverseMercator {
 }
 
 /// A point on the conformal sphere, see [`TransverseMercator::spherical`].
+#[derive(Clone, Copy)]
 struct Spherical {
     lambda: f64,
     chi: f64,
@@ -529,6 +550,40 @@ mod tests {
             let back = tm.inverse(pole).unwrap();
             assert!((back.latitude - latitude).abs() < 1e-12);
         }
+    }
+
+    /// Regression: the series are periodic in northing, so a point beyond a pole used to come
+    /// back as a plausible point near the equator.
+    #[test]
+    fn rejects_northings_beyond_the_poles() {
+        let tm = utm(&grs80(), 31, false);
+        for northings in [1e9, -1e9, 1e300] {
+            assert_eq!(
+                tm.inverse(ProjectedPoint::new(500_000.0, northings, 0.0)),
+                Err(GeodesyError::OutsideDomain)
+            );
+        }
+        let pole = tm
+            .forward(GeographicPoint::new(3.0 * DEG, FRAC_PI_2, 0.0))
+            .unwrap();
+        assert!(tm.inverse(pole).is_ok());
+    }
+
+    /// Regression: at a pole the convergence is not defined and the scale was computed from
+    /// rounding noise.
+    #[test]
+    fn has_no_factors_at_the_poles() {
+        let tm = utm(&grs80(), 31, false);
+        for latitude in [FRAC_PI_2, -FRAC_PI_2] {
+            assert_eq!(
+                tm.factors(GeographicPoint::new(40.0 * DEG, latitude, 0.0)),
+                Err(GeodesyError::OutsideDomain)
+            );
+        }
+        assert_eq!(
+            tm.factors(GeographicPoint::new(0.0, f64::NAN, 0.0)),
+            Err(GeodesyError::NonFinite)
+        );
     }
 
     proptest! {

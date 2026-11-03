@@ -3,10 +3,12 @@
 //! Note 7-2, §3.2.1; the inverse latitude by Newton's method on the isometric latitude, as in
 //! Karney, "Transverse Mercator with an accuracy of a few nanometers", J. Geodesy 85 (2011).
 
-use std::f64::consts::FRAC_PI_2;
+use std::f64::consts::{FRAC_PI_2, PI};
 
 use crate::ProjectedPoint;
-use crate::geodesy::{Ellipsoid, GeodesyError, GeographicPoint, Parameter, finite, wrap_angle};
+use crate::geodesy::{
+    Ellipsoid, GeodesyError, GeographicPoint, Parameter, finite, is_pole, wrap_angle,
+};
 use crate::projection::Factors;
 
 /// The parameters of a Lambert Conformal Conic projection with two standard parallels, angles in
@@ -47,7 +49,6 @@ pub struct LambertConic1SpParameters {
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct LambertConformalConic {
     ellipsoid: Ellipsoid,
-    eccentricity: f64,
     longitude_of_origin: f64,
     false_easting: f64,
     false_northing: f64,
@@ -73,8 +74,9 @@ impl LambertConformalConic {
     ///
     /// # Errors
     ///
-    /// [`GeodesyError::InvalidParameter`] when a parameter is not finite, a latitude is at or
-    /// beyond a pole, or the parallels are symmetric about the equator (no cone).
+    /// [`GeodesyError::InvalidParameter`] when a parameter is not finite, a standard parallel is
+    /// at or beyond a pole, the parallels are symmetric about the equator (no cone), or the
+    /// false origin is beyond a pole or at the pole away from the cone's apex.
     pub fn two_standard_parallels(
         ellipsoid: &Ellipsoid,
         parameters: &LambertConic2SpParameters,
@@ -82,7 +84,6 @@ impl LambertConformalConic {
         let e = ellipsoid.eccentricity();
         let lat1 = parallel(parameters.first_parallel, Parameter::StandardParallels)?;
         let lat2 = parallel(parameters.second_parallel, Parameter::StandardParallels)?;
-        let lat_f = parallel(parameters.latitude_of_origin, Parameter::LatitudeOfOrigin)?;
         let (m1, iso1) = (m(ellipsoid, lat1), isometric_latitude(lat1, e));
         let n = if (lat1 - lat2).abs() < 1e-10 {
             libm::sin(lat1)
@@ -99,7 +100,7 @@ impl LambertConformalConic {
             ellipsoid,
             n,
             c,
-            lat_f,
+            parameters.latitude_of_origin,
             parameters.longitude_of_origin,
             [parameters.false_easting, parameters.false_northing],
         )
@@ -148,30 +149,28 @@ impl LambertConformalConic {
         longitude_of_origin: f64,
         [false_easting, false_northing]: [f64; 2],
     ) -> Result<Self, GeodesyError> {
-        let eccentricity = ellipsoid.eccentricity();
+        let invalid_origin = GeodesyError::InvalidParameter {
+            parameter: Parameter::LatitudeOfOrigin,
+        };
+        let latitude_of_origin = finite(latitude_of_origin, Parameter::LatitudeOfOrigin)?;
+        if latitude_of_origin.abs() > FRAC_PI_2 {
+            return Err(invalid_origin);
+        }
+        // A false origin at the apex is valid (ρ0 = 0), as in PROJ; the other pole is not.
+        let rho0 = radius(ellipsoid, n, c, latitude_of_origin).map_err(|_| invalid_origin)?;
         Ok(Self {
             ellipsoid: *ellipsoid,
-            eccentricity,
             longitude_of_origin: finite(longitude_of_origin, Parameter::LongitudeOfOrigin)?,
             false_easting: finite(false_easting, Parameter::FalseOrigin)?,
             false_northing: finite(false_northing, Parameter::FalseOrigin)?,
             n,
             c,
-            rho0: c * libm::exp(-n * isometric_latitude(latitude_of_origin, eccentricity)),
+            rho0,
         })
     }
 
-    /// The radius of the parallel through `latitude`: zero at the apex of the cone.
     fn rho(&self, latitude: f64) -> Result<f64, GeodesyError> {
-        if is_pole(latitude) {
-            // The pole the cone points to is its apex; the other one is at infinity.
-            return if latitude * self.n > 0.0 {
-                Ok(0.0)
-            } else {
-                Err(GeodesyError::OutsideDomain)
-            };
-        }
-        Ok(self.c * libm::exp(-self.n * isometric_latitude(latitude, self.eccentricity)))
+        radius(&self.ellipsoid, self.n, self.c, latitude)
     }
 
     /// The projected coordinates of `point`; the height passes through unchanged.
@@ -196,7 +195,9 @@ impl LambertConformalConic {
     ///
     /// # Errors
     ///
-    /// [`GeodesyError::NonFinite`] for a non-finite coordinate.
+    /// [`GeodesyError::NonFinite`] for a non-finite coordinate, and
+    /// [`GeodesyError::OutsideDomain`] for a point in the gap of the unrolled cone, which no
+    /// longitude reaches.
     pub fn inverse(&self, point: ProjectedPoint) -> Result<GeographicPoint, GeodesyError> {
         if !point.is_finite() {
             return Err(GeodesyError::NonFinite);
@@ -210,16 +211,20 @@ impl LambertConformalConic {
         let rho = libm::hypot(dx, dy);
         if rho == 0.0 {
             return Ok(GeographicPoint::new(
-                self.longitude_of_origin,
+                wrap_angle(self.longitude_of_origin),
                 FRAC_PI_2.copysign(self.n),
                 point.height,
             ));
         }
-        let psi = -libm::log(rho / self.c.abs()) / self.n;
         let theta = libm::atan2(dx, dy);
+        // The cone unrolls to a sector of half-angle π·|n| around the apex.
+        if theta.abs() > PI * self.n.abs() + 1e-12 {
+            return Err(GeodesyError::OutsideDomain);
+        }
+        let psi = -libm::log(rho / self.c.abs()) / self.n;
         Ok(GeographicPoint::new(
             wrap_angle(theta / self.n + self.longitude_of_origin),
-            latitude_from_isometric(psi, self.eccentricity),
+            latitude_from_isometric(psi, self.ellipsoid.eccentricity()),
             point.height,
         ))
     }
@@ -244,10 +249,17 @@ impl LambertConformalConic {
     }
 }
 
-/// Whether `latitude` is a pole, within 10⁻¹² rad (a few micrometres), where the isometric
-/// latitude is infinite.
-fn is_pole(latitude: f64) -> bool {
-    (latitude.abs() - FRAC_PI_2).abs() < 1e-12
+/// The radius of the parallel through `latitude` on the cone with constant `n` and scale `c`:
+/// zero at the apex, and an error at the other pole, which is at infinity.
+fn radius(ellipsoid: &Ellipsoid, n: f64, c: f64, latitude: f64) -> Result<f64, GeodesyError> {
+    if is_pole(latitude) {
+        return if latitude * n > 0.0 {
+            Ok(0.0)
+        } else {
+            Err(GeodesyError::OutsideDomain)
+        };
+    }
+    Ok(c * libm::exp(-n * isometric_latitude(latitude, ellipsoid.eccentricity())))
 }
 
 /// `cos φ / sqrt(1 − e²·sin²φ)`: the radius of the parallel over the semi-major axis.
@@ -268,6 +280,11 @@ fn latitude_from_isometric(psi: f64, e: f64) -> f64 {
     let e2m = 1.0 - e * e;
     let tolerance = f64::EPSILON.sqrt() / 10.0;
     let mut tau = taup / e2m;
+    // Within 10⁻⁸ rad of a pole (or ±∞), tan φ is the answer to the rounding of `f64`, and
+    // squaring it would overflow: GeographicLib's `tauf` stops here too.
+    if tau.is_nan() || tau.abs() >= 2.0 / f64::EPSILON.sqrt() {
+        return libm::atan(tau);
+    }
     for _ in 0..5 {
         let secant = libm::hypot(1.0, tau);
         let sigma = libm::sinh(e * libm::atanh(e * tau / secant));
@@ -501,6 +518,20 @@ mod tests {
             ),
             (
                 LambertConic2SpParameters {
+                    latitude_of_origin: 2.0,
+                    ..valid
+                },
+                Parameter::LatitudeOfOrigin,
+            ),
+            (
+                LambertConic2SpParameters {
+                    latitude_of_origin: f64::NAN,
+                    ..valid
+                },
+                Parameter::LatitudeOfOrigin,
+            ),
+            (
+                LambertConic2SpParameters {
                     longitude_of_origin: f64::NAN,
                     ..valid
                 },
@@ -591,6 +622,67 @@ mod tests {
         assert_eq!(
             lcc.inverse(ProjectedPoint::new(0.0, f64::INFINITY, 0.0)),
             Err(GeodesyError::NonFinite)
+        );
+    }
+
+    /// Regression: a point very far from the apex is near the pole at infinity, not NaN.
+    #[test]
+    fn inverts_points_far_from_the_apex() {
+        let lcc = lambert93();
+        for eastings in [1e130, 1e300] {
+            let point = lcc
+                .inverse(ProjectedPoint::new(eastings, 0.0, 0.0))
+                .unwrap();
+            assert!((point.latitude + FRAC_PI_2).abs() < 1e-8, "{point:?}");
+        }
+    }
+
+    /// Regression: the unrolled cone covers π·n either side of its axis; beyond it, no
+    /// longitude projects there.
+    #[test]
+    fn rejects_points_in_the_gap_of_the_cone() {
+        let lcc = lambert93();
+        let apex = lcc
+            .forward(GeographicPoint::new(0.0, FRAC_PI_2, 0.0))
+            .unwrap();
+        let beyond_apex = ProjectedPoint::new(apex.eastings, apex.northings + 1e6, 0.0);
+        assert_eq!(lcc.inverse(beyond_apex), Err(GeodesyError::OutsideDomain));
+        let antimeridian = lcc
+            .forward(GeographicPoint::new(-177.0 * DEG, 60.0 * DEG, 0.0))
+            .unwrap();
+        assert!(lcc.inverse(antimeridian).is_ok());
+    }
+
+    /// Regression: a false origin at the apex is valid (ρ0 = 0), at the other pole it is not.
+    #[test]
+    fn accepts_a_false_origin_at_the_apex() {
+        let parameters = LambertConic2SpParameters {
+            latitude_of_origin: FRAC_PI_2,
+            longitude_of_origin: 190.0 * DEG,
+            first_parallel: 60.0 * DEG,
+            second_parallel: 70.0 * DEG,
+            false_easting: 1e6,
+            false_northing: 2e6,
+        };
+        let lcc = LambertConformalConic::two_standard_parallels(&grs80(), &parameters).unwrap();
+        let apex = lcc
+            .forward(GeographicPoint::new(0.3, FRAC_PI_2, 0.0))
+            .unwrap();
+        assert!((apex.eastings - 1e6).abs() < 1e-6 && (apex.northings - 2e6).abs() < 1e-6);
+        // The apex keeps the longitude of origin, wrapped like every other result.
+        let back = lcc.inverse(ProjectedPoint::new(1e6, 2e6, 0.0)).unwrap();
+        assert!((back.longitude + 170.0 * DEG).abs() < 1e-12, "{back:?}");
+        assert_eq!(
+            LambertConformalConic::two_standard_parallels(
+                &grs80(),
+                &LambertConic2SpParameters {
+                    latitude_of_origin: -FRAC_PI_2,
+                    ..parameters
+                }
+            ),
+            Err(GeodesyError::InvalidParameter {
+                parameter: Parameter::LatitudeOfOrigin
+            })
         );
     }
 

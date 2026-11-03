@@ -130,6 +130,12 @@ pub(crate) fn finite(value: f64, parameter: Parameter) -> Result<f64, GeodesyErr
     }
 }
 
+/// Whether `latitude` is a pole, within 10⁻¹² rad (a few micrometres), where projections
+/// degenerate.
+pub(crate) fn is_pole(latitude: f64) -> bool {
+    (latitude.abs() - FRAC_PI_2).abs() < 1e-12
+}
+
 /// `angle` brought into [−π, π], as PROJ does for longitudes.
 pub(crate) fn wrap_angle(angle: f64) -> f64 {
     libm::remainder(angle, 2.0 * PI)
@@ -144,20 +150,25 @@ pub struct Ellipsoid {
 }
 
 impl Ellipsoid {
+    /// The smallest inverse flattening accepted. The Transverse Mercator series, to sixth order in
+    /// the third flattening, lose their accuracy on flatter ellipsoids; every Earth ellipsoid in
+    /// use has 1/f near 300.
+    pub const MIN_INVERSE_FLATTENING: f64 = 50.0;
+
     /// The ellipsoid with `semi_major_axis` (metres) and `inverse_flattening` (1/f). An infinite
     /// inverse flattening is a sphere.
     ///
     /// # Errors
     ///
     /// [`GeodesyError::InvalidParameter`] when the semi-major axis is not finite and positive, or
-    /// the inverse flattening is not greater than 1.
+    /// the inverse flattening is below [`Ellipsoid::MIN_INVERSE_FLATTENING`].
     pub fn new(semi_major_axis: f64, inverse_flattening: f64) -> Result<Self, GeodesyError> {
         if finite(semi_major_axis, Parameter::SemiMajorAxis)? <= 0.0 {
             return Err(GeodesyError::InvalidParameter {
                 parameter: Parameter::SemiMajorAxis,
             });
         }
-        if inverse_flattening.is_nan() || inverse_flattening <= 1.0 {
+        if inverse_flattening.is_nan() || inverse_flattening < Self::MIN_INVERSE_FLATTENING {
             return Err(GeodesyError::InvalidParameter {
                 parameter: Parameter::InverseFlattening,
             });
@@ -277,9 +288,7 @@ mod tests {
     use proptest::prelude::*;
 
     use super::*;
-    use crate::test_support::{grs80, wgs84};
-
-    const DEG: f64 = PI / 180.0;
+    use crate::test_support::{DEG, grs80, wgs84};
 
     #[test]
     fn derives_the_grs80_constants() {
@@ -314,6 +323,9 @@ mod tests {
         assert_eq!(Ellipsoid::new(f64::NAN, 298.0), semi_major);
         assert_eq!(Ellipsoid::new(f64::INFINITY, 298.0), semi_major);
         assert_eq!(Ellipsoid::new(6e6, 1.0), flattening);
+        assert_eq!(Ellipsoid::new(6e6, 1.5), flattening);
+        assert_eq!(Ellipsoid::new(6e6, 49.9), flattening);
+        assert!(Ellipsoid::new(6e6, Ellipsoid::MIN_INVERSE_FLATTENING).is_ok());
         assert_eq!(Ellipsoid::new(6e6, f64::NAN), flattening);
         assert_eq!(Ellipsoid::new(6e6, -298.0), flattening);
     }
