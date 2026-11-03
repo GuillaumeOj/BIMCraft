@@ -1306,8 +1306,12 @@ dependencies = [
 name = "georef"
 version = "0.0.0"
 dependencies = [
+ "core-model",
+ "core-txn",
  "libm",
  "proptest",
+ "schema-gen",
+ "serde",
  "thiserror 2.0.21",
 ]
 

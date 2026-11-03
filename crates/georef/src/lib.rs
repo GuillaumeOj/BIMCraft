@@ -19,6 +19,7 @@
 
 mod conversion;
 mod georeference;
+pub mod site;
 
 pub use conversion::{MapConversion, XAxisError, rotation_from_x_axis};
 pub use georeference::{
