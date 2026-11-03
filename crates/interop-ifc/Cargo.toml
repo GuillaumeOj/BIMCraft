@@ -8,12 +8,15 @@ license.workspace = true
 publish = false
 
 [dependencies]
+core-model = { workspace = true }
+georef = { workspace = true }
 thiserror = { workspace = true }
 
 [build-dependencies]
 express = { workspace = true }
 
 [dev-dependencies]
+core-model = { workspace = true, features = ["test-support"] }
 express = { workspace = true }
 proptest = { workspace = true }
 schema = { workspace = true }

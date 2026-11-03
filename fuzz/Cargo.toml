@@ -15,7 +15,7 @@ cargo-fuzz = true
 
 [dependencies]
 api = { path = "../crates/api", features = ["conformance"] }
-core-model = { path = "../crates/core-model" }
+core-model = { path = "../crates/core-model", features = ["test-support"] }
 core-txn = { path = "../crates/core-txn" }
 express = { path = "../crates/express" }
 geom = { path = "../crates/geom" }
@@ -59,6 +59,13 @@ bench = false
 [[bin]]
 name = "extrusion"
 path = "fuzz_targets/extrusion.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "ifc_georef"
+path = "fuzz_targets/ifc_georef.rs"
 test = false
 doc = false
 bench = false

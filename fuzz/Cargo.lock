@@ -134,6 +134,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "georef"
+version = "0.0.0"
+dependencies = [
+ "core-model",
+ "core-txn",
+ "libm",
+ "thiserror",
+]
+
+[[package]]
 name = "getrandom"
 version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -173,7 +183,9 @@ dependencies = [
 name = "interop-ifc"
 version = "0.0.0"
 dependencies = [
+ "core-model",
  "express",
+ "georef",
  "thiserror",
 ]
 

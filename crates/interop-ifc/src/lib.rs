@@ -3,7 +3,9 @@
 //! The [`step`] module reads ISO 10303-21 (STEP Part 21) files, the text encoding of IFC, as a
 //! stream of instances with bounded memory, so a hostile file cannot exhaust memory or crash the
 //! importer, and writes them back deterministically. The [`preserve`] module keeps the instances
-//! the model does not map and gives them back on export (INT-03).
+//! the model does not map and gives them back on export (INT-03). The [`georef`] module reads and
+//! writes the project georeference: `IfcProjectedCRS` and `IfcMapConversion` (GEOREF-01,
+//! GEOREF-02).
 //!
 //! This crate builds for native targets and `wasm32-unknown-unknown` (ARCH-01) and never touches
 //! the platform directly (ARCH-02): it reads from any [`std::io::BufRead`], such as the bytes a
@@ -12,6 +14,7 @@
 // ARCH-02: forbid, not deny, so nothing in this crate can opt out. See docs/dev/quality.md.
 #![forbid(clippy::disallowed_methods, clippy::disallowed_types)]
 
+pub mod georef;
 pub mod ifc;
 pub mod preserve;
 pub mod step;

@@ -1832,7 +1832,9 @@ dependencies = [
 name = "interop-ifc"
 version = "0.0.0"
 dependencies = [
+ "core-model",
  "express",
+ "georef",
  "proptest",
  "schema",
  "schema-gen",

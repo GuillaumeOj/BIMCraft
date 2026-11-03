@@ -45,7 +45,7 @@ pub(super) fn keyword() -> impl Strategy<Value = String> {
 }
 
 /// Any parameter the reader and the writer accept, nested up to [`MAX_VALUE_DEPTH`] levels.
-pub(super) fn parameter() -> impl Strategy<Value = Parameter> {
+pub(crate) fn parameter() -> impl Strategy<Value = Parameter> {
     let finite = prop::num::f64::POSITIVE
         | prop::num::f64::NEGATIVE
         | prop::num::f64::NORMAL

@@ -66,6 +66,20 @@ impl Preserved {
         (mapped, Self { instances })
     }
 
+    /// Splits the `instances` of a file into those whose id is in `mapped`, returned in order,
+    /// and the others, kept. Complex instances and user-defined (`!NAME`) records are always
+    /// kept, as in [`Preserved::split`].
+    pub fn split_ids(
+        instances: impl IntoIterator<Item = Instance>,
+        mapped: &BTreeSet<u64>,
+    ) -> (Vec<Instance>, Self) {
+        let (mapped, instances) = instances.into_iter().partition(|instance| {
+            mapped.contains(&instance.id)
+                && matches!(&instance.body, InstanceBody::Simple(record) if !record.name.starts_with('!'))
+        });
+        (mapped, Self { instances })
+    }
+
     /// The kept instances, in the order they were read, with the ids they had.
     #[must_use]
     pub fn instances(&self) -> &[Instance] {
@@ -263,6 +277,14 @@ mod tests {
         let (mapped, preserved) = Preserved::split(file(), is_wall);
         assert_eq!(ids(&mapped), [1]);
         assert_eq!(ids(preserved.instances()), [2, 3, 4, 5, 6]);
+    }
+
+    #[test]
+    fn splits_by_id_and_keeps_complex_and_user_defined_instances() {
+        let mapped_ids = BTreeSet::from([2, 3, 5, 6, 9]);
+        let (mapped, preserved) = Preserved::split_ids(file(), &mapped_ids);
+        assert_eq!(ids(&mapped), [2, 3]);
+        assert_eq!(ids(preserved.instances()), [1, 4, 5, 6]);
     }
 
     #[test]
