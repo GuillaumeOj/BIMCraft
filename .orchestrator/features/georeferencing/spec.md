@@ -19,6 +19,8 @@ The four sub-issues ship as a stack of four pull requests, in this order. Each o
 
 On the integration branch, the tasks of each sub-issue are merged in stack order, so each sub-issue ends at a known commit. When the feature is done, the lead names those four boundary commits in the PR request, and the user pushes the stack (`bun scripts/push-pr.ts --stack`). Each commit references its issue and requirement IDs. The three backend PRs say "User docs: N/A (internal change)".
 
+**`.orchestrator/` does not ship** (user decision). Before the PR request, the lead removes `.orchestrator/` in a final commit. The design lives in `docs/BIMCraft.figcraft`. AGENTS.md already names FigCraft on main (#290). The user edits `.claude/skills/new-feature/SKILL.md`, which still says Penpot.
+
 ## Decisions
 
 ### D1. Where the georeference is stored: a `Site` entity
