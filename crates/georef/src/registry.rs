@@ -255,16 +255,27 @@ impl Registry {
 
         let mut datum_map = BTreeMap::new();
         for (line, record) in datums {
+            let prime_meridian = lookup(&meridians, record.prime_meridian, line, "prime meridian")?;
+            // The projections and the datum shifts work on longitudes from Greenwich: a datum on
+            // another meridian would be silently shifted by its longitude.
+            if prime_meridian.longitude.abs() > 0.0 {
+                return Err(ParseError {
+                    line,
+                    field: "prime meridian",
+                });
+            }
             let datum = Datum {
                 code: record.code,
                 name: record.name,
                 ellipsoid: lookup(&ellipsoids, record.ellipsoid, line, "ellipsoid")?,
-                prime_meridian: lookup(&meridians, record.prime_meridian, line, "prime meridian")?,
+                prime_meridian,
             };
             unique(&mut datum_map, record.code, datum, line)?;
         }
 
-        let shifts = best_shifts(helmerts)?;
+        let sources: BTreeSet<EpsgCode> =
+            geographic.iter().map(|(_, record)| record.code).collect();
+        let shifts = best_shifts(helmerts, &sources)?;
         let mut geographic_map = BTreeMap::new();
         for (line, record) in geographic {
             let crs = GeographicCrs {
@@ -275,15 +286,6 @@ impl Registry {
                 to_wgs84: shifts.get(&record.code).map(|(_, shift)| shift.clone()),
             };
             unique(&mut geographic_map, record.code, Arc::new(crs), line)?;
-        }
-        if let Some((line, _)) = shifts
-            .iter()
-            .find_map(|(source, shift)| (!geographic_map.contains_key(source)).then_some(shift))
-        {
-            return Err(ParseError {
-                line: *line,
-                field: "source CRS",
-            });
         }
 
         let mut projected_map = BTreeMap::new();
@@ -375,9 +377,11 @@ fn lookup<V: Clone>(
 }
 
 /// The most accurate transformation to WGS 84 of each source CRS, with its line. Accuracy ties
-/// go to the lower code; an unstated accuracy is the least accurate.
+/// go to the lower code; an unstated accuracy is the least accurate. Every transformation, the
+/// ones not kept included, must start from a geographic CRS of `sources` and end at WGS 84.
 fn best_shifts(
     helmerts: Vec<(usize, HelmertRecord)>,
+    sources: &BTreeSet<EpsgCode>,
 ) -> Result<BTreeMap<EpsgCode, (usize, DatumShift)>, ParseError> {
     let mut codes = BTreeSet::new();
     let mut best: BTreeMap<EpsgCode, (usize, DatumShift)> = BTreeMap::new();
@@ -391,6 +395,12 @@ fn best_shifts(
             return Err(ParseError {
                 line,
                 field: "target CRS",
+            });
+        }
+        if !sources.contains(&source) {
+            return Err(ParseError {
+                line,
+                field: "source CRS",
             });
         }
         if !codes.insert(shift.code) {
@@ -680,6 +690,26 @@ mod tests {
             ]))
             .is_ok()
         );
+    }
+
+    #[test]
+    fn rejects_a_prime_meridian_other_than_greenwich() {
+        let paris = MERIDIAN.replace("8901\tGreenwich\t0.0", "8903\tParis\t2.5969213");
+        let datum = DATUM.replace("8901", "8903");
+        let error = Registry::parse(&document(&[ELLIPSOID, &paris, &datum])).unwrap_err();
+        assert_eq!((error.line, error.field), (3, "prime meridian"));
+    }
+
+    #[test]
+    fn rejects_a_shift_that_is_not_kept_from_an_unknown_source() {
+        let unknown = HELMERT
+            .replace("1671", "1672")
+            .replace("\t4171\t", "\t4999\t");
+        let error = Registry::parse(&document(&[
+            ELLIPSOID, MERIDIAN, DATUM, GEOGRAPHIC, HELMERT, &unknown,
+        ]))
+        .unwrap_err();
+        assert_eq!((error.line, error.field), (6, "source CRS"));
     }
 
     #[test]
