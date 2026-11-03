@@ -78,6 +78,16 @@ The scale applies to all three axes. `IfcMapConversion.Scale` is the conversion 
   The error does not fail the import: `Imported::survey_error` holds it, and the georeference has no survey point. The set and its relationship are still in `Imported::mapped`, because `BIMCraft` owns a set of that name: an export replaces it, so a file never holds two. The properties of an invalid set are not mapped, as they may belong to other sets.
 - **Writing.** Writing a survey point with no site to attach it to is the error `SurveyPointWithoutSite`. It is never dropped silently.
 
+## The CRS registry
+
+The CRS definitions (GEOREF-02) are data, not code (`crates/georef/epsg/`).
+
+- **Embedded TSV.** `epsg.tsv` is extracted from PROJ's `proj.db` by `extract.py` and embedded with `include_str!`. `georef::Registry::embedded()` parses it once, on first use, into records that each carry a ready `Projection`. The crate reads no file (ARCH-02), so it builds for WebAssembly unchanged.
+- **A subset.** Only the MVP set is in the file: Lambert-93, CC42 to CC50, ETRS89 and WGS 84 UTM zones. Adding a CRS is a change to `extract.py` and a regeneration, described in `epsg/README.md`, which also holds the IOGP attribution.
+- **Deprecated codes.** EPSG deprecates some codes of the set, such as 25838. They stay in the data with their status (and replacement, if any). `Registry::projected` accepts them, so a project or an IFC file that names one still opens; `Registry::list_projected` leaves them out, so a user cannot pick one for a new project.
+- **Hostile input.** Every number is checked on the way in (finite, within the bounds of real definitions: Helmert translations up to 10 km, rotations up to 60″, scale up to 1000 ppm), and an error names the line and the field, never a value (SEC-03).
+- **True north.** `ProjectedCrs::true_north` and `factors_at_base_point` take a `Georeference` and refuse one on another CRS, so the projection is always the one of the georeference's `crs_epsg`.
+
 ## Consequences
 
 - Undo/redo, change events, persistence, the generic `model.*` API and the IFC mapping table work for the georeference with no new core machinery. The georeference commands (sub-issue [#83](https://github.com/GuillaumeOj/BIMCraft/issues/83)) only call `georef::site::write` and `clear` in a transaction.

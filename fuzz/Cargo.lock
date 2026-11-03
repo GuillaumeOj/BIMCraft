@@ -29,6 +29,7 @@ dependencies = [
  "core-txn",
  "express",
  "geom",
+ "georef",
  "interop-ifc",
  "libfuzzer-sys",
  "libm",

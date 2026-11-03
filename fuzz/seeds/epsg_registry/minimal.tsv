@@ -1,0 +1,5 @@
+ellipsoid	7019	GRS 1980	6378137.0	298.257222101
+prime_meridian	8901	Greenwich	0.0
+datum	6171	Reseau Geodesique Francais 1993 v1	7019	8901
+geographic	4171	RGF93 v1	6171	41.15	51.56	-9.86	10.38	France
+projected	2154	RGF93 v1 / Lambert-93	-	4171	9802	east,north	41.15	51.56	-9.86	10.38	France	8821=46.5	8822=3.0	8823=49.0	8824=44.0	8826=700000.0	8827=6600000.0

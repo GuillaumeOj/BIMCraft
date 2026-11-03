@@ -1,10 +1,9 @@
-//! Map projections between geographic and projected coordinates (GEOREF-03), and the true north
-//! of a georeference derived from its grid rotation (spec D2).
+//! Map projections between geographic and projected coordinates (GEOREF-03).
 
-use crate::geodesy::{GeodesyError, GeographicPoint, wrap_angle};
+use crate::ProjectedPoint;
+use crate::geodesy::{GeodesyError, GeographicPoint};
 use crate::lcc::LambertConformalConic;
 use crate::tmerc::TransverseMercator;
-use crate::{Georeference, ProjectedPoint};
 
 /// The local properties of a conformal projection at a point.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -63,21 +62,6 @@ impl Projection {
             Self::LambertConformalConic(projection) => projection.factors(point),
         }
     }
-
-    /// The direction of true north at the base point of `georeference`, in radians,
-    /// counter-clockwise from the local y-axis, in [−π, π]: γ − θ, with γ the meridian
-    /// convergence there and θ the grid rotation (spec D2).
-    ///
-    /// `georeference` must be on the CRS this projection belongs to.
-    ///
-    /// # Errors
-    ///
-    /// [`GeodesyError`] when the base point is outside the projection's domain.
-    pub fn true_north(&self, georeference: &Georeference) -> Result<f64, GeodesyError> {
-        let base = self.inverse(georeference.base_point())?;
-        let convergence = self.factors(base)?.convergence;
-        Ok(wrap_angle(convergence - georeference.grid_rotation()))
-    }
 }
 
 impl From<TransverseMercator> for Projection {
@@ -97,7 +81,6 @@ mod tests {
     use proptest::prelude::*;
 
     use super::*;
-    use crate::EpsgCode;
     use crate::test_support::{DEG, grs80, lambert93, utm};
 
     /// The convergence and scale of `projection`, on GRS 80, at `point`, from central
@@ -193,38 +176,6 @@ mod tests {
                 Err(GeodesyError::NonFinite)
             );
         }
-    }
-
-    fn georeference(base: ProjectedPoint, grid_rotation: f64) -> Georeference {
-        Georeference::new(EpsgCode::new(2154).unwrap(), base, grid_rotation, 1.0, None).unwrap()
-    }
-
-    #[test]
-    fn derives_true_north_from_the_grid_rotation() {
-        let projection = Projection::from(lambert93());
-        // East of the central meridian, grid north is clockwise of true north, so true north is
-        // counter-clockwise of the local y-axis when the grid is not rotated.
-        let point = GeographicPoint::new(7.75 * DEG, 48.58 * DEG, 0.0);
-        let strasbourg = projection.forward(point).unwrap();
-        let convergence = projection.factors(point).unwrap().convergence;
-        assert!((convergence - 0.725_607_765_053_267 * 4.75 * DEG).abs() < 1e-12);
-        let unrotated = projection
-            .true_north(&georeference(strasbourg, 0.0))
-            .unwrap();
-        assert!((unrotated - convergence).abs() < 1e-12);
-        let rotated = projection
-            .true_north(&georeference(strasbourg, 30.0 * DEG))
-            .unwrap();
-        assert!((rotated - (convergence - 30.0 * DEG)).abs() < 1e-12);
-        let wrapped = projection
-            .true_north(&georeference(strasbourg, -179.0 * DEG))
-            .unwrap();
-        assert!((wrapped - (convergence + 179.0 * DEG - 360.0 * DEG)).abs() < 1e-12);
-        let tm = Projection::from(utm(&grs80(), 31, false));
-        assert_eq!(
-            tm.true_north(&georeference(ProjectedPoint::new(3e7, 0.0, 0.0), 0.0)),
-            Err(GeodesyError::OutsideDomain)
-        );
     }
 
     proptest! {

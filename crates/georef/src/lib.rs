@@ -11,8 +11,9 @@
 //! Mercator ([`TransverseMercator`], UTM included) and Lambert Conformal Conic
 //! ([`LambertConformalConic`]), on an [`Ellipsoid`], with a seven-parameter [`Helmert`]
 //! transformation between datums. They also give the meridian convergence and the point scale
-//! factor ([`Factors`]), from which [`Projection::true_north`] derives true north. Their
-//! parameters are plain values; the EPSG registry fills them.
+//! factor ([`Factors`]). Their parameters are plain values; the [`registry`] fills them from the
+//! embedded EPSG definitions, and [`ProjectedCrs::true_north`] derives true north from the
+//! grid rotation with the projection of the georeference's own CRS.
 //!
 //! The georeference is stored on the project's single `Site` object; the [`site`] module reads
 //! and writes it there. Decisions: `docs/dev/adr/0017-georeference-storage-and-ifc-mapping.md`.
@@ -30,6 +31,7 @@ mod georeference;
 mod helmert;
 mod lcc;
 mod projection;
+pub mod registry;
 pub mod site;
 mod tmerc;
 
@@ -41,6 +43,10 @@ pub use georeference::{
 pub use helmert::{Helmert, HelmertParameters, RotationConvention};
 pub use lcc::{LambertConformalConic, LambertConic1SpParameters, LambertConic2SpParameters};
 pub use projection::{Factors, Projection};
+pub use registry::{
+    AreaOfUse, BasePointError, CrsStatus, Datum, DatumShift, GeographicCrs, NamedEllipsoid,
+    ParseError, PrimeMeridian, ProjectedCrs, Registry, RegistryError,
+};
 pub use tmerc::{TransverseMercator, TransverseMercatorParameters};
 
 /// Property-test settings shared by the crate. A fixed seed keeps runs reproducible; with no

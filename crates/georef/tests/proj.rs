@@ -5,7 +5,8 @@
 //!
 //! The reference values come from PROJ through `proj/generate.py`; the file header records the
 //! versions and the command. The test never calls PROJ. The CRS parameters below are the EPSG
-//! definitions, entered by hand as fixtures; the EPSG registry (#82) will provide them.
+//! definitions, entered by hand as fixtures; `registry_matches_the_fixtures` checks that the EPSG
+//! registry's projections agree with PROJ on the same grid for four of them.
 
 // The fixtures are valid by construction and the reference file is committed; a failure is a
 // test failure.
@@ -283,4 +284,23 @@ fn records_its_provenance() {
             .iter()
             .any(|line| line.contains("PROJ ") && line.contains("EPSG dataset"))
     );
+}
+
+/// The registry builds, from the embedded EPSG data, the projections the hand-entered fixtures
+/// above stand for: Lambert-93, CC44, UTM 31N and ETRS89 UTM 31N (GEOREF-02).
+#[test]
+fn registry_matches_the_fixtures() {
+    let registry = georef::Registry::embedded().unwrap();
+    for epsg in [2154_u32, 3944, 32631, 25831] {
+        let crs = registry
+            .projected(georef::EpsgCode::new(epsg).unwrap())
+            .unwrap();
+        let case = (crs.projection.clone(), crs.base.datum.ellipsoid.ellipsoid);
+        let name = format!("epsg:{epsg}");
+        let checked = lines()
+            .filter(|line| line.kind == "project" && line.case == name)
+            .inspect(|line| check_projection(line, &case))
+            .count();
+        assert!(checked > 0, "no reference line for {name}");
+    }
 }

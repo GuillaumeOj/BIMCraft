@@ -34,6 +34,7 @@ These are the commands and queries that task T6 adds to the `api` crate and that
 Lists the CRSs of the embedded registry that can georeference a project. Only projected CRSs are listed by default.
 
 - params: `{ "include_geographic"?: bool }` (default `false`)
+- Deprecated CRSs are omitted from the list. `georef.get`, `georef.convert` and `georef.set` accept a deprecated code (such as 25838), so a project or IFC file that names one still opens.
 - result: `{ "crs": CrsSummary[] }`, sorted by EPSG code. The list is small (≈ 140 entries), so it is not paged.
 
 ### `georef.get` v1
