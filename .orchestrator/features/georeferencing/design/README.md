@@ -85,4 +85,4 @@ New components are in **Brand guide › 8 · Form and dialog components**. The b
 13. **States not drawn** (details in `ux-notes.md`, built from the same components): F1-E list states, dialog loading, `multiple_sites`, Hover of fields and buttons, the "Copié" toast.
 14. **Shortcuts in strings** are written per platform: Ctrl on Windows and Linux, Cmd on macOS.
 15. The boards keep the file's font, IBM Plex Sans. It is not bundled with the app (which falls back to `system-ui`), so check long French strings in the running app.
-16. **Overlap with 2.2.** Board 2.2 shows an older coordinate-system picker (a table in its own dialog); 2.4–2.9 replace it with the search select inside the project location dialog, as in `ux-notes.md`. Lead decides whether 2.2 stays.
+16. **Board 2.2 is superseded.** Board 2.2 (an older coordinate-system picker, a table in its own dialog) stays in the file, but 2.4–2.9 supersede it for the CRS picker. Front implements from 2.4–2.13.
