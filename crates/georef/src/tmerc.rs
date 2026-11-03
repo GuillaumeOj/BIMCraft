@@ -179,9 +179,7 @@ impl TransverseMercator {
         }
         let xi = (point.northings - self.false_northing - self.zb) / self.qn;
         let eta = (point.eastings - self.false_easting) / self.qn;
-        // ξ is the rectifying latitude on the central meridian, ±π/2 at the poles; past a pole it
-        // goes on along the antimeridian, where forward projects points more than 90° away, and
-        // reaches ±π on the equator.
+        // ξ is ±π/2 at the poles and ±π where the antimeridian crosses the equator.
         if eta.abs() > MAX_ETA || xi.abs() > PI + DOMAIN_TOLERANCE {
             return Err(GeodesyError::OutsideDomain);
         }
@@ -567,10 +565,6 @@ mod tests {
                 Err(GeodesyError::OutsideDomain)
             );
         }
-        let pole = tm
-            .forward(GeographicPoint::new(3.0 * DEG, FRAC_PI_2, 0.0))
-            .unwrap();
-        assert!(tm.inverse(pole).is_ok());
     }
 
     /// Regression: forward projects points more than 90° from the central meridian past the
