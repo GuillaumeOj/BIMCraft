@@ -74,7 +74,7 @@ The survey point has no IFC 4.3 attribute. The backend proposes its mapping in *
 - **Project location dialog**: pick the CRS from the registry (search by code or name), enter the base point coordinates, the grid rotation, the scale and the optional survey point. It shows the derived true north and the geographic position of the base point. It applies the whole georeference as one undoable step (`georef.set`) or removes it (`georef.clear`).
 - **Coordinates panel**: enter a point in local, projected or geographic coordinates and read it in the other two systems (`georef.convert`). Each value can be copied.
 - **Scope limit, "pick"**: there is no viewport renderer yet, so picking a point in a view with the pointer cannot be built. In this feature, "pick" means entering a point in either system. The panel is written so that a future viewport can push the hovered or clicked point into it. Pointer picking is left to the viewport work, and the PR says so.
-- **Design tool: FigCraft.** The designs are made in FigCraft through its MCP server. The document is committed at `.orchestrator/features/georeferencing/design/georeferencing.figcraft`, with PNG exports next to it (see `ux-brief.md`). Frontend reads the PNG exports and `design/README.md`, and may inspect the file with the FigCraft MCP. Deviations from the design go in the PR, as `docs/dev/ui-design.md` requires.
+- **Design tool: FigCraft, in the project's design file.** The georeferencing frames go on the page `2 · Site and georeferencing` of `docs/BIMCraft.figcraft`, the project's single design file (main #290, Git LFS, see `docs/dev/ui-design.md`). They reuse its `Mode`/`Core` variables and its `Brand guide` components, in light and dark boards. No separate .figcraft file. PNG exports and `design/README.md` in `.orchestrator/features/georeferencing/design/` are for the team's convenience only. Frontend reads them, or inspects the file with the FigCraft MCP. Deviations from the design go in the PR, as `docs/dev/ui-design.md` requires.
 - UI-01: the UI goes through the API client (`ui/src/api/`) only. UI-04: every string goes into `en.json` and `fr.json`. UI-06: labels, full keyboard use, WCAG AA contrast. UI-03: the dialog and the panel can be opened by a keyboard shortcut and the command palette if one exists; otherwise the shortcut is documented.
 - Numbers: lengths in metres with mm precision. Angles in degrees, or DMS through the core's angle formats. Geographic coordinates on the CRS's own geodetic datum, labelled with its name (e.g. "RGF93 v1"). Locale decimal separators are handled in the UI (ADR 0004).
 
@@ -90,7 +90,7 @@ Vertical datums (GEOREF-05), grid shifts such as NTv2 and geoid grids (spec §7.
 | T2 Projections and Helmert, PROJ test grid | back | #81 | T1 |
 | T3 EPSG registry data, loader, terms recorded | back | #82 | T2 |
 | T4 UX flows for the location dialog and the coordinates panel, in FigCraft | ux | #83 | — |
-| T5 UI design in FigCraft (`design/georeferencing.figcraft`), frames exported as PNG to `.orchestrator/features/georeferencing/design/`, `docs/dev/ui-design.md` updated for FigCraft | ui | #83 | T4 |
+| T5 UI design in `docs/BIMCraft.figcraft` (page `2 · Site and georeferencing`), frames exported as PNG to `.orchestrator/features/georeferencing/design/` | ui | #83 | T4 |
 | T6 `georef.*` API commands and queries, protocol schema, generated TS types | back | #83 | T3 |
 | T7 Location dialog and coordinates panel, i18n EN/FR, unit and e2e tests, user guide EN/FR | front | #83 | T5, T6 |
 
