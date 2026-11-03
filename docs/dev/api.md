@@ -12,6 +12,9 @@ A `Descriptor` holds a stable dotted name (`model.set`; the `rpc.` area is reser
 | `history.undo`, `history.redo` | Undo and redo; they take an empty object. |
 | `model.get_object`, `model.list_objects`, `model.property_sets`, `history.state` | Read-only queries. `model.list_objects` pages by id with an `after` cursor, `history.state` by position with `start`; both return `next`, take 100 items by default and `MAX_PAGE_SIZE` (1000) at most. History entries name the method that ran, such as `model.create`. |
 
+| `georef.list_crs`, `georef.get`, `georef.convert` | Read-only georeferencing queries: the CRSs a project can use (current, projected by default), the project's georeference with its derived true north, convergence and scale, and conversion of up to `MAX_PAGE_SIZE` points between local, projected and geographic coordinates (radians and metres). |
+| `georef.set`, `georef.clear` | Set or remove the georeference on the project's `Site`. Each runs as one `model.batch`, so it is one undo step and the history names it `model.batch`; `georef.clear` on a project that is not georeferenced changes nothing and records nothing. |
+
 A command runs with the caller's `Origin`, which the history records (API-05), and reports a `ChangeEvent`. A query only borrows the session, so it cannot change the model. A failed call leaves the model and its history unchanged.
 
 ## Add a command or query
@@ -50,6 +53,8 @@ Clients send JSON-RPC 2.0 messages (API-03) to an `api::jsonrpc::Server`, which 
 | -32000 | The model rejected the command. |
 | -32001, -32002 | Nothing to undo, nothing to redo. |
 | -32003 | No object with this id. |
+
+A georeference call that the model refuses (-32000) adds `data.reason`, a stable `snake_case` string the UI maps to a message: `unknown_crs`, `not_projected`, `invalid_scale`, `outside_domain` (with `data.index`, the first bad point of a conversion), `not_georeferenced` and `multiple_sites`. `georef.get`, `georef.convert` and `georef.set` accept a deprecated CRS such as 25838; `georef.list_crs` leaves it out.
 
 Error messages never hold model content (SEC-03). The `jsonrpc` fuzz target (`fuzz/`) feeds arbitrary bytes to the server.
 

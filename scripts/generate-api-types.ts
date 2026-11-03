@@ -16,7 +16,7 @@ export const OUTPUT_FILE = "ui/src/api/protocol.gen.ts";
 const SHAPING = ["type", "properties", "required", "additionalProperties", "items", "prefixItems", "$ref", "const", "anyOf", "oneOf"];
 const ALONE = ["$ref", "const", "anyOf", "oneOf"];
 // Keywords that narrow values without changing their TypeScript type: the server checks them.
-const NARROWING = new Set(["description", "pattern", "minimum", "maximum", "uniqueItems", "minItems"]);
+const NARROWING = new Set(["description", "pattern", "minimum", "maximum", "uniqueItems", "minItems", "maxItems"]);
 const SUPPORTED = new Set([...NARROWING, ...SHAPING]);
 const REF = /^#\/\$defs\/([A-Za-z]\w*)$/;
 // The $defs that are not shared types: the commands, the queries and the entity schema. Shared

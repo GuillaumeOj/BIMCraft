@@ -113,10 +113,108 @@
       ],
       "type": "object"
     },
+    "CrsSummary": {
+      "additionalProperties": false,
+      "properties": {
+        "area": {
+          "type": "string"
+        },
+        "epsg": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "geographic_name": {
+          "type": "string"
+        },
+        "kind": {
+          "oneOf": [
+            {
+              "const": "projected"
+            },
+            {
+              "const": "geographic"
+            }
+          ]
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "epsg",
+        "name",
+        "kind",
+        "geographic_name",
+        "area"
+      ],
+      "type": "object"
+    },
     "EntityId": {
       "description": "The stable 128-bit identifier of an object, as 32 lower-case hexadecimal digits.",
       "pattern": "^[0-9a-f]{32}$",
       "type": "string"
+    },
+    "Georeference": {
+      "additionalProperties": false,
+      "properties": {
+        "base_point": {
+          "items": false,
+          "minItems": 3,
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "type": "array"
+        },
+        "crs_epsg": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "grid_rotation": {
+          "type": "number"
+        },
+        "scale": {
+          "type": "number"
+        },
+        "survey_point": {
+          "anyOf": [
+            {
+              "items": false,
+              "minItems": 3,
+              "prefixItems": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                }
+              ],
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "crs_epsg",
+        "base_point",
+        "grid_rotation",
+        "scale",
+        "survey_point"
+      ],
+      "type": "object"
     },
     "ModelCommand": {
       "description": "A model command, tagged with its kind.",
@@ -578,6 +676,57 @@
       ]
     },
     "commands": {
+      "georef.clear": {
+        "description": "Removes the project's georeference.",
+        "properties": {
+          "name": {
+            "const": "georef.clear"
+          },
+          "params": {
+            "additionalProperties": false,
+            "properties": {},
+            "required": [],
+            "type": "object"
+          },
+          "result": {
+            "additionalProperties": false,
+            "properties": {},
+            "required": [],
+            "type": "object"
+          },
+          "version": {
+            "const": "1.0.0"
+          }
+        },
+        "type": "object"
+      },
+      "georef.set": {
+        "description": "Sets the project's georeference.",
+        "properties": {
+          "name": {
+            "const": "georef.set"
+          },
+          "params": {
+            "$ref": "#/$defs/Georeference"
+          },
+          "result": {
+            "additionalProperties": false,
+            "properties": {
+              "site": {
+                "$ref": "#/$defs/EntityId"
+              }
+            },
+            "required": [
+              "site"
+            ],
+            "type": "object"
+          },
+          "version": {
+            "const": "1.0.0"
+          }
+        },
+        "type": "object"
+      },
       "history.redo": {
         "description": "Redoes the last undone command.",
         "properties": {
@@ -1260,6 +1409,285 @@
       "title": "BIMCraft `core` schema"
     },
     "queries": {
+      "georef.convert": {
+        "description": "Converts points between local, projected and geographic coordinates.",
+        "properties": {
+          "name": {
+            "const": "georef.convert"
+          },
+          "params": {
+            "additionalProperties": false,
+            "properties": {
+              "from": {
+                "oneOf": [
+                  {
+                    "const": "local"
+                  },
+                  {
+                    "const": "projected"
+                  },
+                  {
+                    "const": "geographic"
+                  }
+                ]
+              },
+              "points": {
+                "items": {
+                  "items": false,
+                  "minItems": 3,
+                  "prefixItems": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ],
+                  "type": "array"
+                },
+                "maxItems": 1000,
+                "type": "array"
+              }
+            },
+            "required": [
+              "from",
+              "points"
+            ],
+            "type": "object"
+          },
+          "result": {
+            "additionalProperties": false,
+            "properties": {
+              "points": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "geographic": {
+                      "items": false,
+                      "minItems": 3,
+                      "prefixItems": [
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "number"
+                        }
+                      ],
+                      "type": "array"
+                    },
+                    "local": {
+                      "items": false,
+                      "minItems": 3,
+                      "prefixItems": [
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "number"
+                        }
+                      ],
+                      "type": "array"
+                    },
+                    "projected": {
+                      "items": false,
+                      "minItems": 3,
+                      "prefixItems": [
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "number"
+                        }
+                      ],
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "local",
+                    "projected",
+                    "geographic"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "points"
+            ],
+            "type": "object"
+          },
+          "version": {
+            "const": "1.0.0"
+          }
+        },
+        "type": "object"
+      },
+      "georef.get": {
+        "description": "Reads the project's georeference and the values derived from it.",
+        "properties": {
+          "name": {
+            "const": "georef.get"
+          },
+          "params": {
+            "additionalProperties": false,
+            "properties": {},
+            "required": [],
+            "type": "object"
+          },
+          "result": {
+            "additionalProperties": false,
+            "properties": {
+              "georeference": {
+                "anyOf": [
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "crs": {
+                        "$ref": "#/$defs/CrsSummary"
+                      },
+                      "derived": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "base_point_geographic": {
+                            "items": false,
+                            "minItems": 3,
+                            "prefixItems": [
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "number"
+                              }
+                            ],
+                            "type": "array"
+                          },
+                          "convergence": {
+                            "type": "number"
+                          },
+                          "point_scale_factor": {
+                            "type": "number"
+                          },
+                          "survey_point_local": {
+                            "anyOf": [
+                              {
+                                "items": false,
+                                "minItems": 3,
+                                "prefixItems": [
+                                  {
+                                    "type": "number"
+                                  },
+                                  {
+                                    "type": "number"
+                                  },
+                                  {
+                                    "type": "number"
+                                  }
+                                ],
+                                "type": "array"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "true_north": {
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "true_north",
+                          "convergence",
+                          "point_scale_factor",
+                          "base_point_geographic",
+                          "survey_point_local"
+                        ],
+                        "type": "object"
+                      },
+                      "site": {
+                        "$ref": "#/$defs/EntityId"
+                      },
+                      "value": {
+                        "$ref": "#/$defs/Georeference"
+                      }
+                    },
+                    "required": [
+                      "site",
+                      "value",
+                      "crs",
+                      "derived"
+                    ],
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "georeference"
+            ],
+            "type": "object"
+          },
+          "version": {
+            "const": "1.0.0"
+          }
+        },
+        "type": "object"
+      },
+      "georef.list_crs": {
+        "description": "Lists the coordinate reference systems a project can be georeferenced on.",
+        "properties": {
+          "name": {
+            "const": "georef.list_crs"
+          },
+          "params": {
+            "additionalProperties": false,
+            "properties": {
+              "include_geographic": {
+                "type": "boolean"
+              }
+            },
+            "required": [],
+            "type": "object"
+          },
+          "result": {
+            "additionalProperties": false,
+            "properties": {
+              "crs": {
+                "items": {
+                  "$ref": "#/$defs/CrsSummary"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "crs"
+            ],
+            "type": "object"
+          },
+          "version": {
+            "const": "1.0.0"
+          }
+        },
+        "type": "object"
+      },
       "history.state": {
         "description": "Reads what undo and redo would do.",
         "properties": {

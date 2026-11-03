@@ -26,6 +26,9 @@ describe("typeOf", () => {
     expect(typeOf({ type: "array", items: { type: "string" }, uniqueItems: true }, "s")).toBe(
       "Array<string>",
     );
+    expect(typeOf({ type: "array", items: { type: "number" }, maxItems: 1000 }, "s")).toBe(
+      "Array<number>",
+    );
     const tuple = { type: "array", prefixItems: [{ type: "string" }, { type: "number" }], items: false, minItems: 2 };
     expect(typeOf(tuple, "s")).toBe("[string, number]");
   });

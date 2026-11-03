@@ -86,6 +86,8 @@ Sets the whole georeference in one transaction, so one undo step reverts it. It 
   - The base point must lie in the projection's valid domain, which is checked by an inverse projection (`outside_domain`).
   - More than one `Site` gives `multiple_sites`.
 
+Implementation notes (task 203). `georef.set` creates the `Site` with the fixed id `0b1c0000000040008000000000000001`; it runs as a `model.batch`, so the history entry is named `model.batch`. A survey point left out is cleared. `georef.clear` on a project that is not georeferenced reports no change event at all (no notification). Non-finite numbers cannot occur in JSON; a `NaN` that reaches the validation is `-32602`. `data.index` is only present for `outside_domain` in `georef.convert`.
+
 ### `georef.clear` v1
 
 Removes the georeference: it unsets every georeference attribute of the `Site` (it does not delete the `Site`). It can be undone. When the project is not georeferenced, it succeeds and changes nothing (empty change event, no history entry).

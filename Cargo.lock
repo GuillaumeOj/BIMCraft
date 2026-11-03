@@ -94,9 +94,11 @@ version = "0.0.0"
 dependencies = [
  "core-model",
  "core-txn",
+ "georef",
  "jsonschema",
  "proptest",
  "schema",
+ "schema-gen",
  "serde",
  "serde_json",
  "thiserror 2.0.21",
