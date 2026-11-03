@@ -8,7 +8,7 @@ use std::collections::BTreeSet;
 use common::{read, write};
 use core_model::SeededIdSource;
 use georef::{EpsgCode, Georeference, ProjectedPoint};
-use interop_ifc::georef::{SurveyPoint, Targets, read_georeference, write_georeference};
+use interop_ifc::georef::{Kept, SurveyPoint, Targets, read_georeference, write_georeference};
 use interop_ifc::preserve::{Preserved, normalise};
 use interop_ifc::step::{Instance, InstanceBody, Parameter};
 use proptest::prelude::*;
@@ -32,6 +32,7 @@ fn export(
     preserved: &Preserved,
     georeference: &Georeference,
     targets: Targets,
+    kept: &Kept,
     old_crs: u64,
     length_unit: f64,
 ) -> Result<Vec<Instance>> {
@@ -39,6 +40,7 @@ fn export(
     let written = write_georeference(
         georeference,
         targets,
+        kept,
         length_unit,
         first_id,
         &mut SeededIdSource::new(3),
@@ -76,6 +78,7 @@ fn read_write_read_is_lossless_and_keeps_the_other_instances() {
         &preserved,
         &imported.georeference,
         targets,
+        &imported.kept,
         imported.crs,
         1.0,
     )
@@ -85,6 +88,25 @@ fn read_write_read_is_lossless_and_keeps_the_other_instances() {
         .unwrap()
         .unwrap();
     assert_same(&again.georeference, &imported.georeference);
+    // The CRS keeps its other attributes, and the survey point its GlobalIds.
+    assert_eq!(again.kept, imported.kept);
+    let crs = exported
+        .iter()
+        .find(|instance| instance.id == again.crs)
+        .unwrap();
+    let InstanceBody::Simple(record) = &crs.body else {
+        unreachable!("the CRS is a simple instance");
+    };
+    assert_eq!(
+        record.parameters[1..6],
+        [
+            Parameter::String("RGF93 v1 / Lambert-93".into()),
+            Parameter::String("RGF93 v1".into()),
+            Parameter::Null,
+            Parameter::Null,
+            Parameter::Null,
+        ]
+    );
 
     // The kept instances come back as they were, except the well-known text, which now names
     // the new CRS.
@@ -129,6 +151,7 @@ fn writes_back_the_same_bytes_twice() {
         &preserved,
         &imported.georeference,
         targets,
+        &imported.kept,
         imported.crs,
         1.0,
     )
@@ -137,6 +160,7 @@ fn writes_back_the_same_bytes_twice() {
         &preserved,
         &imported.georeference,
         targets,
+        &imported.kept,
         imported.crs,
         1.0,
     )
@@ -159,7 +183,14 @@ fn round_trip(georeference: &Georeference, length_unit: f64) -> Result<Georefere
         context: 4,
         site: Some(9),
     };
-    let exported = export(&blank()?, georeference, targets, 0, length_unit)?;
+    let exported = export(
+        &blank()?,
+        georeference,
+        targets,
+        &Kept::default(),
+        0,
+        length_unit,
+    )?;
     Ok(
         read_georeference(&exported, length_unit, SurveyPoint::Read)?
             .ok_or("no georeference")?

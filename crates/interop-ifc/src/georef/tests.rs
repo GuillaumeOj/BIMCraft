@@ -343,6 +343,16 @@ fn reads_scaled_conversions_only_with_unit_factors() {
 }
 
 #[test]
+fn scaled_conversions_from_other_contexts_or_crss_are_left_alone() {
+    for source in ["#16", "#7"] {
+        let extra = format!("#18=IFCMAPCONVERSIONSCALED({source},#7,0.,0.,0.,$,$,$,2.,2.,1.);");
+        let imported = import_ok(&edited(&[], &extra));
+        assert_eq!(imported.conversion, 8, "{source}");
+        assert!(!imported.mapped.contains(&18), "{source}");
+    }
+}
+
+#[test]
 fn rejects_invalid_values() {
     let zero_axis = "#8=IFCMAPCONVERSION(#4,#7,0.,0.,0.,0.,0.,$);";
     assert_eq!(
@@ -545,6 +555,7 @@ fn writes_the_crs_and_the_conversion() {
     let instances = write_georeference(
         &sample(None),
         targets,
+        &Kept::default(),
         1.0,
         100,
         &mut SeededIdSource::new(1),
@@ -568,7 +579,15 @@ fn writes_the_survey_point_on_the_site() {
     let mut expected_ids = SeededIdSource::new(7);
     let set_id = expected_ids.next_id().to_global_id();
     let relationship_id = expected_ids.next_id().to_global_id();
-    let instances = write_georeference(&sample(survey), targets, 0.001, 1, &mut ids).unwrap();
+    let instances = write_georeference(
+        &sample(survey),
+        targets,
+        &Kept::default(),
+        0.001,
+        1,
+        &mut ids,
+    )
+    .unwrap();
     assert_eq!(
         written(&instances),
         format!(
@@ -584,6 +603,50 @@ fn writes_the_survey_point_on_the_site() {
 }
 
 #[test]
+fn writes_back_what_it_kept() {
+    let imported = import_ok(&fixture());
+    assert_eq!(
+        imported.kept.survey_global_ids,
+        Some([
+            "1kTvXnbbzCWw8lcMd1dR4o".to_owned(),
+            "2kTvXnbbzCWw8lcMd1dR4o".to_owned()
+        ])
+    );
+    let targets = Targets {
+        context: 4,
+        site: Some(9),
+    };
+    let ids = &mut SeededIdSource::new(1);
+    let instances = write_georeference(
+        &imported.georeference,
+        targets,
+        &imported.kept,
+        1.0,
+        100,
+        ids,
+    )
+    .unwrap();
+    let text = written(&instances);
+    assert!(text.starts_with(
+        "#100=IFCPROJECTEDCRS('EPSG:2154','RGF93 v1 / Lambert-93','RGF93 v1',$,$,$,$);\n"
+    ));
+    assert!(text.contains("IFCPROPERTYSET('1kTvXnbbzCWw8lcMd1dR4o',"));
+    assert!(text.contains("IFCRELDEFINESBYPROPERTIES('2kTvXnbbzCWw8lcMd1dR4o',"));
+
+    // Under another CRS, the attributes of the old one no longer apply.
+    let other = Georeference::new(
+        EpsgCode::new(3946).unwrap(),
+        imported.georeference.base_point(),
+        0.0,
+        1.0,
+        None,
+    )
+    .unwrap();
+    let instances = write_georeference(&other, targets, &imported.kept, 1.0, 100, ids).unwrap();
+    assert!(written(&instances).starts_with("#100=IFCPROJECTEDCRS('EPSG:3946',$,$,$,$,$,$);\n"));
+}
+
+#[test]
 fn rejects_what_it_cannot_write() {
     let survey = Some(ProjectedPoint::new(1.0, 2.0, 3.0));
     let no_site = Targets {
@@ -592,35 +655,59 @@ fn rejects_what_it_cannot_write() {
     };
     let ids = &mut SeededIdSource::new(1);
     assert_eq!(
-        write_georeference(&sample(survey), no_site, 1.0, 1, ids),
+        write_georeference(&sample(survey), no_site, &Kept::default(), 1.0, 1, ids),
         Err(GeorefExportError::SurveyPointWithoutSite)
     );
     for length_unit in [0.0, -1.0, f64::NAN, f64::INFINITY] {
         assert_eq!(
-            write_georeference(&sample(None), no_site, length_unit, 1, ids),
+            write_georeference(
+                &sample(None),
+                no_site,
+                &Kept::default(),
+                length_unit,
+                1,
+                ids
+            ),
             Err(GeorefExportError::InvalidLengthUnit)
         );
     }
     assert_eq!(
-        write_georeference(&sample(None), no_site, 1e-320, 1, ids),
+        write_georeference(&sample(None), no_site, &Kept::default(), 1e-320, 1, ids),
         Err(GeorefExportError::NonFinite)
     );
     assert_eq!(
-        write_georeference(&sample(None), no_site, 1.0, u64::MAX, ids),
+        write_georeference(&sample(None), no_site, &Kept::default(), 1.0, u64::MAX, ids),
         Err(GeorefExportError::IdOverflow)
     );
-    assert!(write_georeference(&sample(None), no_site, 1.0, u64::MAX - 1, ids).is_ok());
+    assert!(
+        write_georeference(
+            &sample(None),
+            no_site,
+            &Kept::default(),
+            1.0,
+            u64::MAX - 1,
+            ids
+        )
+        .is_ok()
+    );
     let site = Targets {
         context: 4,
         site: Some(9),
     };
     assert_eq!(
-        write_georeference(&sample(survey), site, 1.0, u64::MAX - 1, ids),
+        write_georeference(
+            &sample(survey),
+            site,
+            &Kept::default(),
+            1.0,
+            u64::MAX - 1,
+            ids
+        ),
         Err(GeorefExportError::IdOverflow)
     );
     let far = Some(ProjectedPoint::new(1e300, 2.0, 3.0));
     assert_eq!(
-        write_georeference(&sample(far), site, 1e-10, 1, ids),
+        write_georeference(&sample(far), site, &Kept::default(), 1e-10, 1, ids),
         Err(GeorefExportError::NonFinite)
     );
 }

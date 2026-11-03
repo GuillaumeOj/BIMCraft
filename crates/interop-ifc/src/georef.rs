@@ -185,6 +185,19 @@ pub struct Imported {
     pub conversion: u64,
     /// The id of the `IfcSite` that holds the survey point.
     pub site: Option<u64>,
+    /// What the export writes back as it was read.
+    pub kept: Kept,
+}
+
+/// What an export writes back as the file had it, so that a round trip changes only what the
+/// model changed (INT-03).
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Kept {
+    /// The code of the CRS read and its `Description`, `GeodeticDatum`, `VerticalDatum`,
+    /// `MapProjection` and `MapZone`, written back while the CRS keeps that code.
+    pub crs: Option<(EpsgCode, [Parameter; 5])>,
+    /// The `GlobalId`s of the survey point property set and of the relationship attaching it.
+    pub survey_global_ids: Option<[String; 2]>,
 }
 
 /// Reads the georeference of a file from its `instances`, whose length unit is `length_unit`
@@ -212,7 +225,7 @@ pub fn read_georeference(
         return Ok(None);
     };
     let crs_id = map_conversion.target_crs.id();
-    let crs = file.projected_crs(crs_id)?;
+    let (crs, crs_record) = file.projected_crs(crs_id)?;
     let code = crs
         .name
         .as_ref()
@@ -245,15 +258,25 @@ pub fn read_georeference(
         base_point,
         rotation,
         scale * map_unit / length_unit,
-        survey_point.map(|(point, _)| point),
+        survey_point.as_ref().map(|survey| survey.point),
     )?;
+    let kept = Kept {
+        crs: Some((
+            code,
+            std::array::from_fn(|index| crs_record.parameters[index + 1].clone()),
+        )),
+        survey_global_ids: survey_point
+            .as_ref()
+            .map(|survey| survey.global_ids.clone()),
+    };
     Ok(Some(Imported {
         georeference,
         mapped,
         context,
         crs: crs_id,
         conversion,
-        site: survey_point.map(|(_, site)| site),
+        site: survey_point.map(|survey| survey.site),
+        kept,
     }))
 }
 
@@ -323,12 +346,16 @@ impl<'a> File<'a> {
     fn model_conversion(&self) -> Result<Option<(u64, IfcMapConversion, u64)>, GeorefImportError> {
         let mut found = None;
         for &id in self.instances.keys() {
-            let Some(conversion) = self.map_conversion(id)? else {
+            let Some((conversion, unit_factors)) = self.map_conversion(id)? else {
                 continue;
             };
             let IfcCoordinateReferenceSystemSelect::Instance(source) = conversion.source_crs;
+            // Conversions from other contexts or CRSs are left alone, whatever their factors.
             if !self.is_model_context(source)? {
                 continue;
+            }
+            if !unit_factors {
+                return Err(GeorefImportError::UnsupportedScaledConversion);
             }
             if found.is_some() {
                 return Err(GeorefImportError::MultipleConversions);
@@ -338,15 +365,19 @@ impl<'a> File<'a> {
         Ok(found)
     }
 
-    /// The map conversion of instance `id`, when it is one: an `IfcMapConversionScaled` only
-    /// when its factors are 1.
-    fn map_conversion(&self, id: u64) -> Result<Option<IfcMapConversion>, GeorefImportError> {
+    /// The map conversion of instance `id`, when it is one, and whether its per-axis factors
+    /// are all 1: always for an `IfcMapConversion`, and for an `IfcMapConversionScaled` only
+    /// when each factor is exactly 1.
+    fn map_conversion(
+        &self,
+        id: u64,
+    ) -> Result<Option<(IfcMapConversion, bool)>, GeorefImportError> {
         if let Some(conversion) = self.typed(
             id,
             IfcMapConversion::STEP_NAME,
             IfcMapConversion::from_record,
         )? {
-            return Ok(Some(conversion));
+            return Ok(Some((conversion, true)));
         }
         let Some(scaled) = self.typed(
             id,
@@ -356,14 +387,11 @@ impl<'a> File<'a> {
         else {
             return Ok(None);
         };
-        if [scaled.factor_x, scaled.factor_y, scaled.factor_z]
+        let unit_factors = [scaled.factor_x, scaled.factor_y, scaled.factor_z]
             .iter()
             // Exactly 1: any other factor changes the conversion.
-            .any(|factor| factor.0.to_bits() != 1.0_f64.to_bits())
-        {
-            return Err(GeorefImportError::UnsupportedScaledConversion);
-        }
-        Ok(Some(IfcMapConversion {
+            .all(|factor| factor.0.to_bits() == 1.0_f64.to_bits());
+        let conversion = IfcMapConversion {
             source_crs: scaled.source_crs,
             target_crs: scaled.target_crs,
             eastings: scaled.eastings,
@@ -372,7 +400,8 @@ impl<'a> File<'a> {
             x_axis_abscissa: scaled.x_axis_abscissa,
             x_axis_ordinate: scaled.x_axis_ordinate,
             scale: scaled.scale,
-        }))
+        };
+        Ok(Some((conversion, unit_factors)))
     }
 
     /// Whether instance `id` is the 3D `'Model'` context, not a sub-context.
@@ -390,9 +419,16 @@ impl<'a> File<'a> {
         }))
     }
 
-    fn projected_crs(&self, id: u64) -> Result<IfcProjectedCRS, GeorefImportError> {
-        self.typed(id, IfcProjectedCRS::STEP_NAME, IfcProjectedCRS::from_record)?
-            .ok_or(GeorefImportError::UnexpectedEntity { instance: id })
+    /// The projected CRS `id`, decoded and as read.
+    fn projected_crs(&self, id: u64) -> Result<(IfcProjectedCRS, &'a Record), GeorefImportError> {
+        let crs = self
+            .typed(id, IfcProjectedCRS::STEP_NAME, IfcProjectedCRS::from_record)?
+            .ok_or(GeorefImportError::UnexpectedEntity { instance: id })?;
+        // Decoding succeeded, so the instance is a simple record.
+        let record = self
+            .record(id)?
+            .ok_or(GeorefImportError::UnexpectedEntity { instance: id })?;
+        Ok((crs, record))
     }
 
     /// The size in metres of the map unit `id`: the metre or a decimal multiple of it.
@@ -413,13 +449,13 @@ impl<'a> File<'a> {
         }
     }
 
-    /// The survey point, in metres, and the id of its site, adding the instances read to
-    /// `mapped`. Lengths in the set are in the map unit, `map_unit` metres.
+    /// The survey point, adding the instances read to `mapped`. Lengths in the set are in the
+    /// map unit, `map_unit` metres.
     fn survey_point(
         &self,
         map_unit: f64,
         mapped: &mut BTreeSet<u64>,
-    ) -> Result<Option<(ProjectedPoint, u64)>, SurveyPointError> {
+    ) -> Result<Option<ReadSurvey>, SurveyPointError> {
         let mut found = None;
         for (&id, instance) in &self.instances {
             let Some(set) = self.survey_set(instance) else {
@@ -433,15 +469,16 @@ impl<'a> File<'a> {
         let Some((relationship, set)) = found else {
             return Ok(None);
         };
-        let site = self.survey_site(relationship)?;
-        let (properties, values) = self.survey_values(set)?;
+        let (site, relationship_global_id) = self.survey_site(relationship)?;
+        let (properties, values, set_global_id) = self.survey_values(set)?;
         let [eastings, northings, height] = values.map(|value| value * map_unit);
         mapped.extend([relationship, set]);
         mapped.extend(properties);
-        Ok(Some((
-            ProjectedPoint::new(eastings, northings, height),
+        Ok(Some(ReadSurvey {
+            point: ProjectedPoint::new(eastings, northings, height),
             site,
-        )))
+            global_ids: [set_global_id, relationship_global_id],
+        }))
     }
 
     /// The id of the survey point property set that `instance` attaches, when it is an
@@ -476,8 +513,9 @@ impl<'a> File<'a> {
             .ok_or(SurveyPointError::Malformed)
     }
 
-    /// The `IfcSite` the relationship `id` attaches the survey point to.
-    fn survey_site(&self, id: u64) -> Result<u64, SurveyPointError> {
+    /// The `IfcSite` the relationship `id` attaches the survey point to, and the relationship's
+    /// `GlobalId`.
+    fn survey_site(&self, id: u64) -> Result<(u64, String), SurveyPointError> {
         let relationship = self.survey_typed(
             id,
             IfcRelDefinesByProperties::STEP_NAME,
@@ -488,30 +526,33 @@ impl<'a> File<'a> {
         };
         let site = site.id();
         match self.record(site) {
-            Ok(Some(record)) if record.name == IfcSite::STEP_NAME => Ok(site),
+            Ok(Some(record)) if record.name == IfcSite::STEP_NAME => {
+                Ok((site, relationship.global_id.0))
+            }
             Ok(_) => Err(SurveyPointError::NotOnSite),
             Err(_) => Err(SurveyPointError::Dangling { reference: site }),
         }
     }
 
-    /// The ids of the properties of the set `id`, and their values in the order of
-    /// [`SurveyProperty::ALL`].
-    fn survey_values(&self, id: u64) -> Result<(Vec<u64>, [f64; 3]), SurveyPointError> {
+    /// The ids of the properties of the set `id`, their values in the order of
+    /// [`SurveyProperty::ALL`], and the set's `GlobalId`.
+    fn survey_values(&self, id: u64) -> Result<(Vec<u64>, [f64; 3], String), SurveyPointError> {
         let set = self.survey_typed(id, IfcPropertySet::STEP_NAME, IfcPropertySet::from_record)?;
         let mut values = [None; 3];
         let mut ids = Vec::with_capacity(set.has_properties.len());
         for property in &set.has_properties {
             let property = property.id();
-            if self.record(property).is_err() {
-                return Err(SurveyPointError::Dangling {
-                    reference: property,
-                });
-            }
-            let value = self.survey_typed(
+            let value = match self.typed(
                 property,
                 IfcPropertySingleValue::STEP_NAME,
                 IfcPropertySingleValue::from_record,
-            )?;
+            ) {
+                Ok(Some(value)) => value,
+                Err(GeorefImportError::Dangling { reference }) => {
+                    return Err(SurveyPointError::Dangling { reference });
+                }
+                _ => return Err(SurveyPointError::Malformed),
+            };
             let name =
                 SurveyProperty::from_name(&value.name.0).ok_or(SurveyPointError::Malformed)?;
             let slot = &mut values[name as usize];
@@ -535,8 +576,18 @@ impl<'a> File<'a> {
         {
             *slot = value.ok_or(SurveyPointError::Missing(property))?;
         }
-        Ok((ids, result))
+        Ok((ids, result, set.global_id.0))
     }
+}
+
+/// A survey point read from a file.
+struct ReadSurvey {
+    /// The point, in metres.
+    point: ProjectedPoint,
+    /// The id of its `IfcSite`.
+    site: u64,
+    /// The `GlobalId`s of the property set and of the relationship.
+    global_ids: [String; 2],
 }
 
 /// The instances a georeference is written to.
@@ -569,7 +620,9 @@ pub enum GeorefExportError {
 /// is `length_unit` metres: an `IfcProjectedCRS` named `EPSG:<code>`, an `IfcMapConversion`
 /// from `targets.context` to it and, with a survey point, three `IfcPropertySingleValue`, the
 /// `BIMCraft_SurveyPoint` `IfcPropertySet` and the `IfcRelDefinesByProperties` attaching it to
-/// `targets.site`. The `GlobalId`s come from `ids`.
+/// `targets.site`. What `kept` holds is written back as read: the other attributes of the CRS
+/// while it keeps its code, and the `GlobalId`s of the survey point instances; new `GlobalId`s
+/// come from `ids`.
 ///
 /// The map unit is left to the project's length unit, so lengths are written in the file's
 /// unit, and the scale stays the one of the georeference.
@@ -581,6 +634,7 @@ pub enum GeorefExportError {
 pub fn write_georeference(
     georeference: &Georeference,
     targets: Targets,
+    kept: &Kept,
     length_unit: f64,
     first_id: u64,
     ids: &mut impl IdSource,
@@ -609,20 +663,20 @@ pub fn write_georeference(
     let conversion = first_id + 1;
     let base = georeference.base_point();
     let (abscissa, ordinate) = MapConversion::new(georeference).x_axis();
+    let mut crs_parameters = vec![Parameter::String(format!(
+        "EPSG:{}",
+        georeference.crs().get()
+    ))];
+    match &kept.crs {
+        Some((code, attributes)) if *code == georeference.crs() => {
+            crs_parameters.extend(attributes.iter().cloned());
+        }
+        _ => crs_parameters.extend([const { Parameter::Null }; 5]),
+    }
+    // The map unit is the project's length unit, in which every length is written.
+    crs_parameters.push(Parameter::Null);
     let mut instances = vec![
-        simple(
-            crs,
-            "IFCPROJECTEDCRS",
-            vec![
-                Parameter::String(format!("EPSG:{}", georeference.crs().get())),
-                Parameter::Null,
-                Parameter::Null,
-                Parameter::Null,
-                Parameter::Null,
-                Parameter::Null,
-                Parameter::Null,
-            ],
-        ),
+        simple(crs, "IFCPROJECTEDCRS", crs_parameters),
         simple(
             conversion,
             "IFCMAPCONVERSION",
@@ -656,12 +710,16 @@ pub fn write_georeference(
                 ],
             ));
         }
+        let [set_global_id, relationship_global_id] = kept
+            .survey_global_ids
+            .clone()
+            .unwrap_or_else(|| [ids.next_id().to_global_id(), ids.next_id().to_global_id()]);
         let set = first_id + 5;
         instances.push(simple(
             set,
             "IFCPROPERTYSET",
             vec![
-                Parameter::String(ids.next_id().to_global_id()),
+                Parameter::String(set_global_id),
                 Parameter::Null,
                 Parameter::String(SURVEY_POINT_SET.into()),
                 Parameter::Null,
@@ -672,7 +730,7 @@ pub fn write_georeference(
             first_id + 6,
             "IFCRELDEFINESBYPROPERTIES",
             vec![
-                Parameter::String(ids.next_id().to_global_id()),
+                Parameter::String(relationship_global_id),
                 Parameter::Null,
                 Parameter::Null,
                 Parameter::Null,

@@ -57,13 +57,14 @@ The scale applies to all three axes. `IfcMapConversion.Scale` is the conversion 
 - **Units.** Lengths in the file are in the project length unit, which the caller gives. The map unit is `MapUnit` when it is the metre or a decimal multiple of it, otherwise the import is refused. When `MapUnit` is absent, the map unit is the project length unit. The model's scale is `Scale` × map unit ÷ length unit. The export writes no `MapUnit` and writes lengths in the file's unit, so `Scale` stays the georeference's scale.
 - **Scaled conversions.** An `IfcMapConversionScaled` is read only when its three factors are exactly 1. Otherwise the import of the georeference is refused (`UnsupportedScaledConversion`), and its instances stay in the file as read.
 - On export, the georeference becomes new instances: an `IfcProjectedCRS`, an `IfcMapConversion` and, with a survey point, its property set. Instances that are kept and referred to the old CRS, such as an `IfcWellKnownText`, are pointed at the new one through `Preserved::restore` (INT-03).
+- **What a round trip keeps.** The import records what the export writes back as it was read (`Kept`): the CRS's `Description`, `GeodeticDatum`, `VerticalDatum`, `MapProjection` and `MapZone`, while the CRS keeps its EPSG code, and the `GlobalId`s of the survey point set and of its relationship. Tools that track objects by `GlobalId` therefore see the same objects.
 - **Validation.** Every value read is checked: dangling references, wrong entities, non-finite numbers, a scale that is not positive and a zero x-axis are typed errors, never panics. Messages never quote file content (SEC-03).
 
 ### Survey point: a `BIMCraft_SurveyPoint` property set on `IfcSite`
 
 - **Where it goes.** The survey point is an `IfcPropertySet` named `BIMCraft_SurveyPoint`, attached to the `IfcSite` by an `IfcRelDefinesByProperties`.
 - **Properties.** The set holds three `IfcPropertySingleValue`: `Eastings`, `Northings` and `OrthogonalHeight`. Each is an `IFCLENGTHMEASURE` with no unit of its own, in the map unit, like the base point in `IfcMapConversion`.
-- **Identifiers.** The `GlobalId`s of the set and of the relationship come from the model's `IdSource`, so a seeded source makes exports deterministic.
+- **Identifiers.** The `GlobalId`s of a new set and relationship come from the model's `IdSource`, so a seeded source makes exports deterministic. Those read from a file are written back.
 - **Name.** It has no `Pset_` prefix, which buildingSMART reserves for its own sets.
 - **Reading.** The read is strict. One set, attached to exactly one `IfcSite`, holding exactly the three properties, is the survey point. Anything else is a typed `SurveyPointError`:
   - a second set, or a set attached twice
@@ -80,6 +81,7 @@ The scale applies to all three axes. `IfcMapConversion.Scale` is the conversion 
 - The `Site` attribute names are now part of the schema history: renaming one needs a migration step ([schema versions](../schema-versions.md)).
 - When the model-to-IFC export arrives, it must give `write_georeference` the export ids of the model context and of the `IfcSite`.
 - Other tools see the survey point as an ordinary property set. A tool that rewrites property sets may drop it, which loses only the survey point, not the georeference.
+- A file imported with `SurveyPoint::Ignore` keeps its unread survey point set. An export that then writes a survey point adds a second set, which the next strict read reports as `MultipleSets`. The importer has to drop the old set first, or keep the survey point unset.
 - Files whose CRS is not named after an EPSG code, whose map unit is not metric, or with per-axis scale factors, are not georeferenced on import. Their instances stay in the file.
 
 ## Alternatives considered

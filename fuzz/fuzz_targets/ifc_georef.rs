@@ -1,6 +1,6 @@
 //! Any bytes, read as an IFC file, give a georeference or a typed error: reading the map
 //! conversion, the projected CRS and the survey point never panics (ENG-02). An accepted
-//! georeference writes back, and reading what was written gives it back.
+//! georeference writes back, as the instances its survey point needs.
 //!
 //! The seeds are the IFC test fixtures, one of which is georeferenced.
 
@@ -33,6 +33,7 @@ fuzz_target!(|data: &[u8]| {
     let written = write_georeference(
         &imported.georeference,
         targets,
+        &imported.kept,
         1.0,
         1,
         &mut SeededIdSource::new(1),

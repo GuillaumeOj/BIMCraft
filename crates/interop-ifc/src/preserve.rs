@@ -54,16 +54,7 @@ impl Preserved {
         instances: impl IntoIterator<Item = Instance>,
         mut is_mapped: impl FnMut(&Record) -> bool,
     ) -> (Vec<Instance>, Self) {
-        let (mapped, instances) =
-            instances
-                .into_iter()
-                .partition(|instance| match &instance.body {
-                    InstanceBody::Simple(record) => {
-                        !record.name.starts_with('!') && is_mapped(record)
-                    }
-                    InstanceBody::Complex(_) => false,
-                });
-        (mapped, Self { instances })
+        Self::partition(instances, |_, record| is_mapped(record))
     }
 
     /// Splits the `instances` of a file into those whose id is in `mapped`, returned in order,
@@ -73,10 +64,24 @@ impl Preserved {
         instances: impl IntoIterator<Item = Instance>,
         mapped: &BTreeSet<u64>,
     ) -> (Vec<Instance>, Self) {
-        let (mapped, instances) = instances.into_iter().partition(|instance| {
-            mapped.contains(&instance.id)
-                && matches!(&instance.body, InstanceBody::Simple(record) if !record.name.starts_with('!'))
-        });
+        Self::partition(instances, |id, _| mapped.contains(&id))
+    }
+
+    /// Splits `instances` into the simple, standard-named ones `is_mapped` accepts, given the
+    /// id and the record, and the others, kept.
+    fn partition(
+        instances: impl IntoIterator<Item = Instance>,
+        mut is_mapped: impl FnMut(u64, &Record) -> bool,
+    ) -> (Vec<Instance>, Self) {
+        let (mapped, instances) =
+            instances
+                .into_iter()
+                .partition(|instance| match &instance.body {
+                    InstanceBody::Simple(record) => {
+                        !record.name.starts_with('!') && is_mapped(instance.id, record)
+                    }
+                    InstanceBody::Complex(_) => false,
+                });
         (mapped, Self { instances })
     }
 
