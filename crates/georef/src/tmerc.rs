@@ -13,7 +13,8 @@ use crate::ProjectedPoint;
 use std::f64::consts::FRAC_PI_2;
 
 use crate::geodesy::{
-    Ellipsoid, GeodesyError, GeographicPoint, Parameter, finite, is_pole, wrap_angle,
+    DOMAIN_TOLERANCE, Ellipsoid, GeodesyError, GeographicPoint, Parameter, finite, latitude,
+    positive, wrap_angle,
 };
 use crate::projection::Factors;
 
@@ -64,28 +65,29 @@ pub struct TransverseMercator {
 }
 
 impl TransverseMercator {
+    /// The smallest inverse flattening of the ellipsoid. The series, to sixth order in the third
+    /// flattening, lose their accuracy on flatter ellipsoids; every Earth ellipsoid in use has
+    /// 1/f near 300.
+    pub const MIN_INVERSE_FLATTENING: f64 = 50.0;
+
     /// The projection with `parameters` on `ellipsoid`.
     ///
     /// # Errors
     ///
     /// [`GeodesyError::InvalidParameter`] when a parameter is not finite, the latitude of origin
-    /// is beyond a pole or the scale factor is not positive.
+    /// is beyond a pole, the scale factor is not positive, or the ellipsoid is flatter than
+    /// [`TransverseMercator::MIN_INVERSE_FLATTENING`] allows.
     pub fn new(
         ellipsoid: &Ellipsoid,
         parameters: &TransverseMercatorParameters,
     ) -> Result<Self, GeodesyError> {
-        let phi0 = finite(parameters.latitude_of_origin, Parameter::LatitudeOfOrigin)?;
-        if phi0.abs() > FRAC_PI_2 {
+        if 1.0 / ellipsoid.flattening() < Self::MIN_INVERSE_FLATTENING {
             return Err(GeodesyError::InvalidParameter {
-                parameter: Parameter::LatitudeOfOrigin,
+                parameter: Parameter::InverseFlattening,
             });
         }
-        let k0 = finite(parameters.scale_factor, Parameter::ScaleFactor)?;
-        if k0 <= 0.0 {
-            return Err(GeodesyError::InvalidParameter {
-                parameter: Parameter::ScaleFactor,
-            });
-        }
+        let phi0 = latitude(parameters.latitude_of_origin, Parameter::LatitudeOfOrigin)?;
+        let k0 = positive(parameters.scale_factor, Parameter::ScaleFactor)?;
         let n = ellipsoid.third_flattening();
         let (cbg, cgb) = latitude_series(n);
         let (utg, gtu) = krueger_series(n);
@@ -124,8 +126,10 @@ impl TransverseMercator {
             libm::hypot(sin_chi, cos_chi * cos_lambda),
         )));
         Spherical {
-            lambda,
-            chi,
+            sin_chi,
+            cos_chi,
+            sin_lambda,
+            cos_lambda,
             xi,
             eta,
         }
@@ -175,7 +179,7 @@ impl TransverseMercator {
         let xi = (point.northings - self.false_northing - self.zb) / self.qn;
         let eta = (point.eastings - self.false_easting) / self.qn;
         // ξ is the rectifying latitude on the central meridian: ±π/2 at the poles.
-        if eta.abs() > MAX_ETA || xi.abs() > FRAC_PI_2 + 1e-12 {
+        if eta.abs() > MAX_ETA || xi.abs() > FRAC_PI_2 + DOMAIN_TOLERANCE {
             return Err(GeodesyError::OutsideDomain);
         }
         let (d_xi, d_eta) = clenshaw_complex_sin(&self.utg, 2.0 * xi, 2.0 * eta);
@@ -198,20 +202,17 @@ impl TransverseMercator {
     /// As [`TransverseMercator::forward`], and [`GeodesyError::OutsideDomain`] at the poles,
     /// where the convergence is not defined.
     pub fn factors(&self, point: GeographicPoint) -> Result<Factors, GeodesyError> {
-        let point = point.checked()?;
-        if is_pole(point.latitude) {
-            return Err(GeodesyError::OutsideDomain);
-        }
+        let point = point.checked_off_pole()?;
         let spherical = self.spherical(point);
         self.ellipsoidal(&spherical)?;
         let Spherical {
-            lambda,
-            chi,
+            sin_chi,
+            cos_chi,
+            sin_lambda,
+            cos_lambda,
             xi,
             eta,
         } = spherical;
-        let (sin_chi, cos_chi) = libm::sincos(chi);
-        let (sin_lambda, cos_lambda) = libm::sincos(lambda);
         let (sin_lat, cos_lat) = libm::sincos(point.latitude);
         // On the conformal sphere.
         let gamma_sphere = libm::atan2(sin_lambda * sin_chi, cos_lambda);
@@ -235,8 +236,12 @@ impl TransverseMercator {
 /// A point on the conformal sphere, see [`TransverseMercator::spherical`].
 #[derive(Clone, Copy)]
 struct Spherical {
-    lambda: f64,
-    chi: f64,
+    /// Sine and cosine of the conformal latitude χ.
+    sin_chi: f64,
+    cos_chi: f64,
+    /// Sine and cosine of the longitude from the central meridian λ.
+    sin_lambda: f64,
+    cos_lambda: f64,
     xi: f64,
     eta: f64,
 }
@@ -316,15 +321,7 @@ fn krueger_series(n: f64) -> (Series, Series) {
 
 /// `b + Σ p[j]·sin(2(j+1)·b)`, by Clenshaw summation: a latitude converted by the series `p`.
 fn gatg(p: &Series, b: f64) -> f64 {
-    let (sin_2b, cos_2b) = libm::sincos(2.0 * b);
-    let two_cos_2b = 2.0 * cos_2b;
-    let (mut h1, mut h2) = (0.0, 0.0);
-    for &c in p.iter().rev() {
-        let h = -h2 + two_cos_2b * h1 + c;
-        h2 = h1;
-        h1 = h;
-    }
-    b + h1 * sin_2b
+    b + clenshaw_sin(p, 2.0 * b)
 }
 
 /// `Σ a[j]·sin((j+1)·arg)`, by Clenshaw summation.
@@ -500,6 +497,10 @@ mod tests {
                 Parameter::FalseOrigin,
             ),
         ];
+        assert_eq!(
+            TransverseMercator::new(&Ellipsoid::new(6e6, 1.5).unwrap(), &valid),
+            error(Parameter::InverseFlattening)
+        );
         for (parameters, parameter) in cases {
             assert_eq!(
                 TransverseMercator::new(&grs80(), &parameters),

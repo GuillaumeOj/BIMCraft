@@ -7,7 +7,8 @@ use std::f64::consts::{FRAC_PI_2, PI};
 
 use crate::ProjectedPoint;
 use crate::geodesy::{
-    Ellipsoid, GeodesyError, GeographicPoint, Parameter, finite, is_pole, wrap_angle,
+    DOMAIN_TOLERANCE, Ellipsoid, GeodesyError, GeographicPoint, Parameter, finite, is_pole,
+    latitude, positive, wrap_angle,
 };
 use crate::projection::Factors;
 
@@ -123,12 +124,7 @@ impl LambertConformalConic {
                 parameter: Parameter::LatitudeOfOrigin,
             });
         }
-        let k0 = finite(parameters.scale_factor, Parameter::ScaleFactor)?;
-        if k0 <= 0.0 {
-            return Err(GeodesyError::InvalidParameter {
-                parameter: Parameter::ScaleFactor,
-            });
-        }
+        let k0 = positive(parameters.scale_factor, Parameter::ScaleFactor)?;
         let iso0 = isometric_latitude(lat0, ellipsoid.eccentricity());
         let c = ellipsoid.semi_major_axis() * k0 * m(ellipsoid, lat0) * libm::exp(n * iso0) / n;
         Self::build(
@@ -149,15 +145,13 @@ impl LambertConformalConic {
         longitude_of_origin: f64,
         [false_easting, false_northing]: [f64; 2],
     ) -> Result<Self, GeodesyError> {
-        let invalid_origin = GeodesyError::InvalidParameter {
-            parameter: Parameter::LatitudeOfOrigin,
-        };
-        let latitude_of_origin = finite(latitude_of_origin, Parameter::LatitudeOfOrigin)?;
-        if latitude_of_origin.abs() > FRAC_PI_2 {
-            return Err(invalid_origin);
-        }
+        let latitude_of_origin = latitude(latitude_of_origin, Parameter::LatitudeOfOrigin)?;
         // A false origin at the apex is valid (ρ0 = 0), as in PROJ; the other pole is not.
-        let rho0 = radius(ellipsoid, n, c, latitude_of_origin).map_err(|_| invalid_origin)?;
+        let rho0 = radius(ellipsoid, n, c, latitude_of_origin).map_err(|_| {
+            GeodesyError::InvalidParameter {
+                parameter: Parameter::LatitudeOfOrigin,
+            }
+        })?;
         Ok(Self {
             ellipsoid: *ellipsoid,
             longitude_of_origin: finite(longitude_of_origin, Parameter::LongitudeOfOrigin)?,
@@ -218,7 +212,7 @@ impl LambertConformalConic {
         }
         let theta = libm::atan2(dx, dy);
         // The cone unrolls to a sector of half-angle π·|n| around the apex.
-        if theta.abs() > PI * self.n.abs() + 1e-12 {
+        if theta.abs() > PI * self.n.abs() + DOMAIN_TOLERANCE {
             return Err(GeodesyError::OutsideDomain);
         }
         let psi = -libm::log(rho / self.c.abs()) / self.n;
@@ -236,10 +230,7 @@ impl LambertConformalConic {
     /// As [`LambertConformalConic::forward`], and [`GeodesyError::OutsideDomain`] at the poles,
     /// where the scale is not defined.
     pub fn factors(&self, point: GeographicPoint) -> Result<Factors, GeodesyError> {
-        let point = point.checked()?;
-        if is_pole(point.latitude) {
-            return Err(GeodesyError::OutsideDomain);
-        }
+        let point = point.checked_off_pole()?;
         let rho = self.rho(point.latitude)?;
         Ok(Factors {
             convergence: self.n * wrap_angle(point.longitude - self.longitude_of_origin),
@@ -691,20 +682,12 @@ mod tests {
 
         #[test]
         fn round_trips(longitude in -60.0..66.0_f64, latitude in -60.0..89.9_f64) {
-            let lcc = lambert93();
-            let point = GeographicPoint::new(longitude * DEG, latitude * DEG, 0.0);
-            let back = lcc.inverse(lcc.forward(point).unwrap()).unwrap();
-            prop_assert!((back.latitude - point.latitude).abs() < 1e-13);
-            prop_assert!(wrap_angle(back.longitude - point.longitude).abs() < 1e-13);
+            assert_round_trip(&lambert93(), GeographicPoint::new(longitude * DEG, latitude * DEG, 0.0));
         }
 
         #[test]
         fn round_trips_in_the_south(longitude in 90.0..180.0_f64, latitude in -89.9..60.0_f64) {
-            let lcc = southern();
-            let point = GeographicPoint::new(longitude * DEG, latitude * DEG, 0.0);
-            let back = lcc.inverse(lcc.forward(point).unwrap()).unwrap();
-            prop_assert!((back.latitude - point.latitude).abs() < 1e-13);
-            prop_assert!(wrap_angle(back.longitude - point.longitude).abs() < 1e-13);
+            assert_round_trip(&southern(), GeographicPoint::new(longitude * DEG, latitude * DEG, 0.0));
         }
 
         /// On the central meridian, northings grow with latitude.

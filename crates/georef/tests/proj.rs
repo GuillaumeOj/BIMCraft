@@ -11,18 +11,18 @@
 // test failure.
 #![allow(clippy::unwrap_used)]
 
+mod common;
+
 use std::collections::BTreeMap;
 use std::f64::consts::PI;
 
+use common::{DEG, airy, grs80, osgb36_to_wgs84, wgs84};
 use georef::{
-    Ellipsoid, GeographicPoint, Helmert, HelmertParameters, LambertConformalConic,
-    LambertConic2SpParameters, ProjectedPoint, Projection, RotationConvention, TransverseMercator,
-    TransverseMercatorParameters,
+    Ellipsoid, GeographicPoint, LambertConformalConic, LambertConic2SpParameters, ProjectedPoint,
+    Projection, RotationConvention, TransverseMercator, TransverseMercatorParameters,
 };
 
 const REFERENCE: &str = include_str!("proj/reference.txt");
-
-const DEG: f64 = PI / 180.0;
 
 /// GEOREF-03 asks for 1 mm. The implementation agrees with PROJ to 0.1 µm on this grid, so the
 /// test holds it to a micrometre: a regression fails long before it matters.
@@ -32,18 +32,6 @@ const TOLERANCE: f64 = 1e-6;
 /// about 10⁻¹¹ rad (far beyond a zone) and better than 10⁻¹⁰ in scale.
 const CONVERGENCE_TOLERANCE: f64 = 1e-10;
 const SCALE_TOLERANCE: f64 = 1e-10;
-
-fn grs80() -> Ellipsoid {
-    Ellipsoid::new(6_378_137.0, 298.257_222_101).unwrap()
-}
-
-fn wgs84() -> Ellipsoid {
-    Ellipsoid::new(6_378_137.0, 298.257_223_563).unwrap()
-}
-
-fn airy() -> Ellipsoid {
-    Ellipsoid::new(6_377_563.396, 299.324_964_6).unwrap()
-}
 
 /// A projection case: the projection and the ellipsoid it is on.
 type Case = (Projection, Ellipsoid);
@@ -110,17 +98,6 @@ fn projections() -> BTreeMap<String, Case> {
     }
     cases.insert("tmerc_wide".to_owned(), tmerc(grs80(), 3.0, 0.0));
     cases
-}
-
-/// OSGB36 to WGS 84 (EPSG:1314) in `convention`, as `generate.py` applies it.
-fn osgb36_to_wgs84(convention: RotationConvention) -> Helmert {
-    Helmert::new(&HelmertParameters {
-        translation: [446.448, -125.157, 542.06],
-        rotation: [0.15, 0.247, 0.842],
-        scale_difference: -20.489,
-        convention,
-    })
-    .unwrap()
 }
 
 /// The ground distance, in metres, between two nearby geographic points on `ellipsoid`.

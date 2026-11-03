@@ -10,13 +10,15 @@
 // The fixtures are valid by construction; a failure is a test failure.
 #![allow(clippy::unwrap_used)]
 
-use std::f64::consts::PI;
+mod common;
+
 use std::fmt::Write as _;
 
+use common::{DEG, grs80, osgb36_to_wgs84, wgs84};
 use georef::{
-    Ellipsoid, GeocentricPoint, GeodesyError, GeographicPoint, Helmert, HelmertParameters,
-    LambertConformalConic, LambertConic1SpParameters, LambertConic2SpParameters, ProjectedPoint,
-    Projection, RotationConvention, TransverseMercator, TransverseMercatorParameters,
+    GeocentricPoint, GeodesyError, GeographicPoint, LambertConformalConic,
+    LambertConic1SpParameters, LambertConic2SpParameters, ProjectedPoint, Projection,
+    RotationConvention, TransverseMercator, TransverseMercatorParameters,
 };
 
 const GOLDEN: &str = include_str!("golden.txt");
@@ -24,8 +26,6 @@ const GOLDEN_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/golden.txt
 
 /// Random cases per operation.
 const SAMPLES: usize = 32;
-
-const DEG: f64 = PI / 180.0;
 
 /// `SplitMix64`, seeded per case from its name, as in `crates/geom/tests/golden.rs`: adding or
 /// reordering cases leaves the inputs, and the golden lines, of every other case unchanged.
@@ -97,14 +97,6 @@ fn projected(point: Result<ProjectedPoint, GeodesyError>) -> Result<[f64; 3], Ge
 
 fn geographic(point: Result<GeographicPoint, GeodesyError>) -> Result<[f64; 3], GeodesyError> {
     point.map(|p| [p.longitude, p.latitude, p.height])
-}
-
-fn grs80() -> Ellipsoid {
-    Ellipsoid::new(6_378_137.0, 298.257_222_101).unwrap()
-}
-
-fn wgs84() -> Ellipsoid {
-    Ellipsoid::new(6_378_137.0, 298.257_223_563).unwrap()
 }
 
 /// A projection case: its name, the projection, and the longitude and latitude ranges its random
@@ -209,13 +201,7 @@ fn helmert(out: &mut Output) {
             RotationConvention::CoordinateFrame,
         ),
     ] {
-        let helmert = Helmert::new(&HelmertParameters {
-            translation: [446.448, -125.157, 542.06],
-            rotation: [0.15, 0.247, 0.842],
-            scale_difference: -20.489,
-            convention,
-        })
-        .unwrap();
+        let helmert = osgb36_to_wgs84(convention);
         let mut rng = Rng::for_case(name);
         for index in 0..SAMPLES {
             let point = GeocentricPoint::new(

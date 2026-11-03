@@ -1,9 +1,7 @@
 //! Map projections between geographic and projected coordinates (GEOREF-03), and the true north
 //! of a georeference derived from its grid rotation (spec D2).
 
-use std::f64::consts::PI;
-
-use crate::geodesy::{GeodesyError, GeographicPoint};
+use crate::geodesy::{GeodesyError, GeographicPoint, wrap_angle};
 use crate::lcc::LambertConformalConic;
 use crate::tmerc::TransverseMercator;
 use crate::{Georeference, ProjectedPoint};
@@ -78,10 +76,7 @@ impl Projection {
     pub fn true_north(&self, georeference: &Georeference) -> Result<f64, GeodesyError> {
         let base = self.inverse(georeference.base_point())?;
         let convergence = self.factors(base)?.convergence;
-        Ok(libm::remainder(
-            convergence - georeference.grid_rotation(),
-            2.0 * PI,
-        ))
+        Ok(wrap_angle(convergence - georeference.grid_rotation()))
     }
 }
 
@@ -102,16 +97,14 @@ mod tests {
     use proptest::prelude::*;
 
     use super::*;
+    use crate::EpsgCode;
     use crate::test_support::{DEG, grs80, lambert93, utm};
-    use crate::{Ellipsoid, EpsgCode};
 
-    /// The convergence and scale of `projection` at `point`, from central differences of its
-    /// forward projection along the meridian: independent of the analytic formulas.
-    fn numerical_factors(
-        projection: &Projection,
-        ellipsoid: &Ellipsoid,
-        point: GeographicPoint,
-    ) -> Factors {
+    /// The convergence and scale of `projection`, on GRS 80, at `point`, from central
+    /// differences of its forward projection along the meridian: independent of the analytic
+    /// formulas.
+    fn numerical_factors(projection: &Projection, point: GeographicPoint) -> Factors {
+        let ellipsoid = grs80();
         let step = 1e-6;
         let at = |latitude: f64| {
             projection
@@ -132,7 +125,7 @@ mod tests {
 
     fn assert_factors(projection: &Projection, point: GeographicPoint) {
         let analytic = projection.factors(point).unwrap();
-        let numerical = numerical_factors(projection, &grs80(), point);
+        let numerical = numerical_factors(projection, point);
         assert!(
             (analytic.convergence - numerical.convergence).abs() < 1e-9,
             "{analytic:?} {numerical:?} at {point:?}"
@@ -211,13 +204,9 @@ mod tests {
         let projection = Projection::from(lambert93());
         // East of the central meridian, grid north is clockwise of true north, so true north is
         // counter-clockwise of the local y-axis when the grid is not rotated.
-        let strasbourg = projection
-            .forward(GeographicPoint::new(7.75 * DEG, 48.58 * DEG, 0.0))
-            .unwrap();
-        let convergence = projection
-            .factors(GeographicPoint::new(7.75 * DEG, 48.58 * DEG, 0.0))
-            .unwrap()
-            .convergence;
+        let point = GeographicPoint::new(7.75 * DEG, 48.58 * DEG, 0.0);
+        let strasbourg = projection.forward(point).unwrap();
+        let convergence = projection.factors(point).unwrap().convergence;
         assert!((convergence - 0.725_607_765_053_267 * 4.75 * DEG).abs() < 1e-12);
         let unrotated = projection
             .true_north(&georeference(strasbourg, 0.0))

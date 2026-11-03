@@ -38,6 +38,16 @@ impl GeographicPoint {
         }
         Ok(self)
     }
+
+    /// The point, as [`GeographicPoint::checked`], and not at a pole, where the convergence and
+    /// the scale of a projection are not defined.
+    pub(crate) fn checked_off_pole(self) -> Result<Self, GeodesyError> {
+        let point = self.checked()?;
+        if is_pole(point.latitude) {
+            return Err(GeodesyError::OutsideDomain);
+        }
+        Ok(point)
+    }
 }
 
 /// A point in Earth-centred, Earth-fixed Cartesian coordinates, in metres.
@@ -130,10 +140,31 @@ pub(crate) fn finite(value: f64, parameter: Parameter) -> Result<f64, GeodesyErr
     }
 }
 
-/// Whether `latitude` is a pole, within 10⁻¹² rad (a few micrometres), where projections
-/// degenerate.
+/// `value`, if it is finite and greater than zero, else an error naming `parameter`.
+pub(crate) fn positive(value: f64, parameter: Parameter) -> Result<f64, GeodesyError> {
+    if finite(value, parameter)? > 0.0 {
+        Ok(value)
+    } else {
+        Err(GeodesyError::InvalidParameter { parameter })
+    }
+}
+
+/// `value`, if it is a finite latitude within [−π/2, π/2], else an error naming `parameter`.
+pub(crate) fn latitude(value: f64, parameter: Parameter) -> Result<f64, GeodesyError> {
+    if finite(value, parameter)?.abs() <= FRAC_PI_2 {
+        Ok(value)
+    } else {
+        Err(GeodesyError::InvalidParameter { parameter })
+    }
+}
+
+/// How far, in radians, a value may stray past the edge of a domain through rounding: 10⁻¹²
+/// rad, a few micrometres on the ground.
+pub(crate) const DOMAIN_TOLERANCE: f64 = 1e-12;
+
+/// Whether `latitude` is a pole, within [`DOMAIN_TOLERANCE`], where projections degenerate.
 pub(crate) fn is_pole(latitude: f64) -> bool {
-    (latitude.abs() - FRAC_PI_2).abs() < 1e-12
+    (latitude.abs() - FRAC_PI_2).abs() < DOMAIN_TOLERANCE
 }
 
 /// `angle` brought into [−π, π], as PROJ does for longitudes.
@@ -150,25 +181,16 @@ pub struct Ellipsoid {
 }
 
 impl Ellipsoid {
-    /// The smallest inverse flattening accepted. The Transverse Mercator series, to sixth order in
-    /// the third flattening, lose their accuracy on flatter ellipsoids; every Earth ellipsoid in
-    /// use has 1/f near 300.
-    pub const MIN_INVERSE_FLATTENING: f64 = 50.0;
-
     /// The ellipsoid with `semi_major_axis` (metres) and `inverse_flattening` (1/f). An infinite
     /// inverse flattening is a sphere.
     ///
     /// # Errors
     ///
     /// [`GeodesyError::InvalidParameter`] when the semi-major axis is not finite and positive, or
-    /// the inverse flattening is below [`Ellipsoid::MIN_INVERSE_FLATTENING`].
+    /// the inverse flattening is not greater than 1.
     pub fn new(semi_major_axis: f64, inverse_flattening: f64) -> Result<Self, GeodesyError> {
-        if finite(semi_major_axis, Parameter::SemiMajorAxis)? <= 0.0 {
-            return Err(GeodesyError::InvalidParameter {
-                parameter: Parameter::SemiMajorAxis,
-            });
-        }
-        if inverse_flattening.is_nan() || inverse_flattening < Self::MIN_INVERSE_FLATTENING {
+        let semi_major_axis = positive(semi_major_axis, Parameter::SemiMajorAxis)?;
+        if inverse_flattening.is_nan() || inverse_flattening <= 1.0 {
             return Err(GeodesyError::InvalidParameter {
                 parameter: Parameter::InverseFlattening,
             });
@@ -263,18 +285,21 @@ impl Ellipsoid {
         let second_e2 = e2 / (1.0 - e2);
         let mut beta = libm::atan2(z * a, p * b);
         let mut latitude = 0.0;
-        for _ in 0..3 {
+        let (mut sin_phi, mut cos_phi) = (0.0, 1.0);
+        for step in 0..3 {
+            if step > 0 {
+                beta = libm::atan2(b * sin_phi, a * cos_phi);
+            }
             let (sin_beta, cos_beta) = libm::sincos(beta);
             latitude = libm::atan2(
                 z + second_e2 * b * sin_beta * sin_beta * sin_beta,
                 p - e2 * a * cos_beta * cos_beta * cos_beta,
             );
-            let (sin_phi, cos_phi) = libm::sincos(latitude);
-            beta = libm::atan2(b * sin_phi, a * cos_phi);
+            (sin_phi, cos_phi) = libm::sincos(latitude);
         }
-        // On the polar axis, rounding can put the latitude a hair beyond the pole.
+        // A guard: rounding could only ever move the latitude a hair past a pole, where the
+        // sine and cosine already computed stay correct to the last bit.
         let latitude = latitude.clamp(-FRAC_PI_2, FRAC_PI_2);
-        let (sin_phi, cos_phi) = libm::sincos(latitude);
         Ok(GeographicPoint::new(
             libm::atan2(y, x),
             latitude,
@@ -323,9 +348,7 @@ mod tests {
         assert_eq!(Ellipsoid::new(f64::NAN, 298.0), semi_major);
         assert_eq!(Ellipsoid::new(f64::INFINITY, 298.0), semi_major);
         assert_eq!(Ellipsoid::new(6e6, 1.0), flattening);
-        assert_eq!(Ellipsoid::new(6e6, 1.5), flattening);
-        assert_eq!(Ellipsoid::new(6e6, 49.9), flattening);
-        assert!(Ellipsoid::new(6e6, Ellipsoid::MIN_INVERSE_FLATTENING).is_ok());
+        assert!(Ellipsoid::new(6e6, 1.5).is_ok());
         assert_eq!(Ellipsoid::new(6e6, f64::NAN), flattening);
         assert_eq!(Ellipsoid::new(6e6, -298.0), flattening);
     }
