@@ -17,7 +17,7 @@ Text twin of the FigCraft page "UX flows" in `georeferencing.figcraft`. Frames: 
 
 ## F1 — Project location dialog
 
-Entry: title-bar/project menu "Project location…", shortcut **Ctrl/Cmd+Alt+L** (proposal, documented; Ctrl+Alt is AltGr on Windows AZERTY and other European layouts, so the UI must check that the final combination does not swallow typing in fields; no palette exists yet; if one exists the entry is "Project location…"). From the panel's button.
+Entry: title-bar/project menu "Project location…", shortcut **Ctrl/Cmd+Shift+L** (lead decision: Ctrl+Alt is AltGr on Windows AZERTY and other European layouts, so no Ctrl+Alt shortcuts; no palette exists yet; if one exists the entry is "Project location…"). From the panel's button.
 
 States (frames):
 - **F1-A not georeferenced**: guidance sentence, CRS combobox focused, other sections disabled until a CRS is chosen (they enable on choice), Derived shows a placeholder, no "Remove". Apply stays enabled (decision 4): with no CRS or an unparsable number it focuses the first invalid field and shows the inline error.
@@ -98,8 +98,8 @@ Copy formats (plain text, tab-separated so it pastes into a spreadsheet cells; l
 
 | Where | Keys | Action |
 | --- | --- | --- |
-| Global | Ctrl/Cmd+Alt+L | Open Project location (F1) |
-| Global | Ctrl/Cmd+Alt+K | Focus the Coordinates panel (opens the tab) |
+| Global | Ctrl/Cmd+Shift+L | Open Project location (F1) |
+| Global | Ctrl/Cmd+Shift+K | Focus the Coordinates panel (opens the tab) |
 | Dialog | Tab / Shift+Tab | Fields in visual order: CRS, E, N, H, rotation (+ DMS toggle), Advanced toggle, scale, survey toggle/E/N/H, Remove, Cancel, Apply; trapped |
 | Dialog | Enter | Apply (not inside the open CRS list or a button) |
 | Dialog | Esc | Closes an open list/popover first, then cancels the dialog; in the remove confirmation it keeps the georeference |

@@ -45,7 +45,7 @@ The `georef` crate turns these attributes into the typed `Georeference` and back
 
 The map conversion follows the semantics of IFC 4.3 ADD2 `IfcMapConversion`. Local point (x, y, z) in metres, θ = `grid_rotation`, s = `scale`:
 
-- E = s·(x·cos θ − y·sin θ) + E₀, N = s·(x·sin θ + y·cos θ) + N₀, H = z + H₀ (the backend checks in the EXPRESS schema and its documentation whether s applies to z and follows IFC). The inverse is exact up to rounding.
+- E = s·(x·cos θ − y·sin θ) + E₀, N = s·(x·sin θ + y·cos θ) + N₀, H = s·z + H₀ (decided in T1 and ADR 0017: IFC `Scale` is the unit conversion and applies to all three axes; `IfcMapConversionScaled` carries per-axis factors). The inverse is exact up to rounding.
 - Grid rotation is what is stored. **True north** is derived from it with the meridian convergence γ of the projection at the base point (sub-issue 2): counter-clockwise from the local y-axis, true north is γ − θ. It is shown read-only. GEOREF-02's "rotation (true north)" is met by storing the grid rotation and deriving true north.
 - Trigonometry uses `libm` (ENG-04). Angles are converted with `x * (PI / 180.0)`.
 
