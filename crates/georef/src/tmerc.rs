@@ -9,9 +9,9 @@
 //! few nanometers", J. Geodesy 85 (2011); Engsager and Poder, "A highly accurate world wide
 //! algorithm for the transverse Mercator mapping (almost)", ICC 2007.
 
-use crate::ProjectedPoint;
-use std::f64::consts::FRAC_PI_2;
+use std::f64::consts::PI;
 
+use crate::ProjectedPoint;
 use crate::geodesy::{
     DOMAIN_TOLERANCE, Ellipsoid, GeodesyError, GeographicPoint, Parameter, finite, latitude,
     positive, wrap_angle,
@@ -152,8 +152,9 @@ impl TransverseMercator {
     /// # Errors
     ///
     /// [`GeodesyError::NonFinite`] or [`GeodesyError::LatitudeOutOfRange`] for an invalid point,
-    /// and [`GeodesyError::OutsideDomain`] when the point is too far from the central meridian
-    /// for the series (about 90° of longitude on the equator).
+    /// and [`GeodesyError::OutsideDomain`] when the point is too close to one of the two points
+    /// of the equator 90° from the central meridian, where the projection goes to infinity and
+    /// the series no longer converge.
     pub fn forward(&self, point: GeographicPoint) -> Result<ProjectedPoint, GeodesyError> {
         let point = point.checked()?;
         let (xi, eta) = self.ellipsoidal(&self.spherical(point))?;
@@ -170,16 +171,18 @@ impl TransverseMercator {
     ///
     /// [`GeodesyError::NonFinite`] for a non-finite coordinate, and
     /// [`GeodesyError::OutsideDomain`] when the point is beyond the reach of the series or
-    /// beyond a pole: the series are periodic in northing, so such a point would otherwise come
-    /// back as a wrong but plausible one.
+    /// beyond the antimeridian of the central meridian: the series are periodic in northing, so
+    /// such a point would otherwise come back as a wrong but plausible one.
     pub fn inverse(&self, point: ProjectedPoint) -> Result<GeographicPoint, GeodesyError> {
         if !point.is_finite() {
             return Err(GeodesyError::NonFinite);
         }
         let xi = (point.northings - self.false_northing - self.zb) / self.qn;
         let eta = (point.eastings - self.false_easting) / self.qn;
-        // ξ is the rectifying latitude on the central meridian: ±π/2 at the poles.
-        if eta.abs() > MAX_ETA || xi.abs() > FRAC_PI_2 + DOMAIN_TOLERANCE {
+        // ξ is the rectifying latitude on the central meridian, ±π/2 at the poles; past a pole it
+        // goes on along the antimeridian, where forward projects points more than 90° away, and
+        // reaches ±π on the equator.
+        if eta.abs() > MAX_ETA || xi.abs() > PI + DOMAIN_TOLERANCE {
             return Err(GeodesyError::OutsideDomain);
         }
         let (d_xi, d_eta) = clenshaw_complex_sin(&self.utg, 2.0 * xi, 2.0 * eta);
@@ -553,10 +556,10 @@ mod tests {
         }
     }
 
-    /// Regression: the series are periodic in northing, so a point beyond a pole used to come
-    /// back as a plausible point near the equator.
+    /// Regression: the series are periodic in northing, so a point beyond the antimeridian used
+    /// to come back as a plausible point near the equator.
     #[test]
-    fn rejects_northings_beyond_the_poles() {
+    fn rejects_northings_beyond_the_antimeridian() {
         let tm = utm(&grs80(), 31, false);
         for northings in [1e9, -1e9, 1e300] {
             assert_eq!(
@@ -568,6 +571,18 @@ mod tests {
             .forward(GeographicPoint::new(3.0 * DEG, FRAC_PI_2, 0.0))
             .unwrap();
         assert!(tm.inverse(pole).is_ok());
+    }
+
+    /// Regression: forward projects points more than 90° from the central meridian past the
+    /// poles, and the inverse used to reject them.
+    #[test]
+    fn round_trips_beyond_the_poles() {
+        let tm = utm(&grs80(), 31, false);
+        for (longitude, latitude) in [(123.0, 80.0), (100.0, 60.0), (150.0, 45.0), (183.0, 10.0)] {
+            let point = GeographicPoint::new(longitude * DEG, latitude * DEG, 0.0);
+            let back = tm.inverse(tm.forward(point).unwrap()).unwrap();
+            assert!(ground_distance(back, point) < 1e-6, "{back:?} {point:?}");
+        }
     }
 
     /// Regression: at a pole the convergence is not defined and the scale was computed from

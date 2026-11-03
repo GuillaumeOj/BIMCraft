@@ -1,6 +1,6 @@
-//! Checks the projections and transformations against PROJ, within 1 mm (in fact 1 µm), on the grid of
-//! `proj/reference.txt` (GEOREF-03): Lambert-93, CC42 to CC50, UTM on ETRS89 and WGS 84 over the
-//! full zone width, Transverse Mercator far beyond a zone, geocentric conversions and a
+//! Checks the projections and transformations against PROJ, within 1 mm (in fact 1 µm), on the
+//! grid of `proj/reference.txt` (GEOREF-03): Lambert-93, CC42 to CC50, UTM on ETRS89 and WGS 84
+//! over the full zone width, Transverse Mercator far beyond a zone, geocentric conversions and a
 //! seven-parameter Helmert in both conventions.
 //!
 //! The reference values come from PROJ through `proj/generate.py`; the file header records the
@@ -16,7 +16,7 @@ mod common;
 use std::collections::BTreeMap;
 use std::f64::consts::PI;
 
-use common::{DEG, airy, grs80, osgb36_to_wgs84, wgs84};
+use common::{DEG, grs80, osgb36_to_wgs84, wgs84};
 use georef::{
     Ellipsoid, GeographicPoint, LambertConformalConic, LambertConic2SpParameters, ProjectedPoint,
     Projection, RotationConvention, TransverseMercator, TransverseMercatorParameters,
@@ -32,6 +32,11 @@ const TOLERANCE: f64 = 1e-6;
 /// about 10⁻¹¹ rad (far beyond a zone) and better than 10⁻¹⁰ in scale.
 const CONVERGENCE_TOLERANCE: f64 = 1e-10;
 const SCALE_TOLERANCE: f64 = 1e-10;
+
+/// Airy 1830 (EPSG:7001), the ellipsoid of OSGB36.
+fn airy() -> Ellipsoid {
+    Ellipsoid::new(6_377_563.396, 299.324_964_6).unwrap()
+}
 
 /// A projection case: the projection and the ellipsoid it is on.
 type Case = (Projection, Ellipsoid);

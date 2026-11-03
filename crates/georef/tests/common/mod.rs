@@ -1,9 +1,6 @@
 //! Fixtures shared by the integration tests: EPSG values, entered by hand. The unit tests have
 //! their own in `src/lib.rs`, which integration tests cannot see.
 
-// Each test binary uses part of the fixtures.
-#![allow(dead_code)]
-
 use std::f64::consts::PI;
 
 use georef::{Ellipsoid, Helmert, HelmertParameters, RotationConvention};
@@ -19,11 +16,6 @@ pub fn grs80() -> Ellipsoid {
 /// WGS 84 (EPSG:7030).
 pub fn wgs84() -> Ellipsoid {
     Ellipsoid::new(6_378_137.0, 298.257_223_563).unwrap()
-}
-
-/// Airy 1830 (EPSG:7001).
-pub fn airy() -> Ellipsoid {
-    Ellipsoid::new(6_377_563.396, 299.324_964_6).unwrap()
 }
 
 /// OSGB36 to WGS 84 (EPSG:1314) in `convention`, as `tests/proj/generate.py` applies it.
