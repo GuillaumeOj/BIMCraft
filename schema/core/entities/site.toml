@@ -1,0 +1,59 @@
+format = 1
+
+[entity]
+name = "Site"
+kind = "spatial"
+doc = "The piece of land the project stands on, and where it lies on Earth: the projected coordinate reference system, the base point, the grid rotation, the scale and an optional survey point (GEOREF-01, ADR 0017). A project has at most one site."
+
+[ifc]
+entity = "IfcSite"
+
+[[attribute]]
+name = "crs_epsg"
+value = "integer"
+doc = "EPSG code of the projected coordinate reference system, such as 2154 for Lambert-93. Unset: the project is not georeferenced."
+
+[[attribute]]
+name = "base_point_eastings"
+value = "quantity:length"
+default = 0.0
+doc = "Easting of the project base point, the origin of the local frame."
+
+[[attribute]]
+name = "base_point_northings"
+value = "quantity:length"
+default = 0.0
+doc = "Northing of the project base point."
+
+[[attribute]]
+name = "base_point_height"
+value = "quantity:length"
+default = 0.0
+doc = "Orthogonal height of the project base point."
+
+[[attribute]]
+name = "grid_rotation"
+value = "quantity:plane_angle"
+default = 0.0
+doc = "Angle from the grid easting axis of the coordinate reference system to the local x-axis, counter-clockwise."
+
+[[attribute]]
+name = "scale"
+value = "real"
+default = 1.0
+doc = "Map conversion scale from local lengths to map lengths, applied to all three axes. Finite and greater than zero."
+
+[[attribute]]
+name = "survey_point_eastings"
+value = "quantity:length"
+doc = "Easting of the survey point, a known point such as a benchmark. Unset: no survey point."
+
+[[attribute]]
+name = "survey_point_northings"
+value = "quantity:length"
+doc = "Northing of the survey point."
+
+[[attribute]]
+name = "survey_point_height"
+value = "quantity:length"
+doc = "Orthogonal height of the survey point."

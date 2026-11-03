@@ -1174,11 +1174,89 @@
           "description": "The stable 128-bit identifier of an object, as an IFC GlobalId.",
           "pattern": "^[0-3][0-9A-Za-z_$]{21}$",
           "type": "string"
+        },
+        "Site": {
+          "additionalProperties": false,
+          "description": "The piece of land the project stands on, and where it lies on Earth: the projected coordinate reference system, the base point, the grid rotation, the scale and an optional survey point (GEOREF-01, ADR 0017). A project has at most one site.",
+          "properties": {
+            "base_point_eastings": {
+              "default": 0.0,
+              "description": "Easting of the project base point, the origin of the local frame.\n\nIn m.",
+              "type": "number"
+            },
+            "base_point_height": {
+              "default": 0.0,
+              "description": "Orthogonal height of the project base point.\n\nIn m.",
+              "type": "number"
+            },
+            "base_point_northings": {
+              "default": 0.0,
+              "description": "Northing of the project base point.\n\nIn m.",
+              "type": "number"
+            },
+            "crs_epsg": {
+              "anyOf": [
+                {
+                  "maximum": 9223372036854775807,
+                  "minimum": -9223372036854775808,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "EPSG code of the projected coordinate reference system, such as 2154 for Lambert-93. Unset: the project is not georeferenced."
+            },
+            "grid_rotation": {
+              "default": 0.0,
+              "description": "Angle from the grid easting axis of the coordinate reference system to the local x-axis, counter-clockwise.\n\nIn rad.",
+              "type": "number"
+            },
+            "scale": {
+              "default": 1.0,
+              "description": "Map conversion scale from local lengths to map lengths, applied to all three axes. Finite and greater than zero.",
+              "type": "number"
+            },
+            "survey_point_eastings": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Easting of the survey point, a known point such as a benchmark. Unset: no survey point.\n\nIn m."
+            },
+            "survey_point_height": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Orthogonal height of the survey point.\n\nIn m."
+            },
+            "survey_point_northings": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Northing of the survey point.\n\nIn m."
+            }
+          },
+          "type": "object"
         }
       },
       "$id": "urn:bimcraft:schema:core",
       "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "description": "Objects of the `core` schema, version 1.",
+      "description": "Objects of the `core` schema, version 2.",
       "title": "BIMCraft `core` schema"
     },
     "queries": {
