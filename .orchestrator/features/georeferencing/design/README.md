@@ -1,8 +1,8 @@
 # Georeferencing — UI design (sub-issue #83, GEOREF-04)
 
-High-fidelity frames for the project location dialog (F1) and the Coordinates panel (F2). Source file: `georeferencing.figcraft`, page **"UI"** (the page "UX flows" holds the wireframes, text twin in `ux-notes.md`). All strings are the French ones (about 30 % longer than English); the English copy is in `ux-notes.md`.
+High-fidelity frames for the project location dialog (F1) and the Coordinates panel (F2). Source file: `georeferencing.figcraft`, page **"UI"**; the page "UX flows" holds the wireframes, and `ux-notes.md` is their text twin with the English copy. All strings here are the French ones (about 30 % longer than English).
 
-Open the file in the FigCraft app, or through the FigCraft MCP server (`figcraft-app` when the app is running, else the headless `figcraft`): `open_file` with this path, then `inspect_document` / `screenshot`. See `docs/dev/ui-design.md`.
+Open it in the FigCraft app or over MCP: see `docs/dev/ui-design.md`.
 
 ## Frames → images
 
@@ -10,7 +10,7 @@ Every image is a 2× PNG export of one frame on the page "UI".
 
 | Frame (page "UI") | Image | Notes |
 | --- | --- | --- |
-| F1-A Dialog · not georeferenced (empty) | `location-dialog-empty.png` | Intro, CRS combobox focused (empty), sections 2–3 disabled until a CRS is chosen, true north "–", derived info placeholder, no "Remove" |
+| F1-A Dialog · not georeferenced (empty) | `location-dialog-empty.png` | Intro, CRS combobox focused (empty), sections 2–3, Advanced and Survey point disabled until a CRS is chosen, true north "–", derived info placeholder, no "Remove" |
 | F1-B Dialog · georeferenced (filled) | `location-dialog-filled.png` | Filled from `georef.get`; Advanced closed, survey point open with its model position |
 | F1-C Dialog · field errors (non-numeric, scale ≤ 0) | `location-dialog-field-error.png` | Client errors; Easting has the focus (first invalid field); Advanced opened by the scale error |
 | F1-C Dialog · outside the CRS area (server reason outside_domain) | `location-dialog-outside-area.png` | Group error on Easting/Northing, focus on Easting; message never repeats the values (SEC-03) |
@@ -40,6 +40,7 @@ Contrast, computed with `ui/src/shell/contrast.ts` (needs ≥ 4.5:1 for text, �
 | Pair | Light | Dark |
 | --- | --- | --- |
 | danger on surface / raised / paper | 6.54 / 5.99 / 6.31 | 5.97 / 5.28 / 6.75 |
+| on-danger on danger | 6.54 | 6.75 |
 | on-verdigris on verdigris | 6.39 | 7.52 |
 | verdigris on surface / raised | 6.39 / 5.86 | 6.00 / 5.31 |
 | muted on surface / raised | 5.86 / 5.37 | 5.60 / 4.96 |
@@ -86,21 +87,21 @@ Field labels are 13 px Medium (500). Numbers use tabular figures (`font-variant-
 | Dialog | – | Modal shell: title, body, footer (Remove left, Cancel and Apply right). The F1 frames are detached copies of it |
 | Tooltip, Toast | – | Tooltip of the disabled Pick button; "Project location applied" toast (`georef.applied`) |
 
-Colours of the components are bound to the Tokens variables; set a frame's Tokens mode to Dark to see a component in dark mode.
+Colours of the components are bound to the Tokens variables; set a frame's Tokens mode to Dark to see a component in dark mode. Text added directly in the frames uses the Light hex values, so the frames themselves are Light only.
 
 ## Deviations from the UX notes, and points for front
 
 1. **Font.** IBM Plex Sans is neither installed here nor bundled in `ui/` (the app falls back to `system-ui`). The frames are drawn in Inter at the same sizes; widths are close but not exact, so check the French strings in the running app.
 2. **Field borders.** `--bc-line` (1.46:1) fails WCAG 1.4.11 for input boundaries, so fields use the new `color/field-line`. `line` stays for dividers, panel borders, the listbox and the Copy button (identified by its text).
-3. **Panel width.** The frames use the shipped right dock, 296 px (`.panel-right`), not 320 px. At 296 px the three French tabs ("Propriétés", "Historique", "Coordonnées") do not fit with the shipped tab padding (12 px): about 295 px for 268 px available. The frames use 8 px tab padding and 2 px list padding (about 271 px, still tight). Front: reduce `.panel-tab` padding, or let the tab list scroll horizontally; never truncate.
+3. **Panel width.** Frames: 296 px dock (`.panel-right`, as in the Penpot shell), 268 px for the tab list. Shipped: 310 px, because the UI has no `box-sizing: border-box` reset, so 282 px for the tabs. The three French tabs need about 295 px with the shipped 12 px tab padding and about 271 px with the 8 px used in the frames. Front: shrink `.panel-tab` padding or let the tab list scroll; never truncate. The shell width itself (the console assumes 296 px) is for lead.
 4. **Geographic precision.** Latitude and longitude show 8 decimals in decimal degrees (about 1 mm) and seconds with 4 decimals in DMS (about 3 mm). 4 decimals of a degree (the UX rule for angles) is about 11 m, too coarse for coordinates. Rotation, true north and convergence keep 4 decimals. To be confirmed by lead/UX.
 5. **True north** is shown in the NorthArrow legend (highlighted), not as a separate read-only field. Before Apply / without a CRS it shows "–".
 6. **Labels and help in F1.** The section header labels the CRS combobox (`aria-labelledby`), no duplicate label. Easting/Northing/Height (base point and survey point) use the section's help sentence as their description; info buttons stay on the section headers, the rotation and the scale.
-7. **F1-C** is split into three frames (client field errors, `outside_domain`, server error banner) to keep each state readable.
-8. **Pick from view** must be `aria-disabled="true"` (focusable, not `disabled`) so its tooltip is reachable from the keyboard.
-9. **Toast** has no Undo button (only the hint "Ctrl+Z pour annuler"): interactive toasts are hard to reach. Its colours are fixed (dark), not bound.
-10. **Dialog height.** With the survey point open the dialog is about 880 px high: the body scrolls (max height 100vh − 64 px), header and footer stay visible.
-11. **Remove confirmation** uses a solid danger button for "Supprimer la géoréférence" next to the focused "Conserver la géoréférence".
-12. In the panel, "Calculé depuis …" sits under the fields of each computed block; a conversion error replaces it in danger colour.
-13. Only the components are bound to variables; text added directly in the frames uses the Light hex values, so the frames themselves are Light only.
-14. Example values (a Paris site in Lambert-93, grid rotation 30°) are illustrative and only approximately computed.
+7. **Pick from view** must be `aria-disabled="true"` (focusable, not `disabled`) so its tooltip is reachable from the keyboard.
+8. **Toast** has no Undo button, only the hint "Ctrl+Z pour annuler" ("Cmd+Z" on macOS): interactive toasts are hard to reach. Its colours are fixed (dark), not bound.
+9. **Dialog height.** With the survey point open the dialog is about 880 px high: the body scrolls (max height 100vh − 64 px), header and footer stay visible.
+10. **Remove confirmation** uses a solid danger button for "Supprimer la géoréférence" next to the focused "Conserver la géoréférence".
+11. In the panel, "Calculé depuis …" sits under the fields of each computed block; a conversion error replaces it in danger colour.
+12. Example values (a Paris site in Lambert-93, grid rotation 30°) are illustrative and only approximately computed. In particular the `outside_domain` frames use an easting 2 000 km off: the backend decides which points are outside the domain.
+13. **Geographic height.** The frames label it "Hauteur (h)" only. `api-contract.md` says the UI labels it as approximate (no geoid yet, GEOREF-05): front adds that marker, for example in the label or the block caption.
+14. **States not drawn here** (details in `ux-notes.md`, built from the same components): F1-E list states, dialog loading, `multiple_sites`, Hover of fields and buttons, the "Copié" toast.
