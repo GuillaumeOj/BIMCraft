@@ -53,9 +53,23 @@ fn lambert(extra: Value) -> Value {
     value
 }
 
+/// The id the tests give the new `Site`.
+const SITE: u128 = 0x51e;
+
+fn site_id() -> Value {
+    json!(format!("{SITE:032x}"))
+}
+
+/// `lambert(extra)` with the id of the site `georef.set` creates.
+fn settable(extra: Value) -> Value {
+    let mut value = lambert(extra);
+    value["site"] = site_id();
+    value
+}
+
 fn georeferenced(value: Value) -> Session {
     let mut session = session();
-    call(&mut session, "georef.set", value).unwrap();
+    call(&mut session, "georef.set", settable(value)).unwrap();
     session
 }
 
@@ -138,7 +152,7 @@ fn list_crs_can_include_geographic_crss() {
 fn a_project_without_georeference_reads_as_none() {
     let mut session = session();
     assert_eq!(get(&mut session), Value::Null);
-    call(&mut session, "georef.set", lambert(json!({}))).unwrap();
+    call(&mut session, "georef.set", settable(json!({}))).unwrap();
     call(&mut session, "georef.clear", json!({})).unwrap();
     assert_eq!(get(&mut session), Value::Null);
 }
@@ -146,7 +160,7 @@ fn a_project_without_georeference_reads_as_none() {
 #[test]
 fn set_creates_the_site_and_get_derives_its_values() {
     let mut session = session();
-    let outcome = call(&mut session, "georef.set", lambert(json!({}))).unwrap();
+    let outcome = call(&mut session, "georef.set", settable(json!({}))).unwrap();
     let site = outcome.result["site"].clone();
     let event = outcome.event.unwrap();
     assert_eq!(event.created.len(), 1);
@@ -225,7 +239,7 @@ fn set_and_clear_are_single_undo_steps_recorded_with_their_origin() {
         name: "survey".into(),
     };
     registry
-        .dispatch(&mut session, "georef.set", lambert(json!({})), &origin)
+        .dispatch(&mut session, "georef.set", settable(json!({})), &origin)
         .unwrap();
     registry
         .dispatch(&mut session, "georef.clear", json!({}), &Origin::Ui)
@@ -252,7 +266,7 @@ fn clear_keeps_the_site_and_leaves_an_ungeoreferenced_project_alone() {
     assert_eq!((outcome.result, outcome.event), (json!({}), None));
     assert!(!session.document().can_undo());
 
-    call(&mut session, "georef.set", lambert(json!({}))).unwrap();
+    call(&mut session, "georef.set", settable(json!({}))).unwrap();
     let site = site_ids(&session)[0];
     let outcome = call(&mut session, "georef.clear", json!({})).unwrap();
     assert!(outcome.event.is_some());
@@ -320,7 +334,8 @@ fn set_rejects_malformed_params() {
         ));
     }
     // A number JSON cannot hold is refused by the georeference itself.
-    let value = GeoreferenceValue {
+    let value = SetParams {
+        site: None,
         crs_epsg: 2154,
         base_point: [f64::NAN, 0.0, 0.0],
         grid_rotation: 0.0,
@@ -468,7 +483,7 @@ fn a_model_with_two_sites_is_refused() {
     let history = session.document().history().count();
     for (name, params) in [
         ("georef.get", json!({})),
-        ("georef.set", lambert(json!({}))),
+        ("georef.set", settable(json!({}))),
         ("georef.clear", json!({})),
         (
             "georef.convert",
@@ -550,6 +565,7 @@ fn errors_name_a_stable_reason_and_never_a_value() {
         ),
         (GeorefError::NotGeoreferenced, "not_georeferenced"),
         (GeorefError::MultipleSites, "multiple_sites"),
+        (GeorefError::MissingSiteId, "missing_site_id"),
     ];
     for (error, reason) in errors {
         assert_eq!(error.reason(), reason);
@@ -579,7 +595,7 @@ fn json_rpc_answers_with_the_reason_and_the_index() {
         "the project is not georeferenced"
     );
 
-    assert!(send("georef.set", lambert(json!({})))["error"].is_null());
+    assert!(send("georef.set", settable(json!({})))["error"].is_null());
     let response = send(
         "georef.convert",
         json!({ "from": "geographic", "points": [[0.8, 0.13, 0.0], [2.0, 0.0, 0.0]] }),
@@ -588,4 +604,42 @@ fn json_rpc_answers_with_the_reason_and_the_index() {
         response["error"]["data"],
         json!({ "reason": "outside_domain", "index": 1 })
     );
+}
+
+#[test]
+fn set_needs_the_id_of_the_site_it_creates() {
+    let mut session = session();
+    assert_eq!(
+        reason(call(&mut session, "georef.set", lambert(json!({})))),
+        GeorefError::MissingSiteId
+    );
+    assert!(
+        !session.document().can_undo(),
+        "a failed call changes nothing"
+    );
+    let outcome = call(&mut session, "georef.set", settable(json!({}))).unwrap();
+    assert_eq!(outcome.result, json!({ "site": site_id() }));
+    assert_eq!(site_ids(&session), [EntityId::new(SITE)]);
+}
+
+#[test]
+fn set_takes_the_id_of_an_existing_site_or_none() {
+    let mut session = georeferenced(json!({}));
+    // The same id, or none, updates the site.
+    call(
+        &mut session,
+        "georef.set",
+        settable(json!({ "scale": 2.0 })),
+    )
+    .unwrap();
+    call(&mut session, "georef.set", lambert(json!({ "scale": 3.0 }))).unwrap();
+    assert_eq!(get(&mut session)["value"]["scale"], 3.0);
+    // Another id is refused, and the site is left as it was.
+    let other = lambert(json!({ "scale": 4.0, "site": format!("{:032x}", SITE + 1) }));
+    assert!(matches!(
+        call(&mut session, "georef.set", other),
+        Err(ApiError::InvalidParams { .. })
+    ));
+    assert_eq!(get(&mut session)["value"]["scale"], 3.0);
+    assert_eq!(site_ids(&session), [EntityId::new(SITE)]);
 }

@@ -25,10 +25,6 @@ use crate::{
 
 const V1: Version = Version::new(1, 0, 0);
 
-/// The id of the `Site` that `georef.set` creates. A project has one site, and a command carries
-/// its ids (CORE-11), so the id is fixed rather than drawn at random.
-const SITE_ID: EntityId = EntityId::new(0x0b1c_0000_0000_4000_8000_0000_0000_0001);
-
 /// A point `[x, y, z]`, or `[latitude, longitude, height]` for a geographic one.
 type Point = [f64; 3];
 
@@ -51,20 +47,26 @@ fn one_of_strings(values: &[&str]) -> Value {
     json!({ "oneOf": variants })
 }
 
+fn epsg_schema() -> Value {
+    json!({ "type": "integer", "minimum": 1 })
+}
+
+/// The fields of a georeference, which `georef.set` takes with an optional `site`.
+fn georeference_fields() -> [(&'static str, Value); 5] {
+    [
+        ("crs_epsg", epsg_schema()),
+        ("base_point", point_schema()),
+        ("grid_rotation", json!({ "type": "number" })),
+        ("scale", json!({ "type": "number" })),
+        ("survey_point", nullable(point_schema())),
+    ]
+}
+
 /// The definitions the georeference signatures share, for the protocol schema.
 pub(crate) fn definitions() -> [(String, Value); 2] {
-    let epsg = || json!({ "type": "integer", "minimum": 1 });
+    let epsg = epsg_schema;
     let text = || json!({ "type": "string" });
-    let georeference = object(
-        &[
-            ("crs_epsg", epsg()),
-            ("base_point", point_schema()),
-            ("grid_rotation", json!({ "type": "number" })),
-            ("scale", json!({ "type": "number" })),
-            ("survey_point", nullable(point_schema())),
-        ],
-        &[],
-    );
+    let georeference = object(&georeference_fields(), &[]);
     let summary = object(
         &[
             ("epsg", epsg()),
@@ -134,7 +136,7 @@ pub(crate) fn descriptors() -> [Descriptor<Session>; 5] {
         result: object(&[("points", array_of(everywhere))], &[]),
     };
     let set = Signature {
-        params: def("Georeference"),
+        params: object(&georeference_fields(), &[("site", def("EntityId"))]),
         result: object(&[("site", def("EntityId"))], &[]),
     };
     let clear = Signature {
@@ -184,6 +186,21 @@ pub(crate) fn descriptors() -> [Descriptor<Session>; 5] {
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct GeoreferenceValue {
+    crs_epsg: u32,
+    base_point: Point,
+    grid_rotation: f64,
+    scale: f64,
+    survey_point: Option<Point>,
+}
+
+/// The parameters of `georef.set`: a georeference, and the id of the new `Site` when the project
+/// has none. The caller draws it, as for `model.create`, so the command stays serialisable
+/// (CORE-11) and no two projects share a `GlobalId`.
+#[derive(Clone, Copy, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct SetParams {
+    #[serde(default)]
+    site: Option<EntityId>,
     crs_epsg: u32,
     base_point: Point,
     grid_rotation: f64,
@@ -486,26 +503,32 @@ struct SetResult {
 /// batch. Every attribute is set, so a survey point from an earlier georeference does not stay.
 fn set_georeference(
     session: &mut Session,
-    value: GeoreferenceValue,
+    params: SetParams,
     origin: &Origin,
 ) -> Result<Outcome<SetResult>, ApiError> {
-    let georeference = validated(value)?;
+    let georeference = validated(params)?;
     let existing =
         site::find_site(session.document().model()).map_err(|error| site_error(&error))?;
     let values = site::values(Some(&georeference));
     let (site, command) = if let Some(site) = existing {
+        if params.site.is_some_and(|given| given != site) {
+            return Err(ApiError::InvalidParams {
+                detail: "site is not the id of the project's site".to_owned(),
+            });
+        }
         (site, set_all(site, values))
     } else {
+        let id = params.site.ok_or(GeorefError::MissingSiteId)?;
         let values = values
             .into_iter()
             .filter_map(|(attribute, value)| Some((attribute.to_owned(), value?)))
             .collect();
         let create = ModelCommand::Create {
-            id: SITE_ID,
+            id,
             entity: site::SITE.to_owned(),
             values,
         };
-        (SITE_ID, create)
+        (id, create)
     };
     let event = session.document_mut().execute(command, origin.clone())?;
     Ok(Outcome {
@@ -516,7 +539,7 @@ fn set_georeference(
 
 /// The georeference of `value`, if its CRS is a projected one of the registry, its numbers are
 /// valid and its base point lies in the projection's domain.
-fn validated(value: GeoreferenceValue) -> Result<Georeference, ApiError> {
+fn validated(value: SetParams) -> Result<Georeference, ApiError> {
     let code = EpsgCode::new(value.crs_epsg).map_err(|_| GeorefError::UnknownCrs)?;
     let crs = registry()?.projected(code).map_err(GeorefError::from)?;
     let georeference = Georeference::new(

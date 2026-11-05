@@ -101,6 +101,9 @@ pub enum GeorefError {
     /// The model holds more than one `Site`.
     #[error("the model holds more than one site")]
     MultipleSites,
+    /// The project has no `Site` and the call did not name the id of the one to create.
+    #[error("the id of the new site is missing")]
+    MissingSiteId,
 }
 
 impl GeorefError {
@@ -114,6 +117,7 @@ impl GeorefError {
             Self::OutsideDomain { .. } => "outside_domain",
             Self::NotGeoreferenced => "not_georeferenced",
             Self::MultipleSites => "multiple_sites",
+            Self::MissingSiteId => "missing_site_id",
         }
     }
 }

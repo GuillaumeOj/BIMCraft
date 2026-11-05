@@ -54,7 +54,7 @@ Clients send JSON-RPC 2.0 messages (API-03) to an `api::jsonrpc::Server`, which 
 | -32001, -32002 | Nothing to undo, nothing to redo. |
 | -32003 | No object with this id. |
 
-A georeference call that the model refuses (-32000) adds `data.reason`, a stable `snake_case` string the UI maps to a message: `unknown_crs`, `not_projected`, `invalid_scale`, `outside_domain` (with `data.index`, the first bad point of a conversion), `not_georeferenced` and `multiple_sites`. `georef.get`, `georef.convert` and `georef.set` accept a deprecated CRS such as 25838; `georef.list_crs` leaves it out.
+A georeference call that the model refuses (-32000) adds `data.reason`, a stable `snake_case` string the UI maps to a message: `unknown_crs`, `not_projected`, `invalid_scale`, `outside_domain` (with `data.index`, the first bad point of a conversion), `not_georeferenced`, `multiple_sites` and `missing_site_id`. `georef.set` takes the id of the `Site` to create, like `model.create` takes its id; it is required only when the project has no `Site`. `georef.get`, `georef.convert` and `georef.set` accept a deprecated CRS such as 25838; `georef.list_crs` leaves it out.
 
 Error messages never hold model content (SEC-03). The `jsonrpc` fuzz target (`fuzz/`) feeds arbitrary bytes to the server.
 

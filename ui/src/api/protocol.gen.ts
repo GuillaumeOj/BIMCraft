@@ -26,7 +26,7 @@ export interface Commands {
   /** Removes the project's georeference. */
   "georef.clear": { params: Record<string, never>; result: Record<string, never> };
   /** Sets the project's georeference. */
-  "georef.set": { params: Georeference; result: { site: EntityId } };
+  "georef.set": { params: { base_point: [number, number, number]; crs_epsg: number; grid_rotation: number; scale: number; site?: EntityId; survey_point: [number, number, number] | null }; result: { site: EntityId } };
   /** Redoes the last undone command. */
   "history.redo": { params: Record<string, never>; result: null };
   /** Undoes the last command. */

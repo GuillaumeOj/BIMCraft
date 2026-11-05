@@ -78,7 +78,7 @@ Converts points from one system to the other two. The UI uses it for the coordin
 
 Sets the whole georeference in one transaction, so one undo step reverts it. It creates the `Site` if there is none, otherwise it sets the attributes of the existing one.
 
-- params: `Georeference`
+- params: `Georeference` plus `"site"?: EntityId`, the id of the `Site` to create, drawn by the caller as for `model.create` so the command stays serialisable (CORE-11) and no two projects share a `GlobalId`. It is required when the project has no `Site` (`data.reason = "missing_site_id"`). When a `Site` exists, `site` is absent or equal to its id; another id is `-32602`.
 - result: `{ "site": EntityId }`, plus the usual `ChangeEvent`, which also goes out as the `model.changed` notification
 - Validation, before anything is changed:
   - `crs_epsg` must be in the registry and projected. Otherwise `-32000` `data.reason = "unknown_crs"` or `"not_projected"`.
@@ -86,7 +86,7 @@ Sets the whole georeference in one transaction, so one undo step reverts it. It 
   - The base point must lie in the projection's valid domain, which is checked by an inverse projection (`outside_domain`).
   - More than one `Site` gives `multiple_sites`.
 
-Implementation notes (task 203). `georef.set` creates the `Site` with the fixed id `0b1c0000000040008000000000000001`; it runs as a `model.batch`, so the history entry is named `model.batch`. A survey point left out is cleared. `georef.clear` on a project that is not georeferenced reports no change event at all (no notification). Non-finite numbers cannot occur in JSON; a `NaN` that reaches the validation is `-32602`. `data.index` is only present for `outside_domain` in `georef.convert`.
+Implementation notes (task 203). `georef.set` and `georef.clear` run as a `model.batch` (the batch cannot carry a label without a core-txn change), so their history entry is named `model.batch`. A survey point left out is cleared. `georef.clear` on a project that is not georeferenced reports no change event at all (no notification): it is a no-op. Non-finite numbers cannot occur in JSON; a `NaN` that reaches the validation is `-32602`. `data.index` is only present for `outside_domain` in `georef.convert`.
 
 ### `georef.clear` v1
 
@@ -107,6 +107,7 @@ Every georef error uses the existing codes. `data.reason` is a stable snake_case
 | `outside_domain` | -32000 | Point out of the projection's domain; `data.index` names the first bad point |
 | `not_georeferenced` | -32000 | `georef.convert` before `georef.set` |
 | `multiple_sites` | -32000 | Model holds more than one `Site` |
+| `missing_site_id` | -32000 | `georef.set` on a project with no `Site` and no `site` id |
 
 If the API has no `data.reason` convention yet, T6 adds it in a backward-compatible way and documents it in `docs/dev/api.md`.
 

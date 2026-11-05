@@ -707,7 +707,69 @@
             "const": "georef.set"
           },
           "params": {
-            "$ref": "#/$defs/Georeference"
+            "additionalProperties": false,
+            "properties": {
+              "base_point": {
+                "items": false,
+                "minItems": 3,
+                "prefixItems": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ],
+                "type": "array"
+              },
+              "crs_epsg": {
+                "minimum": 1,
+                "type": "integer"
+              },
+              "grid_rotation": {
+                "type": "number"
+              },
+              "scale": {
+                "type": "number"
+              },
+              "site": {
+                "$ref": "#/$defs/EntityId"
+              },
+              "survey_point": {
+                "anyOf": [
+                  {
+                    "items": false,
+                    "minItems": 3,
+                    "prefixItems": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "number"
+                      }
+                    ],
+                    "type": "array"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "crs_epsg",
+              "base_point",
+              "grid_rotation",
+              "scale",
+              "survey_point"
+            ],
+            "type": "object"
           },
           "result": {
             "additionalProperties": false,
