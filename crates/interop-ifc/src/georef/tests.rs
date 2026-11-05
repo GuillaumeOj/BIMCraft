@@ -250,10 +250,18 @@ fn accepts_decimal_multiples_of_the_metre_as_map_unit() {
     ];
     for (prefix, size) in cases {
         let unit = format!("#3=IFCSIUNIT(*,.LENGTHUNIT.,{prefix},.METRE.);");
-        let georef = read_georeference(&edited(&[(3, &unit)], ""), 1.0)
-            .unwrap()
-            .unwrap()
-            .georeference;
+        let read = read_georeference(&edited(&[(3, &unit)], ""), 1.0);
+        // With the fixture's coordinates, map units from the kilometre up put the base point
+        // beyond its bound, and from the micrometre down the scale below its range: the
+        // conversion is refused, not misread.
+        if !(1e-3..=1e2).contains(&size) {
+            assert!(
+                matches!(read, Err(GeorefImportError::Invalid(_))),
+                "{prefix}"
+            );
+            continue;
+        }
+        let georef = read.unwrap().unwrap().georeference;
         let eastings = georef.base_point().eastings;
         assert!(
             (eastings / (652_000.0 * size) - 1.0).abs() < 1e-12,
@@ -399,7 +407,7 @@ fn rejects_invalid_values() {
         error(&edited(&[(8, zero_axis)], "")),
         GeorefImportError::XAxis(XAxisError::Zero)
     );
-    for scale in ["0.", "-1."] {
+    for scale in ["0.", "-1.", "1.E-300", "1.E10"] {
         let line = format!("#8=IFCMAPCONVERSION(#4,#7,0.,0.,0.,$,$,{scale});");
         assert_eq!(
             error(&edited(&[(8, &line)], "")),
@@ -813,7 +821,7 @@ fn rejects_what_it_cannot_write() {
         );
     }
     // The scale times the unit overflows, or underflows to zero.
-    for (scale, length_unit) in [(1e10, 1e300), (1e-300, 1e-300)] {
+    for (scale, length_unit) in [(1e6, 1e303), (1e-6, 1e-320)] {
         assert_eq!(
             write(&scaled(scale), NO_SITE, length_unit, 1, ids),
             Err(GeorefExportError::ScaleOutOfRange),

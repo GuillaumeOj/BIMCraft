@@ -558,15 +558,6 @@ fn validated(value: SetParams) -> Result<Georeference, ApiError> {
     crs.projection
         .inverse(georeference.base_point())
         .map_err(|_| OUTSIDE_DOMAIN)?;
-    // A tiny scale puts the survey point beyond what `f64` holds in local coordinates, which
-    // `georef.get` could not report as JSON numbers.
-    if let Some(survey) = georeference.survey_point_local()
-        && !local_of(survey).iter().all(|value| value.is_finite())
-    {
-        return Err(ApiError::InvalidParams {
-            detail: "survey_point is out of range for the scale".to_owned(),
-        });
-    }
     Ok(georeference)
 }
 

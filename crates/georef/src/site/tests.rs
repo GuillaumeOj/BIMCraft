@@ -296,7 +296,7 @@ fn errors_name_attributes_but_not_values() {
     );
     assert_eq!(
         SiteError::Invalid(GeoreferenceError::InvalidScale).to_string(),
-        "the scale must be greater than zero"
+        "the scale is out of range"
     );
 }
 

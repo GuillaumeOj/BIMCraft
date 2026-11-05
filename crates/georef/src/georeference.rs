@@ -26,6 +26,12 @@ impl ProjectedPoint {
     pub(crate) fn is_finite(self) -> bool {
         self.eastings.is_finite() && self.northings.is_finite() && self.height.is_finite()
     }
+
+    fn is_within(self, limit: f64) -> bool {
+        [self.eastings, self.northings, self.height]
+            .iter()
+            .all(|value| value.abs() <= limit)
+    }
 }
 
 /// A point in the local engineering frame of the model, in metres.
@@ -109,9 +115,15 @@ pub enum GeoreferenceError {
         /// The value holding the number.
         field: Field,
     },
-    /// The scale is zero or negative.
-    #[error("the scale must be greater than zero")]
+    /// The scale is outside [`Georeference::SCALE_RANGE`].
+    #[error("the scale is out of range")]
     InvalidScale,
+    /// A coordinate of a point is larger than [`Georeference::MAX_COORDINATE`].
+    #[error("the {field} is out of range")]
+    OutOfRange {
+        /// The value holding the coordinate.
+        field: Field,
+    },
     /// The EPSG code is zero, negative or too large.
     #[error("the EPSG code is out of range")]
     InvalidCrsCode,
@@ -121,7 +133,7 @@ pub enum GeoreferenceError {
 /// CRS, following IFC 4.3 `IfcMapConversion` and `IfcProjectedCRS` (GEOREF-01).
 ///
 /// Every value is validated on construction, so a `Georeference` is always usable: its numbers
-/// are finite and its scale is positive.
+/// are finite and within bounds, and its scale is in [`Georeference::SCALE_RANGE`].
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Georeference {
     crs: EpsgCode,
@@ -132,6 +144,16 @@ pub struct Georeference {
 }
 
 impl Georeference {
+    /// The scales a georeference accepts. Real map conversions are close to 1, since the
+    /// scale goes from local metres to map metres; the wide margin only keeps every derived
+    /// coordinate finite, whatever a hostile file holds.
+    pub const SCALE_RANGE: std::ops::RangeInclusive<f64> = 1e-6..=1e6;
+
+    /// The largest magnitude, in metres, of a projected coordinate. Projected CRSs stay
+    /// within a few times 10⁷ m; with [`Self::SCALE_RANGE`], this bound keeps local
+    /// coordinates finite.
+    pub const MAX_COORDINATE: f64 = 1e9;
+
     /// A georeference on the CRS `crs`.
     ///
     /// - `base_point`: the projected coordinates of the local origin.
@@ -142,8 +164,10 @@ impl Georeference {
     ///
     /// # Errors
     ///
-    /// [`GeoreferenceError::NonFinite`] when a number is NaN or infinite, and
-    /// [`GeoreferenceError::InvalidScale`] when `scale` is not greater than zero.
+    /// [`GeoreferenceError::NonFinite`] when a number is NaN or infinite,
+    /// [`GeoreferenceError::OutOfRange`] when a coordinate is beyond
+    /// [`Self::MAX_COORDINATE`], and [`GeoreferenceError::InvalidScale`] when `scale` is
+    /// outside [`Self::SCALE_RANGE`].
     pub fn new(
         crs: EpsgCode,
         base_point: ProjectedPoint,
@@ -165,7 +189,18 @@ impl Georeference {
             survey_point.is_none_or(ProjectedPoint::is_finite),
             Field::SurveyPoint,
         )?;
-        if scale <= 0.0 {
+        let within = |point: ProjectedPoint, field| {
+            if point.is_within(Self::MAX_COORDINATE) {
+                Ok(())
+            } else {
+                Err(GeoreferenceError::OutOfRange { field })
+            }
+        };
+        within(base_point, Field::BasePoint)?;
+        if let Some(survey_point) = survey_point {
+            within(survey_point, Field::SurveyPoint)?;
+        }
+        if !Self::SCALE_RANGE.contains(&scale) {
             return Err(GeoreferenceError::InvalidScale);
         }
         Ok(Self {
@@ -196,7 +231,7 @@ impl Georeference {
         self.grid_rotation
     }
 
-    /// The map conversion scale, always greater than zero.
+    /// The map conversion scale, always in [`Self::SCALE_RANGE`].
     #[must_use]
     pub const fn scale(&self) -> f64 {
         self.scale
@@ -302,13 +337,60 @@ mod tests {
     }
 
     #[test]
-    fn rejects_a_scale_that_is_not_positive() {
-        for scale in [0.0, -0.0, -1.0] {
+    fn rejects_a_scale_outside_its_range() {
+        for scale in [0.0, -0.0, -1.0, 1e-310, 0.99e-6, 1.01e6, f64::MAX] {
             assert_eq!(
                 Georeference::new(lambert93(), BASE, 0.0, scale, None),
-                Err(GeoreferenceError::InvalidScale)
+                Err(GeoreferenceError::InvalidScale),
+                "{scale}"
             );
         }
+        for scale in [1e-6, 1e-3, 1.0, 1e6] {
+            assert!(Georeference::new(lambert93(), BASE, 0.0, scale, None).is_ok());
+        }
+    }
+
+    #[test]
+    fn rejects_coordinates_beyond_the_bound() {
+        let max = Georeference::MAX_COORDINATE;
+        let far = [
+            ProjectedPoint::new(-1.01 * max, 0.0, 0.0),
+            ProjectedPoint::new(0.0, 1.01 * max, 0.0),
+            ProjectedPoint::new(0.0, 0.0, -1.01 * max),
+        ];
+        for point in far {
+            assert_eq!(
+                Georeference::new(lambert93(), point, 0.0, 1.0, None),
+                Err(GeoreferenceError::OutOfRange {
+                    field: Field::BasePoint
+                })
+            );
+            assert_eq!(
+                Georeference::new(lambert93(), BASE, 0.0, 1.0, Some(point)),
+                Err(GeoreferenceError::OutOfRange {
+                    field: Field::SurveyPoint
+                })
+            );
+        }
+        let edge = ProjectedPoint::new(max, -max, max);
+        assert!(Georeference::new(lambert93(), edge, 0.0, 1.0, Some(edge)).is_ok());
+    }
+
+    /// With every value at its bound, the survey point stays finite in local coordinates,
+    /// so `georef.get` can always report it.
+    #[test]
+    fn keeps_the_local_survey_point_finite_at_the_bounds() {
+        let max = Georeference::MAX_COORDINATE;
+        let georef = Georeference::new(
+            lambert93(),
+            ProjectedPoint::new(-max, -max, -max),
+            0.25 * std::f64::consts::PI,
+            *Georeference::SCALE_RANGE.start(),
+            Some(ProjectedPoint::new(max, max, max)),
+        )
+        .unwrap();
+        let local = georef.survey_point_local().unwrap();
+        assert!(local.x.is_finite() && local.y.is_finite() && local.z.is_finite());
     }
 
     #[test]
@@ -331,6 +413,10 @@ mod tests {
             }
             .to_string(),
             GeoreferenceError::InvalidScale.to_string(),
+            GeoreferenceError::OutOfRange {
+                field: Field::SurveyPoint,
+            }
+            .to_string(),
             GeoreferenceError::InvalidCrsCode.to_string(),
         ];
         assert_eq!(
@@ -340,7 +426,8 @@ mod tests {
                 "the grid rotation is not a finite number",
                 "the scale is not a finite number",
                 "the survey point is not a finite number",
-                "the scale must be greater than zero",
+                "the scale is out of range",
+                "the survey point is out of range",
                 "the EPSG code is out of range",
             ]
         );

@@ -85,8 +85,8 @@ pub enum GeorefError {
     /// The EPSG code is a geographic CRS, which cannot georeference a project.
     #[error("the coordinate reference system is not projected")]
     NotProjected,
-    /// The scale is zero or negative.
-    #[error("the scale must be greater than zero")]
+    /// The scale is outside `Georeference::SCALE_RANGE`.
+    #[error("the scale is out of range")]
     InvalidScale,
     /// A point is outside the domain of the projection. `index` is the position of the first
     /// such point of a conversion.

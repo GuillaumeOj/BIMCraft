@@ -296,8 +296,8 @@ fn set_refuses_what_is_not_a_projected_crs_of_the_registry() {
 }
 
 #[test]
-fn set_refuses_a_scale_that_is_not_positive() {
-    for scale in [0.0, -1.0] {
+fn set_refuses_a_scale_outside_its_range() {
+    for scale in [0.0, -1.0, 1e-310, 1e7] {
         let mut session = session();
         let params = lambert(json!({ "scale": scale }));
         assert_eq!(
@@ -308,10 +308,9 @@ fn set_refuses_a_scale_that_is_not_positive() {
 }
 
 #[test]
-fn set_refuses_a_survey_point_that_overflows_in_local_coordinates() {
+fn set_refuses_coordinates_beyond_the_bound() {
     let mut session = session();
-    let params =
-        lambert(json!({ "scale": 1e-310, "survey_point": [1_050_100.0, 6_840_100.0, 0.0] }));
+    let params = lambert(json!({ "survey_point": [1e10, 6_840_100.0, 0.0] }));
     assert!(matches!(
         call(&mut session, "georef.set", params),
         Err(ApiError::InvalidParams { .. })
