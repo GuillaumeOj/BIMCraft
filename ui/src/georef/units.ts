@@ -7,6 +7,10 @@ export const GEOGRAPHIC_DECIMALS = 8;
 /** Decimals of an arc second: about 3 mm on the ground. */
 export const SECOND_DECIMALS = 4;
 
+/** Unit symbols written inside fields. */
+export const METRE = "m";
+export const DEGREE = "°";
+
 export const radToDeg = (radians: number): number => (radians * 180) / Math.PI;
 export const degToRad = (degrees: number): number => (degrees * Math.PI) / 180;
 

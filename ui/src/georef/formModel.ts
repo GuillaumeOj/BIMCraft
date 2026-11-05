@@ -1,6 +1,7 @@
 import type { CrsSummary, GeoreferenceValue } from "../api";
 import type { Language, MessageKey } from "../i18n/i18n";
 import type { GeorefInfo } from "./GeorefContext";
+import type { GeographicFormat } from "./pointFormat";
 import {
   ANGLE_DECIMALS,
   degToRad,
@@ -18,8 +19,6 @@ export const SCALE_MIN = 1e-6;
 export const SCALE_MAX = 1e6;
 /** The largest projected coordinate the core accepts, in metres. */
 export const COORDINATE_LIMIT = 1e9;
-
-export type AngleFormat = "decimal" | "dms";
 
 /** What the user typed, field by field; numbers stay text until Apply. */
 export type FormValues = {
@@ -60,7 +59,11 @@ export const formatLength = (value: number, language: Language) =>
   formatNumber(value, LENGTH_DECIMALS, language);
 
 /** The rotation as shown in the field: radians in, degrees (or DMS) out. */
-export function formatRotation(radians: number, format: AngleFormat, language: Language): string {
+export function formatRotation(
+  radians: number,
+  format: GeographicFormat,
+  language: Language,
+): string {
   const degrees = radToDeg(radians);
   return format === "dms"
     ? formatDms(degrees, null, language)
@@ -70,7 +73,7 @@ export function formatRotation(radians: number, format: AngleFormat, language: L
 /** The form for the project's current georeference, or the empty form when it has none. */
 export function initialValues(
   info: GeorefInfo | null,
-  format: AngleFormat,
+  format: GeographicFormat,
   language: Language,
 ): FormValues {
   if (info === null) {

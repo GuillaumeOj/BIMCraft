@@ -9,9 +9,7 @@ import {
   type System,
   type Texts,
 } from "./pointFormat";
-
-const METRE = "m";
-const DEGREE = "°";
+import { DEGREE, METRE } from "./units";
 
 type CoordinateBlockProps = {
   system: System;

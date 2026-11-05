@@ -9,7 +9,6 @@ import { SegmentedToggle } from "../ui/SegmentedToggle";
 import { TextField } from "../ui/TextField";
 import { CrsCombobox, type CrsList } from "./CrsCombobox";
 import {
-  type AngleFormat,
   type FieldErrors,
   type FieldKey,
   type FormValues,
@@ -23,8 +22,10 @@ import {
 } from "./formModel";
 import { type GeorefInfo, useGeoref } from "./GeorefContext";
 import { NorthArrow } from "./NorthArrow";
+import type { GeographicFormat } from "./pointFormat";
 import {
   ANGLE_DECIMALS,
+  DEGREE,
   degToRad,
   formatDms,
   formatNumber,
@@ -32,12 +33,11 @@ import {
   GEOGRAPHIC_DECIMALS,
   LATITUDE,
   LONGITUDE,
+  METRE,
   parseAngle,
   radToDeg,
 } from "./units";
 
-const METRE = "m";
-const DEGREE = "°";
 const SCALE_DECIMALS = 6;
 
 function SectionHeader({ number, id, title }: { number: number; id: string; title: string }) {
@@ -102,7 +102,7 @@ export function LocationForm({ info }: { info: GeorefInfo | null }) {
   const fieldId = (key: FieldKey) => `${prefix}-${key}`;
   const baseErrorId = `${prefix}-base-error`;
 
-  const [angleFormat, setAngleFormat] = useState<AngleFormat>("decimal");
+  const [angleFormat, setAngleFormat] = useState<GeographicFormat>("decimal");
   const [initial] = useState(() => initialValues(info, "decimal", language));
   const [values, setValues] = useState<FormValues>(initial);
   const [errors, setErrors] = useState<FieldErrors>({});
@@ -209,7 +209,7 @@ export function LocationForm({ info }: { info: GeorefInfo | null }) {
     }
   };
 
-  const changeFormat = (next: AngleFormat) => {
+  const changeFormat = (next: GeographicFormat) => {
     const degrees = parseAngle(values.rotation);
     if (degrees !== null) set("rotation", formatRotation(degToRad(degrees), next, language));
     setAngleFormat(next);
