@@ -151,9 +151,8 @@ describe("CoordinatesPanel, project georeferenced", () => {
     await waitFor(() =>
       expect(convertCalls(core).at(-1)?.params).toMatchObject({ from: "geographic" }),
     );
-    const point = (convertCalls(core).at(-1)?.params as { points: number[][] })
-      .points[0] as number[];
-    expect(point[0]).toBeCloseTo((10.5 * Math.PI) / 180, 12);
+    const sent = convertCalls(core).at(-1)?.params as { points: number[][] };
+    expect(sent.points[0]?.[0]).toBeCloseTo((10.5 * Math.PI) / 180, 12);
     await user.click(screen.getByRole("button", { name: "Decimal degrees" }));
     expect(block("Geographic").values()[0]).toBe("10.50000000");
   });
