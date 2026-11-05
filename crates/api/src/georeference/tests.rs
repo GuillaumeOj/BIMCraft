@@ -308,6 +308,18 @@ fn set_refuses_a_scale_that_is_not_positive() {
 }
 
 #[test]
+fn set_refuses_a_survey_point_that_overflows_in_local_coordinates() {
+    let mut session = session();
+    let params =
+        lambert(json!({ "scale": 1e-310, "survey_point": [1_050_100.0, 6_840_100.0, 0.0] }));
+    assert!(matches!(
+        call(&mut session, "georef.set", params),
+        Err(ApiError::InvalidParams { .. })
+    ));
+    assert!(site_ids(&session).is_empty());
+}
+
+#[test]
 fn set_refuses_a_base_point_outside_the_projection() {
     let mut session = session();
     let params = lambert(json!({ "crs_epsg": 32631, "base_point": [3.0e7, 0.0, 0.0] }));

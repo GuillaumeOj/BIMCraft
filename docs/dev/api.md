@@ -11,7 +11,6 @@ A `Descriptor` holds a stable dotted name (`model.set`; the `rpc.` area is reser
 | `model.<tag>` | One per `core_txn::ModelCommand` variant, named after its serde tag; the parameters are the variant's fields, and unknown fields are rejected, in batches too. |
 | `history.undo`, `history.redo` | Undo and redo; they take an empty object. |
 | `model.get_object`, `model.list_objects`, `model.property_sets`, `history.state` | Read-only queries. `model.list_objects` pages by id with an `after` cursor, `history.state` by position with `start`; both return `next`, take 100 items by default and `MAX_PAGE_SIZE` (1000) at most. History entries name the method that ran, such as `model.create`. |
-
 | `georef.list_crs`, `georef.get`, `georef.convert` | Read-only georeferencing queries: the CRSs a project can use (current, projected by default), the project's georeference with its derived true north, convergence and scale, and conversion of up to `MAX_PAGE_SIZE` points between local, projected and geographic coordinates (radians and metres). |
 | `georef.set`, `georef.clear` | Set or remove the georeference on the project's `Site`. Each runs as one `model.batch`, so it is one undo step and the history names it `model.batch`; `georef.clear` on a project that is not georeferenced changes nothing and records nothing. |
 
