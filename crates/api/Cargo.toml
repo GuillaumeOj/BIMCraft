@@ -10,6 +10,7 @@ publish = false
 [dependencies]
 core-model = { workspace = true }
 core-txn = { workspace = true }
+georef = { workspace = true }
 schema = { workspace = true, optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -23,6 +24,8 @@ conformance = ["dep:schema"]
 jsonschema = { workspace = true }
 proptest = { workspace = true }
 schema = { workspace = true }
+# The core schema, which defines the `Site` the georeference commands write.
+schema-gen = { workspace = true }
 # For tests/conformance.rs.
 core-txn = { workspace = true }
 

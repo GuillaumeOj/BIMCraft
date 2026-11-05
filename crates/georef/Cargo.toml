@@ -1,0 +1,25 @@
+[package]
+name = "georef"
+version = "0.0.0"
+description = "Georeferencing: project CRS, base point, survey point and the IFC map conversion."
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+core-model = { workspace = true }
+core-txn = { workspace = true }
+libm = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+schema-gen = { workspace = true }
+serde = { workspace = true }
+
+# Native only: it does not build for wasm32-wasip1, where tests/golden.rs runs (ENG-04).
+[target.'cfg(not(target_family = "wasm"))'.dev-dependencies]
+proptest = { workspace = true }
+
+[lints]
+workspace = true

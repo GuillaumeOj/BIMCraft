@@ -1,13 +1,12 @@
-import { render, screen, within } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
+import { screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { I18nProvider } from "../i18n/I18nProvider";
+import { fakeCore } from "../test-support/fakeCore";
+import { renderWithCore } from "../test-support/render";
 import { Shell } from "./Shell";
 
 // jsdom reports an English system language (navigator.languages is ["en-US", "en"]).
 function renderShell() {
-  render(<Shell />, { wrapper: I18nProvider });
-  return userEvent.setup();
+  return renderWithCore(<Shell />, fakeCore()).user;
 }
 
 const region = (name: string) => screen.getByRole("region", { name });
@@ -66,7 +65,7 @@ describe("Shell", () => {
     expect(region("Console")).toBeInTheDocument();
   });
 
-  it("switches the right panel between Properties and History with the arrow keys", async () => {
+  it("switches the right panel between its three tabs with the arrow keys", async () => {
     const user = renderShell();
     const properties = screen.getByRole("tab", { name: "Properties" });
     expect(properties).toHaveAttribute("aria-selected", "true");
@@ -77,14 +76,53 @@ describe("Shell", () => {
     expect(history).toHaveAttribute("aria-selected", "true");
     expect(region("History")).toBeInTheDocument();
     expect(screen.getByRole("tabpanel", { name: "History" })).toHaveTextContent("No changes yet");
+    await user.keyboard("{ArrowRight}");
+    const coordinates = screen.getByRole("tab", { name: "Coordinates" });
+    expect(coordinates).toHaveFocus();
+    await user.keyboard("{ArrowRight}");
+    expect(properties).toHaveFocus();
     await user.keyboard("{ArrowLeft}");
-    expect(properties).toHaveAttribute("aria-selected", "true");
-    await user.keyboard("{End}");
-    expect(history).toHaveFocus();
+    expect(coordinates).toHaveFocus();
     await user.keyboard("{Home}");
     expect(properties).toHaveFocus();
+    await user.keyboard("{End}");
+    expect(coordinates).toHaveFocus();
     await user.click(history);
     expect(history).toHaveAttribute("aria-selected", "true");
+  });
+
+  it("shows the Coordinates panel with Ctrl+Shift+K", async () => {
+    const user = renderShell();
+    await user.keyboard("{Control>}{Shift>}K{/Shift}{/Control}");
+    const tab = screen.getByRole("tab", { name: "Coordinates" });
+    expect(tab).toHaveFocus();
+    expect(tab).toHaveAttribute("aria-selected", "true");
+    expect(
+      await screen.findByRole("button", { name: "Set project location…" }),
+    ).toBeInTheDocument();
+  });
+
+  it("opens the Project location dialog from the title bar and with Ctrl+Shift+L", async () => {
+    const user = renderShell();
+    await user.click(screen.getByRole("button", { name: "Project location…" }));
+    expect(screen.getByRole("dialog", { name: "Project location" })).toBeInTheDocument();
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    await user.keyboard("{Control>}{Shift>}L{/Shift}{/Control}");
+    expect(screen.getByRole("dialog", { name: "Project location" })).toBeInTheDocument();
+  });
+
+  it("keeps the keyboard in the Project location dialog: F6 and Ctrl+Shift+K do nothing", async () => {
+    const user = renderShell();
+    await user.click(screen.getByRole("button", { name: "Project location…" }));
+    const dialog = screen.getByRole("dialog", { name: "Project location" });
+    await user.keyboard("{F6}");
+    await user.keyboard("{Control>}{Shift>}K{/Shift}{/Control}");
+    expect(dialog).toContainElement(document.activeElement as HTMLElement);
+    expect(screen.getByRole("tab", { name: "Properties" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
   });
 
   it("ignores other keys on the panel tabs", async () => {

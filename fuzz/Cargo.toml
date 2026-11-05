@@ -15,10 +15,11 @@ cargo-fuzz = true
 
 [dependencies]
 api = { path = "../crates/api", features = ["conformance"] }
-core-model = { path = "../crates/core-model" }
+core-model = { path = "../crates/core-model", features = ["test-support"] }
 core-txn = { path = "../crates/core-txn" }
 express = { path = "../crates/express" }
 geom = { path = "../crates/geom" }
+georef = { path = "../crates/georef" }
 interop-ifc = { path = "../crates/interop-ifc" }
 libfuzzer-sys = "=0.4.13"
 # Already in the lockfile through geom: turns the fuzzed boxes the way the kernel would (ENG-04).
@@ -59,6 +60,20 @@ bench = false
 [[bin]]
 name = "extrusion"
 path = "fuzz_targets/extrusion.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "epsg_registry"
+path = "fuzz_targets/epsg_registry.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "ifc_georef"
+path = "fuzz_targets/ifc_georef.rs"
 test = false
 doc = false
 bench = false

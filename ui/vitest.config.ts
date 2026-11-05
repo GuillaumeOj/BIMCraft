@@ -9,7 +9,12 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       include: ["src/**/*.{ts,tsx}"],
-      exclude: ["src/**/*.test.{ts,tsx}", "src/main.tsx", "src/test-setup.ts"],
+      exclude: [
+        "src/**/*.test.{ts,tsx}",
+        "src/main.tsx",
+        "src/test-setup.ts",
+        "src/test-support/**",
+      ],
       reporter: ["text", "lcov"],
       // AGENTS.md §5: 90 % overall, 98 % for critical areas.
       thresholds: {

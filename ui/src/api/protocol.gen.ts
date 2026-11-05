@@ -6,8 +6,12 @@ export type AttributeValue = { Bool: boolean } | { Integer: number } | { Real: n
 
 export type ChangeEvent = { created: Array<EntityId>; deleted: Array<EntityId>; modified: Array<EntityId> };
 
+export type CrsSummary = { area: string; epsg: number; geographic_name: string; kind: "projected" | "geographic"; name: string };
+
 /** The stable 128-bit identifier of an object, as 32 lower-case hexadecimal digits. */
 export type EntityId = string;
+
+export type Georeference = { base_point: [number, number, number]; crs_epsg: number; grid_rotation: number; scale: number; survey_point: [number, number, number] | null };
 
 /** A model command, tagged with its kind. */
 export type ModelCommand = { command: "create"; entity: string; id: EntityId; values: Array<NameValue> } | { attribute: string; command: "set"; id: EntityId; value?: AttributeValue | null } | { command: "delete"; id: EntityId } | { command: "relate"; entity: string; id: EntityId; roles: Array<[string, Array<EntityId>]>; values: Array<NameValue> } | { command: "add_participant"; participant: EntityId; relationship: EntityId; role: string } | { command: "remove_participant"; participant: EntityId; relationship: EntityId; role: string } | { command: "set_property"; id: EntityId; property: string; set: string; value?: AttributeValue | null } | { command: "attach_property_set"; id: EntityId; set: string; values: Array<NameValue> } | { command: "detach_property_set"; id: EntityId; set: string } | { command: "create_component"; component: { defaults: Array<NameValue>; entity: string; library: { id: string; version: number } }; id: EntityId } | { command: "remove_component"; id: EntityId } | { command: "create_type"; component: EntityId; id: EntityId; values: Array<NameValue> } | { command: "assign_type"; instance: EntityId; type_id?: EntityId | null } | { command: "batch"; commands: Array<ModelCommand> };
@@ -19,6 +23,10 @@ export type Origin = { kind: "ui" } | { kind: "plugin"; name: string } | { id: s
 
 /** Every command: its parameters and its result. */
 export interface Commands {
+  /** Removes the project's georeference. */
+  "georef.clear": { params: Record<string, never>; result: Record<string, never> };
+  /** Sets the project's georeference. */
+  "georef.set": { params: { base_point: [number, number, number]; crs_epsg: number; grid_rotation: number; scale: number; site?: EntityId; survey_point: [number, number, number] | null }; result: { site: EntityId } };
   /** Redoes the last undone command. */
   "history.redo": { params: Record<string, never>; result: null };
   /** Undoes the last command. */
@@ -55,6 +63,12 @@ export interface Commands {
 
 /** Every query: its parameters and its result. */
 export interface Queries {
+  /** Converts points between local, projected and geographic coordinates. */
+  "georef.convert": { params: { from: "local" | "projected" | "geographic"; points: Array<[number, number, number]> }; result: { points: Array<{ geographic: [number, number, number]; local: [number, number, number]; projected: [number, number, number] }> } };
+  /** Reads the project's georeference and the values derived from it. */
+  "georef.get": { params: Record<string, never>; result: { georeference: { crs: CrsSummary; derived: { base_point_geographic: [number, number, number]; convergence: number; point_scale_factor: number; survey_point_local: [number, number, number] | null; true_north: number }; site: EntityId; value: Georeference } | null } };
+  /** Lists the coordinate reference systems a project can be georeferenced on. */
+  "georef.list_crs": { params: { include_geographic?: boolean }; result: { crs: Array<CrsSummary> } };
   /** Reads what undo and redo would do. */
   "history.state": { params: { limit?: number | null; start?: number | null }; result: { can_redo: boolean; can_undo: boolean; entries: Array<{ command: string; origin: Origin; undone: boolean }>; next: number | null } };
   /** Reads an object and its attributes. */

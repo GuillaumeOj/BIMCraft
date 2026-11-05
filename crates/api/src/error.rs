@@ -49,6 +49,9 @@ pub enum ApiError {
     /// The model rejected the command.
     #[error(transparent)]
     Rejected(#[from] CommandError),
+    /// A georeference command or query failed; see [`GeorefError`].
+    #[error(transparent)]
+    Georef(#[from] GeorefError),
     /// Undo was asked with nothing to undo.
     #[error("nothing to undo")]
     NothingToUndo,
@@ -68,6 +71,53 @@ impl From<HistoryError> for ApiError {
             HistoryError::NothingToRedo => Self::NothingToRedo,
             // Only a model changed behind the history's back makes a recorded change fail again.
             HistoryError::Model(_) => Self::Internal,
+        }
+    }
+}
+
+/// Why a `georef.*` call failed. Each has a stable `reason` the UI maps to a message, and none
+/// repeats a value of the model (SEC-03).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
+pub enum GeorefError {
+    /// The EPSG code is not in the registry.
+    #[error("the coordinate reference system is unknown")]
+    UnknownCrs,
+    /// The EPSG code is a geographic CRS, which cannot georeference a project.
+    #[error("the coordinate reference system is not projected")]
+    NotProjected,
+    /// The scale is outside `Georeference::SCALE_RANGE`.
+    #[error("the scale is out of range")]
+    InvalidScale,
+    /// A point is outside the domain of the projection. `index` is the position of the first
+    /// such point of a conversion.
+    #[error("a point is outside the domain of the projection")]
+    OutsideDomain {
+        /// The position of the first bad point, for a conversion.
+        index: Option<usize>,
+    },
+    /// The project has no georeference.
+    #[error("the project is not georeferenced")]
+    NotGeoreferenced,
+    /// The model holds more than one `Site`.
+    #[error("the model holds more than one site")]
+    MultipleSites,
+    /// The project has no `Site` and the call did not name the id of the one to create.
+    #[error("the id of the new site is missing")]
+    MissingSiteId,
+}
+
+impl GeorefError {
+    /// The stable `snake_case` name of the error, the `data.reason` of its response.
+    #[must_use]
+    pub const fn reason(self) -> &'static str {
+        match self {
+            Self::UnknownCrs => "unknown_crs",
+            Self::NotProjected => "not_projected",
+            Self::InvalidScale => "invalid_scale",
+            Self::OutsideDomain { .. } => "outside_domain",
+            Self::NotGeoreferenced => "not_georeferenced",
+            Self::MultipleSites => "multiple_sites",
+            Self::MissingSiteId => "missing_site_id",
         }
     }
 }

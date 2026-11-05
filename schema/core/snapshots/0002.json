@@ -1,0 +1,103 @@
+{
+  "name": "core",
+  "version": 2,
+  "entities": [
+    {
+      "name": "Site",
+      "kind": "spatial",
+      "doc": "The piece of land the project stands on, and where it lies on Earth: the projected coordinate reference system, the base point, the grid rotation, the scale and an optional survey point (GEOREF-01, ADR 0017). A project has at most one site.",
+      "property_sets": [],
+      "ifc": {
+        "entity": "IfcSite"
+      },
+      "attributes": [
+        {
+          "name": "crs_epsg",
+          "value": "integer",
+          "presence": "optional",
+          "placement": "instance",
+          "doc": "EPSG code of the projected coordinate reference system, such as 2154 for Lambert-93. Unset: the project is not georeferenced."
+        },
+        {
+          "name": "base_point_eastings",
+          "value": "quantity:length",
+          "presence": {
+            "default": {
+              "real": "0"
+            }
+          },
+          "placement": "instance",
+          "doc": "Easting of the project base point, the origin of the local frame."
+        },
+        {
+          "name": "base_point_northings",
+          "value": "quantity:length",
+          "presence": {
+            "default": {
+              "real": "0"
+            }
+          },
+          "placement": "instance",
+          "doc": "Northing of the project base point."
+        },
+        {
+          "name": "base_point_height",
+          "value": "quantity:length",
+          "presence": {
+            "default": {
+              "real": "0"
+            }
+          },
+          "placement": "instance",
+          "doc": "Orthogonal height of the project base point."
+        },
+        {
+          "name": "grid_rotation",
+          "value": "quantity:plane_angle",
+          "presence": {
+            "default": {
+              "real": "0"
+            }
+          },
+          "placement": "instance",
+          "doc": "Angle from the grid easting axis of the coordinate reference system to the local x-axis, counter-clockwise."
+        },
+        {
+          "name": "scale",
+          "value": "real",
+          "presence": {
+            "default": {
+              "real": "1"
+            }
+          },
+          "placement": "instance",
+          "doc": "Map conversion scale from local lengths to map lengths, applied to all three axes. Finite and greater than zero."
+        },
+        {
+          "name": "survey_point_eastings",
+          "value": "quantity:length",
+          "presence": "optional",
+          "placement": "instance",
+          "doc": "Easting of the survey point, a known point such as a benchmark. Unset: no survey point."
+        },
+        {
+          "name": "survey_point_northings",
+          "value": "quantity:length",
+          "presence": "optional",
+          "placement": "instance",
+          "doc": "Northing of the survey point."
+        },
+        {
+          "name": "survey_point_height",
+          "value": "quantity:length",
+          "presence": "optional",
+          "placement": "instance",
+          "doc": "Orthogonal height of the survey point."
+        }
+      ],
+      "roles": [],
+      "representations": []
+    }
+  ],
+  "property_sets": []
+}

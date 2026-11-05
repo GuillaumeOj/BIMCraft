@@ -94,9 +94,11 @@ version = "0.0.0"
 dependencies = [
  "core-model",
  "core-txn",
+ "georef",
  "jsonschema",
  "proptest",
  "schema",
+ "schema-gen",
  "serde",
  "serde_json",
  "thiserror 2.0.21",
@@ -1303,6 +1305,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "georef"
+version = "0.0.0"
+dependencies = [
+ "core-model",
+ "core-txn",
+ "libm",
+ "proptest",
+ "schema-gen",
+ "serde",
+ "thiserror 2.0.21",
+]
+
+[[package]]
 name = "getrandom"
 version = "0.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1819,7 +1834,9 @@ dependencies = [
 name = "interop-ifc"
 version = "0.0.0"
 dependencies = [
+ "core-model",
  "express",
+ "georef",
  "proptest",
  "schema",
  "schema-gen",

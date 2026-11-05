@@ -10,10 +10,16 @@ use schema_gen::{Source, parse_sources};
 
 /// The definition files of `schema/core`, embedded so that the program needs nothing beside it.
 /// A test checks them against the directory, as `schema_gen::load_dir` reads it.
-pub(crate) const CORE_SCHEMA: &[(&str, &str)] = &[(
-    "namespace.toml",
-    include_str!("../../../schema/core/namespace.toml"),
-)];
+pub(crate) const CORE_SCHEMA: &[(&str, &str)] = &[
+    (
+        "namespace.toml",
+        include_str!("../../../schema/core/namespace.toml"),
+    ),
+    (
+        "entities/site.toml",
+        include_str!("../../../schema/core/entities/site.toml"),
+    ),
+];
 
 /// Why a document could not be opened.
 #[derive(Debug, thiserror::Error)]

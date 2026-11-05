@@ -18,10 +18,7 @@ pub(crate) fn record(name: &str, parameters: Vec<Parameter>) -> Record {
 }
 
 pub(crate) fn simple(id: u64, name: &str, parameters: Vec<Parameter>) -> Instance {
-    Instance {
-        id,
-        body: InstanceBody::Simple(record(name, parameters)),
-    }
+    Instance::simple(id, name, parameters)
 }
 
 pub(super) fn text(value: &str) -> Parameter {
@@ -45,7 +42,7 @@ pub(super) fn keyword() -> impl Strategy<Value = String> {
 }
 
 /// Any parameter the reader and the writer accept, nested up to [`MAX_VALUE_DEPTH`] levels.
-pub(super) fn parameter() -> impl Strategy<Value = Parameter> {
+pub(crate) fn parameter() -> impl Strategy<Value = Parameter> {
     let finite = prop::num::f64::POSITIVE
         | prop::num::f64::NEGATIVE
         | prop::num::f64::NORMAL

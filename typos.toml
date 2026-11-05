@@ -4,11 +4,14 @@ extend-exclude = [
   "target/",
   "ui/node_modules/",
   "crates/geom/tests/golden.txt",
+  "crates/georef/tests/golden.txt",
   # Vendored unchanged from buildingSMART.
   "crates/interop-ifc/schema/*.exp",
   # Translated interface strings (UI-04); typos checks English only.
   "ui/src/i18n/messages/*.json",
   "!ui/src/i18n/messages/en.json",
+  # French user guide pages (UI-04), named *.fr.md.
+  "docs/user/*.fr.md",
 ]
 
 [default.extend-words]
@@ -16,5 +19,7 @@ extend-exclude = [
 LOD = "LOD" # level of detail
 THM = "THM" # thermal requirement family
 ND = "ND" # NoDerivatives, in the CC BY-ND licence name
+# French title of the project location pages, in the summary and in the tests.
+projet = "projet"
 # Authors cited in the documentation.
 Gere = "Gere" # James M. Gere, co-author of Timoshenko and Gere

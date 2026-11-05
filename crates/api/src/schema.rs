@@ -122,7 +122,8 @@ fn shared() -> Map<String, Value> {
         &[("created", ids()), ("modified", ids()), ("deleted", ids())],
         &[],
     );
-    Map::from_iter([
+    let mut defs = Map::from_iter(crate::georeference::definitions());
+    defs.extend([
         ("AttributeValue".to_owned(), value),
         ("ChangeEvent".to_owned(), event),
         ("EntityId".to_owned(), entity_id),
@@ -132,7 +133,8 @@ fn shared() -> Map<String, Value> {
             crate::commands::model_command_schema(),
         ),
         ("Origin".to_owned(), origin),
-    ])
+    ]);
+    defs
 }
 
 /// One registered command or query: its name and version, and the shape of its parameters and

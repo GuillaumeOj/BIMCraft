@@ -7,7 +7,7 @@
 use core_txn::{ChangeEvent, Origin};
 use serde_json::{Map, Value, json};
 
-use crate::{ApiError, Registry, RegistryError, Session};
+use crate::{ApiError, GeorefError, Registry, RegistryError, Session};
 
 /// The method of the notification a server sends after each change to the model; its params are
 /// the [`ChangeEvent`].
@@ -234,6 +234,14 @@ fn error_response(id: &Value, error: &ApiError) -> Value {
         ApiError::InvalidParams { detail } => {
             let mut response = failure(id, codes::INVALID_PARAMS, &error.to_string());
             response["error"]["data"] = json!({ "detail": detail });
+            return response;
+        }
+        ApiError::Georef(georef) => {
+            let mut response = failure(id, codes::REJECTED, &error.to_string());
+            response["error"]["data"] = json!({ "reason": georef.reason() });
+            if let GeorefError::OutsideDomain { index: Some(index) } = georef {
+                response["error"]["data"]["index"] = json!(index);
+            }
             return response;
         }
         ApiError::NotFound => codes::NOT_FOUND,
