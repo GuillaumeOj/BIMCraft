@@ -55,30 +55,28 @@ export function GeorefProvider({ children }: { children: ReactNode }) {
   const load = useCallback(async () => {
     latest.current += 1;
     const mine = latest.current;
-    let next: GeorefState | { failed: string | null };
+    let info: GeorefInfo | null = null;
+    let failed: { reason: string | null } | null = null;
     try {
-      const { georeference } = await api.query("georef.get", {});
-      next = { status: "ready", info: georeference, reloadError: null };
+      info = (await api.query("georef.get", {})).georeference;
     } catch (error) {
-      next = { failed: apiReason(error) };
+      failed = { reason: apiReason(error) };
     }
     // A slower, older answer must not overwrite a newer one.
     if (mine !== latest.current) return;
     setState((current) => {
-      if ("failed" in next) {
+      if (failed !== null) {
         // A failed reload keeps the last known state, so that typed input is not lost.
         return current.status === "ready"
-          ? { ...current, reloadError: { reason: next.failed } }
-          : { status: "error", reason: next.failed };
+          ? { ...current, reloadError: failed }
+          : { status: "error", reason: failed.reason };
       }
       // An unchanged georeference keeps its object, so that every model change does not reset
       // the form and the panel built on it.
-      const same =
-        current.status === "ready" &&
-        current.reloadError === null &&
-        next.status === "ready" &&
-        JSON.stringify(current.info) === JSON.stringify(next.info);
-      return same ? current : next;
+      if (current.status === "ready" && JSON.stringify(current.info) === JSON.stringify(info)) {
+        return current.reloadError === null ? current : { ...current, reloadError: null };
+      }
+      return { status: "ready", info, reloadError: null };
     });
   }, [api]);
 

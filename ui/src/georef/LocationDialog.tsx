@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { useI18n } from "../i18n/I18nProvider";
 import { Banner } from "../ui/Banner";
 import { Dialog } from "../ui/Dialog";
@@ -12,6 +12,8 @@ export function LocationDialog() {
   const { state, closeDialog } = useGeoref();
   const titleId = useId();
   const closeButton = useRef<HTMLButtonElement>(null);
+  // Nothing closes the dialog while a command runs: its refusal must reach the user.
+  const [busy, setBusy] = useState(false);
   const showingForm = state.status === "ready";
 
   // Without the form, the Close button takes the focus once, not at every render.
@@ -20,12 +22,12 @@ export function LocationDialog() {
   }, [showingForm]);
 
   return (
-    <Dialog titleId={titleId} onCancel={closeDialog}>
+    <Dialog titleId={titleId} onCancel={() => !busy && closeDialog()}>
       <h2 id={titleId} className="dialog-title">
         {t("georef.location.title")}
       </h2>
       {showingForm ? (
-        <LocationForm info={state.info} reloadError={state.reloadError} />
+        <LocationForm info={state.info} reloadError={state.reloadError} onBusyChange={setBusy} />
       ) : (
         <>
           <div className="dialog-body">

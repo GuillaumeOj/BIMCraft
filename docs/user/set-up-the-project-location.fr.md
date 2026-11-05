@@ -37,7 +37,7 @@ Quand vous rouvrez la boîte de dialogue, elle montre ce que vous avez saisi et 
 | Rotation de la grille | Angle entre la grille de la carte et celle du projet, dans le sens trigonométrique, en degrés. |
 | Échelle | Échelle du projet, entre 0,000001 et 1 000 000. En principe 1. |
 | Point de repère topographique | Un repère connu sur la carte, facultatif. |
-| Supprimer la géoréférence | Oublie la position du projet sur la Terre. Le modèle n’est pas modifié. Demande une confirmation et peut être annulé. |
+| Supprimer la géoréférence | Oublie la position du projet sur la Terre. Le modèle n’est pas modifié. Demande une confirmation. |
 
 ## Conseils
 

@@ -68,7 +68,7 @@
   "georef.action.cancel": "Cancel",
   "georef.action.remove": "Remove georeference",
   "georef.remove.title": "Remove the georeference?",
-  "georef.remove.body": "The model stays as it is; only its place on Earth is forgotten. You can undo this.",
+  "georef.remove.body": "The model stays as it is; only its place on Earth is forgotten.",
   "georef.remove.keep": "Keep georeference",
   "georef.remove.confirm": "Remove",
   "georef.error.required": "Choose a coordinate system.",

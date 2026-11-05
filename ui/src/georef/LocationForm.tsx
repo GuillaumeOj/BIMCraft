@@ -98,10 +98,13 @@ function DerivedInfo({ info, dms }: { info: GeorefInfo | null; dms: boolean }) {
 export function LocationForm({
   info,
   reloadError = null,
+  onBusyChange,
 }: {
   info: GeorefInfo | null;
   /** Set when the last reload of the georeference failed: the form still shows older values. */
   reloadError?: { reason: string | null } | null;
+  /** Called when a command starts and when it ends. */
+  onBusyChange: (busy: boolean) => void;
 }) {
   const api = useApi();
   const { t, language } = useI18n();
@@ -127,6 +130,7 @@ export function LocationForm({
     count: 0,
   });
   const keepButton = useRef<HTMLButtonElement>(null);
+  const applyButton = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     let current = true;
@@ -143,6 +147,8 @@ export function LocationForm({
   useEffect(() => {
     document.getElementById(`${prefix}-${focusRequest.key}`)?.focus();
   }, [focusRequest, prefix]);
+
+  useEffect(() => onBusyChange(busy), [busy, onBusyChange]);
 
   useEffect(() => {
     if (confirmRemove) keepButton.current?.focus();
@@ -198,6 +204,9 @@ export function LocationForm({
       notify(t("georef.toast.applied"));
     } catch (error) {
       refused(error);
+      // The button was disabled while the command ran; the focus goes back to it, unless
+      // `refused` moved it to the field at fault.
+      if (document.activeElement === document.body) applyButton.current?.focus();
     } finally {
       setBusy(false);
     }
@@ -269,9 +278,7 @@ export function LocationForm({
     <form className="location-form" noValidate onSubmit={apply} onKeyDown={onKeyDown}>
       <div className="dialog-body" inert={confirmRemove}>
         {info === null && <p className="dialog-intro">{t("georef.location.intro")}</p>}
-        {reloadError !== undefined && reloadError !== null && (
-          <Banner>{t(loadErrorMessage(reloadError.reason))}</Banner>
-        )}
+        {reloadError !== null && <Banner>{t(loadErrorMessage(reloadError.reason))}</Banner>}
         {banner !== null && <Banner>{t(banner)}</Banner>}
 
         <section aria-labelledby={`${prefix}-crs-title`}>
@@ -422,7 +429,12 @@ export function LocationForm({
             <button type="button" className="button" disabled={busy} onClick={closeDialog}>
               {t("georef.action.cancel")}
             </button>
-            <button type="submit" className="button button-primary" disabled={busy}>
+            <button
+              type="submit"
+              className="button button-primary"
+              disabled={busy}
+              ref={applyButton}
+            >
               {t("georef.action.apply")}
             </button>
           </div>

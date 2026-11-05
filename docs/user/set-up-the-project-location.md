@@ -37,7 +37,7 @@ When you reopen the dialog, it shows what you entered together with the informat
 | Grid rotation | Angle between the map grid and the project grid, counter-clockwise, in degrees. |
 | Scale | Project scale between 0.000001 and 1,000,000. Normally 1. |
 | Survey point | A known benchmark in map coordinates, optional. |
-| Remove georeference | Forgets the project's place on Earth. The model itself is not changed. Asks for confirmation, and can be undone. |
+| Remove georeference | Forgets the project's place on Earth. The model itself is not changed. Asks for confirmation. |
 
 ## Tips
 

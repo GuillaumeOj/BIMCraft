@@ -68,7 +68,7 @@
   "georef.action.cancel": "Annuler",
   "georef.action.remove": "Supprimer la géoréférence",
   "georef.remove.title": "Supprimer la géoréférence ?",
-  "georef.remove.body": "Le modèle reste inchangé ; seule sa position sur la Terre est oubliée. Vous pouvez annuler cette action.",
+  "georef.remove.body": "Le modèle reste inchangé ; seule sa position sur la Terre est oubliée.",
   "georef.remove.keep": "Conserver la géoréférence",
   "georef.remove.confirm": "Supprimer",
   "georef.error.required": "Choisissez un système de coordonnées.",
