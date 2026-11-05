@@ -92,7 +92,9 @@ export function parseAngle(text: string): number | null {
   const letter = (HEMISPHERE.exec(body)?.slice(1).find(Boolean) ?? "").toUpperCase();
   body = body.replace(HEMISPHERE, "").trim();
   const sign = letter !== "" && NEGATIVE_LETTERS.includes(letter) ? -1 : 1;
-  const value = DMS_MARKS.test(body) ? parseDms(body) : parseNumber(body);
+  // Parts separated by spaces, such as `10 15 30`, are degrees, minutes and seconds, not a number
+  // with a grouping space.
+  const value = DMS_MARKS.test(body) || /\s/.test(body) ? parseDms(body) : parseNumber(body);
   return value === null ? null : sign * value;
 }
 

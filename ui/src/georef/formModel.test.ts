@@ -64,6 +64,37 @@ describe("formatRotation", () => {
   });
 });
 
+describe("toParams with the previous form", () => {
+  const value = {
+    crs_epsg: 2154,
+    base_point: [652000.12345, 6862000.98765, 35.00049] as [number, number, number],
+    grid_rotation: 0.5235987756,
+    scale: 0.99996123,
+    survey_point: [1.00004, 2, 3] as [number, number, number],
+  };
+  const shown: FormValues = {
+    ...FILLED,
+    easting: "652000.123",
+    northing: "6862000.988",
+    height: "35.000",
+    rotation: "30.0000",
+    scale: "0.999961",
+    surveyEasting: "1.000",
+    surveyNorthing: "2.000",
+    surveyHeight: "3.000",
+  };
+
+  it("keeps the saved value of every field the user did not edit", () => {
+    const result = toParams({ ...shown, northing: "6862001" }, { values: shown, value });
+    expect(result).toEqual({
+      params: {
+        ...value,
+        base_point: [652000.12345, 6862001, 35.00049],
+      },
+    });
+  });
+});
+
 describe("toParams", () => {
   it("reads lengths with either separator, the angle in degrees and the scale", () => {
     const result = toParams(FILLED);

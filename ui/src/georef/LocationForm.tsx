@@ -18,6 +18,7 @@ import {
   formatRotation,
   initialValues,
   reasonMessage,
+  type SURVEY_FIELDS,
   toParams,
 } from "./formModel";
 import { type GeorefInfo, useGeoref } from "./GeorefContext";
@@ -176,7 +177,10 @@ export function LocationForm({ info }: { info: GeorefInfo | null }) {
     if (busy) return;
     setBanner(null);
     setSummary("");
-    const result = toParams(values);
+    const result = toParams(
+      values,
+      info === null ? undefined : { values: initial, value: info.value },
+    );
     if ("errors" in result) return showErrors(result.errors);
     if (JSON.stringify(values) === JSON.stringify(initial)) return closeDialog();
     setBusy(true);
@@ -224,16 +228,15 @@ export function LocationForm({ info }: { info: GeorefInfo | null }) {
     const message = errors[key];
     return message === undefined ? undefined : t(message);
   };
-  const length = (key: keyof FormValues, label: MessageKey, extra?: { describedBy?: string }) => (
+  const surveyField = (key: (typeof SURVEY_FIELDS)[number], label: MessageKey) => (
     <TextField
       id={fieldId(key)}
       label={t(label)}
-      value={values[key] as string}
+      value={values[key]}
       unit={METRE}
       disabled={empty}
       error={error(key)}
       onChange={(value) => set(key, value)}
-      {...extra}
     />
   );
   const baseField = (key: "easting" | "northing" | "height", label: MessageKey) => (
@@ -357,9 +360,9 @@ export function LocationForm({ info }: { info: GeorefInfo | null }) {
         <Disclosure title={t("georef.survey.title")} open={surveyOpen} onToggle={setSurveyOpen}>
           <p className="section-help">{t("georef.survey.help")}</p>
           <div className="field-row">
-            {length("surveyEasting", "georef.base.easting")}
-            {length("surveyNorthing", "georef.base.northing")}
-            {length("surveyHeight", "georef.base.height")}
+            {surveyField("surveyEasting", "georef.base.easting")}
+            {surveyField("surveyNorthing", "georef.base.northing")}
+            {surveyField("surveyHeight", "georef.base.height")}
           </div>
           {surveyLocal && (
             <p className="section-help">

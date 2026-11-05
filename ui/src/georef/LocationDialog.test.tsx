@@ -115,6 +115,15 @@ describe("LocationDialog, project not georeferenced", () => {
     expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
   });
 
+  it("leaves Home and End to the caret while the list is closed", async () => {
+    const { user } = await open();
+    await user.type(crsBox(), "2154");
+    await user.keyboard("{Escape}");
+    const key = new KeyboardEvent("keydown", { key: "Home", bubbles: true, cancelable: true });
+    crsBox().dispatchEvent(key);
+    expect(key.defaultPrevented).toBe(false);
+  });
+
   it("says when no system matches, and opens the list again from the keyboard", async () => {
     const { user } = await open();
     await user.type(crsBox(), "zzz");

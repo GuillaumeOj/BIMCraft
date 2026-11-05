@@ -34,7 +34,7 @@ export type FormValues = {
   surveyHeight: string;
 };
 
-export type FieldKey = Exclude<keyof FormValues, "crs"> | "crs";
+export type FieldKey = keyof FormValues;
 /** Fields in the order of the form, which is also the focus order. */
 export const FIELD_ORDER: readonly FieldKey[] = [
   "crs",
@@ -49,7 +49,12 @@ export const FIELD_ORDER: readonly FieldKey[] = [
 ];
 export type FieldErrors = Partial<Record<FieldKey, MessageKey | undefined>>;
 
-const SURVEY_FIELDS = ["surveyEasting", "surveyNorthing", "surveyHeight"] as const;
+const BASE_FIELDS = ["easting", "northing", "height"] as const;
+export const SURVEY_FIELDS = ["surveyEasting", "surveyNorthing", "surveyHeight"] as const;
+type Point3 = [number, number, number];
+
+/** The saved georeference and the form it was shown as, to keep what the user did not touch. */
+export type Previous = { values: FormValues; value: GeoreferenceValue };
 
 export const formatLength = (value: number, language: Language) =>
   formatNumber(value, LENGTH_DECIMALS, language);
@@ -104,7 +109,7 @@ function length(text: string): number | null {
 }
 
 /** The three typed values of a point, or null when one is not a valid length. */
-function point(texts: readonly string[]): [number, number, number] | null {
+function point(texts: readonly string[]): Point3 | null {
   const [e, n, h] = texts.map(length);
   return e == null || n == null || h == null ? null : [e, n, h];
 }
@@ -129,37 +134,64 @@ function surveyErrors(values: FormValues): FieldErrors {
 /** The error of each invalid base-point length field. */
 function baseErrors(values: FormValues): FieldErrors {
   return Object.fromEntries(
-    (["easting", "northing", "height"] as const)
-      .filter((key) => length(values[key]) === null)
-      .map((key) => [key, "georef.error.number"]),
+    BASE_FIELDS.filter((key) => length(values[key]) === null).map((key) => [
+      key,
+      "georef.error.number",
+    ]),
   );
 }
 
 /**
+ * A typed point, except that a field left as shown keeps the saved coordinate: the fields show
+ * fewer decimals than the core stores, so applying must not round what the user did not edit.
+ */
+function keepSaved(
+  typed: Point3,
+  fields: readonly [FieldKey, FieldKey, FieldKey],
+  values: FormValues,
+  previous: Previous | undefined,
+  saved: Point3 | null | undefined,
+): Point3 {
+  if (previous === undefined || !saved) return typed;
+  const pick = (index: 0 | 1 | 2) =>
+    values[fields[index]] === previous.values[fields[index]] ? saved[index] : typed[index];
+  return [pick(0), pick(1), pick(2)];
+}
+
+/**
  * The parameters of `georef.set` for the typed `values`, or the message of each invalid field.
- * An empty survey point is none; a partly filled one is an error on its empty fields.
+ * An empty survey point is none; a partly filled one is an error on its empty fields. With the
+ * `previous` form, a field the user did not change keeps its saved, unrounded value.
  */
 export function toParams(
   values: FormValues,
+  previous?: Previous,
 ): { params: GeoreferenceValue } | { errors: FieldErrors } {
   const rotation = parseAngle(values.rotation);
   const scale = parseNumber(values.scale);
-  const base = point([values.easting, values.northing, values.height]);
+  const base = point(BASE_FIELDS.map((key) => values[key]));
+  const scaleMessage = scaleError(scale);
   const errors: FieldErrors = {
     ...baseErrors(values),
     ...surveyErrors(values),
     ...(values.crs === null && { crs: "georef.error.required" as const }),
     ...(rotation === null && { rotation: "georef.error.angle" as const }),
-    ...(scaleError(scale) !== undefined && { scale: scaleError(scale) }),
+    ...(scaleMessage !== undefined && { scale: scaleMessage }),
   };
   if (Object.keys(errors).length > 0 || values.crs === null || base === null) return { errors };
+  const same = (key: FieldKey) => previous !== undefined && values[key] === previous.values[key];
+  const survey = point(SURVEY_FIELDS.map((key) => values[key]));
   return {
     params: {
       crs_epsg: values.crs.epsg,
-      base_point: base,
-      grid_rotation: degToRad(rotation ?? 0),
-      scale: scale ?? 1,
-      survey_point: point(SURVEY_FIELDS.map((key) => values[key])),
+      base_point: keepSaved(base, BASE_FIELDS, values, previous, previous?.value.base_point),
+      grid_rotation:
+        same("rotation") && previous ? previous.value.grid_rotation : degToRad(rotation ?? 0),
+      scale: same("scale") && previous ? previous.value.scale : (scale ?? 1),
+      survey_point:
+        survey === null
+          ? null
+          : keepSaved(survey, SURVEY_FIELDS, values, previous, previous?.value.survey_point),
     },
   };
 }

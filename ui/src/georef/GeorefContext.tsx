@@ -63,8 +63,17 @@ export function GeorefProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       next = { status: "error", reason: apiReason(error) };
     }
-    // A slower, older answer must not overwrite a newer one.
-    if (mine === latest.current) setState(next);
+    // A slower, older answer must not overwrite a newer one. An unchanged georeference keeps its
+    // object, so that every model change does not reset the form and the panel built on it.
+    if (mine === latest.current) {
+      setState((current) =>
+        current.status === "ready" &&
+        next.status === "ready" &&
+        JSON.stringify(current.info) === JSON.stringify(next.info)
+          ? current
+          : next,
+      );
+    }
   }, [api]);
 
   useEffect(() => {

@@ -86,6 +86,8 @@ export function CrsCombobox({
     if (action === undefined) return;
     if (event.key === "Escape" && !open) return;
     if (event.key === "Enter" && !open) return;
+    // Home and End move the caret while the list is closed.
+    if ((event.key === "Home" || event.key === "End") && !open) return;
     event.preventDefault();
     action();
   };

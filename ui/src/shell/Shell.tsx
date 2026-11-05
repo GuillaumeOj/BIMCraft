@@ -60,6 +60,8 @@ export function Shell() {
 
   useEffect(() => {
     const onKeyDown = (event: globalThis.KeyboardEvent) => {
+      // A modal dialog keeps the keyboard: these shortcuts would move focus behind it.
+      if (dialogOpen) return;
       if (isConsoleShortcut(event)) {
         event.preventDefault();
         setConsoleOpen((open) => !open);
@@ -73,7 +75,7 @@ export function Shell() {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [selectTab]);
+  }, [selectTab, dialogOpen]);
 
   const onTabKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
     const at = RIGHT_PANELS.indexOf(rightPanel);

@@ -112,6 +112,19 @@ describe("Shell", () => {
     expect(screen.getByRole("dialog", { name: "Project location" })).toBeInTheDocument();
   });
 
+  it("keeps the keyboard in the Project location dialog: F6 and Ctrl+Shift+K do nothing", async () => {
+    const user = renderShell();
+    await user.click(screen.getByRole("button", { name: "Project location…" }));
+    const dialog = screen.getByRole("dialog", { name: "Project location" });
+    await user.keyboard("{F6}");
+    await user.keyboard("{Control>}{Shift>}K{/Shift}{/Control}");
+    expect(dialog).toContainElement(document.activeElement as HTMLElement);
+    expect(screen.getByRole("tab", { name: "Properties" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+  });
+
   it("ignores other keys on the panel tabs", async () => {
     const user = renderShell();
     const properties = screen.getByRole("tab", { name: "Properties" });

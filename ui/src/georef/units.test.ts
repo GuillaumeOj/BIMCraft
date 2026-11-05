@@ -109,6 +109,8 @@ describe("parseAngle", () => {
     ["12°", 12],
     ["N 45", 45],
     ["45 O", -45],
+    ["S 10 15 30", -(10 + 15 / 60 + 30 / 3600)],
+    ["48 51 10.8", 48 + 51 / 60 + 10.8 / 3600],
   ])("reads %j as %d", (text, expected) => {
     expect(parseAngle(text)).toBeCloseTo(expected, 10);
   });
