@@ -10,6 +10,8 @@ export type CrsList =
 
 type CrsComboboxProps = {
   id: string;
+  /** Id of the element that names the field: the section title. */
+  labelledBy: string;
   list: CrsList;
   selected: CrsSummary | null;
   onSelect: (crs: CrsSummary) => void;
@@ -33,6 +35,7 @@ function matching(list: readonly CrsSummary[], query: string): readonly CrsSumma
  */
 export function CrsCombobox({
   id,
+  labelledBy,
   list,
   selected,
   onSelect,
@@ -107,6 +110,7 @@ export function CrsCombobox({
           autoComplete="off"
           spellCheck={false}
           placeholder={t("georef.crs.placeholder")}
+          aria-labelledby={labelledBy}
           aria-expanded={open}
           aria-controls={listboxId}
           aria-autocomplete="list"
@@ -128,7 +132,7 @@ export function CrsCombobox({
         {status}
       </div>
       {open && (
-        <div id={listboxId} className="listbox" role="listbox" aria-label={t("georef.crs.label")}>
+        <div id={listboxId} className="listbox" role="listbox" aria-labelledby={labelledBy}>
           {list.status !== "ready" || results.length === 0 ? (
             <div className="listbox-note">{status}</div>
           ) : (

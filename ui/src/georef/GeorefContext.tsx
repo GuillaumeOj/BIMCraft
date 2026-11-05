@@ -69,12 +69,10 @@ export function GeorefProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     void load();
-    const unsubscribe = api.onChange(() => void load());
+    // Without a notification channel (a browser outside the desktop window) it stays unsubscribed.
+    const unsubscribe = api.onChange(() => void load()).catch(() => undefined);
     return () => {
-      void unsubscribe.then(
-        (stop) => stop(),
-        () => {},
-      );
+      void unsubscribe.then((stop) => stop?.());
     };
   }, [api, load]);
 

@@ -266,6 +266,7 @@ export function LocationForm({ info }: { info: GeorefInfo | null }) {
           </p>
           <CrsCombobox
             id={fieldId("crs")}
+            labelledBy={`${prefix}-crs-title`}
             list={crsList}
             selected={values.crs}
             onSelect={(crs) => {
@@ -375,9 +376,11 @@ export function LocationForm({ info }: { info: GeorefInfo | null }) {
       </div>
 
       {confirmRemove ? (
-        <fieldset className="dialog-footer dialog-confirm">
+        <section className="dialog-footer dialog-confirm" aria-labelledby={`${prefix}-remove`}>
           <div>
-            <legend className="confirm-title">{t("georef.remove.title")}</legend>
+            <p id={`${prefix}-remove`} className="confirm-title">
+              {t("georef.remove.title")}
+            </p>
             <p>{t("georef.remove.body")}</p>
           </div>
           <div className="dialog-actions">
@@ -393,7 +396,7 @@ export function LocationForm({ info }: { info: GeorefInfo | null }) {
               {t("georef.remove.confirm")}
             </button>
           </div>
-        </fieldset>
+        </section>
       ) : (
         <div className="dialog-footer">
           {info !== null && (

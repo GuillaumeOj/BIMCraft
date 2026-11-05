@@ -29,6 +29,7 @@ export function fakeCore(options: { georeference?: Georeference | null } = {}) {
   const calls: { method: string; params: unknown }[] = [];
   const listeners = new Set<(message: string) => void>();
   const override: Record<string, Handler> = {};
+  const failures: Record<string, Error[]> = {};
 
   const crs = [LAMBERT93, CC48];
   const rotationOf = () => value?.grid_rotation ?? 0;
@@ -48,8 +49,8 @@ export function fakeCore(options: { georeference?: Georeference | null } = {}) {
     const [dx, dy] = [(e ?? 0) - (e0 ?? 0), (n ?? 0) - (n0 ?? 0)];
     return [c * dx + s * dy, -s * dx + c * dy, (h ?? 0) - (h0 ?? 0)];
   };
-  const toGeographic = ([e, n, h]: number[]) => [(n ?? 0) / 1e7, (e ?? 0) / 1e7, h ?? 0];
-  const fromGeographic = ([lat, lon, h]: number[]) => [(lon ?? 0) * 1e7, (lat ?? 0) * 1e7, h ?? 0];
+  const toGeographic = ([e, n, h]: number[]) => [(n ?? 0) / 1e8, (e ?? 0) / 1e8, h ?? 0];
+  const fromGeographic = ([lat, lon, h]: number[]) => [(lon ?? 0) * 1e8, (lat ?? 0) * 1e8, h ?? 0];
 
   const info = () =>
     value === null
@@ -112,11 +113,13 @@ export function fakeCore(options: { georeference?: Georeference | null } = {}) {
       const { id, method, params } = JSON.parse(message);
       calls.push({ method, params });
       try {
+        const failure = failures[method]?.shift();
+        if (failure) throw failure;
         const result = (override[method] ?? builtIn[method])?.(params);
         if (method === "georef.set" || method === "georef.clear") queueMicrotask(push);
         return JSON.stringify({ jsonrpc: "2.0", id, result });
       } catch (error) {
-        if (!(error instanceof ApiError)) throw error;
+        if (!(error instanceof ApiError)) return null;
         const { code, message: text, data } = error;
         return JSON.stringify({ jsonrpc: "2.0", id, error: { code, message: text, data } });
       }
@@ -133,6 +136,14 @@ export function fakeCore(options: { georeference?: Georeference | null } = {}) {
     /** Answers `method` with `handler` from now on (it may throw an `ApiError`). */
     override: (method: string, handler: Handler) => {
       override[method] = handler;
+    },
+    /** Makes the next call of `method` fail with `error`; an `ApiError` is sent as a refusal. */
+    failNext: (method: string, error: Error) => {
+      failures[method] = [...(failures[method] ?? []), error];
+    },
+    /** Changes the georeference behind the API's back, as another window would. */
+    replace: (next: Georeference | null) => {
+      value = next;
     },
     /** What the project's georeference is now. */
     current: () => value,

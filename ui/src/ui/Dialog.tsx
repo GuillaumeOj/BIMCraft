@@ -1,4 +1,4 @@
-import { type KeyboardEvent, type ReactNode, useEffect, useRef } from "react";
+import { type KeyboardEvent, type ReactNode, useEffect, useRef, useState } from "react";
 import "./forms.css";
 
 const FOCUSABLE =
@@ -37,14 +37,15 @@ type DialogProps = {
  */
 export function Dialog({ titleId, onCancel, children }: DialogProps) {
   const dialog = useRef<HTMLDivElement>(null);
+  // Read while rendering: the content's effects move the focus before this component's.
+  const [opener] = useState(() => document.activeElement);
 
   useEffect(() => {
-    const opener = document.activeElement;
     if (!dialog.current?.contains(document.activeElement)) dialog.current?.focus();
     return () => {
       if (opener instanceof HTMLElement && opener.isConnected) opener.focus();
     };
-  }, []);
+  }, [opener]);
 
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     if (event.key === "Escape" && !event.defaultPrevented) {
