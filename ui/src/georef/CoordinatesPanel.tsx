@@ -66,6 +66,12 @@ function Converter({ info, pickedPoint }: { info: GeorefInfo; pickedPoint: Picke
           geographic: converted.geographic,
         };
         setError(null);
+        // A block that was flagged invalid now shows computed values again.
+        setInvalid((current) => ({
+          local: typed === "local" ? current.local : NO_ERRORS,
+          projected: typed === "projected" ? current.projected : NO_ERRORS,
+          geographic: typed === "geographic" ? current.geographic : NO_ERRORS,
+        }));
         setTexts((current) => {
           const next = { ...current };
           for (const system of SYSTEMS) {

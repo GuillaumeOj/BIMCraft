@@ -115,10 +115,19 @@ describe("parseAngle", () => {
     expect(parseAngle(text)).toBeCloseTo(expected, 10);
   });
 
-  it.each(["", "abc", "48°60′", "48°30′60″", "48.5°30′", "48°30.5′", "1°2′3″4", "°", "48°x′"])(
-    "rejects %j",
-    (text) => {
-      expect(parseAngle(text)).toBeNull();
-    },
-  );
+  it.each([
+    "",
+    "abc",
+    "48°60′",
+    "48°30′60″",
+    "48.5°30′",
+    "48°30.5′",
+    "1°2′3″4",
+    "°",
+    "48°x′",
+    "10 -5",
+    "10 15 -30",
+  ])("rejects %j", (text) => {
+    expect(parseAngle(text)).toBeNull();
+  });
 });

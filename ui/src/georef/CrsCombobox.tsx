@@ -1,4 +1,4 @@
-import { type KeyboardEvent, useId, useMemo, useState } from "react";
+import { type KeyboardEvent, useEffect, useId, useMemo, useState } from "react";
 import type { CrsSummary } from "../api";
 import { useI18n } from "../i18n/I18nProvider";
 import { crsLabel } from "./formModel";
@@ -55,6 +55,12 @@ export function CrsCombobox({
   );
   const text = query ?? (selected === null ? "" : crsLabel(selected));
   const optionId = (index: number) => `${listboxId}-${index}`;
+
+  // The list scrolls: the option the arrow keys reached must stay in view.
+  useEffect(() => {
+    if (open)
+      document.getElementById(`${listboxId}-${active}`)?.scrollIntoView?.({ block: "nearest" });
+  }, [open, active, listboxId]);
 
   const close = () => {
     setOpen(false);

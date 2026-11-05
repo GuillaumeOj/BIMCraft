@@ -1,5 +1,5 @@
 import { screen, waitFor, within } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { Georeference } from "../api";
 import { fakeCore, refusal } from "../test-support/fakeCore";
 import { renderWithCore } from "../test-support/render";
@@ -113,6 +113,22 @@ describe("LocationDialog, project not georeferenced", () => {
     expect(screen.getByRole("listbox")).toBeInTheDocument();
     await user.tab();
     expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
+  });
+
+  it("scrolls the option reached with the arrow keys into view", async () => {
+    const scrollIntoView = vi.fn();
+    Element.prototype.scrollIntoView = scrollIntoView;
+    try {
+      const { user } = await open();
+      await user.click(crsBox());
+      await user.keyboard("{ArrowDown}");
+      const options = screen.getAllByRole("option");
+      expect(scrollIntoView).toHaveBeenLastCalledWith({ block: "nearest" });
+      expect(scrollIntoView.mock.contexts.at(-1)).toBe(options[1]);
+    } finally {
+      // jsdom has none, so the test removes the stand-in.
+      delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView;
+    }
   });
 
   it("leaves Home and End to the caret while the list is closed", async () => {

@@ -140,6 +140,20 @@ describe("CoordinatesPanel, project georeferenced", () => {
     await waitFor(() => expect(x).toBeValid());
   });
 
+  it("clears the flag of a block that is computed again from another block", async () => {
+    const { user } = renderPanel();
+    await waitFor(() => expect(block("Map").values()[0]).toBe("652000.000"));
+    const [easting] = block("Map").fields;
+    await user.clear(easting as HTMLElement);
+    await user.type(easting as HTMLElement, "abc{Enter}");
+    expect(easting).toBeInvalid();
+    const [x] = block("Model (local)").fields;
+    await user.clear(x as HTMLElement);
+    await user.type(x as HTMLElement, "2{Enter}");
+    await waitFor(() => expect(block("Map").values()[0]).toBe("652002.000"));
+    expect(easting).toBeValid();
+  });
+
   it("switches the geographic block between decimal degrees and DMS, and accepts DMS", async () => {
     const { core, user } = renderPanel();
     await waitFor(() => expect(block("Geographic").values()[0]).toBe(LAT));

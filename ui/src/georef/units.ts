@@ -111,7 +111,7 @@ function parseDms(body: string): number | null {
   const [degrees, minutes = "0", seconds = "0"] = parts;
   if (parts.length > 3 || degrees === undefined) return null;
   const [d, m, s] = [parseNumber(degrees), parseNumber(minutes), parseNumber(seconds)];
-  if (d === null || m === null || s === null || m >= 60 || s >= 60) return null;
+  if (d === null || m === null || s === null || m < 0 || s < 0 || m >= 60 || s >= 60) return null;
   if (!Number.isInteger(d) || !Number.isInteger(m)) return null;
   const value = d + m / 60 + s / 3600;
   return negative ? -value : value;

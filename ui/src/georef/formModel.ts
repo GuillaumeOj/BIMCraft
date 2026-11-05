@@ -211,7 +211,6 @@ const KNOWN_REASONS = [
   "multiple_sites",
   "not_georeferenced",
 ] as const;
-export type Reason = (typeof KNOWN_REASONS)[number];
 
 /** The message for a refusal's `data.reason`; unknown reasons get the generic one. */
 export function reasonMessage(reason: string | null): MessageKey {

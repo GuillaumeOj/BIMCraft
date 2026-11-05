@@ -6,18 +6,19 @@ Every area of the BIMCraft window can be reached without a mouse, which also let
 
 | Area | Where | What it shows |
 | --- | --- | --- |
-| Title bar | Top | The views you have open, the **Console** button and the **Language** list. |
+| Title bar | Top | The views you have open, the **Project location…** button, the **Console** button and the **Language** list. |
 | Project | Left | The levels, views and other contents of the project. |
 | Viewport | Centre | The drawing or model you are working on. |
-| Properties / History | Right | The properties of the selection, or the list of changes you can undo. Switch between them with the two tabs at the top of the panel. |
+| Properties / History / Coordinates | Right | The properties of the selection, the list of changes you can undo, or the [coordinates](read-and-enter-coordinates.md) of a point. Switch between them with the three tabs at the top of the panel. |
 | Console | Bottom, when open | A place to type commands and scripts. |
 
 ## Steps
 
-1. Press **F6** to move to the next area, or **Shift+F6** to go back. The order is: title bar, Project, viewport, Properties or History, and the console when it is open.
+1. Press **F6** to move to the next area, or **Shift+F6** to go back. The order is: title bar, Project, viewport, the right-hand panel, and the console when it is open.
 2. Press **Tab** to move between the buttons and lists inside an area.
-3. In the right-hand panel, press **Left** or **Right** on the tabs to switch between **Properties** and **History**. **Home** and **End** jump to the first and last tab.
+3. In the right-hand panel, press **Left** or **Right** on the tabs to switch between **Properties**, **History** and **Coordinates**. **Home** and **End** jump to the first and last tab. **Ctrl+Shift+K** (Cmd+Shift+K on macOS) shows the Coordinates tab from anywhere.
 4. Press **Ctrl+`** (the key left of 1 on most keyboards) to open or close the console. You can also click **Console** in the title bar.
+5. Press **Ctrl+Shift+L** (Cmd+Shift+L on macOS) to open the [project location](set-up-the-project-location.md) dialog.
 
 **Result:** the area you move to gets a green outline and a screen reader reads its name.
 
