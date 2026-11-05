@@ -78,7 +78,7 @@
   "georef.error.survey": "Enter all three survey values, or leave all empty.",
   "georef.error.unknown_crs": "This coordinate system is not available.",
   "georef.error.not_projected": "Choose a projected system (map coordinates in metres), not latitude/longitude.",
-  "georef.error.invalid_scale": "The scale must be greater than 0.",
+  "georef.error.invalid_scale": "The scale must be between 0.000001 and 1000000.",
   "georef.error.outside_domain": "This point is outside the area where this coordinate system is valid. Check the numbers or the system.",
   "georef.error.multiple_sites": "This project has several sites. Georeferencing needs exactly one.",
   "georef.error.not_georeferenced": "The project has no location yet.",
@@ -106,5 +106,8 @@
   "georef.field.longitude": "Longitude",
   "georef.field.ellipsoidHeight": "Height (h)",
   "georef.convert.outside": "This point is too far from the projection to convert.",
-  "georef.convert.failed": "Conversion failed. Try again."
+  "georef.convert.failed": "Conversion failed. Try again.",
+  "georef.axis.x": "x",
+  "georef.axis.y": "y",
+  "georef.axis.z": "z"
 }

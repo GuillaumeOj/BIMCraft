@@ -78,7 +78,7 @@
   "georef.error.survey": "Saisissez les trois valeurs du repère, ou laissez-les toutes vides.",
   "georef.error.unknown_crs": "Ce système de coordonnées n’est pas disponible.",
   "georef.error.not_projected": "Choisissez un système projeté (coordonnées en mètres), pas latitude/longitude.",
-  "georef.error.invalid_scale": "L’échelle doit être supérieure à 0.",
+  "georef.error.invalid_scale": "L’échelle doit être comprise entre 0,000001 et 1000000.",
   "georef.error.outside_domain": "Ce point est hors de la zone de validité de ce système de coordonnées. Vérifiez les nombres ou le système.",
   "georef.error.multiple_sites": "Ce projet contient plusieurs sites. La géoréférence en exige un seul.",
   "georef.error.not_georeferenced": "Le projet n’a pas encore de localisation.",
@@ -106,5 +106,8 @@
   "georef.field.longitude": "Longitude",
   "georef.field.ellipsoidHeight": "Hauteur (h)",
   "georef.convert.outside": "Ce point est trop éloigné de la projection pour être converti.",
-  "georef.convert.failed": "La conversion a échoué. Réessayez."
+  "georef.convert.failed": "La conversion a échoué. Réessayez.",
+  "georef.axis.x": "x",
+  "georef.axis.y": "y",
+  "georef.axis.z": "z"
 }

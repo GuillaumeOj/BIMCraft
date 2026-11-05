@@ -168,7 +168,7 @@
 .panel-tab {
   font-weight: 400;
   border-radius: 8px;
-  padding: 5px 12px;
+  padding: 5px 8px;
 }
 
 .panel-tab[aria-selected="true"] {

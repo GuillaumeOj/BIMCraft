@@ -42,6 +42,14 @@ export function formatNumber(value: number, decimals: number, language: Language
   }).format(rounded);
 }
 
+/** `value` with at most `decimals` decimals, none when it is whole: the scale. */
+export function formatPlain(value: number, decimals: number, language: Language): string {
+  return new Intl.NumberFormat(language, {
+    maximumFractionDigits: decimals,
+    useGrouping: false,
+  }).format(value);
+}
+
 const MINUS = "−";
 
 /** `value` signed as the user reads it, with a true minus sign, for the lists of derived values. */
@@ -53,16 +61,25 @@ export type Hemispheres = readonly [positive: string, negative: string];
 export const LATITUDE: Hemispheres = ["N", "S"];
 export const LONGITUDE: Hemispheres = ["E", "W"];
 
-/** Degrees, minutes and seconds of `degrees`, such as `48°51′10,8000″N`. */
-export function formatDms(degrees: number, hemispheres: Hemispheres, language: Language): string {
+/**
+ * Degrees, minutes and seconds of `degrees`, such as `48°51′10,8000″N`; with no `hemispheres`, a
+ * negative angle starts with a minus sign instead.
+ */
+export function formatDms(
+  degrees: number,
+  hemispheres: Hemispheres | null,
+  language: Language,
+): string {
   const unit = 10 ** SECOND_DECIMALS;
   // Integer ten-thousandths of a second, so that rounding cannot produce 60 seconds.
   const total = Math.round(Math.abs(degrees) * 3600 * unit);
   const whole = Math.floor(total / (3600 * unit));
   const minutes = Math.floor((total - whole * 3600 * unit) / (60 * unit));
   const seconds = (total - whole * 3600 * unit - minutes * 60 * unit) / unit;
-  const letter = degrees < 0 && total !== 0 ? hemispheres[1] : hemispheres[0];
-  return `${whole}°${minutes}′${formatNumber(seconds, SECOND_DECIMALS, language)}″${letter}`;
+  const negative = degrees < 0 && total !== 0;
+  const sign = negative && hemispheres === null ? "-" : "";
+  const letter = hemispheres?.[negative ? 1 : 0] ?? "";
+  return `${sign}${whole}°${minutes}′${formatNumber(seconds, SECOND_DECIMALS, language)}″${letter}`;
 }
 
 const NEGATIVE_LETTERS = "SWO";

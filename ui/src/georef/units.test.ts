@@ -3,6 +3,7 @@ import {
   degToRad,
   formatDms,
   formatNumber,
+  formatPlain,
   formatSigned,
   LATITUDE,
   LONGITUDE,
@@ -52,6 +53,14 @@ describe("formatNumber", () => {
   });
 });
 
+describe("formatPlain", () => {
+  it("drops useless decimals", () => {
+    expect(formatPlain(1, 6, "en")).toBe("1");
+    expect(formatPlain(0.9999, 6, "fr")).toBe("0,9999");
+    expect(formatPlain(1.00000049, 6, "en")).toBe("1");
+  });
+});
+
 describe("formatSigned", () => {
   it("uses a true minus sign", () => {
     expect(formatSigned(-30.4717, 4, "fr")).toBe("−30,4717");
@@ -74,6 +83,11 @@ describe("formatDms", () => {
 
   it("never rounds to 60 seconds", () => {
     expect(formatDms(0.9999999999, LATITUDE, "en")).toBe("1°0′0.0000″N");
+  });
+
+  it("writes a minus sign when there are no hemisphere letters", () => {
+    expect(formatDms(-30.5, null, "en")).toBe("-30°30′0.0000″");
+    expect(formatDms(30.5, null, "en")).toBe("30°30′0.0000″");
   });
 
   it("writes zero with the positive letter", () => {
