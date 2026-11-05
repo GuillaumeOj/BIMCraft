@@ -17,12 +17,18 @@ const TEXT_PAIRS = [
   ["muted", "raised"],
   ["ink-2", "hover"],
   ["on-verdigris", "verdigris"],
+  ["danger", "surface"],
+  ["danger", "raised"],
+  ["danger", "paper"],
+  ["on-danger", "danger"],
 ] as const;
 
-// Interface parts against their surroundings (WCAG 2.2 AA: 3:1): the focus outline.
+// Interface parts against their surroundings (WCAG 2.2 AA: 3:1): the focus outline and the borders of form fields.
 const NON_TEXT_PAIRS = [
   ["verdigris", "surface"],
   ["verdigris", "paper"],
+  ["field-line", "surface"],
+  ["field-line", "raised"],
 ] as const;
 
 describe("contrastRatio", () => {
