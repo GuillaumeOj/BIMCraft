@@ -8,6 +8,7 @@ version = "0.0.0"
 dependencies = [
  "core-model",
  "core-txn",
+ "georef",
  "schema",
  "serde",
  "serde_json",
