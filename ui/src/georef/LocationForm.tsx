@@ -5,9 +5,9 @@ import type { MessageKey } from "../i18n/i18n";
 import { Banner } from "../ui/Banner";
 import { Disclosure } from "../ui/Disclosure";
 import { ErrorIcon } from "../ui/ErrorIcon";
-import { SegmentedToggle } from "../ui/SegmentedToggle";
 import { TextField } from "../ui/TextField";
 import { CrsCombobox, type CrsList } from "./CrsCombobox";
+import { FormatToggle } from "./FormatToggle";
 import {
   type FieldErrors,
   type FieldKey,
@@ -328,15 +328,7 @@ export function LocationForm({ info }: { info: GeorefInfo | null }) {
                 error={error("rotation")}
                 onChange={(value) => set("rotation", value)}
               />
-              <SegmentedToggle
-                label={t("georef.format.label")}
-                value={angleFormat}
-                options={[
-                  { value: "decimal", label: t("georef.format.decimal") },
-                  { value: "dms", label: t("georef.format.dms") },
-                ]}
-                onChange={changeFormat}
-              />
+              <FormatToggle value={angleFormat} onChange={changeFormat} />
             </div>
             <NorthArrow
               gridNorth={info === null ? null : -radToDeg(info.value.grid_rotation)}

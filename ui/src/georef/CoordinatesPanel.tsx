@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { apiReason, useApi } from "../api";
 import { useI18n } from "../i18n/I18nProvider";
 import type { MessageKey } from "../i18n/i18n";
@@ -32,6 +32,7 @@ function Converter({ info, pickedPoint }: { info: GeorefInfo; pickedPoint: Picke
   const api = useApi();
   const { t, language } = useI18n();
   const { notify } = useGeoref();
+  const tooltipId = useId();
   const [format, setFormat] = useState<GeographicFormat>("decimal");
   const [texts, setTexts] = useState<Blocks>({
     local: formatPoint("local", ORIGIN, "decimal", language),
@@ -190,12 +191,12 @@ function Converter({ info, pickedPoint }: { info: GeorefInfo; pickedPoint: Picke
               type="button"
               className="button button-small"
               aria-disabled="true"
-              aria-describedby="pick-tooltip"
+              aria-describedby={tooltipId}
               onClick={(event) => event.preventDefault()}
             >
               {t("georef.panel.pick")}
             </button>
-            <span id="pick-tooltip" role="tooltip" className="tooltip">
+            <span id={tooltipId} role="tooltip" className="tooltip">
               {t("georef.panel.pickDisabled")}
             </span>
           </span>

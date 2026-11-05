@@ -1,7 +1,7 @@
 import { useId } from "react";
 import { useI18n } from "../i18n/I18nProvider";
-import { SegmentedToggle } from "../ui/SegmentedToggle";
 import { TextField } from "../ui/TextField";
+import { FormatToggle } from "./FormatToggle";
 import {
   BLOCK_TITLE,
   FIELD_LABELS,
@@ -73,17 +73,7 @@ export function CoordinateBlock({
         </button>
       </div>
       <p className="block-caption">{caption}</p>
-      {geographic && (
-        <SegmentedToggle
-          label={t("georef.format.label")}
-          value={format}
-          options={[
-            { value: "decimal", label: t("georef.format.decimal") },
-            { value: "dms", label: t("georef.format.dms") },
-          ]}
-          onChange={onFormat}
-        />
-      )}
+      {geographic && <FormatToggle value={format} onChange={onFormat} />}
       {texts.map((text, index) => {
         const label = labels[index] ?? "georef.axis.x";
         const isAngle = geographic && index < 2;
