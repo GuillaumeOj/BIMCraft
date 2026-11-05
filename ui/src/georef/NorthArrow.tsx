@@ -10,17 +10,30 @@ type NorthArrowProps = {
 const SIZE = 64;
 const CENTRE = SIZE / 2;
 
-/** A line from the centre, turned `degrees` counter-clockwise from straight up. */
-function Needle({ degrees, className }: { degrees: number; className: string }) {
+/** A needle from the centre, turned `degrees` counter-clockwise from straight up. */
+function Needle({
+  degrees,
+  className,
+  length,
+  tip,
+}: {
+  degrees: number;
+  className: string;
+  length: number;
+  tip?: "arrow" | "dot";
+}) {
+  const top = CENTRE - length;
   return (
-    <line
-      className={className}
-      x1={CENTRE}
-      y1={CENTRE}
-      x2={CENTRE}
-      y2={8}
-      transform={`rotate(${-degrees} ${CENTRE} ${CENTRE})`}
-    />
+    <g className={className} transform={`rotate(${-degrees} ${CENTRE} ${CENTRE})`}>
+      <line x1={CENTRE} y1={CENTRE} x2={CENTRE} y2={top} />
+      {tip === "arrow" && (
+        <path
+          d={`M${CENTRE - 4} ${top + 7} L${CENTRE} ${top} L${CENTRE + 4} ${top + 7}`}
+          fill="none"
+        />
+      )}
+      {tip === "dot" && <circle cx={CENTRE} cy={top} r={2.5} className="north-dot" />}
+    </g>
   );
 }
 
@@ -45,9 +58,11 @@ export function NorthArrow({ gridNorth, trueNorth }: NorthArrowProps) {
         aria-label={t("georef.north.diagram")}
       >
         <circle cx={CENTRE} cy={CENTRE} r={30} className="north-dial" />
-        <Needle degrees={0} className="north-project" />
-        {gridNorth !== null && <Needle degrees={gridNorth} className="north-grid" />}
-        {trueNorth !== null && <Needle degrees={trueNorth} className="north-true" />}
+        <Needle degrees={0} className="north-project" length={24} tip="arrow" />
+        {gridNorth !== null && <Needle degrees={gridNorth} className="north-grid" length={24} />}
+        {trueNorth !== null && (
+          <Needle degrees={trueNorth} className="north-true" length={16} tip="dot" />
+        )}
       </svg>
       <dl className="north-legend">
         {rows.map(([className, key, value]) => (

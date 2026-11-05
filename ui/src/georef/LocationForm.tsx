@@ -4,6 +4,7 @@ import { useI18n } from "../i18n/I18nProvider";
 import type { MessageKey } from "../i18n/i18n";
 import { Banner } from "../ui/Banner";
 import { Disclosure } from "../ui/Disclosure";
+import { ErrorIcon } from "../ui/ErrorIcon";
 import { SegmentedToggle } from "../ui/SegmentedToggle";
 import { TextField } from "../ui/TextField";
 import { CrsCombobox, type CrsList } from "./CrsCombobox";
@@ -279,6 +280,7 @@ export function LocationForm({ info }: { info: GeorefInfo | null }) {
           />
           {errors.crs && (
             <p id={`${prefix}-crs-error`} className="field-error">
+              <ErrorIcon />
               {t(errors.crs)}
             </p>
           )}
@@ -299,6 +301,7 @@ export function LocationForm({ info }: { info: GeorefInfo | null }) {
           </div>
           {baseError !== null && (
             <p id={baseErrorId} className="field-error">
+              <ErrorIcon />
               {t(baseError)}
             </p>
           )}

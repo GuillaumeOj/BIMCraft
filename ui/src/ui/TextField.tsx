@@ -1,5 +1,6 @@
 import { type KeyboardEvent, useId, useState } from "react";
 import { useI18n } from "../i18n/I18nProvider";
+import { ErrorIcon } from "./ErrorIcon";
 import "./forms.css";
 
 type TextFieldProps = {
@@ -91,6 +92,7 @@ export function TextField({
       )}
       {error && (
         <p id={errorId} className="field-error">
+          <ErrorIcon />
           {error}
         </p>
       )}
