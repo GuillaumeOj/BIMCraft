@@ -95,6 +95,8 @@ export function parseAngle(text: string): number | null {
   let body = text.trim();
   const letter = (HEMISPHERE.exec(body)?.slice(1).find(Boolean) ?? "").toUpperCase();
   body = body.replace(HEMISPHERE, "").trim();
+  // A sign and a hemisphere letter say the same thing twice, and `-10 S` could be either.
+  if (letter !== "" && /^[-+\u2212]/.test(body)) return null;
   const sign = letter !== "" && NEGATIVE_LETTERS.includes(letter) ? -1 : 1;
   // Parts separated by spaces, such as `10 15 30`, are degrees, minutes and seconds, not a number
   // with a grouping space.

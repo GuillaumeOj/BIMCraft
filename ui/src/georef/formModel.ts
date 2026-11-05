@@ -218,5 +218,9 @@ export function reasonMessage(reason: string | null): MessageKey {
   return known === undefined ? "georef.error.generic" : `georef.error.${known}`;
 }
 
+/** The message for a failed read of the georeference: the refusal's reason, or a generic one. */
+export const loadErrorMessage = (reason: string | null): MessageKey =>
+  reason === null ? "georef.loadError" : reasonMessage(reason);
+
 /** The text of the CRS row: code and name. */
 export const crsLabel = (crs: CrsSummary): string => `${crs.epsg} – ${crs.name}`;

@@ -24,7 +24,7 @@ Quelques termes employés sur cette page :
 6. Facultatif : ouvrez **Point de repère topographique (facultatif)** et saisissez l’Est, le Nord et la Hauteur de votre repère. Renseignez les trois valeurs, ou aucune.
 7. Choisissez **Appliquer** (ou appuyez sur Entrée).
 
-**Résultat :** la boîte de dialogue se ferme et un message confirme « Localisation du projet appliquée ». L’ensemble est une seule étape de l’historique : appuyez sur Ctrl+Z (Cmd+Z sous macOS) pour l’annuler.
+**Résultat :** la boîte de dialogue se ferme et un message confirme « Localisation du projet appliquée ».
 
 Quand vous rouvrez la boîte de dialogue, elle montre ce que vous avez saisi et les informations calculées par BIMCraft : l’angle du nord géographique, la latitude et la longitude du point de base, la convergence des méridiens (l’angle entre le nord de la grille et le nord géographique), le coefficient d’échelle au point et la position du repère dans le modèle.
 

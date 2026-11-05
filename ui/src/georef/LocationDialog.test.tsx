@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from "@testing-library/react";
+import { act, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { Georeference } from "../api";
 import { fakeCore, refusal } from "../test-support/fakeCore";
@@ -156,7 +156,7 @@ describe("LocationDialog, project not georeferenced", () => {
     expect(crsBox()).toHaveFocus();
     expect(crsBox()).toBeInvalid();
     expect(crsBox()).toHaveAccessibleDescription(/Choose a coordinate system\./);
-    expect(screen.getByText("4 fields need attention.")).toBeInTheDocument();
+    expect(screen.getByText("Fields to fix: 4")).toBeInTheDocument();
     expect(setCalls(core)).toHaveLength(0);
 
     await chooseLambert(user);
@@ -450,5 +450,57 @@ describe("LocationDialog, dialog behaviour", () => {
         selector: ".listbox-note",
       }),
     ).toBeInTheDocument();
+  });
+
+  it("keeps the form and what was typed when a reload fails, and says so above the form", async () => {
+    const { core, user } = await open(fakeCore({ georeference: PLACED }));
+    await user.clear(field("Easting"));
+    await user.type(field("Easting"), "700000");
+    core.failNext("georef.get", new Error("down"));
+    await act(async () => core.notifyChange());
+    expect(await screen.findByRole("alert")).toHaveTextContent("could not be read");
+    expect(field("Easting")).toHaveValue("700000");
+    expect(screen.getByRole("button", { name: "Apply" })).toBeEnabled();
+  });
+
+  it("does not close while Apply is running, and shows the refusal when it arrives", async () => {
+    const core = fakeCore();
+    let refuse: (error: Error) => void = () => {};
+    core.override(
+      "georef.set",
+      () =>
+        new Promise((_resolve, reject) => {
+          refuse = reject;
+        }),
+    );
+    const { user } = await open(core);
+    await chooseLambert(user);
+    await fillBase(user);
+    await user.click(screen.getByRole("button", { name: "Apply" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Cancel" })).toBeDisabled());
+    expect(screen.getByRole("button", { name: "Apply" })).toBeDisabled();
+    await user.keyboard("{Escape}");
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+
+    await act(async () => refuse(refusal("outside_domain")));
+    expect(
+      await screen.findAllByText(/outside the area where this coordinate system/),
+    ).not.toHaveLength(0);
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Cancel" })).toBeEnabled();
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("refuses a sign together with a hemisphere letter in the rotation", async () => {
+    const { user } = await open(fakeCore({ georeference: PLACED }));
+    await user.clear(field("Grid rotation"));
+    await user.type(field("Grid rotation"), "-10 S");
+    await user.click(screen.getByRole("button", { name: "Apply" }));
+    expect(field("Grid rotation")).toBeInvalid();
+    expect(field("Grid rotation")).toHaveAccessibleDescription(
+      expect.stringContaining("Enter an angle"),
+    );
   });
 });

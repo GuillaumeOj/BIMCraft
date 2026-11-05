@@ -127,6 +127,12 @@ describe("parseAngle", () => {
     "48°x′",
     "10 -5",
     "10 15 -30",
+    // A sign and a hemisphere letter together: `-10 S` could be read either way.
+    "-10 S",
+    "+10 N",
+    "S -10",
+    "-10°15′ W",
+    "\u221210 S",
   ])("rejects %j", (text) => {
     expect(parseAngle(text)).toBeNull();
   });

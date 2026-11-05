@@ -4,6 +4,7 @@ import { useI18n } from "../i18n/I18nProvider";
 import type { MessageKey } from "../i18n/i18n";
 import { Banner } from "../ui/Banner";
 import { CoordinateBlock } from "./CoordinateBlock";
+import { loadErrorMessage } from "./formModel";
 import { type GeorefInfo, useGeoref } from "./GeorefContext";
 import {
   BLOCK_TITLE,
@@ -258,7 +259,7 @@ export function CoordinatesPanel({ pickedPoint = null }: { pickedPoint?: PickedP
   if (state.status === "error") {
     return (
       <div className="panel-note">
-        <Banner>{t("georef.loadError")}</Banner>
+        <Banner>{t(loadErrorMessage(state.reason))}</Banner>
       </div>
     );
   }
@@ -270,5 +271,14 @@ export function CoordinatesPanel({ pickedPoint = null }: { pickedPoint?: PickedP
       </div>
     );
   }
-  return <Converter info={state.info} pickedPoint={pickedPoint} />;
+  return (
+    <>
+      {state.reloadError !== null && (
+        <div className="panel-note">
+          <Banner>{t(loadErrorMessage(state.reloadError.reason))}</Banner>
+        </div>
+      )}
+      <Converter info={state.info} pickedPoint={pickedPoint} />
+    </>
+  );
 }

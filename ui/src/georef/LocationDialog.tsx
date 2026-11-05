@@ -2,7 +2,7 @@ import { useEffect, useId, useRef } from "react";
 import { useI18n } from "../i18n/I18nProvider";
 import { Banner } from "../ui/Banner";
 import { Dialog } from "../ui/Dialog";
-import { reasonMessage } from "./formModel";
+import { loadErrorMessage } from "./formModel";
 import { useGeoref } from "./GeorefContext";
 import { LocationForm } from "./LocationForm";
 
@@ -25,16 +25,14 @@ export function LocationDialog() {
         {t("georef.location.title")}
       </h2>
       {showingForm ? (
-        <LocationForm info={state.info} />
+        <LocationForm info={state.info} reloadError={state.reloadError} />
       ) : (
         <>
           <div className="dialog-body">
             {state.status === "loading" ? (
               <p>{t("georef.loading")}</p>
             ) : (
-              <Banner>
-                {t(state.reason === null ? "georef.loadError" : reasonMessage(state.reason))}
-              </Banner>
+              <Banner>{t(loadErrorMessage(state.reason))}</Banner>
             )}
           </div>
           <div className="dialog-footer">

@@ -24,7 +24,7 @@ A few words used on this page:
 6. Optional: open **Survey point (optional)** and enter the Easting, Northing and Height of your benchmark. Fill in all three, or none.
 7. Choose **Apply** (or press Enter).
 
-**Result:** the dialog closes and a message confirms "Project location applied". The whole setting is one step in the history: press Ctrl+Z (Cmd+Z on macOS) to undo it.
+**Result:** the dialog closes and a message confirms "Project location applied".
 
 When you reopen the dialog, it shows what you entered together with the information BIMCraft derived from it: the true north angle, the latitude and longitude of the base point, the meridian convergence (the angle between grid north and true north), the point scale factor, and the survey point's position in the model.
 

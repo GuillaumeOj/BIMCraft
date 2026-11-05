@@ -9,14 +9,14 @@ import {
   useState,
 } from "react";
 import { apiReason, type Queries, useApi } from "../api";
-import { useI18n } from "../i18n/I18nProvider";
 
 /** The project's georeference with its derived values (`georef.get`). */
 export type GeorefInfo = NonNullable<Queries["georef.get"]["result"]["georeference"]>;
 
 export type GeorefState =
   | { status: "loading" }
-  | { status: "ready"; info: GeorefInfo | null }
+  /** `reloadError` is set when a later reload failed: `info` is then the last known value. */
+  | { status: "ready"; info: GeorefInfo | null; reloadError: { reason: string | null } | null }
   | { status: "error"; reason: string | null };
 
 export type Georef = {
@@ -24,8 +24,8 @@ export type Georef = {
   dialogOpen: boolean;
   openDialog: () => void;
   closeDialog: () => void;
-  /** Shows `message` for a few seconds and announces it; `undoable` adds the undo hint. */
-  notify: (message: string, undoable?: boolean) => void;
+  /** Shows `message` for a few seconds and announces it. */
+  notify: (message: string) => void;
 };
 
 const TOAST_MS = 5000;
@@ -46,34 +46,40 @@ const isOpenShortcut = (event: KeyboardEvent) =>
  */
 export function GeorefProvider({ children }: { children: ReactNode }) {
   const api = useApi();
-  const { t } = useI18n();
   const [state, setState] = useState<GeorefState>({ status: "loading" });
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [toast, setToast] = useState<{ message: string; undoable: boolean } | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
   const latest = useRef(0);
   const toastTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   const load = useCallback(async () => {
     latest.current += 1;
     const mine = latest.current;
-    let next: GeorefState;
+    let next: GeorefState | { failed: string | null };
     try {
       const { georeference } = await api.query("georef.get", {});
-      next = { status: "ready", info: georeference };
+      next = { status: "ready", info: georeference, reloadError: null };
     } catch (error) {
-      next = { status: "error", reason: apiReason(error) };
+      next = { failed: apiReason(error) };
     }
-    // A slower, older answer must not overwrite a newer one. An unchanged georeference keeps its
-    // object, so that every model change does not reset the form and the panel built on it.
-    if (mine === latest.current) {
-      setState((current) =>
+    // A slower, older answer must not overwrite a newer one.
+    if (mine !== latest.current) return;
+    setState((current) => {
+      if ("failed" in next) {
+        // A failed reload keeps the last known state, so that typed input is not lost.
+        return current.status === "ready"
+          ? { ...current, reloadError: { reason: next.failed } }
+          : { status: "error", reason: next.failed };
+      }
+      // An unchanged georeference keeps its object, so that every model change does not reset
+      // the form and the panel built on it.
+      const same =
         current.status === "ready" &&
+        current.reloadError === null &&
         next.status === "ready" &&
-        JSON.stringify(current.info) === JSON.stringify(next.info)
-          ? current
-          : next,
-      );
-    }
+        JSON.stringify(current.info) === JSON.stringify(next.info);
+      return same ? current : next;
+    });
   }, [api]);
 
   useEffect(() => {
@@ -97,9 +103,9 @@ export function GeorefProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => () => clearTimeout(toastTimer.current), []);
 
-  const notify = useCallback((message: string, undoable = false) => {
+  const notify = useCallback((message: string) => {
     clearTimeout(toastTimer.current);
-    setToast({ message, undoable });
+    setToast(message);
     toastTimer.current = setTimeout(() => setToast(null), TOAST_MS);
   }, []);
 
@@ -119,12 +125,7 @@ export function GeorefProvider({ children }: { children: ReactNode }) {
       {children}
       {/* A live region present from the start, so that the first message is announced. */}
       <div className="toast-region" role="status">
-        {toast !== null && (
-          <p className="toast">
-            {toast.message}
-            {toast.undoable && <span className="toast-hint"> {t("georef.undoHint")}</span>}
-          </p>
-        )}
+        {toast !== null && <p className="toast">{toast}</p>}
       </div>
     </GeorefContext.Provider>
   );

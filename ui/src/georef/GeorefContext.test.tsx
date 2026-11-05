@@ -10,13 +10,13 @@ function Probe() {
   const { state, dialogOpen, notify } = useGeoref();
   return (
     <>
-      <p>{`${state.status}${state.status === "ready" ? (state.info === null ? ":none" : ":placed") : ""}`}</p>
+      <p>{`${state.status}${state.status === "ready" ? (state.info === null ? ":none" : ":placed") : ""}${state.status === "ready" && state.reloadError ? ":reload-failed" : ""}`}</p>
       <p>{dialogOpen ? "open" : "closed"}</p>
-      <button type="button" onClick={() => notify("Hello", true)}>
+      <button type="button" onClick={() => notify("Hello")}>
         Notify
       </button>
-      <button type="button" onClick={() => notify("Plain")}>
-        Notify plain
+      <button type="button" onClick={() => notify("Second")}>
+        Notify second
       </button>
     </>
   );
@@ -94,15 +94,33 @@ describe("GeorefProvider", () => {
     expect(screen.getByText("open")).toBeInTheDocument();
   });
 
-  it("shows a toast with an undo hint for a few seconds", async () => {
+  it("keeps the last georeference when a reload fails, and clears the error on the next success", async () => {
+    const core = fakeCore({
+      georeference: {
+        crs_epsg: 2154,
+        base_point: [0, 0, 0],
+        grid_rotation: 0,
+        scale: 1,
+        survey_point: null,
+      },
+    });
+    renderWithCore(<Probe />, core);
+    await screen.findByText("ready:placed");
+    core.failNext("georef.get", new Error("down"));
+    await act(async () => core.notifyChange());
+    expect(await screen.findByText("ready:placed:reload-failed")).toBeInTheDocument();
+    await act(async () => core.notifyChange());
+    expect(await screen.findByText("ready:placed")).toBeInTheDocument();
+  });
+
+  it("shows a toast for a few seconds, and a new one replaces it", async () => {
     renderWithCore(<Probe />, fakeCore());
     await screen.findByText("ready:none");
     vi.useFakeTimers();
     act(() => screen.getByRole("button", { name: "Notify" }).click());
-    expect(screen.getByRole("status")).toHaveTextContent("Hello Press Ctrl+Z to undo");
-    act(() => screen.getByRole("button", { name: "Notify plain" }).click());
-    expect(screen.getByRole("status")).toHaveTextContent("Plain");
-    expect(screen.getByRole("status")).not.toHaveTextContent("undo");
+    expect(screen.getByRole("status")).toHaveTextContent("Hello");
+    act(() => screen.getByRole("button", { name: "Notify second" }).click());
+    expect(screen.getByRole("status")).toHaveTextContent("Second");
     act(() => vi.advanceTimersByTime(5001));
     expect(screen.getByRole("status")).toBeEmptyDOMElement();
   });

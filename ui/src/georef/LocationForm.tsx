@@ -16,6 +16,7 @@ import {
   formatLength,
   formatRotation,
   initialValues,
+  loadErrorMessage,
   reasonMessage,
   type SURVEY_FIELDS,
   toParams,
@@ -94,7 +95,14 @@ function DerivedInfo({ info, dms }: { info: GeorefInfo | null; dms: boolean }) {
 }
 
 /** The form of the Project location dialog, for the project's current georeference `info`. */
-export function LocationForm({ info }: { info: GeorefInfo | null }) {
+export function LocationForm({
+  info,
+  reloadError = null,
+}: {
+  info: GeorefInfo | null;
+  /** Set when the last reload of the georeference failed: the form still shows older values. */
+  reloadError?: { reason: string | null } | null;
+}) {
   const api = useApi();
   const { t, language } = useI18n();
   const { closeDialog, notify } = useGeoref();
@@ -187,7 +195,7 @@ export function LocationForm({ info }: { info: GeorefInfo | null }) {
     try {
       await setGeoreference(api, result.params);
       closeDialog();
-      notify(t("georef.toast.applied"), true);
+      notify(t("georef.toast.applied"));
     } catch (error) {
       refused(error);
     } finally {
@@ -200,7 +208,7 @@ export function LocationForm({ info }: { info: GeorefInfo | null }) {
     try {
       await api.command("georef.clear", {});
       closeDialog();
-      notify(t("georef.toast.removed"), true);
+      notify(t("georef.toast.removed"));
     } catch (error) {
       setConfirmRemove(false);
       setBanner(reasonMessage(apiReason(error)));
@@ -215,12 +223,12 @@ export function LocationForm({ info }: { info: GeorefInfo | null }) {
     setAngleFormat(next);
   };
 
+  // While a command is running nothing closes the dialog, so that its refusal reaches the user.
   // In the removal confirmation Esc keeps the georeference; the dialog stays open.
   const onKeyDown = (event: KeyboardEvent<HTMLFormElement>) => {
-    if (event.key === "Escape" && confirmRemove) {
-      event.preventDefault();
-      setConfirmRemove(false);
-    }
+    if (event.key !== "Escape" || !(busy || confirmRemove)) return;
+    event.preventDefault();
+    if (!busy) setConfirmRemove(false);
   };
 
   const empty = values.crs === null;
@@ -261,6 +269,9 @@ export function LocationForm({ info }: { info: GeorefInfo | null }) {
     <form className="location-form" noValidate onSubmit={apply} onKeyDown={onKeyDown}>
       <div className="dialog-body" inert={confirmRemove}>
         {info === null && <p className="dialog-intro">{t("georef.location.intro")}</p>}
+        {reloadError !== undefined && reloadError !== null && (
+          <Banner>{t(loadErrorMessage(reloadError.reason))}</Banner>
+        )}
         {banner !== null && <Banner>{t(banner)}</Banner>}
 
         <section aria-labelledby={`${prefix}-crs-title`}>
@@ -386,6 +397,7 @@ export function LocationForm({ info }: { info: GeorefInfo | null }) {
               type="button"
               className="button"
               ref={keepButton}
+              disabled={busy}
               onClick={() => setConfirmRemove(false)}
             >
               {t("georef.remove.keep")}
@@ -407,7 +419,7 @@ export function LocationForm({ info }: { info: GeorefInfo | null }) {
             </button>
           )}
           <div className="dialog-actions">
-            <button type="button" className="button" onClick={closeDialog}>
+            <button type="button" className="button" disabled={busy} onClick={closeDialog}>
               {t("georef.action.cancel")}
             </button>
             <button type="submit" className="button button-primary" disabled={busy}>

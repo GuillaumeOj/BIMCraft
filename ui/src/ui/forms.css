@@ -487,10 +487,6 @@
   box-shadow: var(--bc-shadow);
 }
 
-.toast-hint {
-  color: var(--bc-muted);
-}
-
 /* The panel of the right dock: the Coordinates tab. */
 .panel-note {
   display: grid;

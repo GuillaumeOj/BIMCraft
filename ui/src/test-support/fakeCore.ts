@@ -115,7 +115,7 @@ export function fakeCore(options: { georeference?: Georeference | null } = {}) {
       try {
         const failure = failures[method]?.shift();
         if (failure) throw failure;
-        const result = (override[method] ?? builtIn[method])?.(params);
+        const result = await (override[method] ?? builtIn[method])?.(params);
         if (method === "georef.set" || method === "georef.clear") queueMicrotask(push);
         return JSON.stringify({ jsonrpc: "2.0", id, result });
       } catch (error) {
