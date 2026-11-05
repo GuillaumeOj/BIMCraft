@@ -39,6 +39,15 @@
   font-weight: 600;
 }
 
+/* A form between the dialog and its body must pass the height down, or the body never scrolls
+   and the footer falls off a short screen. */
+.dialog > form {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
 .dialog-body {
   flex: 1;
   min-height: 0;
