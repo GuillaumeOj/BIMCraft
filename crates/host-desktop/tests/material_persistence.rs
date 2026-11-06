@@ -7,7 +7,7 @@ use std::path::Path;
 use core_model::{EntityId, Model, Source};
 use core_txn::{Document, ModelCommand, Origin};
 use host_desktop::core_namespace;
-use material::{Category, LawKind, Material, Property, Sourced};
+use material::{Category, Factor, LawKind, Material, NationalAnnex, Property, Sourced};
 use persist::{Connection, Schema, open_model, open_project, save_model};
 use proptest::prelude::*;
 use schema::Namespace;
@@ -47,6 +47,18 @@ fn materials() -> Vec<Material> {
             (
                 Property::MassDensity,
                 sourced(2500.0, "EN 1991-1-1:2002", "Table A.1"),
+            ),
+            (
+                Property::PartialFactor(Factor::GammaC, NationalAnnex::Recommended),
+                ec2(1.5, "2.4.2.4(1)"),
+            ),
+            (
+                Property::PartialFactor(Factor::GammaC, NationalAnnex::France),
+                sourced(1.5, "NF EN 1992-1-1/NA:2016", "2.4.2.4(1)"),
+            ),
+            (
+                Property::PartialFactor(Factor::AlphaCc, NationalAnnex::France),
+                sourced(1.0, "NF EN 1992-1-1/NA:2016", "3.1.6(1)"),
             ),
         ]),
     );
@@ -191,13 +203,14 @@ fn source() -> impl Strategy<Value = Source> {
         .prop_map(|(document, clause)| Source::new(&document, &clause).unwrap())
 }
 
-/// A value `property` accepts: a ratio below one for strains, Poisson's ratio below one half,
-/// at least one for the hardening ratio, else a positive number.
+/// A value `property` accepts: a ratio below one for strains and αcc, Poisson's ratio below one
+/// half, at least one for the hardening ratio and the partial factors, else a positive number.
 #[cfg(test)] // Lets the helper unwrap, as tests may (clippy.toml).
 fn value(property: Property) -> BoxedStrategy<f64> {
     match property {
         Property::PoissonRatio => (0.0..0.5).boxed(),
-        Property::HardeningRatio => (1.0..2.0).boxed(),
+        Property::PartialFactor(Factor::AlphaCc, _) => (0.5..1.0).boxed(),
+        Property::HardeningRatio | Property::PartialFactor(_, _) => (1.0..2.0).boxed(),
         Property::StrainAtPeakStress
         | Property::UltimateCompressiveStrain
         | Property::BilinearStrainAtPeakStress

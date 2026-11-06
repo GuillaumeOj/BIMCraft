@@ -1,5 +1,7 @@
 //! The material properties the core schema defines, each a sourced attribute of `Material`.
 
+use crate::annex::{Factor, NationalAnnex};
+
 /// A material property (MAT-01), stored in the `Material` attribute [`Property::name`] gives.
 /// Values are in SI units: stresses and moduli in pascals, densities in kilograms per cubic
 /// metre, strains and ratios without unit, expansion per kelvin, conductivity in W/(m·K) and
@@ -66,11 +68,13 @@ pub enum Property {
     MeanDensity,
     /// Masonry characteristic compressive strength, fk.
     MasonryCompressiveStrength,
+    /// A partial factor to a national annex.
+    PartialFactor(Factor, NationalAnnex),
 }
 
 impl Property {
     /// Every property, in declaration order.
-    pub const ALL: [Self; 30] = [
+    pub const ALL: [Self; 44] = [
         Self::MassDensity,
         Self::YoungModulus,
         Self::ShearModulus,
@@ -101,6 +105,20 @@ impl Property {
         Self::CharacteristicDensity,
         Self::MeanDensity,
         Self::MasonryCompressiveStrength,
+        Self::PartialFactor(Factor::GammaC, NationalAnnex::Recommended),
+        Self::PartialFactor(Factor::GammaC, NationalAnnex::France),
+        Self::PartialFactor(Factor::AlphaCc, NationalAnnex::Recommended),
+        Self::PartialFactor(Factor::AlphaCc, NationalAnnex::France),
+        Self::PartialFactor(Factor::GammaS, NationalAnnex::Recommended),
+        Self::PartialFactor(Factor::GammaS, NationalAnnex::France),
+        Self::PartialFactor(Factor::GammaM0, NationalAnnex::Recommended),
+        Self::PartialFactor(Factor::GammaM0, NationalAnnex::France),
+        Self::PartialFactor(Factor::GammaM1, NationalAnnex::Recommended),
+        Self::PartialFactor(Factor::GammaM1, NationalAnnex::France),
+        Self::PartialFactor(Factor::GammaM2, NationalAnnex::Recommended),
+        Self::PartialFactor(Factor::GammaM2, NationalAnnex::France),
+        Self::PartialFactor(Factor::GammaM, NationalAnnex::Recommended),
+        Self::PartialFactor(Factor::GammaM, NationalAnnex::France),
     ];
 
     /// The name of the `Material` attribute that stores the property.
@@ -137,6 +155,20 @@ impl Property {
             Self::CharacteristicDensity => "rho_k",
             Self::MeanDensity => "rho_mean",
             Self::MasonryCompressiveStrength => "fk",
+            Self::PartialFactor(Factor::GammaC, NationalAnnex::Recommended) => "gamma_c",
+            Self::PartialFactor(Factor::GammaC, NationalAnnex::France) => "gamma_c_fr",
+            Self::PartialFactor(Factor::AlphaCc, NationalAnnex::Recommended) => "alpha_cc",
+            Self::PartialFactor(Factor::AlphaCc, NationalAnnex::France) => "alpha_cc_fr",
+            Self::PartialFactor(Factor::GammaS, NationalAnnex::Recommended) => "gamma_s",
+            Self::PartialFactor(Factor::GammaS, NationalAnnex::France) => "gamma_s_fr",
+            Self::PartialFactor(Factor::GammaM0, NationalAnnex::Recommended) => "gamma_m0",
+            Self::PartialFactor(Factor::GammaM0, NationalAnnex::France) => "gamma_m0_fr",
+            Self::PartialFactor(Factor::GammaM1, NationalAnnex::Recommended) => "gamma_m1",
+            Self::PartialFactor(Factor::GammaM1, NationalAnnex::France) => "gamma_m1_fr",
+            Self::PartialFactor(Factor::GammaM2, NationalAnnex::Recommended) => "gamma_m2",
+            Self::PartialFactor(Factor::GammaM2, NationalAnnex::France) => "gamma_m2_fr",
+            Self::PartialFactor(Factor::GammaM, NationalAnnex::Recommended) => "gamma_m",
+            Self::PartialFactor(Factor::GammaM, NationalAnnex::France) => "gamma_m_fr",
         }
     }
 
@@ -159,6 +191,7 @@ impl Property {
             | Self::BilinearUltimateCompressiveStrain
             | Self::UltimateStrain => value > 0.0 && value < 1.0,
             Self::HardeningRatio => value.is_finite() && value >= 1.0,
+            Self::PartialFactor(factor, _) => factor.accepts(value),
             _ => value.is_finite() && value > 0.0,
         }
     }
@@ -195,5 +228,9 @@ mod tests {
         assert!(Property::YoungModulus.accepts(210e9));
         assert!(!Property::YoungModulus.accepts(0.0));
         assert!(Property::ThermalConductivity.accepts(0.035));
+        let gamma_c = Property::PartialFactor(Factor::GammaC, NationalAnnex::France);
+        assert_eq!(gamma_c.name(), "gamma_c_fr");
+        assert!(gamma_c.accepts(1.5));
+        assert!(!gamma_c.accepts(0.9));
     }
 }

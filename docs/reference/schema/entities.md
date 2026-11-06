@@ -73,6 +73,20 @@ A substance that elements are made of, such as a concrete or steel grade (MAT-01
 | `rho_k` | mass density (kg/m³), sourced | optional | instance | Timber characteristic density, ρk. |
 | `rho_mean` | mass density (kg/m³), sourced | optional | instance | Timber mean density, ρmean. |
 | `fk` | pressure (Pa), sourced | optional | instance | Masonry characteristic compressive strength, fk. |
+| `gamma_c` | real, sourced | optional | instance | Partial factor γc for concrete, persistent and transient situations, to the recommended values. |
+| `gamma_c_fr` | real, sourced | optional | instance | Partial factor γc for concrete, persistent and transient situations, to the French national annex. |
+| `alpha_cc` | real, sourced | optional | instance | Coefficient αcc for long-term effects on the concrete compressive strength, to the recommended values. |
+| `alpha_cc_fr` | real, sourced | optional | instance | Coefficient αcc for long-term effects on the concrete compressive strength, to the French national annex. |
+| `gamma_s` | real, sourced | optional | instance | Partial factor γs for reinforcing steel, persistent and transient situations, to the recommended values. |
+| `gamma_s_fr` | real, sourced | optional | instance | Partial factor γs for reinforcing steel, persistent and transient situations, to the French national annex. |
+| `gamma_m0` | real, sourced | optional | instance | Partial factor γM0 for the resistance of steel cross-sections, to the recommended values. |
+| `gamma_m0_fr` | real, sourced | optional | instance | Partial factor γM0 for the resistance of steel cross-sections, to the French national annex. |
+| `gamma_m1` | real, sourced | optional | instance | Partial factor γM1 for the resistance of steel members to instability, to the recommended values. |
+| `gamma_m1_fr` | real, sourced | optional | instance | Partial factor γM1 for the resistance of steel members to instability, to the French national annex. |
+| `gamma_m2` | real, sourced | optional | instance | Partial factor γM2 for the resistance of steel cross-sections in tension to fracture, to the recommended values. |
+| `gamma_m2_fr` | real, sourced | optional | instance | Partial factor γM2 for the resistance of steel cross-sections in tension to fracture, to the French national annex. |
+| `gamma_m` | real, sourced | optional | instance | Partial factor γM for timber or masonry, to the recommended values. |
+| `gamma_m_fr` | real, sourced | optional | instance | Partial factor γM for timber or masonry, to the French national annex. |
 
 ### <a id="MaterialOriginal"></a>MaterialOriginal
 

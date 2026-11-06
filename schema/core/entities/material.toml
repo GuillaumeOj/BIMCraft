@@ -219,3 +219,87 @@ name = "fk"
 value = "quantity:pressure"
 sourced = true
 doc = "Masonry characteristic compressive strength, fk."
+
+[[attribute]]
+name = "gamma_c"
+value = "real"
+sourced = true
+doc = "Partial factor γc for concrete, persistent and transient situations, to the recommended values."
+
+[[attribute]]
+name = "gamma_c_fr"
+value = "real"
+sourced = true
+doc = "Partial factor γc for concrete, persistent and transient situations, to the French national annex."
+
+[[attribute]]
+name = "alpha_cc"
+value = "real"
+sourced = true
+doc = "Coefficient αcc for long-term effects on the concrete compressive strength, to the recommended values."
+
+[[attribute]]
+name = "alpha_cc_fr"
+value = "real"
+sourced = true
+doc = "Coefficient αcc for long-term effects on the concrete compressive strength, to the French national annex."
+
+[[attribute]]
+name = "gamma_s"
+value = "real"
+sourced = true
+doc = "Partial factor γs for reinforcing steel, persistent and transient situations, to the recommended values."
+
+[[attribute]]
+name = "gamma_s_fr"
+value = "real"
+sourced = true
+doc = "Partial factor γs for reinforcing steel, persistent and transient situations, to the French national annex."
+
+[[attribute]]
+name = "gamma_m0"
+value = "real"
+sourced = true
+doc = "Partial factor γM0 for the resistance of steel cross-sections, to the recommended values."
+
+[[attribute]]
+name = "gamma_m0_fr"
+value = "real"
+sourced = true
+doc = "Partial factor γM0 for the resistance of steel cross-sections, to the French national annex."
+
+[[attribute]]
+name = "gamma_m1"
+value = "real"
+sourced = true
+doc = "Partial factor γM1 for the resistance of steel members to instability, to the recommended values."
+
+[[attribute]]
+name = "gamma_m1_fr"
+value = "real"
+sourced = true
+doc = "Partial factor γM1 for the resistance of steel members to instability, to the French national annex."
+
+[[attribute]]
+name = "gamma_m2"
+value = "real"
+sourced = true
+doc = "Partial factor γM2 for the resistance of steel cross-sections in tension to fracture, to the recommended values."
+
+[[attribute]]
+name = "gamma_m2_fr"
+value = "real"
+sourced = true
+doc = "Partial factor γM2 for the resistance of steel cross-sections in tension to fracture, to the French national annex."
+
+[[attribute]]
+name = "gamma_m"
+value = "real"
+sourced = true
+doc = "Partial factor γM for timber or masonry, to the recommended values."
+
+[[attribute]]
+name = "gamma_m_fr"
+value = "real"
+sourced = true
+doc = "Partial factor γM for timber or masonry, to the French national annex."

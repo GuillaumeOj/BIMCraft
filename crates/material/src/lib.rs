@@ -11,12 +11,14 @@
 // ARCH-02: forbid, not deny, so nothing in this crate can opt out. See docs/dev/quality.md.
 #![forbid(clippy::disallowed_methods, clippy::disallowed_types)]
 
+mod annex;
 mod law;
 mod material;
 mod model;
 mod property;
 mod source;
 
+pub use annex::{Factor, NationalAnnex};
 pub use core_model::{Source, SourceError};
 pub use law::{
     BehaviourLaw, ConcreteParabolaRectangle, Hardening, LawError, LawKind, LinearElastic,

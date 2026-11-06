@@ -5,6 +5,7 @@ use std::collections::BTreeMap;
 use core_model::units::Quantity;
 use thiserror::Error;
 
+use crate::annex::{Factor, NationalAnnex};
 use crate::law::{
     BehaviourLaw, ConcreteParabolaRectangle, Hardening, LawError, LawKind, LinearElastic,
     SteelBilinear,
@@ -139,7 +140,25 @@ impl Category {
             Self::Masonry => &MASONRY,
             Self::Insulation | Self::Finish | Self::Generic => &[],
         };
+        if let Property::PartialFactor(factor, _) = property {
+            return factor.applies_to(self);
+        }
         COMMON.contains(&property) || own.contains(&property)
+    }
+
+    /// The partial factors that turn the characteristic strength of the category's law into a
+    /// design strength: the strength is divided by their quotient, the first over the second
+    /// when there is one (γc / αcc for concrete). `None` for categories without a structural
+    /// design law.
+    #[must_use]
+    pub const fn strength_divisor(self) -> Option<(Factor, Option<Factor>)> {
+        match self {
+            Self::Concrete => Some((Factor::GammaC, Some(Factor::AlphaCc))),
+            Self::Reinforcement => Some((Factor::GammaS, None)),
+            Self::Steel => Some((Factor::GammaM0, None)),
+            Self::Timber | Self::Masonry => Some((Factor::GammaM, None)),
+            Self::Insulation | Self::Finish | Self::Generic => None,
+        }
     }
 
     /// The properties every material of this category must give, whatever its law: the
@@ -197,6 +216,14 @@ pub enum MaterialError {
     /// A property value is outside its physical range.
     #[error("the property {} is out of range", .0.name())]
     OutOfRange(Property),
+    /// The material gives no value of a partial factor for a national annex.
+    #[error("the material gives no {} for the {} national annex", .factor.key(), .annex.name())]
+    MissingAnnexValue {
+        /// The factor.
+        factor: Factor,
+        /// The annex.
+        annex: NationalAnnex,
+    },
     /// The law's parameters are inconsistent.
     #[error(transparent)]
     Law(#[from] LawError),
@@ -353,6 +380,43 @@ impl Material {
     #[must_use]
     pub fn property(&self, property: Property) -> Option<&Sourced<f64>> {
         self.properties.get(&property)
+    }
+
+    /// The value of `factor` to `annex`, with its source.
+    ///
+    /// # Errors
+    ///
+    /// [`MaterialError::MissingAnnexValue`] when the material does not give it; another
+    /// annex's value is never used in its place.
+    pub fn partial_factor(
+        &self,
+        factor: Factor,
+        annex: NationalAnnex,
+    ) -> Result<&Sourced<f64>, MaterialError> {
+        self.property(Property::PartialFactor(factor, annex))
+            .ok_or(MaterialError::MissingAnnexValue { factor, annex })
+    }
+
+    /// The design behaviour law to `annex`: the characteristic law with its strength divided by
+    /// the category's partial factors (fcd = αcc fck / γc, fyd = fyk / γs, fy / γM0, and
+    /// fk / γM). A linear elastic law, or a category without a design law, is returned
+    /// unchanged.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the material does not give a factor the law needs for this annex.
+    pub fn design_law(&self, annex: NationalAnnex) -> Result<BehaviourLaw, MaterialError> {
+        let Some((factor, over)) = self.category.strength_divisor() else {
+            return Ok(self.law);
+        };
+        if self.law.kind() == LawKind::LinearElastic {
+            return Ok(self.law);
+        }
+        let mut divisor = self.partial_factor(factor, annex)?.value;
+        if let Some(over) = over {
+            divisor /= self.partial_factor(over, annex)?.value;
+        }
+        Ok(self.law.with_strength_divided_by(divisor)?)
     }
 
     /// Every property the material gives, in [`Property`] order.
@@ -695,6 +759,145 @@ pub(crate) mod tests {
             Err(MaterialError::Law(LawError::InvalidParameter(
                 "ultimate_strain"
             )))
+        );
+    }
+
+    fn with_factors(material: &Material, factors: &[(Factor, NationalAnnex, f64)]) -> Material {
+        factors
+            .iter()
+            .fold(material.clone(), |material, (factor, annex, value)| {
+                let property = Property::PartialFactor(*factor, *annex);
+                let value =
+                    Sourced::new(*value, Source::new("EN 1992-1-1:2004", "2.4.2.4").unwrap());
+                material.with_property(property, Some(value)).unwrap()
+            })
+    }
+
+    // Hand calculations (ENG-03), with factors chosen for the test: fck = 30 MPa.
+    // Recommended: fcd = αcc fck / γc = 1.0 × 30 / 1.5 = 20 MPa.
+    // Second annex: fcd = 0.85 × 30 / 1.5 = 17 MPa.
+    #[test]
+    fn the_design_law_divides_the_strength_by_the_annex_factors() {
+        use NationalAnnex::{France, Recommended};
+        let concrete = with_factors(
+            &c30_37(),
+            &[
+                (Factor::GammaC, Recommended, 1.5),
+                (Factor::AlphaCc, Recommended, 1.0),
+                (Factor::GammaC, France, 1.5),
+                (Factor::AlphaCc, France, 0.85),
+            ],
+        );
+        let peak = |annex| concrete.design_law(annex).unwrap().stress(-0.0025).unwrap();
+        assert!((peak(Recommended).si() + 20e6).abs() < 1e-6);
+        assert!((peak(France).si() + 17e6).abs() < 1e-6);
+        let gamma_c = concrete.partial_factor(Factor::GammaC, France).unwrap();
+        assert!((gamma_c.value - 1.5).abs() < f64::EPSILON);
+        assert_eq!(gamma_c.source.clause(), Some("2.4.2.4"));
+
+        // B500B: fyd = 500 / 1.15 = 434.78 MPa on the plastic branch.
+        let base = [
+            (Property::YieldStrength, 500e6),
+            (Property::YoungModulus, 200e9),
+        ];
+        let rebar = with_factors(
+            &steel(&base).unwrap(),
+            &[(Factor::GammaS, Recommended, 1.15)],
+        );
+        let fyd = rebar.design_law(Recommended).unwrap().stress(0.01).unwrap();
+        assert!((fyd.si() - 500e6 / 1.15).abs() < 1e-3);
+    }
+
+    #[test]
+    fn a_missing_annex_value_is_never_replaced_by_another_annex() {
+        use NationalAnnex::{France, Recommended};
+        let concrete = with_factors(
+            &c30_37(),
+            &[
+                (Factor::GammaC, Recommended, 1.5),
+                (Factor::AlphaCc, Recommended, 1.0),
+            ],
+        );
+        assert_eq!(
+            concrete.design_law(France),
+            Err(MaterialError::MissingAnnexValue {
+                factor: Factor::GammaC,
+                annex: France,
+            })
+        );
+        let half = with_factors(&c30_37(), &[(Factor::GammaC, France, 1.5)]);
+        assert_eq!(
+            half.design_law(France),
+            Err(MaterialError::MissingAnnexValue {
+                factor: Factor::AlphaCc,
+                annex: France,
+            })
+        );
+        assert_eq!(
+            MaterialError::MissingAnnexValue {
+                factor: Factor::GammaM0,
+                annex: France
+            }
+            .to_string(),
+            "the material gives no gamma_m0 for the france national annex"
+        );
+    }
+
+    #[test]
+    fn laws_without_strength_have_no_design_factors() {
+        let properties = BTreeMap::from([(Property::YoungModulus, sourced(33e9, "Table 3.1"))]);
+        let elastic = Material::new(
+            "C30/37 elastic",
+            Category::Generic,
+            LawKind::LinearElastic,
+            None,
+            properties,
+        )
+        .unwrap();
+        assert_eq!(
+            elastic.design_law(NationalAnnex::France),
+            Ok(*elastic.law())
+        );
+        let mut properties = BTreeMap::from([(Property::YoungModulus, sourced(33e9, "Table 3.1"))]);
+        properties.insert(
+            Property::CharacteristicCompressiveStrength,
+            sourced(30e6, "Table 3.1"),
+        );
+        let concrete = Material::new(
+            "C30/37 elastic",
+            Category::Concrete,
+            LawKind::LinearElastic,
+            None,
+            properties,
+        )
+        .unwrap();
+        assert_eq!(
+            concrete.design_law(NationalAnnex::France),
+            Ok(*concrete.law())
+        );
+        assert_eq!(Category::Finish.strength_divisor(), None);
+        assert_eq!(
+            Category::Timber.strength_divisor(),
+            Some((Factor::GammaM, None))
+        );
+    }
+
+    #[test]
+    fn factors_belong_to_their_category_and_have_a_range() {
+        let foreign = Property::PartialFactor(Factor::GammaS, NationalAnnex::Recommended);
+        assert!(!Category::Concrete.gives(foreign));
+        assert!(Category::Reinforcement.gives(foreign));
+        assert_eq!(
+            c30_37().with_property(foreign, Some(sourced(1.15, "2.4.2.4"))),
+            Err(MaterialError::PropertyNotForCategory {
+                category: Category::Concrete,
+                property: foreign,
+            })
+        );
+        let gamma_c = Property::PartialFactor(Factor::GammaC, NationalAnnex::Recommended);
+        assert_eq!(
+            c30_37().with_property(gamma_c, Some(sourced(0.5, "2.4.2.4"))),
+            Err(MaterialError::OutOfRange(gamma_c))
         );
     }
 
