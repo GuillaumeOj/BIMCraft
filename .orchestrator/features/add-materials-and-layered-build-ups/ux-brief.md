@@ -4,7 +4,7 @@ For `ux` (T3), then `ui` (T4, T7). Read `spec.md` (D3–D6) and `api-contract.md
 
 ## Starting points in the design file
 
-Open `docs/BIMCraft.figcraft` (repository copy, Git LFS; see `docs/dev/ui-design.md`):
+Open the project's shared design file `/Users/guillaume/Library/CloudStorage/GoogleDrive-guillaume.ojardias@gmail.com/My Drive/BIMCraft.figcraft` (outside the repository; never edit `docs/BIMCraft.figcraft`):
 
 - Page `4 · Structure modelling`, board **4.6 "Material library"**: a modal with a searchable list on the left and the selected material's properties (value, source) in tabs on the right. A concept, not a spec.
 - Page `3 · Architecture modelling`, board **3.3 "Wall type — layers and location line"**: a layer table (#, function, material, thickness, join priority), Add / Move up / Move down / Remove, total, a schematic section preview, Apply. The location line part is **out of scope** here (ARC-30, later); the build-up editor must be reusable inside that future wall-type editor.
