@@ -2001,6 +2001,17 @@
               ],
               "description": "Ratio k of the tensile strength to the yield strength, at least 1."
             },
+            "library_key": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The key of the library grade the material was created from, such as `concrete/C30-37`. Unset: the material was created from scratch."
+            },
             "n": {
               "anyOf": [
                 {
@@ -2218,6 +2229,43 @@
             "generic"
           ],
           "type": "string"
+        },
+        "MaterialOriginal": {
+          "additionalProperties": false,
+          "description": "The library value of a material property that the user has since edited, kept with its source so that resetting the property restores it (MAT-02, ADR 0019). A material has at most one per property.",
+          "properties": {
+            "key": {
+              "description": "The name of the edited `Material` attribute, such as `fck`.",
+              "type": "string"
+            },
+            "material": {
+              "$ref": "#/$defs/ObjectId",
+              "description": "The material whose property was edited."
+            },
+            "value": {
+              "additionalProperties": false,
+              "description": "The library value, in the attribute's SI unit, with the document and clause it comes from.",
+              "properties": {
+                "source": {
+                  "$ref": "#/$defs/Source"
+                },
+                "value": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "value",
+                "source"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "material",
+            "key",
+            "value"
+          ],
+          "type": "object"
         },
         "ObjectId": {
           "description": "The stable 128-bit identifier of an object, as an IFC GlobalId.",

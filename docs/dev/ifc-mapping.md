@@ -9,4 +9,5 @@ Checks: validation rejects an entity with no mapping; `cargo test -p interop-ifc
 | Entity | Kind | IFC entity | Predefined type | Object type | IFC type entity |
 | --- | --- | --- | --- | --- | --- |
 | `Material` | resource | `IfcMaterial` |  |  |  |
+| `MaterialOriginal` | resource | `IfcMaterialProperties` |  |  |  |
 | `Site` | spatial | `IfcSite` |  |  |  |

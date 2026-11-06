@@ -12,6 +12,10 @@ use crate::material::{Category, Material, MaterialError};
 use crate::property::Property;
 use crate::source::Sourced;
 
+mod edit;
+
+pub use edit::{EditError, ORIGINAL_ENTITY, Original, delete, originals, reset_value, set_value};
+
 /// The core schema entity that stores materials.
 pub const ENTITY: &str = "Material";
 
@@ -48,11 +52,14 @@ pub fn commands(id: EntityId, material: &Material) -> ModelCommand {
     if let Some(code) = material.design_code() {
         values.push(text("design_code", code));
     }
-    values.extend(material.properties().map(|(property, sourced)| {
-        let value =
-            AttributeValue::sourced(AttributeValue::Real(sourced.value), sourced.source.clone());
-        (property.name().to_owned(), value)
-    }));
+    if let Some(key) = material.library_key() {
+        values.push(text("library_key", key));
+    }
+    values.extend(
+        material
+            .properties()
+            .map(|(property, value)| (property.name().to_owned(), edit::sourced_value(value))),
+    );
     ModelCommand::Create {
         id,
         entity: ENTITY.to_owned(),
@@ -78,6 +85,7 @@ pub fn read(model: &Model, id: EntityId) -> Result<Material, ReadError> {
         .and_then(|name| LawKind::from_name(&name))
         .ok_or(ReadError::UnknownLaw)?;
     let design_code = attribute(model, id, "design_code")?;
+    let library_key = attribute(model, id, "library_key")?;
     let mut properties = BTreeMap::new();
     for property in Property::ALL {
         // The model keeps every value of these sourced attributes with its source (ADR 0018).
@@ -88,13 +96,8 @@ pub fn read(model: &Model, id: EntityId) -> Result<Material, ReadError> {
             properties.insert(property, Sourced::new(value, sourced.source));
         }
     }
-    Ok(Material::new(
-        &name,
-        category,
-        law,
-        design_code.as_deref(),
-        properties,
-    )?)
+    let material = Material::new(&name, category, law, design_code.as_deref(), properties)?;
+    Ok(material.with_library_key(library_key.as_deref().unwrap_or_default())?)
 }
 
 fn text(name: &str, value: &str) -> (String, AttributeValue) {

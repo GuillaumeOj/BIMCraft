@@ -36,6 +36,11 @@ value = "text"
 doc = "The design code the properties follow, such as `EN 1992-1-1:2004`."
 
 [[attribute]]
+name = "library_key"
+value = "text"
+doc = "The key of the library grade the material was created from, such as `concrete/C30-37`. Unset: the material was created from scratch."
+
+[[attribute]]
 name = "density"
 value = "quantity:mass_density"
 sourced = true

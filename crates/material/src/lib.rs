@@ -23,7 +23,10 @@ pub use law::{
     SteelBilinear,
 };
 pub use material::{Category, Material, MaterialError};
-pub use model::{ENTITY, ReadError, commands, read};
+pub use model::{
+    ENTITY, EditError, ORIGINAL_ENTITY, Original, ReadError, commands, delete, originals, read,
+    reset_value, set_value,
+};
 pub use property::Property;
 pub use source::{MAX_TEXT_LEN, Sourced};
 

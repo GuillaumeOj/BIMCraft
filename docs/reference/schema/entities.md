@@ -42,6 +42,7 @@ A substance that elements are made of, such as a concrete or steel grade (MAT-01
 | `category` | enumeration [MaterialCategory](enumerations.md#MaterialCategory) | required | instance | What the material is. |
 | `behaviour_law` | enumeration [BehaviourLaw](enumerations.md#BehaviourLaw) | required | instance | How stress follows strain. |
 | `design_code` | text | optional | instance | The design code the properties follow, such as `EN 1992-1-1:2004`. |
+| `library_key` | text | optional | instance | The key of the library grade the material was created from, such as `concrete/C30-37`. Unset: the material was created from scratch. |
 | `density` | mass density (kg/m³), sourced | optional | instance | Mass per unit volume, in kg/m³. |
 | `e_modulus` | pressure (Pa), sourced | optional | instance | Modulus of elasticity; for concrete, the secant modulus Ecm. |
 | `shear_modulus` | pressure (Pa), sourced | optional | instance | Shear modulus G. |
@@ -72,3 +73,18 @@ A substance that elements are made of, such as a concrete or steel grade (MAT-01
 | `rho_k` | mass density (kg/m³), sourced | optional | instance | Timber characteristic density, ρk. |
 | `rho_mean` | mass density (kg/m³), sourced | optional | instance | Timber mean density, ρmean. |
 | `fk` | pressure (Pa), sourced | optional | instance | Masonry characteristic compressive strength, fk. |
+
+### <a id="MaterialOriginal"></a>MaterialOriginal
+
+The library value of a material property that the user has since edited, kept with its source so that resetting the property restores it (MAT-02, ADR 0019). A material has at most one per property.
+
+- **Introduced in:** version 3
+- **IFC:** `IfcMaterialProperties`
+
+#### Attributes
+
+| Attribute | Value | Presence | Set on | Description |
+| --- | --- | --- | --- | --- |
+| `material` | reference to [Material](#Material) | required | instance | The material whose property was edited. |
+| `key` | text | required | instance | The name of the edited `Material` attribute, such as `fck`. |
+| `value` | real, sourced | required | instance | The library value, in the attribute's SI unit, with the document and clause it comes from. |

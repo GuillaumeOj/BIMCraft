@@ -209,6 +209,7 @@ pub struct Material {
     category: Category,
     law: BehaviourLaw,
     design_code: Option<String>,
+    library_key: Option<String>,
     properties: BTreeMap<Property, Sourced<f64>>,
 }
 
@@ -274,7 +275,47 @@ impl Material {
             category,
             law,
             design_code: design_code.map(str::to_owned),
+            library_key: None,
             properties,
+        })
+    }
+
+    /// The same material, created from the library grade `key`; a blank key clears it.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the key is longer than [`MAX_TEXT_LEN`] characters.
+    pub fn with_library_key(mut self, key: &str) -> Result<Self, MaterialError> {
+        let key = bounded_text(key).map_err(|_| MaterialError::TooLong("library key"))?;
+        self.library_key = key.map(str::to_owned);
+        Ok(self)
+    }
+
+    /// The same material with `property` set to `value`, checked like [`Material::new`].
+    ///
+    /// # Errors
+    ///
+    /// Fails as [`Material::new`] does on the changed properties.
+    pub fn with_property(
+        &self,
+        property: Property,
+        value: Option<Sourced<f64>>,
+    ) -> Result<Self, MaterialError> {
+        let mut properties = self.properties.clone();
+        match value {
+            Some(value) => properties.insert(property, value),
+            None => properties.remove(&property),
+        };
+        let changed = Self::new(
+            &self.name,
+            self.category,
+            self.law.kind(),
+            self.design_code.as_deref(),
+            properties,
+        )?;
+        Ok(Self {
+            library_key: self.library_key.clone(),
+            ..changed
         })
     }
 
@@ -300,6 +341,12 @@ impl Material {
     #[must_use]
     pub fn design_code(&self) -> Option<&str> {
         self.design_code.as_deref()
+    }
+
+    /// The key of the library grade the material was created from, if any.
+    #[must_use]
+    pub fn library_key(&self) -> Option<&str> {
+        self.library_key.as_deref()
     }
 
     /// The value of `property` with its source, if the material gives it.

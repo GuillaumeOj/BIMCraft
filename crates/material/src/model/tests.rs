@@ -10,16 +10,16 @@ use super::*;
 use crate::{LawKind, Source};
 
 /// The core schema, loaded once for every test.
-static CORE: LazyLock<Namespace> = LazyLock::new(|| {
+pub(super) static CORE: LazyLock<Namespace> = LazyLock::new(|| {
     let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../schema/core");
     schema_gen::load_namespace(&dir).unwrap()
 });
 
-fn model() -> Model {
+pub(super) fn model() -> Model {
     Model::new(&CORE).unwrap()
 }
 
-fn s355() -> Material {
+pub(super) fn s355() -> Material {
     let sourced =
         |value, clause| Sourced::new(value, Source::new("EN 1993-1-1:2005", clause).unwrap());
     let properties = BTreeMap::from([
@@ -42,9 +42,9 @@ fn s355() -> Material {
     .unwrap()
 }
 
-const ID: EntityId = EntityId::new(7);
+pub(super) const ID: EntityId = EntityId::new(7);
 
-fn stored() -> Document<ModelCommand> {
+pub(super) fn stored() -> Document<ModelCommand> {
     let mut document = Document::new(model());
     document.execute(commands(ID, &s355()), Origin::Ui).unwrap();
     document

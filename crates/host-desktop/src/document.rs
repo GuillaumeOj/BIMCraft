@@ -21,6 +21,10 @@ pub(crate) const CORE_SCHEMA: &[(&str, &str)] = &[
         include_str!("../../../schema/core/entities/material.toml"),
     ),
     (
+        "entities/material_original.toml",
+        include_str!("../../../schema/core/entities/material_original.toml"),
+    ),
+    (
         "entities/site.toml",
         include_str!("../../../schema/core/entities/site.toml"),
     ),

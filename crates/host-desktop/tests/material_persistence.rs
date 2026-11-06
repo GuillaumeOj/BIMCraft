@@ -126,8 +126,28 @@ fn assert_same(saved: &Model, reopened: &Model, materials: &[Material]) {
 #[test]
 fn materials_keep_every_value_and_source_after_reopening() {
     let namespace = core_namespace().unwrap();
-    let materials = materials();
-    let saved = model_with(&namespace, &materials);
+    let mut materials = materials();
+    let mut document = Document::<ModelCommand>::new(model_with(&namespace, &materials));
+    // The user edits fck of C30/37 and fu of S355: their library values are kept aside.
+    let concrete = EntityId::new(1);
+    let steel = EntityId::new(2);
+    let edits = [
+        (
+            concrete,
+            Property::CharacteristicCompressiveStrength,
+            28e6,
+            101,
+        ),
+        (steel, Property::UltimateStrength, 500e6, 102),
+    ];
+    for (id, property, value, original) in edits {
+        let model = document.model();
+        let command = material::set_value(model, id, property, value, EntityId::new(original));
+        document.execute(command.unwrap(), Origin::Ui).unwrap();
+    }
+    materials[0] = material::read(document.model(), concrete).unwrap();
+    materials[1] = material::read(document.model(), steel).unwrap();
+    let saved = document.model().clone();
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("materials.bim");
 
@@ -135,10 +155,31 @@ fn materials_keep_every_value_and_source_after_reopening() {
     let reopened = reopen(&path, &namespace);
 
     assert_same(&saved, &reopened, &materials);
-    let concrete = material::read(&reopened, EntityId::new(1)).unwrap();
-    let density = concrete.property(Property::MassDensity).unwrap();
+    for id in [concrete, steel] {
+        assert_eq!(
+            material::originals(&reopened, id),
+            material::originals(&saved, id)
+        );
+    }
+    let read = material::read(&reopened, concrete).unwrap();
+    let fck = read
+        .property(Property::CharacteristicCompressiveStrength)
+        .unwrap();
+    assert!(fck.source.is_user());
+    let density = read.property(Property::MassDensity).unwrap();
     assert_eq!(density.source.document(), Some("EN 1991-1-1:2002"));
     assert_eq!(density.source.clause(), Some("Table A.1"));
+
+    // Reset still restores the library value and source after reopening.
+    let mut document = Document::<ModelCommand>::new(reopened);
+    let command = material::reset_value(
+        document.model(),
+        concrete,
+        Property::CharacteristicCompressiveStrength,
+    );
+    document.execute(command.unwrap(), Origin::Ui).unwrap();
+    let reset = material::read(document.model(), concrete).unwrap();
+    assert_eq!(Some(&reset), self::materials().first());
 }
 
 #[cfg(test)] // Lets the helper unwrap, as tests may (clippy.toml).

@@ -40,6 +40,13 @@
           "doc": "The design code the properties follow, such as `EN 1992-1-1:2004`."
         },
         {
+          "name": "library_key",
+          "value": "text",
+          "presence": "optional",
+          "placement": "instance",
+          "doc": "The key of the library grade the material was created from, such as `concrete/C30-37`. Unset: the material was created from scratch."
+        },
+        {
           "name": "density",
           "value": "quantity:mass_density",
           "presence": "optional",
@@ -277,6 +284,41 @@
           "presence": "optional",
           "placement": "instance",
           "doc": "Masonry characteristic compressive strength, fk.",
+          "sourced": true
+        }
+      ],
+      "roles": [],
+      "representations": []
+    },
+    {
+      "name": "MaterialOriginal",
+      "kind": "resource",
+      "doc": "The library value of a material property that the user has since edited, kept with its source so that resetting the property restores it (MAT-02, ADR 0019). A material has at most one per property.",
+      "property_sets": [],
+      "ifc": {
+        "entity": "IfcMaterialProperties"
+      },
+      "attributes": [
+        {
+          "name": "material",
+          "value": "ref:Material",
+          "presence": "required",
+          "placement": "instance",
+          "doc": "The material whose property was edited."
+        },
+        {
+          "name": "key",
+          "value": "text",
+          "presence": "required",
+          "placement": "instance",
+          "doc": "The name of the edited `Material` attribute, such as `fck`."
+        },
+        {
+          "name": "value",
+          "value": "real",
+          "presence": "required",
+          "placement": "instance",
+          "doc": "The library value, in the attribute's SI unit, with the document and clause it comes from.",
           "sourced": true
         }
       ],
