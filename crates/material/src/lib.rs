@@ -17,6 +17,7 @@ mod model;
 mod property;
 mod source;
 
+pub use core_model::{Source, SourceError};
 pub use law::{
     BehaviourLaw, ConcreteParabolaRectangle, Hardening, LawError, LawKind, LinearElastic,
     SteelBilinear,
@@ -24,7 +25,7 @@ pub use law::{
 pub use material::{Category, Material, MaterialError};
 pub use model::{ENTITY, ReadError, commands, read};
 pub use property::{CONCRETE_SET, MECHANICAL_SET, Property, STEEL_SET};
-pub use source::{MAX_TEXT_LEN, Source, SourceError, Sourced};
+pub use source::{MAX_TEXT_LEN, Sourced};
 
 /// Property-test settings shared by the crate. A fixed seed keeps runs reproducible; with no
 /// persistence, no regression files are written next to the sources.

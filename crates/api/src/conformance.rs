@@ -53,6 +53,7 @@ pub fn namespace() -> Namespace {
             presence: Presence::Optional,
             placement: Placement::Instance,
             doc: None,
+            sourced: false,
         }],
         roles: Vec::new(),
         representations: Vec::new(),

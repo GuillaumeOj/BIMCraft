@@ -342,6 +342,7 @@ impl<'a> Builder<'a> {
             presence,
             placement: definition.on.into(),
             doc: definition.doc,
+            sourced: definition.sourced,
         })
     }
 

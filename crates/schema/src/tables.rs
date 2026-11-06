@@ -91,6 +91,7 @@ mod tests {
             presence,
             placement,
             doc: None,
+            sourced: false,
         }
     }
 

@@ -51,6 +51,7 @@ fn namespace() -> Namespace {
         presence: Presence::Optional,
         placement: Placement::Instance,
         doc: None,
+        sourced: false,
     };
     let space = Entity {
         name: "Space".into(),

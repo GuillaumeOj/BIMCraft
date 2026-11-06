@@ -230,6 +230,11 @@ fn every_value_and_origin_matches_the_schema() {
         json!({ "Text": "W" }),
         json!({ "Ref": format!("{:032x}", 9) }),
         json!({ "List": [{ "List": [] }, { "Real": 1 }] }),
+        serde_json::to_value(core_model::AttributeValue::sourced(
+            core_model::AttributeValue::Real(30e6),
+            core_model::Source::new("EN 1992-1-1:2004", "Table 3.1").unwrap(),
+        ))
+        .unwrap(),
     ] {
         value.assert_valid(&instance);
     }

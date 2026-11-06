@@ -70,7 +70,8 @@ fn write_model(
         row.push(Value::Blob(codec::id_to_sql(id)));
         for column in &table.columns {
             let value = values.next_if(|(name, _)| *name == column.name);
-            row.push(value.map_or(Value::Null, |(_, value)| codec::to_sql(&value)));
+            let value = value.as_ref().map(|(_, value)| value);
+            codec::push_row_values(&mut row, value, column.sourced);
         }
         if let Some((attribute, _)) = values.next() {
             return Err(StoreError::UnknownAttribute {
@@ -108,8 +109,17 @@ pub fn open_model(conn: &mut Connection, schema: &Schema<'_>) -> Result<Store, P
         let mut rows = select.query([])?;
         while let Some(row) = rows.next()? {
             let id = codec::id_from_sql(row.get_ref(0)?)?;
-            for (index, column) in (1..).zip(&table.columns) {
-                if let Some(value) = codec::from_sql(row.get_ref(index)?, column.value_type)? {
+            let mut index = 1;
+            for column in &table.columns {
+                let cell = |offset| row.get_ref(index + offset);
+                let value = if column.sourced {
+                    let cells = [cell(0)?, cell(1)?, cell(2)?];
+                    codec::sourced_from_sql(cells, column.value_type)?
+                } else {
+                    codec::from_sql(cell(0)?, column.value_type)?
+                };
+                index += column.width();
+                if let Some(value) = value {
                     values.push((column.name, value));
                 }
             }
@@ -308,6 +318,12 @@ mod tests {
             format!("UPDATE {table} SET id = x'00'"),
             format!("UPDATE {table} SET is_external = 7"),
             format!("UPDATE {table} SET tags = x'FFFFFFFF'"),
+            format!("UPDATE {table} SET \"strength@clause\" = '3.1'"),
+            format!("UPDATE {table} SET strength = 1.0"),
+            format!(
+                "UPDATE {table} SET strength = 1.0, \"strength@document\" = ' ', \
+                 \"strength@clause\" = '3.1'"
+            ),
         ];
         let namespace = namespace();
         let mut store = Store::new(&namespace).unwrap();

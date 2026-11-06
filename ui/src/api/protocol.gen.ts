@@ -2,7 +2,7 @@
 // `bun scripts/generate-api-types.ts` after changing the API.
 
 /** An attribute or property value; reals are in SI units. */
-export type AttributeValue = { Bool: boolean } | { Integer: number } | { Real: number } | { Text: string } | { Ref: EntityId } | { List: Array<AttributeValue> };
+export type AttributeValue = { Bool: boolean } | { Integer: number } | { Real: number } | { Text: string } | { Ref: EntityId } | { List: Array<AttributeValue> } | { Sourced: { source: Source; value: AttributeValue } };
 
 export type ChangeEvent = { created: Array<EntityId>; deleted: Array<EntityId>; modified: Array<EntityId> };
 
@@ -20,6 +20,9 @@ export type NameValue = [string, AttributeValue];
 
 /** Who issued a command. */
 export type Origin = { kind: "ui" } | { kind: "plugin"; name: string } | { id: string; kind: "ai_session" };
+
+/** The document and clause a sourced value comes from (ADR 0018). */
+export type Source = { clause: string; document: string };
 
 /** Every command: its parameters and its result. */
 export interface Commands {

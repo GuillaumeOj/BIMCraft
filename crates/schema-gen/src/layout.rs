@@ -39,6 +39,8 @@ pub struct Field {
 pub enum FieldType {
     /// A value of an attribute or property.
     Value(ValueType),
+    /// A value of a sourced attribute or property, with its source (ADR 0018).
+    Sourced(ValueType),
     /// The objects playing a role of a relationship.
     Role(Cardinality),
 }
@@ -163,8 +165,16 @@ fn attribute_field(attribute: &Attribute) -> Field {
     Field {
         name: attribute.name.clone(),
         doc: attribute_doc(attribute),
-        ty: FieldType::Value(attribute.value.clone()),
+        ty: value_field_type(attribute),
         kind,
+    }
+}
+
+fn value_field_type(attribute: &Attribute) -> FieldType {
+    if attribute.sourced {
+        FieldType::Sourced(attribute.value.clone())
+    } else {
+        FieldType::Value(attribute.value.clone())
     }
 }
 
@@ -176,7 +186,7 @@ fn override_field(attribute: &Attribute) -> Field {
     Field {
         name: attribute.name.clone(),
         doc,
-        ty: FieldType::Value(attribute.value.clone()),
+        ty: value_field_type(attribute),
         kind: FieldKind::Optional,
     }
 }

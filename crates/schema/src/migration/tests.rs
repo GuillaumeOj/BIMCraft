@@ -10,6 +10,7 @@ fn attribute(name: &str, value: &str, presence: Presence, placement: Placement) 
         presence,
         placement,
         doc: None,
+        sourced: false,
     }
 }
 
@@ -65,6 +66,7 @@ fn stored(name: &str, value: &str) -> StoredAttribute {
     StoredAttribute {
         name: name.into(),
         value: value.parse().unwrap(),
+        sourced: false,
     }
 }
 
@@ -544,6 +546,33 @@ fn type_objects_are_stored_in_their_own_table() {
 }
 
 #[test]
+fn sourced_attributes_cannot_be_set_by_a_step() {
+    let sourced = || Attribute {
+        sourced: true,
+        ..optional("strength", "real")
+    };
+    let before = namespace(1, vec![wall(vec![sourced()])]);
+    let after = namespace(
+        2,
+        vec![wall(vec![Attribute {
+            presence: Presence::Required,
+            ..sourced()
+        }])],
+    );
+    let set = DeclaredStep::SetValue {
+        entity: "Wall".into(),
+        attribute: "strength".into(),
+        value: Value::Real(30e6),
+    };
+    let found = errors(&before, &[set], &after);
+    assert_eq!(found[0], MigrationError::SourcedValue { step: 1 });
+    assert_eq!(
+        found[0].to_string(),
+        "step 1: a sourced attribute cannot be set by a set_value step: add a custom step"
+    );
+}
+
+#[test]
 fn set_value_picks_an_item_of_the_enumeration() {
     use crate::{EnumItem, Enumeration};
     let before = namespace(1, vec![wall(vec![optional("side", "text")])]);
@@ -579,4 +608,32 @@ fn set_value_picks_an_item_of_the_enumeration() {
             },
         ]
     );
+}
+
+#[test]
+fn sourcing_changes_need_a_custom_step() {
+    let before = namespace(1, vec![wall(vec![optional("strength", "real")])]);
+    let sourced = Attribute {
+        sourced: true,
+        ..optional("strength", "real")
+    };
+    let after = namespace(2, vec![wall(vec![sourced])]);
+    let error = errors(&before, &[], &after);
+    assert_eq!(
+        error,
+        [MigrationError::SourcedChanged {
+            entity: "Wall".into(),
+            attribute: "strength".into(),
+        }]
+    );
+    assert_eq!(
+        error[0].to_string(),
+        "attribute \"strength\" of \"Wall\" changes whether its values carry a source: add a \
+         custom step"
+    );
+    let custom = DeclaredStep::Custom {
+        entities: vec!["Wall".into()],
+        function: "migrations::v2::cite_strengths".into(),
+    };
+    assert!(resolve(&before, &[custom], &after).is_ok());
 }

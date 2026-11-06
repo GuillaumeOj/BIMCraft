@@ -85,6 +85,8 @@ pub struct AttributeDef {
     #[serde(default)]
     pub on: PlacementDef,
     pub doc: Option<String>,
+    #[serde(default)]
+    pub sourced: bool,
 }
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, Serialize)]

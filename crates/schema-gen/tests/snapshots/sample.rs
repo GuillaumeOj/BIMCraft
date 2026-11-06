@@ -260,12 +260,12 @@ pub struct PsetWallCommon {
     #[serde(rename = "FireRating")]
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub fire_rating: Option<String>,
-    /// The `UValue` value.
+    /// Thermal transmittance, with the test report or standard it comes from.
     ///
     /// In W/(m²·K).
     #[serde(rename = "UValue")]
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub u_value: Option<f64>,
+    pub u_value: Option<Sourced<f64>>,
 }
 
 impl PsetWallCommon {
@@ -284,4 +284,24 @@ pub enum WallFunction {
     /// `partition`.
     #[serde(rename = "partition")]
     Partition,
+}
+
+/// A value with the document and clause it comes from.
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Sourced<T> {
+    /// The value.
+    pub value: T,
+    /// Where the value comes from.
+    pub source: Source,
+}
+
+/// The document and clause a value comes from.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Source {
+    /// The document, with its edition, such as `EN 1992-1-1:2004`.
+    pub document: String,
+    /// The clause, table or annex number within the document.
+    pub clause: String,
 }

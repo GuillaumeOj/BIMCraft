@@ -270,7 +270,7 @@ fn build_law(
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
-    use crate::source::Source;
+    use crate::Source;
 
     pub(crate) fn sourced(value: f64, clause: &str) -> Sourced<f64> {
         Sourced::new(value, Source::new("EN 1992-1-1:2004", clause).unwrap())

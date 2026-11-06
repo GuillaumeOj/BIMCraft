@@ -106,7 +106,22 @@ fn shared() -> Map<String, Value> {
             variant("Text", &json!({ "type": "string" })),
             variant("Ref", &def("EntityId")),
             variant("List", &array_of(def("AttributeValue"))),
+            variant(
+                "Sourced",
+                &object(
+                    &[("value", def("AttributeValue")), ("source", def("Source"))],
+                    &[],
+                ),
+            ),
         ],
+    });
+    let part = || json!({ "type": "string", "minLength": 1 });
+    let source = json!({
+        "description": "The document and clause a sourced value comes from (ADR 0018).",
+        "type": "object",
+        "properties": { "document": part(), "clause": part() },
+        "required": ["document", "clause"],
+        "additionalProperties": false,
     });
     let text = || json!({ "type": "string" });
     let origin = json!({
@@ -133,6 +148,7 @@ fn shared() -> Map<String, Value> {
             crate::commands::model_command_schema(),
         ),
         ("Origin".to_owned(), origin),
+        ("Source".to_owned(), source),
     ]);
     defs
 }

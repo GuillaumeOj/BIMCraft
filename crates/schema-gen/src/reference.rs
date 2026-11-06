@@ -373,12 +373,22 @@ fn attribute_table(out: &mut String, label: &str, attributes: &[Attribute], page
             out,
             &[
                 &code(&attribute.name),
-                &value_type(&attribute.value, page),
+                &sourced_value_type(attribute, page),
                 &presence,
                 placement,
                 &attribute.doc.as_deref().map(prose).unwrap_or_default(),
             ],
         );
+    }
+}
+
+/// The value type of an attribute, marked when each value carries its source (ADR 0018).
+fn sourced_value_type(attribute: &Attribute, page: &str) -> String {
+    let value = value_type(&attribute.value, page);
+    if attribute.sourced {
+        format!("{value}, sourced")
+    } else {
+        value
     }
 }
 

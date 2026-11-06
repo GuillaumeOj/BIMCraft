@@ -26,6 +26,7 @@ fn attribute(name: &str, value: ValueType, presence: Presence) -> Attribute {
         presence,
         placement: Placement::Instance,
         doc: None,
+        sourced: false,
     }
 }
 

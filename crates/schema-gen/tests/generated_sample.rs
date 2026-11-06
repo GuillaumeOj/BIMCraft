@@ -15,8 +15,8 @@ mod generated {
 }
 
 use generated::{
-    Beam, BeamSection, Containment, Material, Opening, PsetWallCommon, Recess, Storey, Voiding,
-    Wall, WallFunction, WallType,
+    Beam, BeamSection, Containment, Material, Opening, PsetWallCommon, Recess, Source, Sourced,
+    Storey, Voiding, Wall, WallFunction, WallType,
 };
 
 /// The sample's JSON Schema, parsed once.
@@ -180,12 +180,25 @@ fn property_names_keep_their_ifc_spelling() {
         is_external: Some(true),
         load_bearing: true,
         fire_rating: Some("REI 60".into()),
-        u_value: Some(0.25),
+        u_value: Some(Sourced {
+            value: 0.25,
+            source: Source {
+                document: "EN ISO 6946:2017".into(),
+                clause: "6.7".into(),
+            },
+        }),
     };
     assert_eq!(
         serde_json::to_value(&property_set).unwrap(),
-        json!({ "IsExternal": true, "LoadBearing": true, "FireRating": "REI 60", "UValue": 0.25 })
+        json!({
+            "IsExternal": true,
+            "LoadBearing": true,
+            "FireRating": "REI 60",
+            "UValue": { "value": 0.25, "source": { "document": "EN ISO 6946:2017", "clause": "6.7" } }
+        })
     );
+    let unsourced = json!({ "LoadBearing": true, "UValue": 0.25 });
+    assert!(serde_json::from_value::<PsetWallCommon>(unsourced).is_err());
     round_trip("Pset_WallCommon", &property_set).unwrap();
 }
 

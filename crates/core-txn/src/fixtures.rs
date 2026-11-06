@@ -18,6 +18,7 @@ fn attribute(name: &str, value: ValueType, presence: Presence, placement: Placem
         presence,
         placement,
         doc: None,
+        sourced: false,
     }
 }
 

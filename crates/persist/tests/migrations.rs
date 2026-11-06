@@ -119,6 +119,7 @@ fn attribute(name: &str, value: &str, presence: Presence) -> Attribute {
         presence,
         placement: Placement::Instance,
         doc: None,
+        sourced: false,
     }
 }
 

@@ -15,6 +15,9 @@ pub const DRAFT: &str = "https://json-schema.org/draft/2020-12/schema";
 /// The definition object identifiers refer to; no schema record may take its name.
 const OBJECT_ID: &str = "ObjectId";
 const OBJECT_ID_REF: &str = "#/$defs/ObjectId";
+/// The definition of a source (ADR 0018), present when the namespace has sourced values.
+const SOURCE: &str = "Source";
+const SOURCE_REF: &str = "#/$defs/Source";
 
 /// Choices the emitted schema depends on.
 #[derive(Clone, Debug, PartialEq)]
@@ -40,14 +43,22 @@ pub fn emit_json_schema(
     options: &JsonSchemaOptions,
 ) -> Result<String, Vec<Error>> {
     let structs = layout::plan(namespace, |name| format!("`{name}`"))?;
+    let sourced = structs
+        .iter()
+        .flat_map(|item| &item.fields)
+        .any(|field| matches!(field.ty, FieldType::Sourced(_)));
     check_names(
         structs
             .iter()
             .map(|item| item.name.as_str())
-            .chain(namespace.enumerations.keys().map(String::as_str)),
+            .chain(namespace.enumerations.keys().map(String::as_str))
+            .chain(sourced.then_some(SOURCE)),
     )?;
     let mut defs = Map::new();
     defs.insert(OBJECT_ID.to_owned(), options.object_id.clone());
+    if sourced {
+        defs.insert(SOURCE.to_owned(), source_definition());
+    }
     for item in structs {
         let definition = definition(&item);
         defs.insert(item.name, definition);
@@ -125,6 +136,12 @@ fn enumeration_definition(enumeration: &Enumeration) -> Json {
 fn value_schema(ty: &FieldType) -> Json {
     match ty {
         FieldType::Value(value) => value_type_schema(value),
+        FieldType::Sourced(value) => json!({
+            "type": "object",
+            "properties": { "value": value_type_schema(value), "source": { "$ref": SOURCE_REF } },
+            "required": ["value", "source"],
+            "additionalProperties": false,
+        }),
         FieldType::Role(Cardinality::One) => object_id(),
         FieldType::Role(Cardinality::Many) => json!({ "type": "array", "items": object_id() }),
     }
@@ -144,6 +161,18 @@ fn value_type_schema(value: &ValueType) -> Json {
         ValueType::Enum(name) => json!({ "$ref": format!("#/$defs/{name}") }),
         ValueType::List(inner) => json!({ "type": "array", "items": value_type_schema(inner) }),
     }
+}
+
+/// A document and clause, each non-empty text.
+fn source_definition() -> Json {
+    let text = json!({ "type": "string", "minLength": 1 });
+    json!({
+        "type": "object",
+        "description": "The document and clause a value comes from.",
+        "properties": { "document": text, "clause": text },
+        "required": ["document", "clause"],
+        "additionalProperties": false,
+    })
 }
 
 fn object_id() -> Json {

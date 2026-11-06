@@ -84,6 +84,12 @@ pub enum StoreError {
     /// A real value is NaN or infinite.
     #[error("attribute \"{0}\" only accepts finite numbers")]
     NonFinite(String),
+    /// A plain value is written to a sourced attribute, which needs its source (ADR 0018).
+    #[error("attribute \"{0}\" needs the source of its value")]
+    MissingSource(String),
+    /// A sourced value is written to an attribute that does not hold sources.
+    #[error("attribute \"{0}\" does not hold sources")]
+    UnexpectedSource(String),
     /// A text is not an item of the attribute's enumeration.
     #[error("attribute \"{0}\" does not accept this enumeration item")]
     UnknownItem(String),

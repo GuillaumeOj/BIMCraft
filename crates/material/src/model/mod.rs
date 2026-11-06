@@ -9,7 +9,7 @@ use thiserror::Error;
 use crate::law::LawKind;
 use crate::material::{Category, Material, MaterialError};
 use crate::property::Property;
-use crate::source::{Source, SourceError, Sourced};
+use crate::source::Sourced;
 
 /// The core schema entity that stores materials.
 pub const ENTITY: &str = "Material";
@@ -26,15 +26,6 @@ pub enum ReadError {
     /// The stored behaviour law is not one this version knows.
     #[error("the material's behaviour law is unknown")]
     UnknownLaw,
-    /// A property has a source but no value.
-    #[error("the property {} has a source but no value", .0.name())]
-    SourceWithoutValue(Property),
-    /// A property has a value but no source.
-    #[error("the property {} has no source", .0.name())]
-    MissingSource(Property),
-    /// A property's source does not read back.
-    #[error("the source of property {} is not valid: {}", .0.name(), .1)]
-    InvalidSource(Property, SourceError),
     /// The stored values do not make a valid material.
     #[error(transparent)]
     Invalid(#[from] MaterialError),
@@ -63,13 +54,11 @@ pub fn commands(id: EntityId, material: &Material) -> ModelCommand {
     }];
     let mut sets: BTreeMap<&str, Vec<(String, AttributeValue)>> = BTreeMap::new();
     for (property, sourced) in material.properties() {
-        sets.entry(property.property_set()).or_default().extend([
-            (
-                property.name().to_owned(),
-                AttributeValue::Real(sourced.value),
-            ),
-            text(property.source_name(), sourced.source.to_string()),
-        ]);
+        let value =
+            AttributeValue::sourced(AttributeValue::Real(sourced.value), sourced.source.clone());
+        sets.entry(property.property_set())
+            .or_default()
+            .push((property.name().to_owned(), value));
     }
     commands.extend(
         sets.into_iter()
@@ -102,20 +91,15 @@ pub fn read(model: &Model, id: EntityId) -> Result<Material, ReadError> {
     let design_code = attribute(model, id, "design_code")?;
     let mut properties = BTreeMap::new();
     for property in Property::ALL {
-        let set = property.property_set();
-        let value = model.property(id, set, property.name())?;
-        let source = model.property(id, set, property.source_name())?;
-        let (value, source) = match (value, source) {
-            (Some(AttributeValue::Real(value)), Some(AttributeValue::Text(source))) => {
-                (value, source)
-            }
-            (Some(_), _) => return Err(ReadError::MissingSource(property)),
-            (None, Some(_)) => return Err(ReadError::SourceWithoutValue(property)),
-            (None, None) => continue,
+        // The model keeps every value of these sourced properties with its source (ADR 0018).
+        let Some(AttributeValue::Sourced(sourced)) =
+            model.property(id, property.property_set(), property.name())?
+        else {
+            continue;
         };
-        let source =
-            Source::parse(&source).map_err(|error| ReadError::InvalidSource(property, error))?;
-        properties.insert(property, Sourced::new(value, source));
+        if let AttributeValue::Real(value) = sourced.value {
+            properties.insert(property, Sourced::new(value, sourced.source));
+        }
     }
     Ok(Material::new(
         &name,
@@ -126,15 +110,16 @@ pub fn read(model: &Model, id: EntityId) -> Result<Material, ReadError> {
     )?)
 }
 
-fn text(name: &str, value: impl Into<String>) -> (String, AttributeValue) {
-    (name.to_owned(), AttributeValue::Text(value.into()))
+fn text(name: &str, value: &str) -> (String, AttributeValue) {
+    (name.to_owned(), AttributeValue::Text(value.to_owned()))
 }
 
 fn attribute(model: &Model, id: EntityId, name: &str) -> Result<Option<String>, ModelError> {
-    Ok(match model.get(id, name)? {
-        Some(AttributeValue::Text(text)) => Some(text),
-        _ => None,
-    })
+    Ok(model
+        .get(id, name)?
+        .as_ref()
+        .and_then(AttributeValue::as_text)
+        .map(str::to_owned))
 }
 
 #[cfg(test)]

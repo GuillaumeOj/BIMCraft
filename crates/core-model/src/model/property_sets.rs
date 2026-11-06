@@ -266,7 +266,8 @@ impl Model {
             .set(id, property, value)
     }
 
-    /// A quantity property, in the dimension of `U` (CORE-09).
+    /// A quantity property, in the dimension of `U` (CORE-09); for a sourced property, its value
+    /// without the source.
     ///
     /// # Errors
     ///
@@ -279,10 +280,16 @@ impl Model {
         property: &str,
     ) -> Result<Option<Quantity<U>>, ModelError> {
         self.check_quantity::<U>(set, property)?;
-        Ok(match self.property(id, set, property)? {
-            Some(AttributeValue::Real(si)) => Some(Quantity::from_si(si)),
-            _ => None,
-        })
+        Ok(
+            match self
+                .property(id, set, property)?
+                .as_ref()
+                .map(AttributeValue::plain)
+            {
+                Some(AttributeValue::Real(si)) => Some(Quantity::from_si(*si)),
+                _ => None,
+            },
+        )
     }
 
     /// Sets or clears a quantity property and returns its previous stored value; see

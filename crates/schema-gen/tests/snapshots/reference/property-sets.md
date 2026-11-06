@@ -14,4 +14,4 @@ Properties common to every wall.
 | `IsExternal` | boolean | optional | type, instance may override | True when the wall separates the inside from the outside. |
 | `LoadBearing` | boolean | default `false` | instance |  |
 | `FireRating` | text | optional | instance | Fire resistance class as written in the project's regulation. |
-| `UValue` | thermal transmittance (W/(m²·K)) | optional | instance |  |
+| `UValue` | thermal transmittance (W/(m²·K)), sourced | optional | instance | Thermal transmittance, with the test report or standard it comes from. |

@@ -28,6 +28,7 @@ pub(super) fn entity(name: &str, kind: EntityKind, ifc: &str) -> Entity {
             presence: Presence::Optional,
             placement: Placement::Instance,
             doc: None,
+            sourced: false,
         }],
         roles: Vec::new(),
         representations: Vec::new(),
@@ -146,6 +147,7 @@ fn property(name: &str, value: ValueType, presence: Presence, placement: Placeme
         presence,
         placement,
         doc: None,
+        sourced: false,
     }
 }
 

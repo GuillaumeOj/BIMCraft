@@ -10,6 +10,7 @@ fn attribute(name: &str, value: ValueType) -> Attribute {
         presence: Presence::Optional,
         placement: Placement::Instance,
         doc: None,
+        sourced: false,
     }
 }
 
@@ -1052,6 +1053,7 @@ fn arbitrary_attribute() -> impl Strategy<Value = Attribute> {
             presence,
             placement,
             doc: None,
+            sourced: false,
         })
 }
 
@@ -1079,4 +1081,39 @@ proptest! {
             prop_assert!(errors.windows(2).all(|pair| pair[0].location <= pair[1].location));
         }
     }
+}
+
+#[test]
+fn only_plain_values_without_defaults_are_sourced() {
+    let mut namespace = sample();
+    let sourced = |name: &str, value: ValueType, presence: Presence| Attribute {
+        presence,
+        sourced: true,
+        ..attribute(name, value)
+    };
+    let length = ValueType::Quantity(QuantityKind::Length);
+    wall(&mut namespace).attributes.extend([
+        sourced("thickness", length.clone(), Presence::Required),
+        sourced("finish", ValueType::Enum("Side".into()), Presence::Optional),
+    ]);
+    assert_eq!(validate(&namespace), Ok(()));
+    wall(&mut namespace).attributes.extend([
+        sourced("host", ValueType::Ref("Storey".into()), Presence::Optional),
+        sourced("depth", length, Presence::Default(Value::Real(0.2))),
+    ]);
+    let errors = errors_of(&namespace);
+    let kinds: Vec<_> = errors.iter().map(|error| error.kind.clone()).collect();
+    assert_eq!(
+        kinds,
+        [
+            ValidationErrorKind::SourcedDefault,
+            ValidationErrorKind::SourcedValueType {
+                value: ValueType::Ref("Storey".into())
+            },
+        ]
+    );
+    assert_eq!(
+        errors[1].to_string(),
+        "entity Wall, attribute host: only plain values can be sourced, not ref:Storey values"
+    );
 }

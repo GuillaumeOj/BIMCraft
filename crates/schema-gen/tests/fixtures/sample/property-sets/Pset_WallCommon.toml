@@ -24,3 +24,5 @@ doc = "Fire resistance class as written in the project's regulation."
 [[property]]
 name = "UValue"
 value = "quantity:thermal_transmittance"
+sourced = true
+doc = "Thermal transmittance, with the test report or standard it comes from."

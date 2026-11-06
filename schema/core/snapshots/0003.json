@@ -150,91 +150,55 @@
       "applies_to": [
         "Material"
       ],
-      "doc": "Strength and strain properties of a concrete grade, each with its source. An IFC export writes the values to `Pset_MaterialConcrete`.",
+      "doc": "Strength and strain properties of a concrete grade, each with its source. An IFC export writes the values to `Pset_MaterialConcrete`, with each source in the property's Specification.",
       "properties": [
         {
           "name": "CharacteristicCompressiveStrength",
           "value": "quantity:pressure",
           "presence": "optional",
           "placement": "instance",
-          "doc": "Characteristic cylinder compressive strength at 28 days."
-        },
-        {
-          "name": "CharacteristicCompressiveStrengthSource",
-          "value": "text",
-          "presence": "optional",
-          "placement": "instance",
-          "doc": "Design-code document and clause that CharacteristicCompressiveStrength comes from, such as `EN 1992-1-1:2004, Table 3.1`."
+          "doc": "Characteristic cylinder compressive strength at 28 days.",
+          "sourced": true
         },
         {
           "name": "MeanCompressiveStrength",
           "value": "quantity:pressure",
           "presence": "optional",
           "placement": "instance",
-          "doc": "Mean cylinder compressive strength at 28 days."
-        },
-        {
-          "name": "MeanCompressiveStrengthSource",
-          "value": "text",
-          "presence": "optional",
-          "placement": "instance",
-          "doc": "Design-code document and clause that MeanCompressiveStrength comes from, such as `EN 1992-1-1:2004, Table 3.1`."
+          "doc": "Mean cylinder compressive strength at 28 days.",
+          "sourced": true
         },
         {
           "name": "MeanTensileStrength",
           "value": "quantity:pressure",
           "presence": "optional",
           "placement": "instance",
-          "doc": "Mean axial tensile strength."
-        },
-        {
-          "name": "MeanTensileStrengthSource",
-          "value": "text",
-          "presence": "optional",
-          "placement": "instance",
-          "doc": "Design-code document and clause that MeanTensileStrength comes from, such as `EN 1992-1-1:2004, Table 3.1`."
+          "doc": "Mean axial tensile strength.",
+          "sourced": true
         },
         {
           "name": "StrainAtPeakStress",
           "value": "real",
           "presence": "optional",
           "placement": "instance",
-          "doc": "Compressive strain at which the parabola reaches the peak stress, as a ratio."
-        },
-        {
-          "name": "StrainAtPeakStressSource",
-          "value": "text",
-          "presence": "optional",
-          "placement": "instance",
-          "doc": "Design-code document and clause that StrainAtPeakStress comes from, such as `EN 1992-1-1:2004, Table 3.1`."
+          "doc": "Compressive strain at which the parabola reaches the peak stress, as a ratio.",
+          "sourced": true
         },
         {
           "name": "UltimateCompressiveStrain",
           "value": "real",
           "presence": "optional",
           "placement": "instance",
-          "doc": "Ultimate compressive strain, as a ratio."
-        },
-        {
-          "name": "UltimateCompressiveStrainSource",
-          "value": "text",
-          "presence": "optional",
-          "placement": "instance",
-          "doc": "Design-code document and clause that UltimateCompressiveStrain comes from, such as `EN 1992-1-1:2004, Table 3.1`."
+          "doc": "Ultimate compressive strain, as a ratio.",
+          "sourced": true
         },
         {
           "name": "ParabolaExponent",
           "value": "real",
           "presence": "optional",
           "placement": "instance",
-          "doc": "Exponent of the parabola of the parabola-rectangle diagram."
-        },
-        {
-          "name": "ParabolaExponentSource",
-          "value": "text",
-          "presence": "optional",
-          "placement": "instance",
-          "doc": "Design-code document and clause that ParabolaExponent comes from, such as `EN 1992-1-1:2004, Table 3.1`."
+          "doc": "Exponent of the parabola of the parabola-rectangle diagram.",
+          "sourced": true
         }
       ]
     },
@@ -243,63 +207,39 @@
       "applies_to": [
         "Material"
       ],
-      "doc": "Mechanical and physical properties of a material, each with its source. An IFC export writes the values to `Pset_MaterialCommon` and `Pset_MaterialMechanical`.",
+      "doc": "Mechanical and physical properties of a material, each with its source. An IFC export writes the values to `Pset_MaterialCommon` and `Pset_MaterialMechanical`, with each source in the property's Specification.",
       "properties": [
         {
           "name": "MassDensity",
           "value": "quantity:mass_density",
           "presence": "optional",
           "placement": "instance",
-          "doc": "Mass per unit volume."
-        },
-        {
-          "name": "MassDensitySource",
-          "value": "text",
-          "presence": "optional",
-          "placement": "instance",
-          "doc": "Design-code document and clause that MassDensity comes from, such as `EN 1992-1-1:2004, Table 3.1`."
+          "doc": "Mass per unit volume.",
+          "sourced": true
         },
         {
           "name": "YoungModulus",
           "value": "quantity:pressure",
           "presence": "optional",
           "placement": "instance",
-          "doc": "Modulus of elasticity; for concrete, the secant modulus."
-        },
-        {
-          "name": "YoungModulusSource",
-          "value": "text",
-          "presence": "optional",
-          "placement": "instance",
-          "doc": "Design-code document and clause that YoungModulus comes from, such as `EN 1992-1-1:2004, Table 3.1`."
+          "doc": "Modulus of elasticity; for concrete, the secant modulus.",
+          "sourced": true
         },
         {
           "name": "PoissonRatio",
           "value": "real",
           "presence": "optional",
           "placement": "instance",
-          "doc": "Ratio of lateral to axial strain under axial load."
-        },
-        {
-          "name": "PoissonRatioSource",
-          "value": "text",
-          "presence": "optional",
-          "placement": "instance",
-          "doc": "Design-code document and clause that PoissonRatio comes from, such as `EN 1992-1-1:2004, Table 3.1`."
+          "doc": "Ratio of lateral to axial strain under axial load.",
+          "sourced": true
         },
         {
           "name": "ThermalExpansionCoefficient",
           "value": "real",
           "presence": "optional",
           "placement": "instance",
-          "doc": "Linear thermal expansion, per kelvin."
-        },
-        {
-          "name": "ThermalExpansionCoefficientSource",
-          "value": "text",
-          "presence": "optional",
-          "placement": "instance",
-          "doc": "Design-code document and clause that ThermalExpansionCoefficient comes from, such as `EN 1992-1-1:2004, Table 3.1`."
+          "doc": "Linear thermal expansion, per kelvin.",
+          "sourced": true
         }
       ]
     },
@@ -308,63 +248,39 @@
       "applies_to": [
         "Material"
       ],
-      "doc": "Strength and ductility properties of a steel grade, each with its source. An IFC export writes the values to `Pset_MaterialSteel`.",
+      "doc": "Strength and ductility properties of a steel grade, each with its source. An IFC export writes the values to `Pset_MaterialSteel`, with each source in the property's Specification.",
       "properties": [
         {
           "name": "YieldStrength",
           "value": "quantity:pressure",
           "presence": "optional",
           "placement": "instance",
-          "doc": "Characteristic or nominal yield strength."
-        },
-        {
-          "name": "YieldStrengthSource",
-          "value": "text",
-          "presence": "optional",
-          "placement": "instance",
-          "doc": "Design-code document and clause that YieldStrength comes from, such as `EN 1992-1-1:2004, Table 3.1`."
+          "doc": "Characteristic or nominal yield strength.",
+          "sourced": true
         },
         {
           "name": "UltimateStrength",
           "value": "quantity:pressure",
           "presence": "optional",
           "placement": "instance",
-          "doc": "Characteristic or nominal ultimate tensile strength."
-        },
-        {
-          "name": "UltimateStrengthSource",
-          "value": "text",
-          "presence": "optional",
-          "placement": "instance",
-          "doc": "Design-code document and clause that UltimateStrength comes from, such as `EN 1992-1-1:2004, Table 3.1`."
+          "doc": "Characteristic or nominal ultimate tensile strength.",
+          "sourced": true
         },
         {
           "name": "UltimateStrain",
           "value": "real",
           "presence": "optional",
           "placement": "instance",
-          "doc": "Strain at maximum load, as a ratio."
-        },
-        {
-          "name": "UltimateStrainSource",
-          "value": "text",
-          "presence": "optional",
-          "placement": "instance",
-          "doc": "Design-code document and clause that UltimateStrain comes from, such as `EN 1992-1-1:2004, Table 3.1`."
+          "doc": "Strain at maximum load, as a ratio.",
+          "sourced": true
         },
         {
           "name": "HardeningRatio",
           "value": "real",
           "presence": "optional",
           "placement": "instance",
-          "doc": "Ratio of tensile strength to yield strength."
-        },
-        {
-          "name": "HardeningRatioSource",
-          "value": "text",
-          "presence": "optional",
-          "placement": "instance",
-          "doc": "Design-code document and clause that HardeningRatio comes from, such as `EN 1992-1-1:2004, Table 3.1`."
+          "doc": "Ratio of tensile strength to yield strength.",
+          "sourced": true
         }
       ]
     }

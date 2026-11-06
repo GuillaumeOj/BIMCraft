@@ -1,5 +1,6 @@
 //! The tables of a namespace: one `STRICT` table per entity and one per type, one column per
-//! attribute their objects store, like the store's tables (ADR 0016).
+//! attribute their objects store, like the store's tables (ADR 0016), plus a document and a
+//! clause column after each sourced attribute (ADR 0018).
 
 use schema::{Namespace, StoredAttribute, ValueType};
 
@@ -21,6 +22,8 @@ pub(crate) struct Column<'a> {
     pub name: &'a str,
     /// The attribute's value type, which decides the column type and how values are read.
     pub value_type: &'a ValueType,
+    /// Whether each value has its source in the two [`source_columns`].
+    pub sourced: bool,
 }
 
 impl<'a> From<&'a StoredAttribute> for Column<'a> {
@@ -28,8 +31,35 @@ impl<'a> From<&'a StoredAttribute> for Column<'a> {
         Self {
             name: &attribute.name,
             value_type: &attribute.value,
+            sourced: attribute.sourced,
         }
     }
+}
+
+impl Column<'_> {
+    /// How many SQL columns the attribute takes: its value, plus a document and a clause when
+    /// it is sourced.
+    pub const fn width(&self) -> usize {
+        if self.sourced { 3 } else { 1 }
+    }
+
+    /// The SQL columns of the attribute, with their `STRICT` types: its value, then its
+    /// source's document and clause when it is sourced.
+    fn sql_columns(&self) -> Vec<(String, &'static str)> {
+        let mut columns = vec![(self.name.to_owned(), sql_type(self.value_type))];
+        if self.sourced {
+            columns.extend(source_columns(self.name).map(|name| (name, "TEXT")));
+        }
+        columns
+    }
+}
+
+/// The columns holding the document and the clause of a sourced attribute's values.
+pub(crate) fn source_columns(attribute: &str) -> [String; 2] {
+    [
+        format!("{attribute}@document"),
+        format!("{attribute}@clause"),
+    ]
 }
 
 /// The tables of `namespace` as [`schema::stored_tables`] lays them out, sorted by name like
@@ -44,6 +74,7 @@ pub(crate) fn tables(namespace: &Namespace) -> Vec<EntityTable<'_>> {
                 .map(|attribute| Column {
                     name: &attribute.name,
                     value_type: &attribute.value,
+                    sourced: attribute.sourced,
                 })
                 .collect();
             EntityTable::new(&namespace.name, table.name, columns)
@@ -68,14 +99,19 @@ impl<'a> EntityTable<'a> {
         }
     }
 
+    /// Every SQL column after the id, in order, with its `STRICT` type.
+    fn sql_columns(&self) -> impl Iterator<Item = (String, &'static str)> {
+        self.columns.iter().flat_map(Column::sql_columns)
+    }
+
     /// `CREATE TABLE` statement of the table.
     pub fn create_sql(&self) -> String {
-        let columns: Vec<_> =
-            std::iter::once("id BLOB PRIMARY KEY NOT NULL".to_owned())
-                .chain(self.columns.iter().map(|column| {
-                    format!("{} {}", quote(column.name), sql_type(column.value_type))
-                }))
-                .collect();
+        let columns: Vec<_> = std::iter::once("id BLOB PRIMARY KEY NOT NULL".to_owned())
+            .chain(
+                self.sql_columns()
+                    .map(|(name, sql_type)| format!("{} {sql_type}", quote(&name))),
+            )
+            .collect();
         format!(
             "CREATE TABLE {} ({}) STRICT",
             quote(&self.name),
@@ -86,7 +122,7 @@ impl<'a> EntityTable<'a> {
     /// `INSERT` statement taking the id then every column, in order. Columns are named, so
     /// their order in the file does not matter: migrations append the columns they add.
     pub fn insert_sql(&self) -> String {
-        let placeholders = ", ?".repeat(self.columns.len());
+        let placeholders = ", ?".repeat(self.sql_columns().count());
         format!(
             "INSERT INTO {} ({}) VALUES (?{placeholders})",
             quote(&self.name),
@@ -96,7 +132,7 @@ impl<'a> EntityTable<'a> {
 
     fn column_list(&self) -> String {
         let columns: Vec<_> = std::iter::once("id".to_owned())
-            .chain(self.columns.iter().map(|column| quote(column.name)))
+            .chain(self.sql_columns().map(|(name, _)| quote(&name)))
             .collect();
         columns.join(", ")
     }
@@ -115,13 +151,10 @@ impl<'a> EntityTable<'a> {
     /// type and primary key position of each column.
     pub fn expected_columns(&self) -> Vec<(String, String, i64)> {
         let mut columns: Vec<_> = std::iter::once(("id".to_owned(), "BLOB".to_owned(), 1))
-            .chain(self.columns.iter().map(|column| {
-                (
-                    column.name.to_owned(),
-                    sql_type(column.value_type).to_owned(),
-                    0,
-                )
-            }))
+            .chain(
+                self.sql_columns()
+                    .map(|(name, sql_type)| (name, sql_type.to_owned(), 0)),
+            )
             .collect();
         columns.sort();
         columns
@@ -177,8 +210,16 @@ mod tests {
                 "ratio",
                 "hosts",
                 "counts",
-                "offsets"
+                "offsets",
+                "strength"
             ]
+        );
+        let sql = wall.create_sql();
+        assert!(
+            sql.ends_with(
+                "\"strength\" REAL, \"strength@document\" TEXT, \"strength@clause\" TEXT) STRICT"
+            ),
+            "{sql}"
         );
     }
 

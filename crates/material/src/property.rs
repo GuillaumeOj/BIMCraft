@@ -81,27 +81,6 @@ impl Property {
         }
     }
 
-    /// The name of the text property that holds this property's source.
-    #[must_use]
-    pub const fn source_name(self) -> &'static str {
-        match self {
-            Self::MassDensity => "MassDensitySource",
-            Self::YoungModulus => "YoungModulusSource",
-            Self::PoissonRatio => "PoissonRatioSource",
-            Self::ThermalExpansionCoefficient => "ThermalExpansionCoefficientSource",
-            Self::CharacteristicCompressiveStrength => "CharacteristicCompressiveStrengthSource",
-            Self::MeanCompressiveStrength => "MeanCompressiveStrengthSource",
-            Self::MeanTensileStrength => "MeanTensileStrengthSource",
-            Self::StrainAtPeakStress => "StrainAtPeakStressSource",
-            Self::UltimateCompressiveStrain => "UltimateCompressiveStrainSource",
-            Self::ParabolaExponent => "ParabolaExponentSource",
-            Self::YieldStrength => "YieldStrengthSource",
-            Self::UltimateStrength => "UltimateStrengthSource",
-            Self::UltimateStrain => "UltimateStrainSource",
-            Self::HardeningRatio => "HardeningRatioSource",
-        }
-    }
-
     /// The property set that holds the property.
     #[must_use]
     pub const fn property_set(self) -> &'static str {
@@ -144,9 +123,6 @@ mod tests {
     #[test]
     fn names_and_sets_follow_the_schema_naming() {
         assert_eq!(Property::YoungModulus.name(), "YoungModulus");
-        for property in Property::ALL {
-            assert_eq!(property.source_name(), format!("{}Source", property.name()));
-        }
         assert_eq!(Property::PoissonRatio.property_set(), MECHANICAL_SET);
         assert_eq!(Property::ParabolaExponent.property_set(), CONCRETE_SET);
         assert_eq!(Property::HardeningRatio.property_set(), STEEL_SET);

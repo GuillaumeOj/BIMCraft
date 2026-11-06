@@ -147,6 +147,15 @@ pub enum ValidationErrorKind {
     /// A real default is NaN or infinite.
     #[error("default value is not a finite number")]
     NonFiniteDefault,
+    /// A sourced attribute holds references or lists, whose values come from no document.
+    #[error("only plain values can be sourced, not {value} values")]
+    SourcedValueType {
+        /// The declared value type.
+        value: ValueType,
+    },
+    /// A sourced attribute has a default, which has no source.
+    #[error("a sourced attribute cannot have a default value")]
+    SourcedDefault,
     /// A non-relationship entity declares roles.
     #[error("only relationship entities have roles")]
     RolesOutsideRelationship,
@@ -638,6 +647,17 @@ fn check_attribute(
         return;
     }
     check_value_type(namespace, &attribute.value, owner, item(), errors);
+    if attribute.sourced {
+        if matches!(attribute.value, ValueType::Ref(_) | ValueType::List(_)) {
+            let kind = ValidationErrorKind::SourcedValueType {
+                value: attribute.value.clone(),
+            };
+            errors.push(owner, item(), kind);
+        }
+        if matches!(attribute.presence, Presence::Default(_)) {
+            errors.push(owner, item(), ValidationErrorKind::SourcedDefault);
+        }
+    }
     if let Presence::Default(value) = &attribute.presence {
         if !value_matches(value, &attribute.value)
             || !items_known(namespace, value, &attribute.value)

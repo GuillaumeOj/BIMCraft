@@ -10,6 +10,7 @@
 pub mod derived;
 mod id;
 mod model;
+mod source;
 mod store;
 pub mod units;
 
@@ -17,6 +18,7 @@ pub mod units;
 pub use id::SeededIdSource;
 pub use id::{EntityId, GlobalIdError, IdSource};
 pub use model::{Component, LibraryRef, Model, ModelError, ObjectState, Participation, Removal};
+pub use source::{MAX_SOURCE_LEN, Source, SourceError, SourcedValue};
 pub use store::{AttributeValue, RemovedEntity, Store, StoreError};
 
 /// Property-test settings shared by the crate. A fixed seed keeps runs reproducible; with no

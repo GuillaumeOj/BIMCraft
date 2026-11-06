@@ -78,6 +78,31 @@
             "List"
           ],
           "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "Sourced": {
+              "additionalProperties": false,
+              "properties": {
+                "source": {
+                  "$ref": "#/$defs/Source"
+                },
+                "value": {
+                  "$ref": "#/$defs/AttributeValue"
+                }
+              },
+              "required": [
+                "value",
+                "source"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "Sourced"
+          ],
+          "type": "object"
         }
       ]
     },
@@ -674,6 +699,25 @@
           "type": "object"
         }
       ]
+    },
+    "Source": {
+      "additionalProperties": false,
+      "description": "The document and clause a sourced value comes from (ADR 0018).",
+      "properties": {
+        "clause": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "document": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "document",
+        "clause"
+      ],
+      "type": "object"
     },
     "commands": {
       "georef.clear": {
@@ -1383,12 +1427,25 @@
       "$defs": {
         "BIMCraft_MaterialConcrete": {
           "additionalProperties": false,
-          "description": "Strength and strain properties of a concrete grade, each with its source. An IFC export writes the values to `Pset_MaterialConcrete`.\n\nApplies to `Material`.",
+          "description": "Strength and strain properties of a concrete grade, each with its source. An IFC export writes the values to `Pset_MaterialConcrete`, with each source in the property's Specification.\n\nApplies to `Material`.",
           "properties": {
             "CharacteristicCompressiveStrength": {
               "anyOf": [
                 {
-                  "type": "number"
+                  "additionalProperties": false,
+                  "properties": {
+                    "source": {
+                      "$ref": "#/$defs/Source"
+                    },
+                    "value": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "value",
+                    "source"
+                  ],
+                  "type": "object"
                 },
                 {
                   "type": "null"
@@ -1396,21 +1453,23 @@
               ],
               "description": "Characteristic cylinder compressive strength at 28 days.\n\nIn Pa."
             },
-            "CharacteristicCompressiveStrengthSource": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Design-code document and clause that CharacteristicCompressiveStrength comes from, such as `EN 1992-1-1:2004, Table 3.1`."
-            },
             "MeanCompressiveStrength": {
               "anyOf": [
                 {
-                  "type": "number"
+                  "additionalProperties": false,
+                  "properties": {
+                    "source": {
+                      "$ref": "#/$defs/Source"
+                    },
+                    "value": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "value",
+                    "source"
+                  ],
+                  "type": "object"
                 },
                 {
                   "type": "null"
@@ -1418,21 +1477,23 @@
               ],
               "description": "Mean cylinder compressive strength at 28 days.\n\nIn Pa."
             },
-            "MeanCompressiveStrengthSource": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Design-code document and clause that MeanCompressiveStrength comes from, such as `EN 1992-1-1:2004, Table 3.1`."
-            },
             "MeanTensileStrength": {
               "anyOf": [
                 {
-                  "type": "number"
+                  "additionalProperties": false,
+                  "properties": {
+                    "source": {
+                      "$ref": "#/$defs/Source"
+                    },
+                    "value": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "value",
+                    "source"
+                  ],
+                  "type": "object"
                 },
                 {
                   "type": "null"
@@ -1440,21 +1501,23 @@
               ],
               "description": "Mean axial tensile strength.\n\nIn Pa."
             },
-            "MeanTensileStrengthSource": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Design-code document and clause that MeanTensileStrength comes from, such as `EN 1992-1-1:2004, Table 3.1`."
-            },
             "ParabolaExponent": {
               "anyOf": [
                 {
-                  "type": "number"
+                  "additionalProperties": false,
+                  "properties": {
+                    "source": {
+                      "$ref": "#/$defs/Source"
+                    },
+                    "value": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "value",
+                    "source"
+                  ],
+                  "type": "object"
                 },
                 {
                   "type": "null"
@@ -1462,21 +1525,23 @@
               ],
               "description": "Exponent of the parabola of the parabola-rectangle diagram."
             },
-            "ParabolaExponentSource": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Design-code document and clause that ParabolaExponent comes from, such as `EN 1992-1-1:2004, Table 3.1`."
-            },
             "StrainAtPeakStress": {
               "anyOf": [
                 {
-                  "type": "number"
+                  "additionalProperties": false,
+                  "properties": {
+                    "source": {
+                      "$ref": "#/$defs/Source"
+                    },
+                    "value": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "value",
+                    "source"
+                  ],
+                  "type": "object"
                 },
                 {
                   "type": "null"
@@ -1484,50 +1549,54 @@
               ],
               "description": "Compressive strain at which the parabola reaches the peak stress, as a ratio."
             },
-            "StrainAtPeakStressSource": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Design-code document and clause that StrainAtPeakStress comes from, such as `EN 1992-1-1:2004, Table 3.1`."
-            },
             "UltimateCompressiveStrain": {
               "anyOf": [
                 {
-                  "type": "number"
+                  "additionalProperties": false,
+                  "properties": {
+                    "source": {
+                      "$ref": "#/$defs/Source"
+                    },
+                    "value": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "value",
+                    "source"
+                  ],
+                  "type": "object"
                 },
                 {
                   "type": "null"
                 }
               ],
               "description": "Ultimate compressive strain, as a ratio."
-            },
-            "UltimateCompressiveStrainSource": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Design-code document and clause that UltimateCompressiveStrain comes from, such as `EN 1992-1-1:2004, Table 3.1`."
             }
           },
           "type": "object"
         },
         "BIMCraft_MaterialMechanical": {
           "additionalProperties": false,
-          "description": "Mechanical and physical properties of a material, each with its source. An IFC export writes the values to `Pset_MaterialCommon` and `Pset_MaterialMechanical`.\n\nApplies to `Material`.",
+          "description": "Mechanical and physical properties of a material, each with its source. An IFC export writes the values to `Pset_MaterialCommon` and `Pset_MaterialMechanical`, with each source in the property's Specification.\n\nApplies to `Material`.",
           "properties": {
             "MassDensity": {
               "anyOf": [
                 {
-                  "type": "number"
+                  "additionalProperties": false,
+                  "properties": {
+                    "source": {
+                      "$ref": "#/$defs/Source"
+                    },
+                    "value": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "value",
+                    "source"
+                  ],
+                  "type": "object"
                 },
                 {
                   "type": "null"
@@ -1535,21 +1604,23 @@
               ],
               "description": "Mass per unit volume.\n\nIn kg/m³."
             },
-            "MassDensitySource": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Design-code document and clause that MassDensity comes from, such as `EN 1992-1-1:2004, Table 3.1`."
-            },
             "PoissonRatio": {
               "anyOf": [
                 {
-                  "type": "number"
+                  "additionalProperties": false,
+                  "properties": {
+                    "source": {
+                      "$ref": "#/$defs/Source"
+                    },
+                    "value": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "value",
+                    "source"
+                  ],
+                  "type": "object"
                 },
                 {
                   "type": "null"
@@ -1557,21 +1628,23 @@
               ],
               "description": "Ratio of lateral to axial strain under axial load."
             },
-            "PoissonRatioSource": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Design-code document and clause that PoissonRatio comes from, such as `EN 1992-1-1:2004, Table 3.1`."
-            },
             "ThermalExpansionCoefficient": {
               "anyOf": [
                 {
-                  "type": "number"
+                  "additionalProperties": false,
+                  "properties": {
+                    "source": {
+                      "$ref": "#/$defs/Source"
+                    },
+                    "value": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "value",
+                    "source"
+                  ],
+                  "type": "object"
                 },
                 {
                   "type": "null"
@@ -1579,50 +1652,54 @@
               ],
               "description": "Linear thermal expansion, per kelvin."
             },
-            "ThermalExpansionCoefficientSource": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Design-code document and clause that ThermalExpansionCoefficient comes from, such as `EN 1992-1-1:2004, Table 3.1`."
-            },
             "YoungModulus": {
               "anyOf": [
                 {
-                  "type": "number"
+                  "additionalProperties": false,
+                  "properties": {
+                    "source": {
+                      "$ref": "#/$defs/Source"
+                    },
+                    "value": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "value",
+                    "source"
+                  ],
+                  "type": "object"
                 },
                 {
                   "type": "null"
                 }
               ],
               "description": "Modulus of elasticity; for concrete, the secant modulus.\n\nIn Pa."
-            },
-            "YoungModulusSource": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Design-code document and clause that YoungModulus comes from, such as `EN 1992-1-1:2004, Table 3.1`."
             }
           },
           "type": "object"
         },
         "BIMCraft_MaterialSteel": {
           "additionalProperties": false,
-          "description": "Strength and ductility properties of a steel grade, each with its source. An IFC export writes the values to `Pset_MaterialSteel`.\n\nApplies to `Material`.",
+          "description": "Strength and ductility properties of a steel grade, each with its source. An IFC export writes the values to `Pset_MaterialSteel`, with each source in the property's Specification.\n\nApplies to `Material`.",
           "properties": {
             "HardeningRatio": {
               "anyOf": [
                 {
-                  "type": "number"
+                  "additionalProperties": false,
+                  "properties": {
+                    "source": {
+                      "$ref": "#/$defs/Source"
+                    },
+                    "value": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "value",
+                    "source"
+                  ],
+                  "type": "object"
                 },
                 {
                   "type": "null"
@@ -1630,21 +1707,23 @@
               ],
               "description": "Ratio of tensile strength to yield strength."
             },
-            "HardeningRatioSource": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Design-code document and clause that HardeningRatio comes from, such as `EN 1992-1-1:2004, Table 3.1`."
-            },
             "UltimateStrain": {
               "anyOf": [
                 {
-                  "type": "number"
+                  "additionalProperties": false,
+                  "properties": {
+                    "source": {
+                      "$ref": "#/$defs/Source"
+                    },
+                    "value": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "value",
+                    "source"
+                  ],
+                  "type": "object"
                 },
                 {
                   "type": "null"
@@ -1652,21 +1731,23 @@
               ],
               "description": "Strain at maximum load, as a ratio."
             },
-            "UltimateStrainSource": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Design-code document and clause that UltimateStrain comes from, such as `EN 1992-1-1:2004, Table 3.1`."
-            },
             "UltimateStrength": {
               "anyOf": [
                 {
-                  "type": "number"
+                  "additionalProperties": false,
+                  "properties": {
+                    "source": {
+                      "$ref": "#/$defs/Source"
+                    },
+                    "value": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "value",
+                    "source"
+                  ],
+                  "type": "object"
                 },
                 {
                   "type": "null"
@@ -1674,38 +1755,29 @@
               ],
               "description": "Characteristic or nominal ultimate tensile strength.\n\nIn Pa."
             },
-            "UltimateStrengthSource": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Design-code document and clause that UltimateStrength comes from, such as `EN 1992-1-1:2004, Table 3.1`."
-            },
             "YieldStrength": {
               "anyOf": [
                 {
-                  "type": "number"
+                  "additionalProperties": false,
+                  "properties": {
+                    "source": {
+                      "$ref": "#/$defs/Source"
+                    },
+                    "value": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "value",
+                    "source"
+                  ],
+                  "type": "object"
                 },
                 {
                   "type": "null"
                 }
               ],
               "description": "Characteristic or nominal yield strength.\n\nIn Pa."
-            },
-            "YieldStrengthSource": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Design-code document and clause that YieldStrength comes from, such as `EN 1992-1-1:2004, Table 3.1`."
             }
           },
           "type": "object"
@@ -1845,6 +1917,25 @@
               "description": "Northing of the survey point.\n\nIn m."
             }
           },
+          "type": "object"
+        },
+        "Source": {
+          "additionalProperties": false,
+          "description": "The document and clause a value comes from.",
+          "properties": {
+            "clause": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "document": {
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          "required": [
+            "document",
+            "clause"
+          ],
           "type": "object"
         }
       },

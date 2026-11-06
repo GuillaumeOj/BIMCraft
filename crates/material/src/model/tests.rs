@@ -7,7 +7,7 @@ use core_txn::{Document, ModelCommand, Origin};
 use schema::Namespace;
 
 use super::*;
-use crate::{LawKind, MECHANICAL_SET, STEEL_SET, SourceError};
+use crate::{LawKind, MECHANICAL_SET, STEEL_SET, Source};
 
 /// The core schema, loaded once for every test.
 static CORE: LazyLock<Namespace> = LazyLock::new(|| {
@@ -69,11 +69,13 @@ fn a_material_round_trips_through_the_model() {
     assert_eq!(read(document.model(), ID), Ok(s355()));
     let modulus = document
         .model()
-        .property(ID, MECHANICAL_SET, "YoungModulusSource");
+        .property(ID, MECHANICAL_SET, "YoungModulus");
+    let source = Source::new("EN 1993-1-1:2005", "3.2.6(1)").unwrap();
     assert_eq!(
         modulus,
-        Ok(Some(AttributeValue::Text(
-            "EN 1993-1-1:2005, 3.2.6(1)".into()
+        Ok(Some(AttributeValue::sourced(
+            AttributeValue::Real(210e9),
+            source
         )))
     );
 }
@@ -92,9 +94,8 @@ fn every_property_maps_onto_the_core_schema() {
     let model = model();
     for property in Property::ALL {
         let set = model.property_set(property.property_set()).unwrap();
-        for name in [property.name(), property.source_name()] {
-            assert!(set.properties.iter().any(|p| p.name == name), "{name}");
-        }
+        let found = set.properties.iter().find(|p| p.name == property.name());
+        assert!(found.is_some_and(|p| p.sourced), "{property:?}");
     }
 }
 
@@ -115,16 +116,8 @@ fn tampered_materials_are_rejected_with_the_reason() {
             }),
         ),
         (
-            set_property(STEEL_SET, "YieldStrengthSource", None),
-            ReadError::MissingSource(Property::YieldStrength),
-        ),
-        (
             set_property(STEEL_SET, "YieldStrength", None),
-            ReadError::SourceWithoutValue(Property::YieldStrength),
-        ),
-        (
-            set_property(STEEL_SET, "YieldStrengthSource", text("EN 1993-1-1")),
-            ReadError::InvalidSource(Property::YieldStrength, SourceError::EmptyClause),
+            ReadError::Invalid(MaterialError::MissingProperty(Property::YieldStrength)),
         ),
     ];
     for (command, error) in cases {
@@ -132,6 +125,14 @@ fn tampered_materials_are_rejected_with_the_reason() {
         set(&mut document, command);
         assert_eq!(read(document.model(), ID), Err(error));
     }
+}
+
+#[test]
+fn the_model_rejects_values_without_their_source() {
+    let mut document = stored();
+    let command = set_property(STEEL_SET, "YieldStrength", Some(AttributeValue::Real(1.0)));
+    assert!(document.execute(command, Origin::Ui).is_err());
+    assert_eq!(read(document.model(), ID), Ok(s355()));
 }
 
 #[test]
@@ -176,15 +177,7 @@ fn read_errors_explain_without_values() {
         "the object is not a material"
     );
     assert_eq!(
-        ReadError::InvalidSource(Property::YoungModulus, SourceError::EmptyClause).to_string(),
-        "the source of property YoungModulus is not valid: the source names no clause"
-    );
-    assert_eq!(
-        ReadError::SourceWithoutValue(Property::YoungModulus).to_string(),
-        "the property YoungModulus has a source but no value"
-    );
-    assert_eq!(
-        ReadError::MissingSource(Property::YoungModulus).to_string(),
-        "the property YoungModulus has no source"
+        ReadError::UnknownLaw.to_string(),
+        "the material's behaviour law is unknown"
     );
 }

@@ -141,6 +141,8 @@ pub struct Attribute {
     pub placement: Placement,
     /// Description of the attribute.
     pub doc: Option<String>,
+    /// Whether every value comes with the document and clause it is taken from (ADR 0018).
+    pub sourced: bool,
 }
 
 /// Whether an attribute needs a value.

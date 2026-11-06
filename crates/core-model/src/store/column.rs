@@ -1,7 +1,7 @@
 use schema::ValueType;
 
 use super::value::{AttributeValue, ValueError, conforms, finite, known_items};
-use crate::EntityId;
+use crate::{EntityId, Source, SourcedValue};
 
 /// The values of one attribute across every row of a table, in one contiguous vector of their
 /// Rust type plus a presence bitmap, so a scan reads only that attribute (CORE-05).
@@ -12,6 +12,9 @@ pub(super) struct Column {
     items: ValueType,
     /// The items of the enumeration the column, or its lists, hold; `None` for other values.
     allowed: Option<Box<[Box<str>]>>,
+    /// The source of each row of a sourced attribute, present exactly when the value is
+    /// (ADR 0018); `None` for other attributes.
+    sources: Option<Vec<Option<Source>>>,
 }
 
 #[derive(Clone, Debug)]
@@ -40,8 +43,12 @@ macro_rules! each {
 
 impl Column {
     /// An empty column for values of `value_type`, whose texts must be among `allowed` when it
-    /// is given.
-    pub(super) fn new(value_type: &ValueType, allowed: Option<Box<[Box<str>]>>) -> Self {
+    /// is given, and which holds a source with each value when `sourced`.
+    pub(super) fn new(
+        value_type: &ValueType,
+        allowed: Option<Box<[Box<str>]>>,
+        sourced: bool,
+    ) -> Self {
         let cells = match value_type {
             ValueType::Bool => Cells::Bool(Typed::default()),
             ValueType::Integer => Cells::Integer(Typed::default()),
@@ -58,6 +65,24 @@ impl Column {
             cells,
             items,
             allowed,
+            sources: sourced.then(Vec::new),
+        }
+    }
+
+    /// Splits a written value into the plain value the cells store and its source.
+    fn split(
+        &self,
+        value: Option<AttributeValue>,
+    ) -> Result<(Option<AttributeValue>, Option<Source>), ValueError> {
+        match (value, self.sources.is_some()) {
+            (None, _) => Ok((None, None)),
+            (Some(AttributeValue::Sourced(sourced)), true) => {
+                let SourcedValue { value, source } = *sourced;
+                Ok((Some(value), Some(source)))
+            }
+            (Some(AttributeValue::Sourced(_)), false) => Err(ValueError::UnexpectedSource),
+            (Some(_), true) => Err(ValueError::MissingSource),
+            (Some(value), false) => Ok((Some(value), None)),
         }
     }
 
@@ -70,20 +95,32 @@ impl Column {
 
     /// Appends a row.
     pub(super) fn push(&mut self, value: Option<AttributeValue>) -> Result<(), ValueError> {
+        let (value, source) = self.split(value)?;
         self.check_items(value.as_ref())?;
         let items = &self.items;
         each!(&mut self.cells, cells => cells.push(decode(value, items)?));
+        if let Some(sources) = &mut self.sources {
+            sources.push(source);
+        }
         Ok(())
     }
 
     /// Removes the last row, undoing a [`push`](Self::push).
     pub(super) fn pop(&mut self) {
         each!(&mut self.cells, cells => cells.pop());
+        if let Some(sources) = &mut self.sources {
+            sources.pop();
+        }
     }
 
     /// The value in `row`, if any.
     pub(super) fn get(&self, row: usize) -> Option<AttributeValue> {
-        each!(&self.cells, cells => cells.get(row))
+        let value = each!(&self.cells, cells => cells.get(row));
+        let source = self
+            .sources
+            .as_ref()
+            .and_then(|sources| sources[row].clone());
+        join(value, source)
     }
 
     /// Replaces the value in `row` and returns the previous one.
@@ -92,19 +129,46 @@ impl Column {
         row: usize,
         value: Option<AttributeValue>,
     ) -> Result<Option<AttributeValue>, ValueError> {
+        let (value, source) = self.split(value)?;
         self.check_items(value.as_ref())?;
         let items = &self.items;
-        Ok(each!(&mut self.cells, cells => cells.replace(row, decode(value, items)?)))
+        let previous = each!(&mut self.cells, cells => cells.replace(row, decode(value, items)?));
+        let previous_source = self
+            .sources
+            .as_mut()
+            .and_then(|sources| std::mem::replace(&mut sources[row], source));
+        Ok(join(previous, previous_source))
     }
 
     /// Removes `row` by moving the last row into its place, and returns its value.
     pub(super) fn swap_remove(&mut self, row: usize) -> Option<AttributeValue> {
-        each!(&mut self.cells, cells => cells.swap_remove(row))
+        let value = each!(&mut self.cells, cells => cells.swap_remove(row));
+        let source = self
+            .sources
+            .as_mut()
+            .and_then(|sources| sources.swap_remove(row));
+        join(value, source)
     }
 
     /// Heap memory owned by the column.
     pub(super) fn heap_bytes(&self) -> usize {
-        each!(&self.cells, cells => cells.heap_bytes())
+        let sources = self.sources.as_ref().map_or(0, |sources| {
+            sources.capacity() * size_of::<Option<Source>>()
+                + sources
+                    .iter()
+                    .flatten()
+                    .map(Source::heap_bytes)
+                    .sum::<usize>()
+        });
+        each!(&self.cells, cells => cells.heap_bytes()) + sources
+    }
+}
+
+/// A stored value with its source, if it has one.
+fn join(value: Option<AttributeValue>, source: Option<Source>) -> Option<AttributeValue> {
+    match (value, source) {
+        (Some(value), Some(source)) => Some(AttributeValue::sourced(value, source)),
+        (value, _) => value,
     }
 }
 
@@ -299,7 +363,7 @@ mod tests {
     use super::*;
 
     fn filled(value_type: &ValueType, values: &[Option<AttributeValue>]) -> Column {
-        let mut column = Column::new(value_type, None);
+        let mut column = Column::new(value_type, None, false);
         for value in values {
             column.push(value.clone()).unwrap();
         }
@@ -347,7 +411,7 @@ mod tests {
         for (value_type, _) in samples() {
             for (other_type, other) in samples() {
                 if other_type != value_type {
-                    let mut column = Column::new(&value_type, None);
+                    let mut column = Column::new(&value_type, None, false);
                     assert_eq!(column.push(Some(other.clone())), Err(ValueError::Mismatch));
                     assert_eq!(column.heap_bytes(), 0, "{value_type} unchanged");
                 }
@@ -371,7 +435,7 @@ mod tests {
 
     #[test]
     fn list_items_are_checked() {
-        let mut column = Column::new(&ValueType::List(Box::new(ValueType::Integer)), None);
+        let mut column = Column::new(&ValueType::List(Box::new(ValueType::Integer)), None, false);
         let wrong =
             AttributeValue::List(vec![AttributeValue::Integer(1), AttributeValue::Bool(true)]);
         assert_eq!(column.push(Some(wrong)), Err(ValueError::Mismatch));
@@ -421,7 +485,7 @@ mod tests {
         let one = |value_type: &ValueType, value: AttributeValue| {
             filled(value_type, &[Some(value)]).heap_bytes()
         };
-        assert_eq!(Column::new(&ValueType::Text, None).heap_bytes(), 0);
+        assert_eq!(Column::new(&ValueType::Text, None, false).heap_bytes(), 0);
         assert!(filled(&ValueType::Integer, &[None]).heap_bytes() > 0);
 
         let text = |value: &str| AttributeValue::Text(value.into());

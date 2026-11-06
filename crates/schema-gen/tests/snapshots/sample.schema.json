@@ -133,13 +133,26 @@
         "UValue": {
           "anyOf": [
             {
-              "type": "number"
+              "additionalProperties": false,
+              "properties": {
+                "source": {
+                  "$ref": "#/$defs/Source"
+                },
+                "value": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "value",
+                "source"
+              ],
+              "type": "object"
             },
             {
               "type": "null"
             }
           ],
-          "description": "The `UValue` value.\n\nIn W/(m²·K)."
+          "description": "Thermal transmittance, with the test report or standard it comes from.\n\nIn W/(m²·K)."
         }
       },
       "type": "object"
@@ -149,6 +162,25 @@
       "deprecated": true,
       "description": "A `Recess`.\n\nDeprecated since schema version 2.",
       "properties": {},
+      "type": "object"
+    },
+    "Source": {
+      "additionalProperties": false,
+      "description": "The document and clause a value comes from.",
+      "properties": {
+        "clause": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "document": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "document",
+        "clause"
+      ],
       "type": "object"
     },
     "Storey": {

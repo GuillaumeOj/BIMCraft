@@ -87,7 +87,11 @@ impl Table {
                 .map(|attribute| Slot {
                     name: attribute.name.clone(),
                     rule: side.rule(attribute),
-                    column: Column::new(&attribute.value, items(&attribute.value, enumerations)),
+                    column: Column::new(
+                        &attribute.value,
+                        items(&attribute.value, enumerations),
+                        attribute.sourced,
+                    ),
                 })
                 .collect(),
         }
@@ -246,6 +250,8 @@ impl Slot {
             ValueError::Mismatch => StoreError::TypeMismatch(self.name.clone()),
             ValueError::NonFinite => StoreError::NonFinite(self.name.clone()),
             ValueError::UnknownItem => StoreError::UnknownItem(self.name.clone()),
+            ValueError::MissingSource => StoreError::MissingSource(self.name.clone()),
+            ValueError::UnexpectedSource => StoreError::UnexpectedSource(self.name.clone()),
         }
     }
 }

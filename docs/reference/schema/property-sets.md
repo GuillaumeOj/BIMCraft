@@ -4,58 +4,44 @@
 
 ## <a id="BIMCraft_MaterialConcrete"></a>BIMCraft_MaterialConcrete
 
-Strength and strain properties of a concrete grade, each with its source. An IFC export writes the values to `Pset_MaterialConcrete`.
+Strength and strain properties of a concrete grade, each with its source. An IFC export writes the values to `Pset_MaterialConcrete`, with each source in the property's Specification.
 
 - **Introduced in:** version 3
 - **Applies to:** [Material](entities.md#Material)
 
 | Property | Value | Presence | Set on | Description |
 | --- | --- | --- | --- | --- |
-| `CharacteristicCompressiveStrength` | pressure (Pa) | optional | instance | Characteristic cylinder compressive strength at 28 days. |
-| `CharacteristicCompressiveStrengthSource` | text | optional | instance | Design-code document and clause that CharacteristicCompressiveStrength comes from, such as `EN 1992-1-1:2004, Table 3.1`. |
-| `MeanCompressiveStrength` | pressure (Pa) | optional | instance | Mean cylinder compressive strength at 28 days. |
-| `MeanCompressiveStrengthSource` | text | optional | instance | Design-code document and clause that MeanCompressiveStrength comes from, such as `EN 1992-1-1:2004, Table 3.1`. |
-| `MeanTensileStrength` | pressure (Pa) | optional | instance | Mean axial tensile strength. |
-| `MeanTensileStrengthSource` | text | optional | instance | Design-code document and clause that MeanTensileStrength comes from, such as `EN 1992-1-1:2004, Table 3.1`. |
-| `StrainAtPeakStress` | real | optional | instance | Compressive strain at which the parabola reaches the peak stress, as a ratio. |
-| `StrainAtPeakStressSource` | text | optional | instance | Design-code document and clause that StrainAtPeakStress comes from, such as `EN 1992-1-1:2004, Table 3.1`. |
-| `UltimateCompressiveStrain` | real | optional | instance | Ultimate compressive strain, as a ratio. |
-| `UltimateCompressiveStrainSource` | text | optional | instance | Design-code document and clause that UltimateCompressiveStrain comes from, such as `EN 1992-1-1:2004, Table 3.1`. |
-| `ParabolaExponent` | real | optional | instance | Exponent of the parabola of the parabola-rectangle diagram. |
-| `ParabolaExponentSource` | text | optional | instance | Design-code document and clause that ParabolaExponent comes from, such as `EN 1992-1-1:2004, Table 3.1`. |
+| `CharacteristicCompressiveStrength` | pressure (Pa), sourced | optional | instance | Characteristic cylinder compressive strength at 28 days. |
+| `MeanCompressiveStrength` | pressure (Pa), sourced | optional | instance | Mean cylinder compressive strength at 28 days. |
+| `MeanTensileStrength` | pressure (Pa), sourced | optional | instance | Mean axial tensile strength. |
+| `StrainAtPeakStress` | real, sourced | optional | instance | Compressive strain at which the parabola reaches the peak stress, as a ratio. |
+| `UltimateCompressiveStrain` | real, sourced | optional | instance | Ultimate compressive strain, as a ratio. |
+| `ParabolaExponent` | real, sourced | optional | instance | Exponent of the parabola of the parabola-rectangle diagram. |
 
 ## <a id="BIMCraft_MaterialMechanical"></a>BIMCraft_MaterialMechanical
 
-Mechanical and physical properties of a material, each with its source. An IFC export writes the values to `Pset_MaterialCommon` and `Pset_MaterialMechanical`.
+Mechanical and physical properties of a material, each with its source. An IFC export writes the values to `Pset_MaterialCommon` and `Pset_MaterialMechanical`, with each source in the property's Specification.
 
 - **Introduced in:** version 3
 - **Applies to:** [Material](entities.md#Material)
 
 | Property | Value | Presence | Set on | Description |
 | --- | --- | --- | --- | --- |
-| `MassDensity` | mass density (kg/m³) | optional | instance | Mass per unit volume. |
-| `MassDensitySource` | text | optional | instance | Design-code document and clause that MassDensity comes from, such as `EN 1992-1-1:2004, Table 3.1`. |
-| `YoungModulus` | pressure (Pa) | optional | instance | Modulus of elasticity; for concrete, the secant modulus. |
-| `YoungModulusSource` | text | optional | instance | Design-code document and clause that YoungModulus comes from, such as `EN 1992-1-1:2004, Table 3.1`. |
-| `PoissonRatio` | real | optional | instance | Ratio of lateral to axial strain under axial load. |
-| `PoissonRatioSource` | text | optional | instance | Design-code document and clause that PoissonRatio comes from, such as `EN 1992-1-1:2004, Table 3.1`. |
-| `ThermalExpansionCoefficient` | real | optional | instance | Linear thermal expansion, per kelvin. |
-| `ThermalExpansionCoefficientSource` | text | optional | instance | Design-code document and clause that ThermalExpansionCoefficient comes from, such as `EN 1992-1-1:2004, Table 3.1`. |
+| `MassDensity` | mass density (kg/m³), sourced | optional | instance | Mass per unit volume. |
+| `YoungModulus` | pressure (Pa), sourced | optional | instance | Modulus of elasticity; for concrete, the secant modulus. |
+| `PoissonRatio` | real, sourced | optional | instance | Ratio of lateral to axial strain under axial load. |
+| `ThermalExpansionCoefficient` | real, sourced | optional | instance | Linear thermal expansion, per kelvin. |
 
 ## <a id="BIMCraft_MaterialSteel"></a>BIMCraft_MaterialSteel
 
-Strength and ductility properties of a steel grade, each with its source. An IFC export writes the values to `Pset_MaterialSteel`.
+Strength and ductility properties of a steel grade, each with its source. An IFC export writes the values to `Pset_MaterialSteel`, with each source in the property's Specification.
 
 - **Introduced in:** version 3
 - **Applies to:** [Material](entities.md#Material)
 
 | Property | Value | Presence | Set on | Description |
 | --- | --- | --- | --- | --- |
-| `YieldStrength` | pressure (Pa) | optional | instance | Characteristic or nominal yield strength. |
-| `YieldStrengthSource` | text | optional | instance | Design-code document and clause that YieldStrength comes from, such as `EN 1992-1-1:2004, Table 3.1`. |
-| `UltimateStrength` | pressure (Pa) | optional | instance | Characteristic or nominal ultimate tensile strength. |
-| `UltimateStrengthSource` | text | optional | instance | Design-code document and clause that UltimateStrength comes from, such as `EN 1992-1-1:2004, Table 3.1`. |
-| `UltimateStrain` | real | optional | instance | Strain at maximum load, as a ratio. |
-| `UltimateStrainSource` | text | optional | instance | Design-code document and clause that UltimateStrain comes from, such as `EN 1992-1-1:2004, Table 3.1`. |
-| `HardeningRatio` | real | optional | instance | Ratio of tensile strength to yield strength. |
-| `HardeningRatioSource` | text | optional | instance | Design-code document and clause that HardeningRatio comes from, such as `EN 1992-1-1:2004, Table 3.1`. |
+| `YieldStrength` | pressure (Pa), sourced | optional | instance | Characteristic or nominal yield strength. |
+| `UltimateStrength` | pressure (Pa), sourced | optional | instance | Characteristic or nominal ultimate tensile strength. |
+| `UltimateStrain` | real, sourced | optional | instance | Strain at maximum load, as a ratio. |
+| `HardeningRatio` | real, sourced | optional | instance | Ratio of tensile strength to yield strength. |

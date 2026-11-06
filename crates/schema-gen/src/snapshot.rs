@@ -115,6 +115,9 @@ struct AttributeJson {
     placement: PlacementDef,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     doc: Option<String>,
+    // Absent from snapshots taken before sourced values existed (ADR 0018).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    sourced: bool,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -254,6 +257,7 @@ impl From<&Attribute> for AttributeJson {
             },
             placement: attribute.placement.into(),
             doc: attribute.doc.clone(),
+            sourced: attribute.sourced,
         }
     }
 }
@@ -398,6 +402,7 @@ impl TryFrom<AttributeJson> for Attribute {
             placement: json.placement.into(),
             name: json.name,
             doc: json.doc,
+            sourced: json.sourced,
         })
     }
 }
