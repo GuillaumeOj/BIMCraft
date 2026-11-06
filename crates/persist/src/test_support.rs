@@ -216,10 +216,11 @@ fn wall() -> impl Strategy<Value = Vec<(&'static str, AttributeValue)>> {
             proptest::option::of(list(reference())),
             proptest::option::of(list(integer())),
             proptest::option::of(list(finite())),
-            proptest::option::of(
+            proptest::option::of(prop_oneof![
                 (finite(), "[A-Z][A-Za-z0-9 :-]{0,20}", "[0-9][0-9.()]{0,8}")
                     .prop_map(|(value, document, clause)| sourced(value, &document, &clause)),
-            ),
+                finite().prop_map(|value| AttributeValue::sourced(value, Source::user())),
+            ]),
         ),
     )
         .prop_map(

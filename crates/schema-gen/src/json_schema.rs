@@ -167,11 +167,21 @@ fn value_type_schema(value: &ValueType) -> Json {
 fn source_definition() -> Json {
     let text = json!({ "type": "string", "minLength": 1 });
     json!({
-        "type": "object",
-        "description": "The document and clause a value comes from.",
-        "properties": { "document": text, "clause": text },
-        "required": ["document", "clause"],
-        "additionalProperties": false,
+        "description": "Where a value comes from: the document and clause it is taken from, or the user who entered it.",
+        "oneOf": [
+            {
+                "type": "object",
+                "properties": { "document": text, "clause": text },
+                "required": ["document", "clause"],
+                "additionalProperties": false,
+            },
+            {
+                "type": "object",
+                "properties": { "entered_by_user": { "const": true } },
+                "required": ["entered_by_user"],
+                "additionalProperties": false,
+            },
+        ],
     })
 }
 

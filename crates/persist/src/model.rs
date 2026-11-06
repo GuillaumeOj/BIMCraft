@@ -200,7 +200,7 @@ fn check_columns(info: &mut Statement<'_>, table: &EntityTable<'_>) -> Result<()
 
 #[cfg(test)]
 mod tests {
-    use core_model::{AttributeValue, EntityId};
+    use core_model::{AttributeValue, EntityId, Source};
     use proptest::prelude::*;
 
     use super::*;
@@ -319,6 +319,14 @@ mod tests {
             format!("UPDATE {table} SET is_external = 7"),
             format!("UPDATE {table} SET tags = x'FFFFFFFF'"),
             format!("UPDATE {table} SET \"strength@clause\" = '3.1'"),
+            format!(
+                "UPDATE {table} SET strength = 1.0, \"strength@document\" = '', \
+                 \"strength@clause\" = '3.1'"
+            ),
+            format!(
+                "UPDATE {table} SET strength = 1.0, \"strength@document\" = 'EN 1990', \
+                 \"strength@clause\" = ''"
+            ),
             format!("UPDATE {table} SET strength = 1.0"),
             format!(
                 "UPDATE {table} SET strength = 1.0, \"strength@document\" = ' ', \
@@ -418,6 +426,31 @@ mod tests {
         let mut conn = saved(&store);
         let reopened = open_model(&mut conn, &Schema::new(&namespace)).unwrap();
         assert_eq!(sorted_objects(&reopened), sorted_objects(&store));
+    }
+
+    #[test]
+    fn a_value_entered_by_the_user_is_saved_with_an_empty_source() {
+        let namespace = namespace();
+        let mut store = Store::new(&namespace).unwrap();
+        wall(&mut store, 10);
+        let entered = AttributeValue::sourced(AttributeValue::Real(25e6), Source::user());
+        store
+            .set(EntityId::new(10), "strength", Some(entered.clone()))
+            .unwrap();
+        let mut conn = saved(&store);
+        let parts: (String, String) = conn
+            .query_row(
+                "SELECT \"strength@document\", \"strength@clause\" FROM \"core/Wall\"",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(parts, (String::new(), String::new()));
+        let reopened = open_model(&mut conn, &Schema::new(&namespace)).unwrap();
+        assert_eq!(
+            reopened.get(EntityId::new(10), "strength"),
+            Ok(Some(entered))
+        );
     }
 
     proptest! {

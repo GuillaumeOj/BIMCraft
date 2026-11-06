@@ -1,8 +1,8 @@
-//! Where a value comes from: a document and a clause (REP-05, ADR 0018).
+//! Where a value comes from: a document and a clause, or the user (REP-05, ADR 0018).
 
 use std::fmt;
 
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use thiserror::Error;
 
 use crate::AttributeValue;
@@ -10,23 +10,64 @@ use crate::AttributeValue;
 /// The longest document or clause accepted, in characters.
 pub const MAX_SOURCE_LEN: usize = 200;
 
-/// The document and clause a value comes from, such as `EN 1992-1-1:2004` and `Table 3.1`.
+/// Where a value comes from: the document and clause it is taken from, such as
+/// `EN 1992-1-1:2004` and `Table 3.1`, or the user who entered it.
 ///
-/// Both parts are trimmed, non-empty, at most [`MAX_SOURCE_LEN`] characters and free of control
-/// characters, which also keeps standards text from being pasted in (REP-05).
+/// A document and a clause are trimmed, non-empty, at most [`MAX_SOURCE_LEN`] characters and
+/// free of control characters, which also keeps standards text from being pasted in (REP-05).
+/// In JSON, a cited source is `{"document": …, "clause": …}` and a user's value is
+/// `{"entered_by_user": true}`.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-#[serde(try_from = "SourceParts")]
-pub struct Source {
-    document: Box<str>,
-    clause: Box<str>,
+#[serde(try_from = "SourceParts", into = "SourceParts")]
+pub struct Source(Origin);
+
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+enum Origin {
+    Cited {
+        document: Box<str>,
+        clause: Box<str>,
+    },
+    User,
 }
 
-/// The fields of a [`Source`] as serialised, before they are checked.
-#[derive(Deserialize)]
+/// A [`Source`] as serialised, before it is checked.
+#[derive(Serialize, Deserialize)]
+#[serde(untagged)]
+enum SourceParts {
+    Cited(Citation),
+    User(EnteredByUser),
+}
+
+#[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-struct SourceParts {
+struct Citation {
     document: String,
     clause: String,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct EnteredByUser {
+    entered_by_user: True,
+}
+
+/// The JSON `true`, the only value `entered_by_user` takes.
+struct True;
+
+impl Serialize for True {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_bool(true)
+    }
+}
+
+impl<'de> Deserialize<'de> for True {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        if bool::deserialize(deserializer)? {
+            Ok(Self)
+        } else {
+            Err(serde::de::Error::custom("entered_by_user is always true"))
+        }
+    }
 }
 
 /// Why a source was rejected. Messages never repeat the text (SEC-03).
@@ -55,27 +96,49 @@ impl Source {
     pub fn new(document: &str, clause: &str) -> Result<Self, SourceError> {
         let document = part(document)?.ok_or(SourceError::EmptyDocument)?;
         let clause = part(clause)?.ok_or(SourceError::EmptyClause)?;
-        Ok(Self {
+        Ok(Self(Origin::Cited {
             document: document.into(),
             clause: clause.into(),
-        })
+        }))
     }
 
-    /// The document, with its edition.
+    /// The source of a value the user entered instead of taking it from a document.
     #[must_use]
-    pub fn document(&self) -> &str {
-        &self.document
+    pub const fn user() -> Self {
+        Self(Origin::User)
     }
 
-    /// The clause, table or annex number within the document.
+    /// Whether the user entered the value.
     #[must_use]
-    pub fn clause(&self) -> &str {
-        &self.clause
+    pub const fn is_user(&self) -> bool {
+        matches!(self.0, Origin::User)
+    }
+
+    /// The document, with its edition; `None` for a value the user entered.
+    #[must_use]
+    pub fn document(&self) -> Option<&str> {
+        match &self.0 {
+            Origin::Cited { document, .. } => Some(document),
+            Origin::User => None,
+        }
+    }
+
+    /// The clause, table or annex number within the document; `None` for a value the user
+    /// entered.
+    #[must_use]
+    pub fn clause(&self) -> Option<&str> {
+        match &self.0 {
+            Origin::Cited { clause, .. } => Some(clause),
+            Origin::User => None,
+        }
     }
 
     /// Heap memory owned by the source.
     pub(crate) fn heap_bytes(&self) -> usize {
-        self.document.len() + self.clause.len()
+        match &self.0 {
+            Origin::Cited { document, clause } => document.len() + clause.len(),
+            Origin::User => 0,
+        }
     }
 }
 
@@ -83,13 +146,33 @@ impl TryFrom<SourceParts> for Source {
     type Error = SourceError;
 
     fn try_from(parts: SourceParts) -> Result<Self, SourceError> {
-        Self::new(&parts.document, &parts.clause)
+        match parts {
+            SourceParts::Cited(citation) => Self::new(&citation.document, &citation.clause),
+            SourceParts::User(_) => Ok(Self::user()),
+        }
+    }
+}
+
+impl From<Source> for SourceParts {
+    fn from(source: Source) -> Self {
+        match source.0 {
+            Origin::Cited { document, clause } => Self::Cited(Citation {
+                document: document.into(),
+                clause: clause.into(),
+            }),
+            Origin::User => Self::User(EnteredByUser {
+                entered_by_user: True,
+            }),
+        }
     }
 }
 
 impl fmt::Display for Source {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}, {}", self.document, self.clause)
+        match &self.0 {
+            Origin::Cited { document, clause } => write!(f, "{document}, {clause}"),
+            Origin::User => f.write_str("entered by user"),
+        }
     }
 }
 
@@ -122,10 +205,48 @@ mod tests {
     #[test]
     fn a_source_keeps_its_trimmed_parts() {
         let source = Source::new(" EN 1992-1-1:2004 ", "Table 3.1").unwrap();
-        assert_eq!(source.document(), "EN 1992-1-1:2004");
-        assert_eq!(source.clause(), "Table 3.1");
+        assert_eq!(source.document(), Some("EN 1992-1-1:2004"));
+        assert_eq!(source.clause(), Some("Table 3.1"));
+        assert!(!source.is_user());
         assert_eq!(source.to_string(), "EN 1992-1-1:2004, Table 3.1");
         assert_eq!(source.heap_bytes(), 25);
+    }
+
+    #[test]
+    fn a_value_entered_by_the_user_cites_nothing() {
+        let source = Source::user();
+        assert!(source.is_user());
+        assert_eq!(source.document(), None);
+        assert_eq!(source.clause(), None);
+        assert_eq!(source.to_string(), "entered by user");
+        assert_eq!(source.heap_bytes(), 0);
+        assert_ne!(source, Source::new("EN 1990", "3.1").unwrap());
+    }
+
+    #[test]
+    fn sources_have_their_json_shapes() {
+        let cited = Source::new("EN 1990", "3.1").unwrap();
+        let json = |source: &Source| serde_json::to_string(source).unwrap();
+        assert_eq!(json(&cited), r#"{"document":"EN 1990","clause":"3.1"}"#);
+        assert_eq!(json(&Source::user()), r#"{"entered_by_user":true}"#);
+        for source in [cited, Source::user()] {
+            assert_eq!(
+                serde_json::from_str::<Source>(&json(&source)).unwrap(),
+                source
+            );
+        }
+        for invalid in [
+            r#"{"entered_by_user":false}"#,
+            r#"{"entered_by_user":true,"document":"EN 1990"}"#,
+            r#"{"document":"EN 1990","clause":"3.1","entered_by_user":true}"#,
+            r#"{"document":"EN 1990"}"#,
+            r"{}",
+        ] {
+            assert!(
+                serde_json::from_str::<Source>(invalid).is_err(),
+                "{invalid}"
+            );
+        }
     }
 
     #[test]

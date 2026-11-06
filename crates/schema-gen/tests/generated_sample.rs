@@ -182,7 +182,7 @@ fn property_names_keep_their_ifc_spelling() {
         fire_rating: Some("REI 60".into()),
         u_value: Some(Sourced {
             value: 0.25,
-            source: Source {
+            source: Source::Cited {
                 document: "EN ISO 6946:2017".into(),
                 clause: "6.7".into(),
             },
@@ -200,6 +200,20 @@ fn property_names_keep_their_ifc_spelling() {
     let unsourced = json!({ "LoadBearing": true, "UValue": 0.25 });
     assert!(serde_json::from_value::<PsetWallCommon>(unsourced).is_err());
     round_trip("Pset_WallCommon", &property_set).unwrap();
+    let entered = PsetWallCommon {
+        u_value: Some(Sourced {
+            value: 0.3,
+            source: Source::EnteredByUser {
+                entered_by_user: true,
+            },
+        }),
+        ..property_set
+    };
+    assert_eq!(
+        serde_json::to_value(&entered).unwrap()["UValue"],
+        json!({ "value": 0.3, "source": { "entered_by_user": true } })
+    );
+    round_trip("Pset_WallCommon", &entered).unwrap();
 }
 
 #[test]

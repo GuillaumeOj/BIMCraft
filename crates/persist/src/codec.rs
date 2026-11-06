@@ -33,16 +33,18 @@ pub(crate) fn to_sql(value: &AttributeValue) -> Value {
 }
 
 /// Appends to `row` the `SQLite` values of one attribute: the value, then, for a sourced
-/// attribute, the document and the clause of its source (ADR 0018). An absent value is `NULL`
+/// attribute, the document and the clause of its source (ADR 0018). A value the user entered
+/// has an empty document and clause, which no cited source can have. An absent value is `NULL`
 /// in each.
 pub(crate) fn push_row_values(row: &mut Vec<Value>, value: Option<&AttributeValue>, sourced: bool) {
     row.push(value.map_or(Value::Null, to_sql));
     if sourced {
         match value {
-            Some(AttributeValue::Sourced(sourced)) => row.extend([
-                Value::Text(sourced.source.document().to_owned()),
-                Value::Text(sourced.source.clause().to_owned()),
-            ]),
+            Some(AttributeValue::Sourced(sourced)) => {
+                let source = &sourced.source;
+                let part = |part: Option<&str>| Value::Text(part.unwrap_or_default().to_owned());
+                row.extend([part(source.document()), part(source.clause())]);
+            }
             _ => row.extend([Value::Null, Value::Null]),
         }
     }
@@ -55,6 +57,9 @@ pub(crate) fn sourced_from_sql(
 ) -> Result<Option<AttributeValue>, PersistError> {
     match (from_sql(value, value_type)?, document, clause) {
         (None, ValueRef::Null, ValueRef::Null) => Ok(None),
+        (Some(value), ValueRef::Text(b""), ValueRef::Text(b"")) => {
+            Ok(Some(AttributeValue::sourced(value, Source::user())))
+        }
         (Some(value), ValueRef::Text(document), ValueRef::Text(clause)) => {
             let source = Source::new(&text_from(document)?, &text_from(clause)?)
                 .map_err(|_| PersistError::Corrupt)?;

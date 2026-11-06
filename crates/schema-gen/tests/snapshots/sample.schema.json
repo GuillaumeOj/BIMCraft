@@ -165,23 +165,39 @@
       "type": "object"
     },
     "Source": {
-      "additionalProperties": false,
-      "description": "The document and clause a value comes from.",
-      "properties": {
-        "clause": {
-          "minLength": 1,
-          "type": "string"
+      "description": "Where a value comes from: the document and clause it is taken from, or the user who entered it.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "clause": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "document": {
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          "required": [
+            "document",
+            "clause"
+          ],
+          "type": "object"
         },
-        "document": {
-          "minLength": 1,
-          "type": "string"
+        {
+          "additionalProperties": false,
+          "properties": {
+            "entered_by_user": {
+              "const": true
+            }
+          },
+          "required": [
+            "entered_by_user"
+          ],
+          "type": "object"
         }
-      },
-      "required": [
-        "document",
-        "clause"
-      ],
-      "type": "object"
+      ]
     },
     "Storey": {
       "additionalProperties": false,

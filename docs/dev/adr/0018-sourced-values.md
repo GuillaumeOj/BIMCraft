@@ -27,6 +27,8 @@ National annex parameters, partial factors and EPD data will all need the same t
 
 **One source type.** `core_model::Source` is a document and a clause, for example `EN 1992-1-1:2004` and `Table 3.1`. Both parts are trimmed, non-empty, at most 200 characters and free of control characters, so a source never carries standards text by accident (REP-05). The `material` crate's own `Source` is replaced by it.
 
+**Values entered by the user.** A value a user types in place of the library's has no document to cite, yet it must still say where it comes from (MAT-02). `Source::user()` is that source, shown as "Entered by user". In JSON it is `{"entered_by_user": true}` (the cited form stays `{"document", "clause"}`, `$defs/Source` is a `oneOf` of the two); in a project file its document and clause columns hold empty texts, which no cited source can have, so the two never mix up and a half-empty pair is still a damaged file.
+
 **Sourced values are attribute values.** `AttributeValue` gains `Sourced(Box<SourcedValue>)`, where `SourcedValue` holds the plain value and its `Source`; `AttributeValue::sourced` builds one and `AttributeValue::plain` reads the value without its source.
 
 - A sourced attribute or property accepts only `Sourced` values whose inner value has the declared type; any other attribute rejects them. A value and its source are therefore written, read, cleared, undone and serialised together, through the paths that already exist: `insert`, `set`, `attach_property_set`, `set_property`, every `ModelCommand` and the history journal (CORE-11).

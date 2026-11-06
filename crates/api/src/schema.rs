@@ -117,11 +117,11 @@ fn shared() -> Map<String, Value> {
     });
     let part = || json!({ "type": "string", "minLength": 1 });
     let source = json!({
-        "description": "The document and clause a sourced value comes from (ADR 0018).",
-        "type": "object",
-        "properties": { "document": part(), "clause": part() },
-        "required": ["document", "clause"],
-        "additionalProperties": false,
+        "description": "Where a sourced value comes from (ADR 0018): the document and clause it is taken from, or the user who entered it.",
+        "oneOf": [
+            object(&[("document", part()), ("clause", part())], &[]),
+            object(&[("entered_by_user", json!({ "const": true }))], &[]),
+        ],
     });
     let text = || json!({ "type": "string" });
     let origin = json!({

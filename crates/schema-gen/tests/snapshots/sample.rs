@@ -296,12 +296,20 @@ pub struct Sourced<T> {
     pub source: Source,
 }
 
-/// The document and clause a value comes from.
+/// Where a value comes from: the document and clause it is taken from, or the user.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct Source {
-    /// The document, with its edition, such as `EN 1992-1-1:2004`.
-    pub document: String,
-    /// The clause, table or annex number within the document.
-    pub clause: String,
+#[serde(untagged)]
+pub enum Source {
+    /// A clause of a document.
+    Cited {
+        /// The document, with its edition, such as `EN 1992-1-1:2004`.
+        document: String,
+        /// The clause, table or annex number within the document.
+        clause: String,
+    },
+    /// A value the user entered.
+    EnteredByUser {
+        /// Always `true`.
+        entered_by_user: bool,
+    },
 }

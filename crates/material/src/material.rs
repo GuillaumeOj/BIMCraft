@@ -532,7 +532,7 @@ pub(crate) mod tests {
         assert_eq!(concrete.law().kind(), LawKind::ConcreteParabolaRectangle);
         assert_eq!(concrete.law().stress(-0.002), Ok(Quantity::from_si(-30e6)));
         let modulus = concrete.property(Property::YoungModulus).unwrap();
-        assert_eq!(modulus.source.clause(), "Table 3.1");
+        assert_eq!(modulus.source.clause(), Some("Table 3.1"));
         assert_eq!(concrete.properties().count(), 7);
         assert_eq!(concrete.property(Property::YieldStrength), None);
     }

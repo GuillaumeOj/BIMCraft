@@ -21,8 +21,8 @@ export type NameValue = [string, AttributeValue];
 /** Who issued a command. */
 export type Origin = { kind: "ui" } | { kind: "plugin"; name: string } | { id: string; kind: "ai_session" };
 
-/** The document and clause a sourced value comes from (ADR 0018). */
-export type Source = { clause: string; document: string };
+/** Where a sourced value comes from (ADR 0018): the document and clause it is taken from, or the user who entered it. */
+export type Source = { clause: string; document: string } | { entered_by_user: true };
 
 /** Every command: its parameters and its result. */
 export interface Commands {

@@ -137,8 +137,8 @@ fn materials_keep_every_value_and_source_after_reopening() {
     assert_same(&saved, &reopened, &materials);
     let concrete = material::read(&reopened, EntityId::new(1)).unwrap();
     let density = concrete.property(Property::MassDensity).unwrap();
-    assert_eq!(density.source.document(), "EN 1991-1-1:2002");
-    assert_eq!(density.source.clause(), "Table A.1");
+    assert_eq!(density.source.document(), Some("EN 1991-1-1:2002"));
+    assert_eq!(density.source.clause(), Some("Table A.1"));
 }
 
 #[cfg(test)] // Lets the helper unwrap, as tests may (clippy.toml).
