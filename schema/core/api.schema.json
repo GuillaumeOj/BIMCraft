@@ -766,12 +766,16 @@
       "type": "object"
     },
     "MaterialCategory": {
-      "description": "What a material is; it decides which behaviour laws suit it.",
+      "description": "What a material is; it decides which properties it gives and which behaviour laws suit it.",
       "enum": [
         "concrete",
-        "reinforcing_steel",
-        "structural_steel",
-        "other"
+        "reinforcement",
+        "steel",
+        "timber",
+        "masonry",
+        "insulation",
+        "finish",
+        "generic"
       ],
       "type": "string"
     },

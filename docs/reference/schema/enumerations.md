@@ -16,13 +16,17 @@ How the stress in a material follows its strain.
 
 ## <a id="MaterialCategory"></a>MaterialCategory
 
-What a material is; it decides which behaviour laws suit it.
+What a material is; it decides which properties it gives and which behaviour laws suit it.
 
 - **Introduced in:** version 3
 
 | Item | Description |
 | --- | --- |
-| `concrete` | Concrete. |
-| `reinforcing_steel` | Steel bars for reinforced concrete. |
-| `structural_steel` | Steel for structural members. |
-| `other` | Any other material. |
+| `concrete` | Concrete (EN 1992-1-1). |
+| `reinforcement` | Steel bars and meshes for reinforced concrete (EN 1992-1-1). |
+| `steel` | Structural steel for members and plates (EN 1993-1-1). |
+| `timber` | Solid timber and glued laminated timber (EN 1995-1-1, EN 338, EN 14080). |
+| `masonry` | Masonry units laid in mortar (EN 1996-1-1). |
+| `insulation` | Thermal and acoustic insulation, such as mineral wool or expanded polystyrene; no structural use. |
+| `finish` | Linings, renders, plasters and claddings; no structural use. |
+| `generic` | Any other material. |

@@ -52,7 +52,7 @@ fn materials() -> Vec<Material> {
     );
     let steel = Material::new(
         "S355",
-        Category::StructuralSteel,
+        Category::Steel,
         LawKind::SteelBilinear,
         Some("EN 1993-1-1:2005"),
         BTreeMap::from([
@@ -69,7 +69,7 @@ fn materials() -> Vec<Material> {
     );
     let reinforcement = Material::new(
         "B500B",
-        Category::ReinforcingSteel,
+        Category::Reinforcement,
         LawKind::SteelBilinear,
         Some("EN 1992-1-1:2004"),
         BTreeMap::from([
@@ -166,35 +166,27 @@ fn value(property: Property) -> BoxedStrategy<f64> {
     }
 }
 
-/// A linear elastic material giving its modulus and any other properties, each with a source.
+/// A linear elastic material of any category, giving its modulus, the properties its category
+/// requires and any others of the category, each with a source.
 #[cfg(test)] // Lets the helper unwrap, as tests may (clippy.toml).
 fn material() -> impl Strategy<Value = Option<Material>> {
     let properties = Property::ALL.map(|property| {
-        (value(property), source(), any::<bool>()).prop_map(move |(value, source, given)| {
-            given.then(|| (property, Sourced::new(value, source)))
-        })
+        (value(property), source(), any::<bool>())
+            .prop_map(move |(value, source, given)| (property, Sourced::new(value, source), given))
     });
-    (
-        "[A-Z][A-Za-z0-9/ ]{0,30}",
-        properties,
-        value(Property::YoungModulus),
-        source(),
-    )
-        .prop_map(|(name, properties, modulus, modulus_source)| {
-            let mut properties: BTreeMap<_, _> = properties.into_iter().flatten().collect();
-            properties.insert(
-                Property::YoungModulus,
-                Sourced::new(modulus, modulus_source),
-            );
-            Material::new(
-                &name,
-                Category::Other,
-                LawKind::LinearElastic,
-                None,
-                properties,
-            )
-            .ok()
-        })
+    let category = proptest::sample::select(Category::ALL.to_vec());
+    ("[A-Z][A-Za-z0-9/ ]{0,30}", category, properties).prop_map(|(name, category, properties)| {
+        let properties = properties
+            .into_iter()
+            .filter(|(property, _, given)| {
+                let needed =
+                    *property == Property::YoungModulus || category.required().contains(property);
+                category.gives(*property) && (*given || needed)
+            })
+            .map(|(property, value, _)| (property, value))
+            .collect();
+        Material::new(&name, category, LawKind::LinearElastic, None, properties).ok()
+    })
 }
 
 proptest! {
@@ -210,6 +202,7 @@ proptest! {
         materials in proptest::collection::vec(material(), 1..4),
     ) {
         let materials: Vec<Material> = materials.into_iter().flatten().collect();
+        prop_assume!(!materials.is_empty());
         let namespace = core_namespace().unwrap();
         let saved = model_with(&namespace, &materials);
         let dir = TempDir::new().unwrap();

@@ -2,20 +2,36 @@ format = 1
 
 [enumeration]
 name = "MaterialCategory"
-doc = "What a material is; it decides which behaviour laws suit it."
+doc = "What a material is; it decides which properties it gives and which behaviour laws suit it."
 
 [[item]]
 name = "concrete"
-doc = "Concrete."
+doc = "Concrete (EN 1992-1-1)."
 
 [[item]]
-name = "reinforcing_steel"
-doc = "Steel bars for reinforced concrete."
+name = "reinforcement"
+doc = "Steel bars and meshes for reinforced concrete (EN 1992-1-1)."
 
 [[item]]
-name = "structural_steel"
-doc = "Steel for structural members."
+name = "steel"
+doc = "Structural steel for members and plates (EN 1993-1-1)."
 
 [[item]]
-name = "other"
+name = "timber"
+doc = "Solid timber and glued laminated timber (EN 1995-1-1, EN 338, EN 14080)."
+
+[[item]]
+name = "masonry"
+doc = "Masonry units laid in mortar (EN 1996-1-1)."
+
+[[item]]
+name = "insulation"
+doc = "Thermal and acoustic insulation, such as mineral wool or expanded polystyrene; no structural use."
+
+[[item]]
+name = "finish"
+doc = "Linings, renders, plasters and claddings; no structural use."
+
+[[item]]
+name = "generic"
 doc = "Any other material."

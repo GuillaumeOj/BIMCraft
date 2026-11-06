@@ -15,23 +15,83 @@ use crate::source::{MAX_TEXT_LEN, Sourced, bounded_text};
 /// What a material is, as the `category` attribute stores it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Category {
-    /// Concrete.
+    /// Concrete (EN 1992-1-1).
     Concrete,
-    /// Steel bars for reinforced concrete.
-    ReinforcingSteel,
-    /// Steel for structural members.
-    StructuralSteel,
+    /// Steel bars and meshes for reinforced concrete (EN 1992-1-1).
+    Reinforcement,
+    /// Structural steel for members and plates (EN 1993-1-1).
+    Steel,
+    /// Solid and glued laminated timber (EN 1995-1-1).
+    Timber,
+    /// Masonry units laid in mortar (EN 1996-1-1).
+    Masonry,
+    /// Thermal and acoustic insulation; no structural use.
+    Insulation,
+    /// Linings, renders, plasters and claddings; no structural use.
+    Finish,
     /// Any other material.
-    Other,
+    Generic,
 }
+
+/// The properties every category may give: physical and thermal values.
+const COMMON: [Property; 7] = [
+    Property::MassDensity,
+    Property::YoungModulus,
+    Property::ShearModulus,
+    Property::PoissonRatio,
+    Property::ThermalExpansionCoefficient,
+    Property::ThermalConductivity,
+    Property::SpecificHeat,
+];
+
+/// The properties of concrete grades.
+const CONCRETE: [Property; 9] = [
+    Property::CharacteristicCompressiveStrength,
+    Property::CharacteristicCubeStrength,
+    Property::MeanCompressiveStrength,
+    Property::MeanTensileStrength,
+    Property::StrainAtPeakStress,
+    Property::UltimateCompressiveStrain,
+    Property::ParabolaExponent,
+    Property::BilinearStrainAtPeakStress,
+    Property::BilinearUltimateCompressiveStrain,
+];
+
+/// The properties of steel grades, structural or reinforcing.
+const STEEL: [Property; 4] = [
+    Property::YieldStrength,
+    Property::UltimateStrength,
+    Property::HardeningRatio,
+    Property::UltimateStrain,
+];
+
+/// The properties of timber strength classes.
+const TIMBER: [Property; 9] = [
+    Property::TimberBendingStrength,
+    Property::TimberTensileStrength,
+    Property::TimberCompressiveStrength,
+    Property::TimberShearStrength,
+    Property::TimberMeanModulus,
+    Property::TimberFifthPercentileModulus,
+    Property::TimberMeanShearModulus,
+    Property::CharacteristicDensity,
+    Property::MeanDensity,
+];
+
+/// The properties of masonry.
+const MASONRY: [Property; 1] = [Property::MasonryCompressiveStrength];
 
 impl Category {
     /// Every category.
-    pub const ALL: [Self; 4] = [
+    pub const ALL: [Self; 8] = [
         Self::Concrete,
-        Self::ReinforcingSteel,
-        Self::StructuralSteel,
-        Self::Other,
+        Self::Reinforcement,
+        Self::Steel,
+        Self::Timber,
+        Self::Masonry,
+        Self::Insulation,
+        Self::Finish,
+        Self::Generic,
     ];
 
     /// The name stored in the model.
@@ -39,9 +99,13 @@ impl Category {
     pub const fn name(self) -> &'static str {
         match self {
             Self::Concrete => "concrete",
-            Self::ReinforcingSteel => "reinforcing_steel",
-            Self::StructuralSteel => "structural_steel",
-            Self::Other => "other",
+            Self::Reinforcement => "reinforcement",
+            Self::Steel => "steel",
+            Self::Timber => "timber",
+            Self::Masonry => "masonry",
+            Self::Insulation => "insulation",
+            Self::Finish => "finish",
+            Self::Generic => "generic",
         }
     }
 
@@ -60,11 +124,35 @@ impl Category {
             (self, law),
             (_, LawKind::LinearElastic)
                 | (Self::Concrete, LawKind::ConcreteParabolaRectangle)
-                | (
-                    Self::ReinforcingSteel | Self::StructuralSteel,
-                    LawKind::SteelBilinear
-                )
+                | (Self::Reinforcement | Self::Steel, LawKind::SteelBilinear)
         )
+    }
+
+    /// Whether materials of this category may give `property`: the common physical and thermal
+    /// properties, plus those of their own family.
+    #[must_use]
+    pub fn gives(self, property: Property) -> bool {
+        let own: &[Property] = match self {
+            Self::Concrete => &CONCRETE,
+            Self::Reinforcement | Self::Steel => &STEEL,
+            Self::Timber => &TIMBER,
+            Self::Masonry => &MASONRY,
+            Self::Insulation | Self::Finish | Self::Generic => &[],
+        };
+        COMMON.contains(&property) || own.contains(&property)
+    }
+
+    /// The properties every material of this category must give, whatever its law: the
+    /// strength that names its grade.
+    #[must_use]
+    pub const fn required(self) -> &'static [Property] {
+        match self {
+            Self::Concrete => &[Property::CharacteristicCompressiveStrength],
+            Self::Reinforcement | Self::Steel => &[Property::YieldStrength],
+            Self::Timber => &[Property::TimberBendingStrength],
+            Self::Masonry => &[Property::MasonryCompressiveStrength],
+            Self::Insulation | Self::Finish | Self::Generic => &[],
+        }
     }
 }
 
@@ -94,9 +182,18 @@ pub enum MaterialError {
         /// The property it may not be below.
         below: Property,
     },
-    /// The law needs a property the material does not give.
-    #[error("the behaviour law needs the property {}", .0.name())]
+    /// The law or the category needs a property the material does not give.
+    #[error("the material needs the property {}", .0.name())]
     MissingProperty(Property),
+    /// The property does not belong to the material's category, such as a yield strength for
+    /// concrete.
+    #[error("a {} material does not give the property {}", .category.name(), .property.name())]
+    PropertyNotForCategory {
+        /// The material's category.
+        category: Category,
+        /// The rejected property.
+        property: Property,
+    },
     /// A property value is outside its physical range.
     #[error("the property {} is out of range", .0.name())]
     OutOfRange(Property),
@@ -127,7 +224,8 @@ impl Material {
     /// # Errors
     ///
     /// Fails when the name is empty, a text is too long, the law does not suit the category, a
-    /// value is out of range, or the law misses a property or gets inconsistent ones.
+    /// property does not belong to the category or one it requires is missing, a value is out
+    /// of range, or the law misses a property or gets inconsistent ones.
     pub fn new(
         name: &str,
         category: Category,
@@ -146,6 +244,22 @@ impl Material {
             .flatten();
         if !category.allows(law) {
             return Err(MaterialError::LawNotForCategory { category, law });
+        }
+        if let Some(property) = properties
+            .keys()
+            .find(|property| !category.gives(**property))
+        {
+            return Err(MaterialError::PropertyNotForCategory {
+                category,
+                property: *property,
+            });
+        }
+        if let Some(property) = category
+            .required()
+            .iter()
+            .find(|property| !properties.contains_key(property))
+        {
+            return Err(MaterialError::MissingProperty(*property));
         }
         if let Some((property, _)) = properties
             .iter()
@@ -313,7 +427,7 @@ pub(crate) mod tests {
             .collect();
         Material::new(
             "B500B",
-            Category::ReinforcingSteel,
+            Category::Reinforcement,
             LawKind::SteelBilinear,
             None,
             properties,
@@ -325,22 +439,88 @@ pub(crate) mod tests {
         for category in Category::ALL {
             assert_eq!(Category::from_name(category.name()), Some(category));
         }
-        assert_eq!(Category::from_name("timber"), None);
+        assert_eq!(Category::from_name("wood"), None);
     }
 
     #[test]
     fn categories_allow_their_own_laws_and_linear_elasticity() {
-        use Category::{Concrete, Other, ReinforcingSteel, StructuralSteel};
+        use Category::{Concrete, Generic, Reinforcement, Steel};
         use LawKind::{ConcreteParabolaRectangle, LinearElastic, SteelBilinear};
         for category in Category::ALL {
             assert!(category.allows(LinearElastic));
         }
         assert!(Concrete.allows(ConcreteParabolaRectangle));
         assert!(!Concrete.allows(SteelBilinear));
-        assert!(ReinforcingSteel.allows(SteelBilinear));
-        assert!(StructuralSteel.allows(SteelBilinear));
-        assert!(!StructuralSteel.allows(ConcreteParabolaRectangle));
-        assert!(!Other.allows(SteelBilinear));
+        assert!(Reinforcement.allows(SteelBilinear));
+        assert!(Steel.allows(SteelBilinear));
+        assert!(!Steel.allows(ConcreteParabolaRectangle));
+        assert!(!Generic.allows(SteelBilinear));
+    }
+
+    #[test]
+    fn categories_give_the_common_properties_and_their_own() {
+        for category in Category::ALL {
+            for property in COMMON {
+                assert!(category.gives(property), "{category:?} {property:?}");
+            }
+            for property in category.required() {
+                assert!(category.gives(*property), "{category:?} {property:?}");
+            }
+        }
+        // Every property belongs to at least one category.
+        for property in Property::ALL {
+            assert!(
+                Category::ALL
+                    .iter()
+                    .any(|category| category.gives(property))
+            );
+        }
+        assert!(Category::Concrete.gives(Property::BilinearUltimateCompressiveStrain));
+        assert!(!Category::Concrete.gives(Property::YieldStrength));
+        assert!(Category::Reinforcement.gives(Property::UltimateStrain));
+        assert!(Category::Timber.gives(Property::TimberMeanModulus));
+        assert!(!Category::Timber.gives(Property::CharacteristicCompressiveStrength));
+        assert!(Category::Masonry.gives(Property::MasonryCompressiveStrength));
+        assert!(Category::Insulation.gives(Property::ThermalConductivity));
+        assert!(!Category::Finish.gives(Property::MasonryCompressiveStrength));
+        assert_eq!(Category::Generic.required(), &[]);
+        assert_eq!(Category::Steel.required(), &[Property::YieldStrength]);
+    }
+
+    #[test]
+    fn a_property_outside_the_category_or_a_missing_required_one_is_rejected() {
+        let mut properties = BTreeMap::from([
+            (Property::YoungModulus, sourced(33e9, "Table 3.1")),
+            (Property::YieldStrength, sourced(500e6, "Table 3.1")),
+        ]);
+        let concrete = |properties: &BTreeMap<_, _>| {
+            Material::new(
+                "C30/37",
+                Category::Concrete,
+                LawKind::LinearElastic,
+                None,
+                properties.clone(),
+            )
+        };
+        assert_eq!(
+            concrete(&properties),
+            Err(MaterialError::PropertyNotForCategory {
+                category: Category::Concrete,
+                property: Property::YieldStrength,
+            })
+        );
+        properties.remove(&Property::YieldStrength);
+        assert_eq!(
+            concrete(&properties),
+            Err(MaterialError::MissingProperty(
+                Property::CharacteristicCompressiveStrength
+            ))
+        );
+        properties.insert(
+            Property::CharacteristicCompressiveStrength,
+            sourced(30e6, "Table 3.1"),
+        );
+        assert!(concrete(&properties).is_ok());
     }
 
     #[test]
@@ -386,16 +566,16 @@ pub(crate) mod tests {
     #[test]
     fn a_linear_elastic_material_needs_only_a_modulus() {
         let properties = BTreeMap::from([(Property::YoungModulus, sourced(11e9, "Table 1"))]);
-        let timber = Material::new(
-            "GL24h",
-            Category::Other,
+        let board = Material::new(
+            "Board",
+            Category::Generic,
             LawKind::LinearElastic,
             Some(" "),
             properties,
         )
         .unwrap();
-        assert_eq!(timber.design_code(), None);
-        assert_eq!(timber.law().stress(1e-3), Ok(Quantity::from_si(11e6)));
+        assert_eq!(board.design_code(), None);
+        assert_eq!(board.law().stress(1e-3), Ok(Quantity::from_si(11e6)));
     }
 
     #[test]
@@ -404,7 +584,7 @@ pub(crate) mod tests {
             let properties = BTreeMap::from([(Property::YoungModulus, sourced(value, "1"))]);
             Material::new(
                 name,
-                Category::Other,
+                Category::Generic,
                 LawKind::LinearElastic,
                 code,
                 properties,
@@ -438,7 +618,7 @@ pub(crate) mod tests {
         assert_eq!(
             Material::new(
                 "A",
-                Category::Other,
+                Category::Generic,
                 LawKind::LinearElastic,
                 None,
                 BTreeMap::new()
@@ -487,7 +667,15 @@ pub(crate) mod tests {
         );
         assert_eq!(
             MaterialError::MissingProperty(Property::YoungModulus).to_string(),
-            "the behaviour law needs the property e_modulus"
+            "the material needs the property e_modulus"
+        );
+        let foreign = MaterialError::PropertyNotForCategory {
+            category: Category::Timber,
+            property: Property::YieldStrength,
+        };
+        assert_eq!(
+            foreign.to_string(),
+            "a timber material does not give the property fy"
         );
         assert_eq!(
             MaterialError::EmptyName.to_string(),

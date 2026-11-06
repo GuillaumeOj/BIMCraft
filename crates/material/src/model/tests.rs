@@ -34,7 +34,7 @@ fn s355() -> Material {
     ]);
     Material::new(
         "S355",
-        Category::StructuralSteel,
+        Category::Steel,
         LawKind::SteelBilinear,
         Some("EN 1993-1-1:2005"),
         properties,
@@ -131,7 +131,7 @@ fn the_model_rejects_values_without_their_source() {
 
 #[test]
 fn the_model_rejects_unknown_categories_and_laws() {
-    for (attribute, value) in [("category", "timber"), ("behaviour_law", "plastic")] {
+    for (attribute, value) in [("category", "wood"), ("behaviour_law", "plastic")] {
         let mut document = stored();
         let command = ModelCommand::Set {
             id: ID,
