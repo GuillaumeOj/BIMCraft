@@ -289,3 +289,33 @@ fn edit_errors_explain_without_values() {
         "the property fy has no library value to restore"
     );
 }
+
+#[test]
+fn the_generic_delete_refuses_a_material_that_originals_still_refer_to() {
+    let mut document = stored();
+    let command = set_value(
+        document.model(),
+        ID,
+        Property::YieldStrength,
+        345e6,
+        ORIGINAL,
+    );
+    run(&mut document, command.unwrap());
+    let before = document.model().clone();
+    let history = document.history().count();
+
+    let result = document.execute(ModelCommand::Delete { id: ID }, Origin::Ui);
+
+    assert_eq!(
+        result.unwrap_err().to_string(),
+        "1 other object(s) still refer to the object"
+    );
+    assert_eq!(document.model(), &before);
+    assert_eq!(document.history().count(), history);
+    // The material's own delete removes the original first, then the material, in one step.
+    let command = delete(document.model(), ID).unwrap();
+    run(&mut document, command);
+    assert!(!document.model().contains(ID));
+    assert!(!document.model().contains(ORIGINAL));
+    assert_eq!(document.history().count(), history + 1);
+}

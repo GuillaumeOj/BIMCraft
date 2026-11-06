@@ -10,7 +10,7 @@ mod types;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::hash::Hash;
 
-use schema::{Attribute, EntityKind, Namespace, Placement};
+use schema::{Attribute, EntityKind, Namespace, Placement, Presence, ValueType};
 
 pub use self::error::ModelError;
 use self::property_sets::PropertyTable;
@@ -65,6 +65,9 @@ use crate::{AttributeValue, EntityId, RemovedEntity, Store, StoreError};
 /// [`Model::remove`] follows one rule, mirroring IFC, where a relationship cannot exist without
 /// its required ends:
 ///
+/// 0. an object that other objects hold a required `ref` or `list:ref` attribute to is not
+///    removed at all ([`ModelError::StillReferenced`], with the number of referrers): they would
+///    point at nothing. Its owner removes them first, in the same command if it wants to;
 /// 1. the object leaves every role it plays;
 /// 2. a relationship left with an empty role is deleted too, and so on for relationships that
 ///    relate it;
@@ -267,10 +270,16 @@ impl Model {
     ///
     /// # Errors
     ///
-    /// Fails when no object has this id.
+    /// Fails when no object has this id, or when other objects hold a required `ref` or
+    /// `list:ref` attribute to it ([`ModelError::StillReferenced`]): they would point at
+    /// nothing, so they are removed or changed first, never silently with it.
     pub fn remove(&mut self, id: EntityId) -> Result<Removal, ModelError> {
         if !self.store.contains(id) {
             return Err(StoreError::NotFound(id).into());
+        }
+        let count = self.required_referrers(id);
+        if count > 0 {
+            return Err(ModelError::StillReferenced { count });
         }
         let mut objects = Vec::new();
         let mut pending = vec![id];
@@ -320,6 +329,49 @@ impl Model {
             });
         }
         Ok(Removal { objects })
+    }
+
+    /// How many other objects hold a required `ref` or `list:ref` attribute whose value
+    /// includes `id`. Only the entities that have such an attribute for the entity of `id` are
+    /// looked at, so removing most objects costs nothing.
+    fn required_referrers(&self, id: EntityId) -> usize {
+        let Some(target) = self.store.entity_of(id) else {
+            return 0;
+        };
+        // (table name, attribute) of every required reference to the target's entity.
+        let mut holders: Vec<(&str, &str)> = Vec::new();
+        for entity in self.namespace.entities.values() {
+            for attribute in &entity.attributes {
+                if attribute.presence == Presence::Required && targets(&attribute.value, target) {
+                    holders.push((&entity.name, &attribute.name));
+                    if let Some(type_def) = &entity.type_def {
+                        holders.push((&type_def.name, &attribute.name));
+                    }
+                }
+            }
+        }
+        if holders.is_empty() {
+            return 0;
+        }
+        self.store
+            .ids()
+            .filter(|&other| other != id)
+            .filter(|&other| {
+                let Some(table) = self.store.entity_of(other) else {
+                    return false;
+                };
+                holders
+                    .iter()
+                    .filter(|(holder, _)| *holder == table)
+                    .any(|(_, attribute)| {
+                        self.store
+                            .get(other, attribute)
+                            .ok()
+                            .flatten()
+                            .is_some_and(|value| refers_to(&value, id))
+                    })
+            })
+            .count()
     }
 
     /// Every object removing `id` may delete or modify, `id` first: the relationships it plays a
@@ -482,5 +534,23 @@ fn find_attribute<'a>(attributes: &'a [Attribute], name: &str) -> Option<&'a Att
 mod property_set_tests;
 #[cfg(test)]
 mod tests;
+/// Whether a value of type `value` refers to objects of `entity`, directly or in a list.
+fn targets(value: &ValueType, entity: &str) -> bool {
+    match value {
+        ValueType::Ref(target) => target == entity,
+        ValueType::List(items) => targets(items, entity),
+        _ => false,
+    }
+}
+
+/// Whether `value` is, or lists, a reference to `id`.
+fn refers_to(value: &AttributeValue, id: EntityId) -> bool {
+    match value.plain() {
+        AttributeValue::Ref(target) => *target == id,
+        AttributeValue::List(items) => items.iter().any(|item| refers_to(item, id)),
+        _ => false,
+    }
+}
+
 #[cfg(test)]
 mod type_tests;
