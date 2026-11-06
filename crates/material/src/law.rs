@@ -104,9 +104,7 @@ impl BehaviourLaw {
     /// Fails when `divisor` is not finite and positive, the divided strength is not finite and
     /// positive, or the steel yield strain would no longer lie below its ultimate strain.
     pub fn with_strength_divided_by(self, divisor: f64) -> Result<Self, LawError> {
-        if !(divisor.is_finite() && divisor > 0.0) {
-            return Err(LawError::InvalidParameter("divisor"));
-        }
+        positive("divisor", divisor)?;
         Ok(match self {
             Self::LinearElastic(_) => self,
             Self::ConcreteParabolaRectangle(law) => {

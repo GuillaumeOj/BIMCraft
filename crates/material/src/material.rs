@@ -10,7 +10,7 @@ use crate::law::{
     SteelBilinear,
 };
 use crate::property::Property;
-use crate::source::{MAX_TEXT_LEN, Sourced};
+use crate::source::{MAX_TEXT_LEN, Sourced, bounded_text};
 
 /// What a material is, as the `category` attribute stores it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -135,17 +135,15 @@ impl Material {
         design_code: Option<&str>,
         properties: BTreeMap<Property, Sourced<f64>>,
     ) -> Result<Self, MaterialError> {
-        let name = name.trim();
-        if name.is_empty() {
-            return Err(MaterialError::EmptyName);
-        }
-        if name.chars().count() > MAX_TEXT_LEN {
-            return Err(MaterialError::TooLong("name"));
-        }
-        let design_code = design_code.map(str::trim).filter(|code| !code.is_empty());
-        if design_code.is_some_and(|code| code.chars().count() > MAX_TEXT_LEN) {
-            return Err(MaterialError::TooLong("design code"));
-        }
+        let too_long = |field| move |_| MaterialError::TooLong(field);
+        let name = bounded_text(name)
+            .map_err(too_long("name"))?
+            .ok_or(MaterialError::EmptyName)?;
+        let design_code = design_code
+            .map(bounded_text)
+            .transpose()
+            .map_err(too_long("design code"))?
+            .flatten();
         if !category.allows(law) {
             return Err(MaterialError::LawNotForCategory { category, law });
         }
@@ -250,15 +248,15 @@ fn build_law(
             )?)
         }
         LawKind::SteelBilinear => {
-            let hardening = match (
-                properties.contains_key(&Property::HardeningRatio),
-                properties.contains_key(&Property::UltimateStrain),
-            ) {
-                (false, false) => None,
-                _ => Some(Hardening {
+            let hardening = if properties.contains_key(&Property::HardeningRatio)
+                || properties.contains_key(&Property::UltimateStrain)
+            {
+                Some(Hardening {
                     ratio: value(Property::HardeningRatio)?,
                     ultimate_strain: value(Property::UltimateStrain)?,
-                }),
+                })
+            } else {
+                None
             };
             BehaviourLaw::SteelBilinear(SteelBilinear::new(
                 Quantity::from_si(value(Property::YieldStrength)?),

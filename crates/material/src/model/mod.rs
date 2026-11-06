@@ -68,7 +68,7 @@ pub fn commands(id: EntityId, material: &Material) -> ModelCommand {
                 property.name().to_owned(),
                 AttributeValue::Real(sourced.value),
             ),
-            text(property.source_name(), &sourced.source.to_string()),
+            text(property.source_name(), sourced.source.to_string()),
         ]);
     }
     commands.extend(
@@ -126,8 +126,8 @@ pub fn read(model: &Model, id: EntityId) -> Result<Material, ReadError> {
     )?)
 }
 
-fn text(name: &str, value: &str) -> (String, AttributeValue) {
-    (name.to_owned(), AttributeValue::Text(value.to_owned()))
+fn text(name: &str, value: impl Into<String>) -> (String, AttributeValue) {
+    (name.to_owned(), AttributeValue::Text(value.into()))
 }
 
 fn attribute(model: &Model, id: EntityId, name: &str) -> Result<Option<String>, ModelError> {

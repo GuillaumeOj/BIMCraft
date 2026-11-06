@@ -41,18 +41,10 @@ impl Source {
     ///
     /// Fails when either part is empty or too long, or the document contains `", "`.
     pub fn new(document: &str, clause: &str) -> Result<Self, SourceError> {
-        let (document, clause) = (document.trim(), clause.trim());
-        if document.is_empty() {
-            return Err(SourceError::EmptyDocument);
-        }
-        if clause.is_empty() {
-            return Err(SourceError::EmptyClause);
-        }
+        let document = bounded_text(document)?.ok_or(SourceError::EmptyDocument)?;
+        let clause = bounded_text(clause)?.ok_or(SourceError::EmptyClause)?;
         if document.contains(SEPARATOR) {
             return Err(SourceError::SeparatorInDocument);
-        }
-        if document.chars().count() > MAX_TEXT_LEN || clause.chars().count() > MAX_TEXT_LEN {
-            return Err(SourceError::TooLong);
         }
         Ok(Self {
             document: document.to_owned(),
@@ -87,6 +79,20 @@ impl fmt::Display for Source {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}{SEPARATOR}{}", self.document, self.clause)
     }
+}
+
+/// `text` without surrounding spaces, or `None` when nothing is left.
+///
+/// # Errors
+///
+/// Fails with [`SourceError::TooLong`] when the trimmed text is longer than [`MAX_TEXT_LEN`]
+/// characters.
+pub(crate) fn bounded_text(text: &str) -> Result<Option<&str>, SourceError> {
+    let text = text.trim();
+    if text.chars().count() > MAX_TEXT_LEN {
+        return Err(SourceError::TooLong);
+    }
+    Ok((!text.is_empty()).then_some(text))
 }
 
 /// A value with the source it comes from.

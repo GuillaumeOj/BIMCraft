@@ -1,16 +1,21 @@
 use std::collections::BTreeMap;
 use std::path::Path;
+use std::sync::LazyLock;
 
 use core_model::{AttributeValue, EntityId, Model};
 use core_txn::{Document, ModelCommand, Origin};
 
 use super::*;
-use crate::{LawKind, SourceError};
+use crate::{LawKind, MECHANICAL_SET, STEEL_SET, SourceError};
+
+/// The core schema, loaded once for every test.
+static CORE: LazyLock<Model> = LazyLock::new(|| {
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../schema/core");
+    Model::new(&schema_gen::load_namespace(&dir).unwrap()).unwrap()
+});
 
 fn model() -> Model {
-    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../schema/core");
-    let sources = schema_gen::load_dir(&dir).unwrap();
-    Model::new(&schema_gen::parse_sources(&sources).unwrap()).unwrap()
+    CORE.clone()
 }
 
 fn s355() -> Material {
@@ -61,10 +66,9 @@ fn set_property(set: &str, property: &str, value: Option<AttributeValue>) -> Mod
 fn a_material_round_trips_through_the_model() {
     let document = stored();
     assert_eq!(read(document.model(), ID), Ok(s355()));
-    let modulus =
-        document
-            .model()
-            .property(ID, "BIMCraft_MaterialMechanical", "YoungModulusSource");
+    let modulus = document
+        .model()
+        .property(ID, MECHANICAL_SET, "YoungModulusSource");
     assert_eq!(
         modulus,
         Ok(Some(AttributeValue::Text(
@@ -112,19 +116,15 @@ fn tampered_materials_are_rejected_with_the_reason() {
             }),
         ),
         (
-            set_property("BIMCraft_MaterialSteel", "YieldStrengthSource", None),
+            set_property(STEEL_SET, "YieldStrengthSource", None),
             ReadError::MissingSource(Property::YieldStrength),
         ),
         (
-            set_property("BIMCraft_MaterialSteel", "YieldStrength", None),
+            set_property(STEEL_SET, "YieldStrength", None),
             ReadError::SourceWithoutValue(Property::YieldStrength),
         ),
         (
-            set_property(
-                "BIMCraft_MaterialSteel",
-                "YieldStrengthSource",
-                text("EN 1993-1-1"),
-            ),
+            set_property(STEEL_SET, "YieldStrengthSource", text("EN 1993-1-1")),
             ReadError::InvalidSource(Property::YieldStrength, SourceError::EmptyClause),
         ),
     ];
