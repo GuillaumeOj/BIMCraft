@@ -138,7 +138,10 @@ impl Model {
             property_sets: namespace
                 .property_sets
                 .values()
-                .map(|set| (set.name.clone(), PropertyTable::new(set)))
+                .map(|set| {
+                    let table = PropertyTable::new(set, &namespace.enumerations);
+                    (set.name.clone(), table)
+                })
                 .collect(),
             types: Types::new(namespace),
         })

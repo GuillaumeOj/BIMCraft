@@ -40,6 +40,6 @@ A substance that elements are made of, such as a concrete or steel grade (MAT-01
 | Attribute | Value | Presence | Set on | Description |
 | --- | --- | --- | --- | --- |
 | `name` | text | required | instance | The material's name, such as `C30/37` or `S355`. |
-| `category` | text | required | instance | One of `concrete`, `reinforcing_steel`, `structural_steel` or `other`. |
-| `behaviour_law` | text | required | instance | How stress follows strain: `linear_elastic`, `concrete_parabola_rectangle` or `steel_bilinear`. |
+| `category` | enumeration [MaterialCategory](enumerations.md#MaterialCategory) | required | instance | What the material is. |
+| `behaviour_law` | enumeration [BehaviourLaw](enumerations.md#BehaviourLaw) | required | instance | How stress follows strain. |
 | `design_code` | text | optional | instance | The design code the properties follow, such as `EN 1992-1-1:2004`. |

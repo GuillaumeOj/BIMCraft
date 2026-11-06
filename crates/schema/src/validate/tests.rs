@@ -1,7 +1,7 @@
 use proptest::prelude::*;
 
 use super::*;
-use crate::{Cardinality, QuantityKind, Representation, Role, TypeDef};
+use crate::{Cardinality, EnumItem, QuantityKind, Representation, Role, TypeDef};
 
 fn attribute(name: &str, value: ValueType) -> Attribute {
     Attribute {
@@ -114,6 +114,17 @@ fn sample() -> Namespace {
         ],
     };
 
+    let side = Enumeration {
+        name: "Side".into(),
+        doc: Some("A side of a wall.".into()),
+        items: ["exterior", "interior"]
+            .map(|name| EnumItem {
+                name: name.into(),
+                doc: None,
+            })
+            .into(),
+    };
+
     Namespace {
         name: "core".into(),
         version: 1,
@@ -122,6 +133,7 @@ fn sample() -> Namespace {
             .map(|entity| (entity.name.clone(), entity))
             .collect(),
         property_sets: [(property_set.name.clone(), property_set)].into(),
+        enumerations: [(side.name.clone(), side)].into(),
     }
 }
 
@@ -524,20 +536,145 @@ fn checks_references_in_value_types() {
     );
 }
 
+fn side(namespace: &mut Namespace) -> &mut Enumeration {
+    namespace.enumerations.get_mut("Side").unwrap()
+}
+
+fn enumeration_at(item: Option<&str>) -> Location {
+    Location {
+        owner: Owner::Enumeration("Side".into()),
+        item: item.map(|name| Item::EnumItem(name.into())),
+    }
+}
+
 #[test]
-fn rejects_enumerations_until_they_can_be_declared() {
+fn accepts_declared_enumerations_and_their_items_as_defaults() {
+    let mut namespace = sample();
+    wall(&mut namespace).attributes.push(Attribute {
+        presence: Presence::Default(Value::List(vec![Value::Text("interior".into())])),
+        ..attribute(
+            "sides",
+            ValueType::List(Box::new(ValueType::Enum("Side".into()))),
+        )
+    });
+    assert_eq!(validate(&namespace), Ok(()));
+    assert!(namespace.enumerations["Side"].contains("exterior"));
+    assert!(!namespace.enumerations["Side"].contains("top"));
+}
+
+#[test]
+fn rejects_unknown_enumerations_and_items() {
     let mut namespace = sample();
     wall(&mut namespace)
         .attributes
-        .push(attribute("side", ValueType::Enum("Side".into())));
+        .push(attribute("finish", ValueType::Enum("Finish".into())));
+    wall(&mut namespace).attributes.push(Attribute {
+        presence: Presence::Default(Value::Text("top".into())),
+        ..attribute("side", ValueType::Enum("Side".into()))
+    });
     let errors = errors_of(&namespace);
     assert_eq!(
-        errors[0].kind,
-        ValidationErrorKind::Unsupported("enumeration value types")
+        errors[0].to_string(),
+        "entity Wall, attribute finish: unknown enumeration \"Finish\""
     );
     assert_eq!(
-        errors[0].to_string(),
-        "entity Wall, attribute side: enumeration value types are not supported yet"
+        errors[1].kind,
+        ValidationErrorKind::DefaultMismatch {
+            expected: ValueType::Enum("Side".into())
+        }
+    );
+}
+
+#[test]
+fn checks_enumeration_definitions() {
+    let mut namespace = sample();
+    side(&mut namespace).doc = Some("x".repeat(MAX_DOC_LEN + 1));
+    side(&mut namespace).items.push(EnumItem {
+        name: "Bad Name".into(),
+        doc: Some("x".repeat(MAX_DOC_LEN + 1)),
+    });
+    side(&mut namespace).items.push(EnumItem {
+        name: "exterior".into(),
+        doc: None,
+    });
+    let errors = errors_of(&namespace);
+    let found: Vec<(Location, ValidationErrorKind)> = errors
+        .into_iter()
+        .map(|error| (error.location, error.kind))
+        .collect();
+    assert_eq!(
+        found,
+        vec![
+            (enumeration_at(None), ValidationErrorKind::DocTooLong),
+            (
+                enumeration_at(Some("Bad Name")),
+                ValidationErrorKind::InvalidName {
+                    name: "Bad Name".into(),
+                    rule: "snake_case ASCII letters and digits",
+                },
+            ),
+            (
+                enumeration_at(Some("Bad Name")),
+                ValidationErrorKind::DocTooLong
+            ),
+            (
+                enumeration_at(Some("exterior")),
+                ValidationErrorKind::Duplicate {
+                    name: "exterior".into()
+                },
+            ),
+        ]
+    );
+    assert_eq!(
+        enumeration_at(Some("exterior")).to_string(),
+        "enumeration Side, item exterior"
+    );
+}
+
+#[test]
+fn rejects_empty_oversized_and_clashing_enumerations() {
+    let mut namespace = sample();
+    side(&mut namespace).items.clear();
+    assert_single(
+        &namespace,
+        enumeration_at(None),
+        ValidationErrorKind::EnumerationWithoutItems,
+    );
+    let item = EnumItem {
+        name: "a".into(),
+        doc: None,
+    };
+    side(&mut namespace).items = vec![item; MAX_ITEMS + 1];
+    assert_single(
+        &namespace,
+        enumeration_at(None),
+        ValidationErrorKind::TooMany {
+            what: "items",
+            limit: MAX_ITEMS,
+        },
+    );
+    for clash in ["Wall", "WallType", "Pset_WallCommon"] {
+        let mut namespace = sample();
+        let mut enumeration = namespace.enumerations.remove("Side").unwrap();
+        enumeration.name = clash.into();
+        namespace.enumerations.insert(clash.into(), enumeration);
+        let errors = errors_of(&namespace);
+        assert!(
+            errors
+                .iter()
+                .any(|error| error.kind == ValidationErrorKind::Duplicate { name: clash.into() }),
+            "{clash}"
+        );
+    }
+    let mut namespace = sample();
+    let enumeration = namespace.enumerations.remove("Side").unwrap();
+    namespace.enumerations.insert("Sides".into(), enumeration);
+    assert_single(
+        &namespace,
+        enumeration_at(None),
+        ValidationErrorKind::KeyMismatch {
+            key: "Sides".into(),
+        },
     );
 }
 
@@ -703,6 +840,12 @@ fn limits_namespace_size() {
         copy.name = format!("Pset_{index}");
         namespace.property_sets.insert(copy.name.clone(), copy);
     }
+    let enumeration = namespace.enumerations["Side"].clone();
+    for index in 0..MAX_ENUMERATIONS {
+        let mut copy = enumeration.clone();
+        copy.name = format!("Side{index}");
+        namespace.enumerations.insert(copy.name.clone(), copy);
+    }
     let kinds: Vec<_> = errors_of(&namespace).into_iter().map(|e| e.kind).collect();
     assert_eq!(
         kinds,
@@ -714,6 +857,10 @@ fn limits_namespace_size() {
             ValidationErrorKind::TooMany {
                 what: "property sets",
                 limit: MAX_PROPERTY_SETS
+            },
+            ValidationErrorKind::TooMany {
+                what: "enumerations",
+                limit: MAX_ENUMERATIONS
             },
         ]
     );

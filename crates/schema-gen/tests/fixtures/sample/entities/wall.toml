@@ -43,6 +43,12 @@ name = "mark"
 value = "text"
 doc = "Short label shown on drawings."
 
+[[attribute]]
+name = "function"
+value = "enum:WallFunction"
+on = "type_overridable"
+default = "partition"
+
 [[representation]]
 lod = 100
 context = "footprint"

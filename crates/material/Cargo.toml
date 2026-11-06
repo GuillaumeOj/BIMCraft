@@ -15,6 +15,7 @@ thiserror = { workspace = true }
 
 [dev-dependencies]
 proptest = { workspace = true }
+schema = { workspace = true }
 schema-gen = { workspace = true }
 
 [lints]

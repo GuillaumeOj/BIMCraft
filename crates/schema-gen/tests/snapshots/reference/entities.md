@@ -66,6 +66,7 @@ A named wall build-up shared by many walls. Attributes set on the type are share
 | `height` | length (m) | default `2.5` | type, instance may override |  |
 | `base_offset` | length (m) | default `0.0` | instance | Height of the bottom face above the storey. |
 | `mark` | text | optional | instance | Short label shown on drawings. |
+| `function` | enumeration [WallFunction](enumerations.md#WallFunction) | default `"partition"` | type, instance may override |  |
 
 #### Representations
 

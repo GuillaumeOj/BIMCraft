@@ -4,18 +4,19 @@ use std::sync::LazyLock;
 
 use core_model::{AttributeValue, EntityId, Model};
 use core_txn::{Document, ModelCommand, Origin};
+use schema::Namespace;
 
 use super::*;
 use crate::{LawKind, MECHANICAL_SET, STEEL_SET, SourceError};
 
 /// The core schema, loaded once for every test.
-static CORE: LazyLock<Model> = LazyLock::new(|| {
+static CORE: LazyLock<Namespace> = LazyLock::new(|| {
     let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../schema/core");
-    Model::new(&schema_gen::load_namespace(&dir).unwrap()).unwrap()
+    schema_gen::load_namespace(&dir).unwrap()
 });
 
 fn model() -> Model {
-    CORE.clone()
+    Model::new(&CORE).unwrap()
 }
 
 fn s355() -> Material {
@@ -106,8 +107,6 @@ fn tampered_materials_are_rejected_with_the_reason() {
         value: text(value),
     };
     let cases = [
-        (attribute("category", "timber"), ReadError::UnknownCategory),
-        (attribute("behaviour_law", "plastic"), ReadError::UnknownLaw),
         (
             attribute("category", "concrete"),
             ReadError::Invalid(MaterialError::LawNotForCategory {
@@ -133,6 +132,41 @@ fn tampered_materials_are_rejected_with_the_reason() {
         set(&mut document, command);
         assert_eq!(read(document.model(), ID), Err(error));
     }
+}
+
+#[test]
+fn the_model_rejects_unknown_categories_and_laws() {
+    for (attribute, value) in [("category", "timber"), ("behaviour_law", "plastic")] {
+        let mut document = stored();
+        let command = ModelCommand::Set {
+            id: ID,
+            attribute: attribute.into(),
+            value: Some(AttributeValue::Text(value.into())),
+        };
+        assert!(
+            document.execute(command, Origin::Ui).is_err(),
+            "{attribute}"
+        );
+        assert_eq!(read(document.model(), ID), Ok(s355()));
+    }
+}
+
+#[test]
+fn categories_and_laws_match_the_core_enumerations() {
+    let items = |name: &str| -> Vec<&str> {
+        CORE.enumerations[name]
+            .items
+            .iter()
+            .map(|item| item.name.as_str())
+            .collect()
+    };
+    let categories: Vec<&str> = Category::ALL
+        .iter()
+        .map(|category| category.name())
+        .collect();
+    let laws: Vec<&str> = LawKind::ALL.iter().map(|law| law.name()).collect();
+    assert_eq!(categories, items("MaterialCategory"));
+    assert_eq!(laws, items("BehaviourLaw"));
 }
 
 #[test]

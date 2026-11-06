@@ -173,8 +173,14 @@ impl Model {
             .ok_or_else(|| StoreError::UnknownEntity(component.entity.clone()))?;
         let type_def = type_def(entity)?;
         // The defaults must fit a type's columns, none of which is required of a component.
-        Table::new(&type_def.name, &entity.attributes, Side::Component)
-            .insert(id, component.defaults.iter().cloned())?;
+        let enumerations = &self.namespace.enumerations;
+        Table::new(
+            &type_def.name,
+            &entity.attributes,
+            Side::Component,
+            enumerations,
+        )
+        .insert(id, component.defaults.iter().cloned())?;
         self.types.components.insert(id, component);
         Ok(())
     }

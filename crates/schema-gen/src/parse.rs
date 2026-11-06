@@ -1,13 +1,15 @@
 use std::collections::BTreeMap;
 
 use schema::{
-    Attribute, Entity, IfcMapping, Item, Location, MAX_LIST_DEPTH, Namespace, Owner, Presence,
-    PropertySet, Representation, Role, TypeDef, Value, ValueType,
+    Attribute, Entity, EnumItem, Enumeration, IfcMapping, Item, Location, MAX_LIST_DEPTH,
+    Namespace, Owner, Presence, PropertySet, Representation, Role, TypeDef, Value, ValueType,
 };
 use serde::de::DeserializeOwned;
 use toml::Spanned;
 
-use crate::definition::{AttributeDef, EntityFile, NamespaceFile, PropertySetFile, RoleDef};
+use crate::definition::{
+    AttributeDef, EntityFile, EnumerationFile, NamespaceFile, PropertySetFile, RoleDef,
+};
 use crate::snapshot::parse_target;
 use crate::{Error, ErrorKind};
 
@@ -21,13 +23,14 @@ pub const MAX_FILE_SIZE: usize = 256 * 1024;
 const NAMESPACE_FILE: &str = "namespace.toml";
 const ENTITY_DIRS: [&str; 2] = ["entities/", "relationships/"];
 const PROPERTY_SET_DIR: &str = "property-sets/";
+const ENUMERATION_DIR: &str = "enumerations/";
 
 /// The contents of one definition file.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Source {
     /// Path relative to the namespace directory, with `/` separators: `namespace.toml`,
-    /// `entities/wall.toml`, `relationships/…` or `property-sets/…`. The directory says what the
-    /// file defines.
+    /// `entities/wall.toml`, `relationships/…`, `property-sets/…` or `enumerations/…`. The
+    /// directory says what the file defines.
     pub path: String,
     /// The TOML text.
     pub contents: String,
@@ -60,6 +63,7 @@ struct Builder<'a> {
     namespace_file: Option<&'a Source>,
     entities: BTreeMap<String, (Entity, &'a Source)>,
     property_sets: BTreeMap<String, (PropertySet, &'a Source)>,
+    enumerations: BTreeMap<String, (Enumeration, &'a Source)>,
     positions: Positions<'a>,
     errors: Vec<Error>,
 }
@@ -84,9 +88,12 @@ impl<'a> Builder<'a> {
             self.read_entity(source);
         } else if source.path.starts_with(PROPERTY_SET_DIR) {
             self.read_property_set(source);
+        } else if source.path.starts_with(ENUMERATION_DIR) {
+            self.read_enumeration(source);
         } else {
             let message = format!(
-                "unexpected file: definitions go in {NAMESPACE_FILE}, {}, {} or {PROPERTY_SET_DIR}",
+                "unexpected file: definitions go in {NAMESPACE_FILE}, {}, {}, {PROPERTY_SET_DIR} \
+                 or {ENUMERATION_DIR}",
                 ENTITY_DIRS[0], ENTITY_DIRS[1]
             );
             self.definition_error(source, None, message);
@@ -232,6 +239,43 @@ impl<'a> Builder<'a> {
         }
     }
 
+    fn read_enumeration(&mut self, source: &'a Source) {
+        let Some(file) = self.deserialize::<EnumerationFile>(source, |file| &file.format) else {
+            return;
+        };
+        let name_span = file.enumeration.name.span().start;
+        let name = file.enumeration.name.into_inner();
+        let owner = Owner::Enumeration(name.clone());
+        self.mark(&owner, None, source, name_span);
+        let items = file
+            .items
+            .into_iter()
+            .map(|item| {
+                let span = item.name.span().start;
+                let name = item.name.into_inner();
+                self.mark(&owner, Some(Item::EnumItem(name.clone())), source, span);
+                EnumItem {
+                    name,
+                    doc: item.doc,
+                }
+            })
+            .collect();
+        let enumeration = Enumeration {
+            name: name.clone(),
+            doc: file.enumeration.doc,
+            items,
+        };
+        if let Some((_, first)) = self.enumerations.get(&name) {
+            let message = format!(
+                "enumeration \"{name}\" is already defined in {}",
+                first.path
+            );
+            self.definition_error(source, Some(name_span), message);
+        } else {
+            self.enumerations.insert(name, (enumeration, source));
+        }
+    }
+
     /// Records where a definition or one of its items starts, to place validation errors.
     fn mark(&mut self, owner: &Owner, item: Option<Item>, source: &'a Source, offset: usize) {
         self.positions
@@ -344,6 +388,11 @@ impl<'a> Builder<'a> {
                 .property_sets
                 .into_iter()
                 .map(|(name, (property_set, _))| (name, property_set))
+                .collect(),
+            enumerations: self
+                .enumerations
+                .into_iter()
+                .map(|(name, (enumeration, _))| (name, enumeration))
                 .collect(),
         };
         schema::validate(&namespace).map_err(|errors| {

@@ -2,7 +2,7 @@
 
 # The `core` schema
 
-Version 2 of the `core` schema: its [entities](entities.md) and [property sets](property-sets.md).
+Version 2 of the `core` schema: its [entities](entities.md), [property sets](property-sets.md) and [enumerations](enumerations.md).
 
 ## Entities
 
@@ -22,3 +22,9 @@ Version 2 of the `core` schema: its [entities](entities.md) and [property sets](
 | Property set | Applies to |
 | --- | --- |
 | [Pset_WallCommon](property-sets.md#Pset_WallCommon) | [Wall](entities.md#Wall) |
+
+## Enumerations
+
+| Enumeration | Items |
+| --- | --- |
+| [WallFunction](enumerations.md#WallFunction) | `load_bearing`, `partition` |

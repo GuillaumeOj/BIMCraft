@@ -2,7 +2,7 @@
 
 # The `core` schema
 
-Version 3 of the `core` schema: its [entities](entities.md) and [property sets](property-sets.md).
+Version 3 of the `core` schema: its [entities](entities.md), [property sets](property-sets.md) and [enumerations](enumerations.md).
 
 ## Entities
 
@@ -18,3 +18,10 @@ Version 3 of the `core` schema: its [entities](entities.md) and [property sets](
 | [BIMCraft_MaterialConcrete](property-sets.md#BIMCraft_MaterialConcrete) | [Material](entities.md#Material) |
 | [BIMCraft_MaterialMechanical](property-sets.md#BIMCraft_MaterialMechanical) | [Material](entities.md#Material) |
 | [BIMCraft_MaterialSteel](property-sets.md#BIMCraft_MaterialSteel) | [Material](entities.md#Material) |
+
+## Enumerations
+
+| Enumeration | Items |
+| --- | --- |
+| [BehaviourLaw](enumerations.md#BehaviourLaw) | `linear_elastic`, `concrete_parabola_rectangle`, `steel_bilinear` |
+| [MaterialCategory](enumerations.md#MaterialCategory) | `concrete`, `reinforcing_steel`, `structural_steel`, `other` |

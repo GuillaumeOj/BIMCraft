@@ -114,6 +114,7 @@ pub fn namespace() -> Namespace {
             .map(|entity| (entity.name.clone(), entity))
             .collect(),
         property_sets: BTreeMap::new(),
+        enumerations: BTreeMap::new(),
     }
 }
 

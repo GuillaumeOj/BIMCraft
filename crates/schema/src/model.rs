@@ -14,6 +14,36 @@ pub struct Namespace {
     pub entities: BTreeMap<String, Entity>,
     /// Property sets by name.
     pub property_sets: BTreeMap<String, PropertySet>,
+    /// Enumerations by name, the value types `enum:<Name>` refers to.
+    pub enumerations: BTreeMap<String, Enumeration>,
+}
+
+/// A closed list of named values that an `enum:<Name>` attribute or property takes.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Enumeration {
+    /// `PascalCase` name, unique among entities, types, property sets and enumerations.
+    pub name: String,
+    /// Description of the enumeration.
+    pub doc: Option<String>,
+    /// The values, in declaration order.
+    pub items: Vec<EnumItem>,
+}
+
+/// One value of an [`Enumeration`].
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct EnumItem {
+    /// `snake_case` name, the text stored in the model.
+    pub name: String,
+    /// Description of the value.
+    pub doc: Option<String>,
+}
+
+impl Enumeration {
+    /// Whether `name` is one of the enumeration's items.
+    #[must_use]
+    pub fn contains(&self, name: &str) -> bool {
+        self.items.iter().any(|item| item.name == name)
+    }
 }
 
 /// An entity: an element, a spatial structure element or a relationship.

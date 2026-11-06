@@ -16,7 +16,7 @@ mod generated {
 
 use generated::{
     Beam, BeamSection, Containment, Material, Opening, PsetWallCommon, Recess, Storey, Voiding,
-    Wall, WallType,
+    Wall, WallFunction, WallType,
 };
 
 /// The sample's JSON Schema, parsed once.
@@ -56,6 +56,7 @@ fn absent_values_take_their_defaults() {
             height: None,
             base_offset: 0.0,
             mark: None,
+            function: None,
         }
     );
     let wall_type: WallType = serde_json::from_value(json!({ "thickness": 0.2 })).unwrap();
@@ -65,6 +66,7 @@ fn absent_values_take_their_defaults() {
             thickness: 0.2,
             layer_names: Vec::new(),
             height: 2.5,
+            function: WallFunction::Partition,
         }
     );
     let beam: Beam = serde_json::from_value(json!({ "span": 6.0 })).unwrap();
@@ -153,6 +155,7 @@ fn absent_options_are_not_written() {
         height: None,
         base_offset: 0.1,
         mark: Some("W1".into()),
+        function: None,
     };
     assert_eq!(
         serde_json::to_value(&wall).unwrap(),
@@ -162,11 +165,13 @@ fn absent_options_are_not_written() {
         thickness: 0.3,
         layer_names: Vec::new(),
         height: 3.0,
+        function: WallFunction::LoadBearing,
     };
     assert_eq!(
         serde_json::to_value(&wall_type).unwrap(),
-        json!({ "thickness": 0.3, "height": 3.0 })
+        json!({ "thickness": 0.3, "height": 3.0, "function": "load_bearing" })
     );
+    assert!(serde_json::from_value::<Wall>(json!({ "function": "curtain" })).is_err());
 }
 
 #[test]
@@ -192,6 +197,7 @@ fn every_type_round_trips() -> Result<(), serde_json::Error> {
             height: Some(3.1),
             base_offset: -0.2,
             mark: Some("W2".into()),
+            function: Some(WallFunction::LoadBearing),
         },
     )?;
     round_trip(
@@ -200,8 +206,10 @@ fn every_type_round_trips() -> Result<(), serde_json::Error> {
             thickness: 0.25,
             layer_names: vec!["Brick".into(), "Insulation".into()],
             height: 2.7,
+            function: WallFunction::Partition,
         },
     )?;
+    round_trip("WallFunction", &WallFunction::LoadBearing)?;
     round_trip(
         "Beam",
         &Beam {

@@ -8,8 +8,8 @@
 use std::collections::BTreeMap;
 
 use schema::{
-    Attribute, Entity, EntityKind, IfcMapping, Namespace, Presence, PropertySet, Representation,
-    Role, RoleTarget, TypeDef, Value,
+    Attribute, Entity, EntityKind, EnumItem, Enumeration, IfcMapping, Namespace, Presence,
+    PropertySet, Representation, Role, RoleTarget, TypeDef, Value,
 };
 use serde::{Deserialize, Serialize};
 
@@ -45,6 +45,26 @@ struct NamespaceJson {
     version: u32,
     entities: Vec<EntityJson>,
     property_sets: Vec<PropertySetJson>,
+    // Absent from snapshots taken before enumerations existed.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    enumerations: Vec<EnumerationJson>,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct EnumerationJson {
+    name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    doc: Option<String>,
+    items: Vec<EnumItemJson>,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct EnumItemJson {
+    name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    doc: Option<String>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -159,6 +179,22 @@ impl From<&Namespace> for NamespaceJson {
                     properties: set.properties.iter().map(AttributeJson::from).collect(),
                 })
                 .collect(),
+            enumerations: namespace
+                .enumerations
+                .values()
+                .map(|enumeration| EnumerationJson {
+                    name: enumeration.name.clone(),
+                    doc: enumeration.doc.clone(),
+                    items: enumeration
+                        .items
+                        .iter()
+                        .map(|item| EnumItemJson {
+                            name: item.name.clone(),
+                            doc: item.doc.clone(),
+                        })
+                        .collect(),
+                })
+                .collect(),
         }
     }
 }
@@ -266,11 +302,28 @@ impl TryFrom<NamespaceJson> for Namespace {
             Ok((set.name.clone(), set))
         });
         let property_sets = unique(property_sets, "property set")?;
+        let enumerations = json.enumerations.into_iter().map(|enumeration| {
+            let enumeration = Enumeration {
+                name: enumeration.name,
+                doc: enumeration.doc,
+                items: enumeration
+                    .items
+                    .into_iter()
+                    .map(|item| EnumItem {
+                        name: item.name,
+                        doc: item.doc,
+                    })
+                    .collect(),
+            };
+            Ok((enumeration.name.clone(), enumeration))
+        });
+        let enumerations = unique(enumerations, "enumeration")?;
         Ok(Self {
             name: json.name,
             version: json.version,
             entities,
             property_sets,
+            enumerations,
         })
     }
 }

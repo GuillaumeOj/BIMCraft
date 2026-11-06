@@ -218,6 +218,7 @@ fn sample(version: u32) -> Namespace {
             .map(|entity| (entity.name.clone(), entity))
             .collect(),
         property_sets: BTreeMap::new(),
+        enumerations: BTreeMap::new(),
     }
 }
 

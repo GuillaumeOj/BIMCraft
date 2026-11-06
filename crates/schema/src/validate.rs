@@ -3,10 +3,12 @@ use std::fmt;
 
 use crate::value_type::MAX_LIST_DEPTH;
 use crate::{
-    Attribute, Entity, EntityKind, IfcMapping, Namespace, Placement, Presence, PropertySet,
-    RoleTarget, Value, ValueType,
+    Attribute, Entity, EntityKind, Enumeration, IfcMapping, Namespace, Placement, Presence,
+    PropertySet, RoleTarget, Value, ValueType,
 };
 
+/// Most enumerations a namespace may define.
+pub const MAX_ENUMERATIONS: usize = 4096;
 /// Most entities a namespace may define.
 pub const MAX_ENTITIES: usize = 4096;
 /// Most property sets a namespace may define.
@@ -36,6 +38,8 @@ pub enum Owner {
     Entity(String),
     /// A property set, by name.
     PropertySet(String),
+    /// An enumeration, by name.
+    Enumeration(String),
 }
 
 /// A part of a definition.
@@ -53,6 +57,8 @@ pub enum Item {
     Role(String),
     /// A representation, by position from 0.
     Representation(usize),
+    /// An enumeration item, by name.
+    EnumItem(String),
 }
 
 /// One problem found by [`validate`].
@@ -108,6 +114,15 @@ pub enum ValidationErrorKind {
         /// The unknown name.
         name: String,
     },
+    /// An `enum:<Name>` value type names no enumeration of the namespace.
+    #[error("unknown enumeration \"{name}\"")]
+    UnknownEnumeration {
+        /// The unknown name.
+        name: String,
+    },
+    /// An enumeration has no item.
+    #[error("an enumeration needs at least one item")]
+    EnumerationWithoutItems,
     /// An entity lists a property set the namespace does not define.
     #[error("unknown property set \"{name}\"")]
     UnknownPropertySet {
@@ -132,9 +147,6 @@ pub enum ValidationErrorKind {
     /// A real default is NaN or infinite.
     #[error("default value is not a finite number")]
     NonFiniteDefault,
-    /// A value type is valid but cannot be used yet.
-    #[error("{0} are not supported yet")]
-    Unsupported(&'static str),
     /// A non-relationship entity declares roles.
     #[error("only relationship entities have roles")]
     RolesOutsideRelationship,
@@ -187,6 +199,7 @@ impl fmt::Display for Location {
             Owner::Namespace => f.write_str("namespace")?,
             Owner::Entity(name) => write!(f, "entity {name}")?,
             Owner::PropertySet(name) => write!(f, "property set {name}")?,
+            Owner::Enumeration(name) => write!(f, "enumeration {name}")?,
         }
         match &self.item {
             None => Ok(()),
@@ -196,6 +209,7 @@ impl fmt::Display for Location {
             Some(Item::Property(name)) => write!(f, ", property {name}"),
             Some(Item::Role(name)) => write!(f, ", role {name}"),
             Some(Item::Representation(index)) => write!(f, ", representation #{}", index + 1),
+            Some(Item::EnumItem(name)) => write!(f, ", item {name}"),
         }
     }
 }
@@ -268,6 +282,11 @@ fn validate_namespace(namespace: &Namespace, errors: &mut Errors) {
             MAX_PROPERTY_SETS,
             "property sets",
         ),
+        (
+            namespace.enumerations.len(),
+            MAX_ENUMERATIONS,
+            "enumerations",
+        ),
     ];
     if errors.too_many(&owner, None, &limits) {
         return;
@@ -281,6 +300,52 @@ fn validate_namespace(namespace: &Namespace, errors: &mut Errors) {
     for (key, property_set) in &namespace.property_sets {
         check_key(key, &property_set.name, Owner::PropertySet, errors);
         validate_property_set(namespace, property_set, errors);
+    }
+    for (key, enumeration) in &namespace.enumerations {
+        check_key(key, &enumeration.name, Owner::Enumeration, errors);
+        validate_enumeration(namespace, enumeration, errors);
+    }
+}
+
+fn validate_enumeration(namespace: &Namespace, enumeration: &Enumeration, errors: &mut Errors) {
+    let owner = Owner::Enumeration(enumeration.name.clone());
+    check_name(&enumeration.name, NameRule::Pascal, &owner, None, errors);
+    check_doc(enumeration.doc.as_deref(), &owner, None, errors);
+    // Generated code and the API's JSON Schema give enumerations, entities, types and property
+    // sets one namespace of names.
+    let taken = namespace.entities.contains_key(&enumeration.name)
+        || namespace.property_sets.contains_key(&enumeration.name)
+        || namespace.entities.values().any(|entity| {
+            entity
+                .type_def
+                .as_ref()
+                .is_some_and(|type_def| type_def.name == enumeration.name)
+        });
+    if taken {
+        let kind = ValidationErrorKind::Duplicate {
+            name: enumeration.name.clone(),
+        };
+        errors.push(&owner, None, kind);
+    }
+    let limits = [(enumeration.items.len(), MAX_ITEMS, "items")];
+    if errors.too_many(&owner, None, &limits) {
+        return;
+    }
+    if enumeration.items.is_empty() {
+        errors.push(&owner, None, ValidationErrorKind::EnumerationWithoutItems);
+    }
+    let mut names = BTreeSet::new();
+    for item in &enumeration.items {
+        let at = || Some(Item::EnumItem(item.name.clone()));
+        check_name(&item.name, NameRule::Snake, &owner, at(), errors);
+        check_doc(item.doc.as_deref(), &owner, at(), errors);
+        check_unique(
+            &mut names,
+            &item.name,
+            &owner,
+            Item::EnumItem(item.name.clone()),
+            errors,
+        );
     }
 }
 
@@ -574,7 +639,9 @@ fn check_attribute(
     }
     check_value_type(namespace, &attribute.value, owner, item(), errors);
     if let Presence::Default(value) = &attribute.presence {
-        if !value_matches(value, &attribute.value) {
+        if !value_matches(value, &attribute.value)
+            || !items_known(namespace, value, &attribute.value)
+        {
             let kind = ValidationErrorKind::DefaultMismatch {
                 expected: attribute.value.clone(),
             };
@@ -603,12 +670,12 @@ fn check_value_type(
 ) {
     match value {
         ValueType::Ref(name) => check_entity_exists(namespace, name, owner, item, errors),
-        // ADR 0002 names `enum:<Name>` but defines no file to declare enumerations in yet.
-        ValueType::Enum(_) => errors.push(
-            owner,
-            item,
-            ValidationErrorKind::Unsupported("enumeration value types"),
-        ),
+        ValueType::Enum(name) => {
+            if !namespace.enumerations.contains_key(name) {
+                let kind = ValidationErrorKind::UnknownEnumeration { name: name.clone() };
+                errors.push(owner, item, kind);
+            }
+        }
         ValueType::List(inner) => check_value_type(namespace, inner, owner, item, errors),
         ValueType::Bool
         | ValueType::Integer
@@ -623,11 +690,26 @@ pub(crate) fn value_matches(value: &Value, value_type: &ValueType) -> bool {
         (Value::Bool(_), ValueType::Bool)
         | (Value::Integer(_), ValueType::Integer)
         | (Value::Real(_), ValueType::Real | ValueType::Quantity(_))
-        | (Value::Text(_), ValueType::Text) => true,
+        | (Value::Text(_), ValueType::Text | ValueType::Enum(_)) => true,
         (Value::List(items), ValueType::List(inner)) => {
             items.iter().all(|item| value_matches(item, inner))
         }
         _ => false,
+    }
+}
+
+/// Whether every text in a matching `value` is an item of its enumeration; an unknown
+/// enumeration is reported on its own.
+pub(crate) fn items_known(namespace: &Namespace, value: &Value, value_type: &ValueType) -> bool {
+    match (value, value_type) {
+        (Value::Text(text), ValueType::Enum(name)) => namespace
+            .enumerations
+            .get(name)
+            .is_none_or(|enumeration| enumeration.contains(text)),
+        (Value::List(items), ValueType::List(inner)) => {
+            items.iter().all(|item| items_known(namespace, item, inner))
+        }
+        _ => true,
     }
 }
 

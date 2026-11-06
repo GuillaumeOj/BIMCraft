@@ -186,6 +186,11 @@ pub struct Wall {
     /// Short label shown on drawings.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub mark: Option<String>,
+    /// Overrides the type's value for this object when set.
+    ///
+    /// The `function` value.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub function: Option<WallFunction>,
 }
 
 impl Wall {
@@ -216,11 +221,18 @@ pub struct WallType {
     /// In m.
     #[serde(default = "WallType::default_height")]
     pub height: f64,
+    /// The `function` value.
+    #[serde(default = "WallType::default_function")]
+    pub function: WallFunction,
 }
 
 impl WallType {
     fn default_height() -> f64 {
         2.5
+    }
+
+    fn default_function() -> WallFunction {
+        WallFunction::Partition
     }
 }
 
@@ -260,4 +272,16 @@ impl PsetWallCommon {
     fn default_load_bearing() -> bool {
         false
     }
+}
+
+/// What a wall does in the building.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[allow(clippy::doc_markdown, reason = "docs come from the schema definitions")]
+pub enum WallFunction {
+    /// Carries loads from above.
+    #[serde(rename = "load_bearing")]
+    LoadBearing,
+    /// `partition`.
+    #[serde(rename = "partition")]
+    Partition,
 }

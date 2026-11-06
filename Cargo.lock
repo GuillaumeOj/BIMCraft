@@ -2159,6 +2159,7 @@ dependencies = [
  "core-txn",
  "libm",
  "proptest",
+ "schema",
  "schema-gen",
  "thiserror 2.0.21",
 ]

@@ -45,6 +45,7 @@ fn namespace(version: u32, entities: Vec<Entity>) -> Namespace {
             .map(|entity| (entity.name.clone(), entity))
             .collect(),
         property_sets: BTreeMap::new(),
+        enumerations: BTreeMap::new(),
     }
 }
 
@@ -537,6 +538,44 @@ fn type_objects_are_stored_in_their_own_table() {
                 attribute: "fire_rating".into(),
                 found: ValueType::Text,
                 expected: ValueType::Integer,
+            },
+        ]
+    );
+}
+
+#[test]
+fn set_value_picks_an_item_of_the_enumeration() {
+    use crate::{EnumItem, Enumeration};
+    let before = namespace(1, vec![wall(vec![optional("side", "text")])]);
+    let mut after = namespace(2, vec![wall(vec![required("side", "enum:Side")])]);
+    after.enumerations.insert(
+        "Side".into(),
+        Enumeration {
+            name: "Side".into(),
+            doc: None,
+            items: vec![EnumItem {
+                name: "left".into(),
+                doc: None,
+            }],
+        },
+    );
+    let convert = change_value("side", "enum:Side", 1.0);
+    let set = |text: &str| DeclaredStep::SetValue {
+        entity: "Wall".into(),
+        attribute: "side".into(),
+        value: Value::Text(text.into()),
+    };
+    assert!(resolve(&before, &[convert.clone(), set("left")], &after).is_ok());
+    assert_eq!(
+        errors(&before, &[convert, set("top")], &after),
+        [
+            MigrationError::ValueMismatch {
+                step: 2,
+                expected: "enum:Side".parse().unwrap(),
+            },
+            MigrationError::Unfilled {
+                entity: "Wall".into(),
+                attribute: "side".into(),
             },
         ]
     );

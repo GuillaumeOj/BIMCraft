@@ -217,7 +217,7 @@ fn deprecation(version: u32) -> String {
 }
 
 /// The trimmed lines of a description, or the fallback when there is none.
-fn doc_lines(doc: Option<&str>, fallback: impl FnOnce() -> String) -> Vec<String> {
+pub(crate) fn doc_lines(doc: Option<&str>, fallback: impl FnOnce() -> String) -> Vec<String> {
     let Some(doc) = doc.map(str::trim).filter(|doc| !doc.is_empty()) else {
         return vec![fallback()];
     };

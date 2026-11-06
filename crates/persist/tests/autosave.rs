@@ -44,6 +44,7 @@ fn namespace() -> Namespace {
         version: 1,
         entities: [("Space".to_owned(), space)].into(),
         property_sets: std::collections::BTreeMap::new(),
+        enumerations: std::collections::BTreeMap::new(),
     }
 }
 

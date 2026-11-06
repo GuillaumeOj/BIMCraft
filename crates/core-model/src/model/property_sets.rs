@@ -1,8 +1,8 @@
 //! Property sets: named groups of typed properties carried by objects (CORE-04, ADR 0013).
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
-use schema::{Attribute, PropertySet, ValueType};
+use schema::{Attribute, Enumeration, PropertySet, ValueType};
 
 use super::types::Object;
 use super::{Model, ModelError, find_attribute};
@@ -26,9 +26,9 @@ pub(super) struct Rows {
 }
 
 impl PropertyTable {
-    pub(super) fn new(set: &PropertySet) -> Self {
+    pub(super) fn new(set: &PropertySet, enumerations: &BTreeMap<String, Enumeration>) -> Self {
         let rows = |side| Rows {
-            table: Table::new(&set.name, &set.properties, side),
+            table: Table::new(&set.name, &set.properties, side, enumerations),
             rows: HashMap::new(),
         };
         Self {
@@ -150,7 +150,10 @@ impl Model {
             self.namespace.property_sets.remove(&name);
             return Err(ModelError::InvalidPropertySet(errors));
         }
-        let table = PropertyTable::new(&self.namespace.property_sets[&name]);
+        let table = PropertyTable::new(
+            &self.namespace.property_sets[&name],
+            &self.namespace.enumerations,
+        );
         self.property_sets.insert(name, table);
         Ok(())
     }

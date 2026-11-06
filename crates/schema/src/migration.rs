@@ -14,7 +14,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::validate::{is_finite, value_matches};
+use crate::validate::{is_finite, items_known, value_matches};
 use crate::{Attribute, Namespace, Presence, Side, StoredTable, Value, ValueType, stored_tables};
 
 /// Most declared steps one migration may hold, so a hostile plugin bundle stays cheap to check.
@@ -306,7 +306,7 @@ pub fn resolve(
     let target = layout(&after_tables);
     resolver.add(&after_tables);
     for (step, declared) in numbered {
-        resolver.change(step, declared);
+        resolver.change(step, declared, after);
     }
     resolver.remove(&target);
     resolver.check(&target);
@@ -520,7 +520,9 @@ impl Resolver {
         }
     }
 
-    fn change(&mut self, step: usize, declared: &DeclaredStep) {
+    /// Applies a declared step other than a rename; `after` gives the enumerations a
+    /// `set_value` must pick its items from.
+    fn change(&mut self, step: usize, declared: &DeclaredStep, after: &Namespace) {
         match declared {
             DeclaredStep::ChangeValue {
                 entity,
@@ -558,7 +560,10 @@ impl Resolver {
                 let Some(column) = self.column(step, entity, attribute) else {
                     return;
                 };
-                if !value_matches(value, &column.value) || !is_finite(value) {
+                if !value_matches(value, &column.value)
+                    || !items_known(after, value, &column.value)
+                    || !is_finite(value)
+                {
                     let expected = column.value.clone();
                     self.errors
                         .push(MigrationError::ValueMismatch { step, expected });

@@ -1,0 +1,17 @@
+format = 1
+
+[enumeration]
+name = "BehaviourLaw"
+doc = "How the stress in a material follows its strain."
+
+[[item]]
+name = "linear_elastic"
+doc = "Stress proportional to strain, in tension and compression."
+
+[[item]]
+name = "concrete_parabola_rectangle"
+doc = "The parabola-rectangle diagram for concrete in compression (EN 1992-1-1, 3.1.7)."
+
+[[item]]
+name = "steel_bilinear"
+doc = "Linear up to yield, then a hardening or horizontal branch (EN 1992-1-1, 3.2.7; EN 1993-1-1, 5.4.3)."

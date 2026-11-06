@@ -1,0 +1,21 @@
+format = 1
+
+[enumeration]
+name = "MaterialCategory"
+doc = "What a material is; it decides which behaviour laws suit it."
+
+[[item]]
+name = "concrete"
+doc = "Concrete."
+
+[[item]]
+name = "reinforcing_steel"
+doc = "Steel bars for reinforced concrete."
+
+[[item]]
+name = "structural_steel"
+doc = "Steel for structural members."
+
+[[item]]
+name = "other"
+doc = "Any other material."

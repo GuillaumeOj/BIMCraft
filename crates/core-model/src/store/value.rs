@@ -55,6 +55,8 @@ pub(super) enum ValueError {
     Mismatch,
     /// A real is NaN or infinite.
     NonFinite,
+    /// A text is not an item of the attribute's enumeration.
+    UnknownItem,
 }
 
 /// Checks that `value`, lists included, has the value type `value_type`.
@@ -71,6 +73,19 @@ pub(super) fn conforms(value: &AttributeValue, value_type: &ValueType) -> Result
         | (AttributeValue::Text(_), ValueType::Text | ValueType::Enum(_))
         | (AttributeValue::Ref(_), ValueType::Ref(_)) => Ok(()),
         _ => Err(ValueError::Mismatch),
+    }
+}
+
+/// Checks that every text in `value`, lists included, is one of `items`.
+pub(super) fn known_items(value: &AttributeValue, items: &[Box<str>]) -> Result<(), ValueError> {
+    match value {
+        AttributeValue::Text(text) if !items.iter().any(|item| **item == **text) => {
+            Err(ValueError::UnknownItem)
+        }
+        AttributeValue::List(values) => values
+            .iter()
+            .try_for_each(|value| known_items(value, items)),
+        _ => Ok(()),
     }
 }
 

@@ -1,7 +1,9 @@
 //! One table of rows, one typed column per attribute, shared by entity tables and property-set
 //! tables.
 
-use schema::{Attribute, Placement, Presence};
+use std::collections::BTreeMap;
+
+use schema::{Attribute, Enumeration, Placement, Presence, ValueType};
 
 use super::StoreError;
 use super::column::Column;
@@ -68,11 +70,13 @@ enum Rule {
 }
 
 impl Table {
-    /// An empty table named `name` holding the attributes, or properties, set on `side`.
+    /// An empty table named `name` holding the attributes, or properties, set on `side`;
+    /// `enumerations` gives the items `enum:` values may take.
     pub(crate) fn new<'a>(
         name: &str,
         attributes: impl IntoIterator<Item = &'a Attribute>,
         side: Side,
+        enumerations: &BTreeMap<String, Enumeration>,
     ) -> Self {
         Self {
             name: name.to_owned(),
@@ -83,7 +87,7 @@ impl Table {
                 .map(|attribute| Slot {
                     name: attribute.name.clone(),
                     rule: side.rule(attribute),
-                    column: Column::new(&attribute.value),
+                    column: Column::new(&attribute.value, items(&attribute.value, enumerations)),
                 })
                 .collect(),
         }
@@ -241,7 +245,27 @@ impl Slot {
         match error {
             ValueError::Mismatch => StoreError::TypeMismatch(self.name.clone()),
             ValueError::NonFinite => StoreError::NonFinite(self.name.clone()),
+            ValueError::UnknownItem => StoreError::UnknownItem(self.name.clone()),
         }
+    }
+}
+
+/// The item names of the enumeration a value type, or its lists, hold.
+fn items(
+    value_type: &ValueType,
+    enumerations: &BTreeMap<String, Enumeration>,
+) -> Option<Box<[Box<str>]>> {
+    match value_type {
+        ValueType::List(inner) => items(inner, enumerations),
+        // Validation guarantees the enumeration exists.
+        ValueType::Enum(name) => enumerations.get(name).map(|enumeration| {
+            enumeration
+                .items
+                .iter()
+                .map(|item| item.name.as_str().into())
+                .collect()
+        }),
+        _ => None,
     }
 }
 

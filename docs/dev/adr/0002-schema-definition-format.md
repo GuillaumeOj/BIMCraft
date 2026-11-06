@@ -34,6 +34,7 @@ schema/
     entities/beam.toml
     relationships/containment.toml   # a relationship entity (CORE-03)
     property-sets/Pset_WallCommon.toml
+    enumerations/wall_function.toml  # the items of an `enum:<Name>` value type
     migrations/0002.toml             # from version 1 to version 2
     snapshots/0001.json              # canonical model of each released version,
     snapshots/0002.json              #   generated and committed
@@ -71,6 +72,8 @@ Every definition file starts with `format`, the version of the definition file f
 - `depends_on` is the dependency graph's input (CORE-08) and tells IFC export which parameters are geometric (INT-07).
 
 A property set file has `[property_set]` (`name`, `applies_to`, optional `doc`) and `[[property]]` entries with the same keys as attributes, placement included. User-defined property sets (CORE-04) are model data with this same structure, but they live in the project file, not in `schema/`.
+
+An enumeration file has `[enumeration]` (`name` in PascalCase, optional `doc`) and one `[[item]]` per value (`name` in snake_case, optional `doc`), in order. Enumeration names share one namespace with entities, types and property sets, because the generated code and the API's JSON Schema give each a definition of that name. Values are stored as the item's name; the model rejects any other text (CORE-04), the JSON Schema lists the items, and the Rust types are enums. Changing an attribute from `text` to an enumeration needs no migration step when every stored value is an item.
 
 Allowed relationships are declared once, on the relationship entity, not on each participant. An element therefore takes part in containment, connections or voids through its `kind`, and a plugin element joins core relationships without changing any core file.
 

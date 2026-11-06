@@ -25,18 +25,15 @@ doc = "The material's name, such as `C30/37` or `S355`."
 
 [[attribute]]
 name = "category"
-value = "text"
+value = "enum:MaterialCategory"
 required = true
-doc = "One of `concrete`, `reinforcing_steel`, `structural_steel` or `other`."
+doc = "What the material is."
 
 [[attribute]]
 name = "behaviour_law"
-value = "text"
+value = "enum:BehaviourLaw"
 required = true
-doc = """
-How stress follows strain: `linear_elastic`, `concrete_parabola_rectangle` or \
-`steel_bilinear`.\
-"""
+doc = "How stress follows strain."
 
 [[attribute]]
 name = "design_code"

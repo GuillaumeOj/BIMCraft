@@ -1,6 +1,6 @@
 use schema::ValueType;
 
-use super::value::{AttributeValue, ValueError, conforms, finite};
+use super::value::{AttributeValue, ValueError, conforms, finite, known_items};
 use crate::EntityId;
 
 /// The values of one attribute across every row of a table, in one contiguous vector of their
@@ -10,6 +10,8 @@ pub(super) struct Column {
     cells: Cells,
     /// The item type of a list column; the column's own value type otherwise, unused.
     items: ValueType,
+    /// The items of the enumeration the column, or its lists, hold; `None` for other values.
+    allowed: Option<Box<[Box<str>]>>,
 }
 
 #[derive(Clone, Debug)]
@@ -37,8 +39,9 @@ macro_rules! each {
 }
 
 impl Column {
-    /// An empty column for values of `value_type`.
-    pub(super) fn new(value_type: &ValueType) -> Self {
+    /// An empty column for values of `value_type`, whose texts must be among `allowed` when it
+    /// is given.
+    pub(super) fn new(value_type: &ValueType, allowed: Option<Box<[Box<str>]>>) -> Self {
         let cells = match value_type {
             ValueType::Bool => Cells::Bool(Typed::default()),
             ValueType::Integer => Cells::Integer(Typed::default()),
@@ -51,11 +54,23 @@ impl Column {
             ValueType::List(items) => (**items).clone(),
             other => other.clone(),
         };
-        Self { cells, items }
+        Self {
+            cells,
+            items,
+            allowed,
+        }
+    }
+
+    fn check_items(&self, value: Option<&AttributeValue>) -> Result<(), ValueError> {
+        match (value, &self.allowed) {
+            (Some(value), Some(allowed)) => known_items(value, allowed),
+            _ => Ok(()),
+        }
     }
 
     /// Appends a row.
     pub(super) fn push(&mut self, value: Option<AttributeValue>) -> Result<(), ValueError> {
+        self.check_items(value.as_ref())?;
         let items = &self.items;
         each!(&mut self.cells, cells => cells.push(decode(value, items)?));
         Ok(())
@@ -77,6 +92,7 @@ impl Column {
         row: usize,
         value: Option<AttributeValue>,
     ) -> Result<Option<AttributeValue>, ValueError> {
+        self.check_items(value.as_ref())?;
         let items = &self.items;
         Ok(each!(&mut self.cells, cells => cells.replace(row, decode(value, items)?)))
     }
@@ -283,7 +299,7 @@ mod tests {
     use super::*;
 
     fn filled(value_type: &ValueType, values: &[Option<AttributeValue>]) -> Column {
-        let mut column = Column::new(value_type);
+        let mut column = Column::new(value_type, None);
         for value in values {
             column.push(value.clone()).unwrap();
         }
@@ -331,7 +347,7 @@ mod tests {
         for (value_type, _) in samples() {
             for (other_type, other) in samples() {
                 if other_type != value_type {
-                    let mut column = Column::new(&value_type);
+                    let mut column = Column::new(&value_type, None);
                     assert_eq!(column.push(Some(other.clone())), Err(ValueError::Mismatch));
                     assert_eq!(column.heap_bytes(), 0, "{value_type} unchanged");
                 }
@@ -355,7 +371,7 @@ mod tests {
 
     #[test]
     fn list_items_are_checked() {
-        let mut column = Column::new(&ValueType::List(Box::new(ValueType::Integer)));
+        let mut column = Column::new(&ValueType::List(Box::new(ValueType::Integer)), None);
         let wrong =
             AttributeValue::List(vec![AttributeValue::Integer(1), AttributeValue::Bool(true)]);
         assert_eq!(column.push(Some(wrong)), Err(ValueError::Mismatch));
@@ -405,7 +421,7 @@ mod tests {
         let one = |value_type: &ValueType, value: AttributeValue| {
             filled(value_type, &[Some(value)]).heap_bytes()
         };
-        assert_eq!(Column::new(&ValueType::Text).heap_bytes(), 0);
+        assert_eq!(Column::new(&ValueType::Text, None).heap_bytes(), 0);
         assert!(filled(&ValueType::Integer, &[None]).heap_bytes() > 0);
 
         let text = |value: &str| AttributeValue::Text(value.into());

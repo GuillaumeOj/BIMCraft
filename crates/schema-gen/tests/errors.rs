@@ -3,6 +3,7 @@
 // Tests build throwaway namespace directories, which the ARCH-02 lints of clippy.toml flag.
 #![allow(clippy::disallowed_methods)]
 
+use std::fmt::Write as _;
 use std::path::PathBuf;
 
 use schema::{EntityKind, Namespace, ValidationErrorKind};
@@ -605,4 +606,90 @@ fn reference_generation_reports_definition_and_snapshot_errors() {
     .unwrap();
     let errors = generate_reference(&dir.0).unwrap_err();
     assert_eq!(errors[0].file.as_deref(), Some("snapshots/README.md"));
+}
+
+fn enumeration(name: &str, items: &[&str]) -> String {
+    let mut out = format!("format = 1\n\n[enumeration]\nname = {name:?}\n");
+    for item in items {
+        let _ = write!(out, "\n[[item]]\nname = {item:?}\n");
+    }
+    out
+}
+
+#[test]
+fn rejects_enumerations_repeated_across_files() {
+    let side = enumeration("Side", &["left"]);
+    let error = single_error(&[
+        ("enumerations/a.toml", &side),
+        ("enumerations/b.toml", &side),
+    ]);
+    assert_error(
+        &error,
+        "enumerations/b.toml",
+        Some(4),
+        "enumeration \"Side\" is already defined in enumerations/a.toml",
+    );
+}
+
+#[test]
+fn places_enumeration_errors_at_the_item() {
+    let error = single_error(&[("enumerations/side.toml", &enumeration("Side", &["Left"]))]);
+    assert_error(
+        &error,
+        "enumerations/side.toml",
+        Some(7),
+        "\"Left\" is not a valid name",
+    );
+}
+
+#[test]
+fn enumerations_without_docs_get_a_generated_one() {
+    let namespace =
+        parse_with(&[("enumerations/side.toml", &enumeration("Side", &["left"]))]).unwrap();
+    let code = emit_rust(&namespace, &options()).unwrap();
+    assert!(code.contains("/// The `Side` enumeration.\n"), "{code}");
+    assert!(
+        code.contains("    /// `left`.\n    #[serde(rename = \"left\")]\n    Left,\n"),
+        "{code}"
+    );
+}
+
+#[test]
+fn rejects_enumeration_names_that_collide_in_rust() {
+    let namespace = parse_with(&[
+        (
+            "enumerations/option.toml",
+            &enumeration("Option", &["some"]),
+        ),
+        (
+            "enumerations/side.toml",
+            &enumeration("Side", &["a_1", "a1", "self"]),
+        ),
+    ])
+    .unwrap();
+    let messages: Vec<_> = emit_rust(&namespace, &options())
+        .unwrap_err()
+        .iter()
+        .map(ToString::to_string)
+        .collect();
+    assert_eq!(
+        messages,
+        [
+            "`Option` cannot be a generated enum name",
+            "`a1` in `Side` gives the same Rust variant name as another item",
+            "`self` in `Side` cannot be a Rust variant name",
+        ]
+    );
+}
+
+#[test]
+fn rejects_unknown_keys_in_enumerations() {
+    let side = enumeration("Side", &["left"]).replace("[enumeration]", "[enumeration]\nitems = 2");
+    let error = single_error(&[("enumerations/side.toml", &side)]);
+    assert_error(
+        &error,
+        "enumerations/side.toml",
+        Some(4),
+        "unknown field `items`",
+    );
 }

@@ -24,17 +24,17 @@
         },
         {
           "name": "category",
-          "value": "text",
+          "value": "enum:MaterialCategory",
           "presence": "required",
           "placement": "instance",
-          "doc": "One of `concrete`, `reinforcing_steel`, `structural_steel` or `other`."
+          "doc": "What the material is."
         },
         {
           "name": "behaviour_law",
-          "value": "text",
+          "value": "enum:BehaviourLaw",
           "presence": "required",
           "placement": "instance",
-          "doc": "How stress follows strain: `linear_elastic`, `concrete_parabola_rectangle` or `steel_bilinear`."
+          "doc": "How stress follows strain."
         },
         {
           "name": "design_code",
@@ -365,6 +365,48 @@
           "presence": "optional",
           "placement": "instance",
           "doc": "Design-code document and clause that HardeningRatio comes from, such as `EN 1992-1-1:2004, Table 3.1`."
+        }
+      ]
+    }
+  ],
+  "enumerations": [
+    {
+      "name": "BehaviourLaw",
+      "doc": "How the stress in a material follows its strain.",
+      "items": [
+        {
+          "name": "linear_elastic",
+          "doc": "Stress proportional to strain, in tension and compression."
+        },
+        {
+          "name": "concrete_parabola_rectangle",
+          "doc": "The parabola-rectangle diagram for concrete in compression (EN 1992-1-1, 3.1.7)."
+        },
+        {
+          "name": "steel_bilinear",
+          "doc": "Linear up to yield, then a hardening or horizontal branch (EN 1992-1-1, 3.2.7; EN 1993-1-1, 5.4.3)."
+        }
+      ]
+    },
+    {
+      "name": "MaterialCategory",
+      "doc": "What a material is; it decides which behaviour laws suit it.",
+      "items": [
+        {
+          "name": "concrete",
+          "doc": "Concrete."
+        },
+        {
+          "name": "reinforcing_steel",
+          "doc": "Steel bars for reinforced concrete."
+        },
+        {
+          "name": "structural_steel",
+          "doc": "Steel for structural members."
+        },
+        {
+          "name": "other",
+          "doc": "Any other material."
         }
       ]
     }

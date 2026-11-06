@@ -118,6 +118,7 @@ pub(super) fn namespace() -> Namespace {
             .map(|entity| (entity.name.clone(), entity))
             .collect(),
         property_sets: BTreeMap::from([("Pset_WallCommon".into(), wall_common())]),
+        enumerations: BTreeMap::new(),
     }
 }
 

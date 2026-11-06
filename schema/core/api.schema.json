@@ -330,17 +330,26 @@
       },
       "type": "object"
     },
+    "BehaviourLaw": {
+      "description": "How the stress in a material follows its strain.",
+      "enum": [
+        "linear_elastic",
+        "concrete_parabola_rectangle",
+        "steel_bilinear"
+      ],
+      "type": "string"
+    },
     "Material": {
       "additionalProperties": false,
       "description": "A substance that elements are made of, such as a concrete or steel grade (MAT-01). Its behaviour law says how it responds to strain; its properties, in the property sets below, each cite the design-code clause they come from (REP-05).",
       "properties": {
         "behaviour_law": {
-          "description": "How stress follows strain: `linear_elastic`, `concrete_parabola_rectangle` or `steel_bilinear`.",
-          "type": "string"
+          "$ref": "#/$defs/BehaviourLaw",
+          "description": "How stress follows strain."
         },
         "category": {
-          "description": "One of `concrete`, `reinforcing_steel`, `structural_steel` or `other`.",
-          "type": "string"
+          "$ref": "#/$defs/MaterialCategory",
+          "description": "What the material is."
         },
         "design_code": {
           "anyOf": [
@@ -364,6 +373,16 @@
         "behaviour_law"
       ],
       "type": "object"
+    },
+    "MaterialCategory": {
+      "description": "What a material is; it decides which behaviour laws suit it.",
+      "enum": [
+        "concrete",
+        "reinforcing_steel",
+        "structural_steel",
+        "other"
+      ],
+      "type": "string"
     },
     "ObjectId": {
       "description": "The stable 128-bit identifier of an object, as an IFC GlobalId.",

@@ -35,6 +35,14 @@ pub(crate) const CORE_SCHEMA: &[(&str, &str)] = &[
         "property-sets/BIMCraft_MaterialSteel.toml",
         include_str!("../../../schema/core/property-sets/BIMCraft_MaterialSteel.toml"),
     ),
+    (
+        "enumerations/behaviour_law.toml",
+        include_str!("../../../schema/core/enumerations/behaviour_law.toml"),
+    ),
+    (
+        "enumerations/material_category.toml",
+        include_str!("../../../schema/core/enumerations/material_category.toml"),
+    ),
 ];
 
 /// Why a document could not be opened.

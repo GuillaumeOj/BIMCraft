@@ -205,6 +205,17 @@
           "description": "Height of the bottom face above the storey.\n\nIn m.",
           "type": "number"
         },
+        "function": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/WallFunction"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Overrides the type's value for this object when set.\n\nThe `function` value."
+        },
         "height": {
           "anyOf": [
             {
@@ -230,10 +241,23 @@
       },
       "type": "object"
     },
+    "WallFunction": {
+      "description": "What a wall does in the building.",
+      "enum": [
+        "load_bearing",
+        "partition"
+      ],
+      "type": "string"
+    },
     "WallType": {
       "additionalProperties": false,
       "description": "A named wall build-up shared by many walls.",
       "properties": {
+        "function": {
+          "$ref": "#/$defs/WallFunction",
+          "default": "partition",
+          "description": "The `function` value."
+        },
         "height": {
           "default": 2.5,
           "description": "The `height` value.\n\nIn m.",

@@ -141,6 +141,30 @@ pub struct PropertySetSection {
     pub doc: Option<String>,
 }
 
+/// An enumeration file.
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct EnumerationFile {
+    pub format: Spanned<u32>,
+    pub enumeration: EnumerationSection,
+    #[serde(default, rename = "item")]
+    pub items: Vec<EnumItemDef>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct EnumerationSection {
+    pub name: Spanned<String>,
+    pub doc: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct EnumItemDef {
+    pub name: Spanned<String>,
+    pub doc: Option<String>,
+}
+
 /// Converts between a file-format enum and its model enum, both ways, variant by variant;
 /// definition files and snapshots spell them the same.
 macro_rules! same_variants {

@@ -61,6 +61,7 @@ fn namespace() -> Namespace {
         version: 1,
         entities: [(wall.name.clone(), wall)].into(),
         property_sets: [].into(),
+        enumerations: [].into(),
     }
 }
 
