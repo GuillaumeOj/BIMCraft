@@ -683,6 +683,25 @@ fn rejects_enumeration_names_that_collide_in_rust() {
 }
 
 #[test]
+fn rejects_enumerations_named_like_the_sourced_types() {
+    let sourced = "\n[[attribute]]\nname = \"strength\"\nvalue = \"real\"\nsourced = true\n";
+    let namespace = parse_with(&[
+        ("entities/wall.toml", &wall(sourced)),
+        (
+            "enumerations/source.toml",
+            &enumeration("Source", &["cited"]),
+        ),
+    ])
+    .unwrap();
+    let messages: Vec<_> = emit_rust(&namespace, &options())
+        .unwrap_err()
+        .iter()
+        .map(ToString::to_string)
+        .collect();
+    assert_eq!(messages, ["two generated types are named `Source`"]);
+}
+
+#[test]
 fn rejects_unknown_keys_in_enumerations() {
     let side = enumeration("Side", &["left"]).replace("[enumeration]", "[enumeration]\nitems = 2");
     let error = single_error(&[("enumerations/side.toml", &side)]);

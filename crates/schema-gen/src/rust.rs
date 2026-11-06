@@ -324,8 +324,9 @@ fn check_names(structs: &[Struct], enums: &[Enum], sourced: bool) -> Result<(), 
     for item in enums {
         if USED_TYPES.contains(&item.name.as_str()) {
             errors.push(format!("`{}` cannot be a generated enum name", item.name));
-        } else {
-            struct_names.insert(item.name.as_str());
+        } else if !struct_names.insert(item.name.as_str()) {
+            // Validation keeps enumerations apart from records, but not from the sourced types.
+            errors.push(format!("two generated types are named `{}`", item.name));
         }
         let mut variant_names = BTreeSet::new();
         for variant in &item.variants {
