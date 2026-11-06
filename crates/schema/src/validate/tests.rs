@@ -795,6 +795,34 @@ fn only_relationships_have_roles() {
 }
 
 #[test]
+fn resources_have_no_type_and_no_representation() {
+    let mut namespace = sample();
+    let representations = wall(&mut namespace).representations.clone();
+    let mut material = entity("Material", EntityKind::Resource, "IfcMaterial");
+    let mut valid = namespace.clone();
+    valid.entities.insert("Material".into(), material.clone());
+    assert_eq!(validate(&valid), Ok(()));
+    material.type_def = Some(TypeDef {
+        name: "MaterialType".into(),
+        doc: None,
+    });
+    material.representations = representations;
+    namespace.entities.insert("Material".into(), material);
+    let kinds: Vec<_> = errors_of(&namespace)
+        .into_iter()
+        .filter(|error| error.location == entity_at("Material", None))
+        .map(|error| error.kind)
+        .collect();
+    assert_eq!(
+        kinds,
+        vec![
+            ValidationErrorKind::ResourceWithType,
+            ValidationErrorKind::ResourceWithRepresentations,
+        ]
+    );
+}
+
+#[test]
 fn checks_representations() {
     let mut namespace = sample();
     let mut duplicate = wall(&mut namespace).representations[0].clone();
@@ -958,6 +986,8 @@ fn every_error_kind_has_a_message() {
         ValidationErrorKind::PlacementWithoutType,
         ValidationErrorKind::NonFiniteDefault,
         ValidationErrorKind::RolesOutsideRelationship,
+        ValidationErrorKind::ResourceWithType,
+        ValidationErrorKind::ResourceWithRepresentations,
         ValidationErrorKind::RelationshipWithoutRoles,
         ValidationErrorKind::RoleWithoutTargets,
         ValidationErrorKind::MissingIfcMapping,

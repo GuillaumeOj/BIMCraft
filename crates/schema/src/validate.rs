@@ -159,6 +159,12 @@ pub enum ValidationErrorKind {
     /// A non-relationship entity declares roles.
     #[error("only relationship entities have roles")]
     RolesOutsideRelationship,
+    /// A resource entity declares a type; resources are shared definitions without types.
+    #[error("a resource entity cannot have a type")]
+    ResourceWithType,
+    /// A resource entity declares a representation; resources are never placed.
+    #[error("a resource entity cannot have representations")]
+    ResourceWithRepresentations,
     /// A relationship entity declares no role.
     #[error("a relationship entity needs at least one role")]
     RelationshipWithoutRoles,
@@ -429,6 +435,18 @@ fn validate_entity(namespace: &Namespace, entity: &Entity, errors: &mut Errors) 
     ];
     if errors.too_many(&owner, None, &limits) {
         return;
+    }
+    if entity.kind == EntityKind::Resource {
+        if entity.type_def.is_some() {
+            errors.push(&owner, None, ValidationErrorKind::ResourceWithType);
+        }
+        if !entity.representations.is_empty() {
+            errors.push(
+                &owner,
+                None,
+                ValidationErrorKind::ResourceWithRepresentations,
+            );
+        }
     }
     if let Some(type_def) = &entity.type_def {
         check_name(
