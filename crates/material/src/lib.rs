@@ -22,7 +22,7 @@ pub use annex::{Factor, NationalAnnex};
 pub use core_model::{Source, SourceError};
 pub use law::{
     BehaviourLaw, ConcreteBilinear, ConcreteParabolaRectangle, Hardening, LawError, LawKind,
-    LinearElastic, SteelBilinear, TimberElasticBrittle,
+    LinearElastic, SteelBilinear, StrainLimits, TimberElasticBrittle,
 };
 pub use material::{Category, Material, MaterialError};
 pub use model::{

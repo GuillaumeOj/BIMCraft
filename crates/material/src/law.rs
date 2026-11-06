@@ -73,6 +73,24 @@ pub enum LawError {
     NoStructuralLaw,
 }
 
+/// The strains a law is defined up to, as positive magnitudes: beyond them,
+/// [`BehaviourLaw::stress`] fails with [`LawError::BeyondUltimateStrain`]. `None` where the law
+/// has no limit, such as concrete in tension, which carries no stress at any strain.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct StrainLimits {
+    /// The largest compressive strain, such as εcu2.
+    pub compression: Option<f64>,
+    /// The largest tensile strain, such as εuk.
+    pub tension: Option<f64>,
+}
+
+impl StrainLimits {
+    const NONE: Self = Self {
+        compression: None,
+        tension: None,
+    };
+}
+
 /// A behaviour law with its parameters.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum BehaviourLaw {
@@ -121,6 +139,50 @@ impl BehaviourLaw {
             Self::SteelBilinear(law) => law.stress(strain),
             Self::TimberElasticBrittle(law) => law.stress(strain),
             Self::None => Err(LawError::NoStructuralLaw),
+        }
+    }
+
+    /// The strains the law is defined up to.
+    #[must_use]
+    pub fn limit_strains(&self) -> StrainLimits {
+        match self {
+            Self::LinearElastic(_) | Self::None => StrainLimits::NONE,
+            Self::ConcreteParabolaRectangle(law) => StrainLimits {
+                compression: Some(law.ultimate_strain),
+                tension: None,
+            },
+            Self::ConcreteBilinear(law) => StrainLimits {
+                compression: Some(law.ultimate_strain),
+                tension: None,
+            },
+            Self::SteelBilinear(law) => {
+                let limit = law.hardening.map(|hardening| hardening.ultimate_strain);
+                StrainLimits {
+                    compression: limit,
+                    tension: limit,
+                }
+            }
+            Self::TimberElasticBrittle(law) => StrainLimits {
+                compression: None,
+                tension: Some(law.tensile_strength / law.modulus),
+            },
+        }
+    }
+
+    /// The tangent modulus at zero strain, on the loading side: n fc / εc2 for the
+    /// parabola-rectangle, fc / εc3 for the bi-linear concrete diagram, the modulus of
+    /// elasticity otherwise. `None` for a material without structural behaviour.
+    #[must_use]
+    pub fn initial_modulus(&self) -> Option<Stress> {
+        match self {
+            Self::LinearElastic(law) => Some(law.modulus),
+            Self::ConcreteParabolaRectangle(law) => {
+                Some(law.strength * (law.exponent / law.strain_at_peak))
+            }
+            Self::ConcreteBilinear(law) => Some(law.strength * (1.0 / law.strain_at_peak)),
+            Self::SteelBilinear(law) => Some(law.modulus),
+            Self::TimberElasticBrittle(law) => Some(law.modulus),
+            Self::None => None,
         }
     }
 
@@ -815,6 +877,96 @@ mod tests {
             let jump = (timber.stress(strain + step).unwrap()
                 - timber.stress(strain).unwrap()).get(Megapascal).abs();
             prop_assert!(jump <= 11_500.0 * step + 1e-9);
+        }
+    }
+
+    fn elastic() -> BehaviourLaw {
+        BehaviourLaw::LinearElastic(LinearElastic::new(mpa(33_000.0)).unwrap())
+    }
+
+    /// Every law of the tests, with a strain range inside its limits.
+    fn every_law() -> [BehaviourLaw; 6] {
+        [
+            elastic(),
+            concrete(),
+            concrete_bilinear(),
+            steel(Some(B500B_HARDENING)),
+            steel(None),
+            timber(),
+        ]
+    }
+
+    #[test]
+    fn each_law_reports_its_limit_strains() {
+        let limits = |compression, tension| StrainLimits {
+            compression,
+            tension,
+        };
+        assert_eq!(elastic().limit_strains(), limits(None, None));
+        assert_eq!(concrete().limit_strains(), limits(Some(0.0035), None));
+        assert_eq!(
+            concrete_bilinear().limit_strains(),
+            limits(Some(0.0035), None)
+        );
+        assert_eq!(
+            steel(Some(B500B_HARDENING)).limit_strains(),
+            limits(Some(0.05), Some(0.05))
+        );
+        assert_eq!(steel(None).limit_strains(), limits(None, None));
+        // ft / E = 19.2 / 11 500 = 1.6696 ‰.
+        let timber = timber().limit_strains();
+        assert_eq!(timber.compression, None);
+        assert!((timber.tension.unwrap() - 19.2 / 11_500.0).abs() < 1e-15);
+        assert_eq!(BehaviourLaw::None.limit_strains(), limits(None, None));
+    }
+
+    // Hand calculations (ENG-03): parabola n fc / εc2 = 2 × 30 / 0.002 = 30 000 MPa; bi-linear
+    // fc / εc3 = 30 / 0.00175 = 17 142.857 MPa; the others start at their modulus.
+    #[test]
+    fn each_law_reports_its_initial_modulus() {
+        let modulus = |law: BehaviourLaw| law.initial_modulus().unwrap().get(Megapascal);
+        assert!((modulus(elastic()) - 33_000.0).abs() < 1e-9);
+        assert!((modulus(concrete()) - 30_000.0).abs() < 1e-6);
+        assert!((modulus(concrete_bilinear()) - 30.0 / 0.001_75).abs() < 1e-6);
+        assert!((modulus(steel(None)) - 200_000.0).abs() < 1e-9);
+        assert!((modulus(timber()) - 11_500.0).abs() < 1e-9);
+        assert_eq!(BehaviourLaw::None.initial_modulus(), None);
+    }
+
+    proptest! {
+        #![proptest_config(crate::proptest_config())]
+
+        // Within its limits a law always gives a stress; just beyond a limit it refuses.
+        #[test]
+        fn laws_are_defined_exactly_up_to_their_limits(fraction in 0.0f64..=1.0) {
+            for law in every_law() {
+                let limits = law.limit_strains();
+                if let Some(limit) = limits.compression {
+                    prop_assert!(law.stress(-limit * fraction).is_ok(), "{law:?}");
+                    prop_assert_eq!(
+                        law.stress(-limit * (1.0 + 1e-9) - 1e-12),
+                        Err(LawError::BeyondUltimateStrain)
+                    );
+                }
+                if let Some(limit) = limits.tension {
+                    prop_assert!(law.stress(limit * fraction).is_ok(), "{law:?}");
+                    prop_assert_eq!(
+                        law.stress(limit * (1.0 + 1e-9) + 1e-12),
+                        Err(LawError::BeyondUltimateStrain)
+                    );
+                }
+            }
+        }
+
+        // The initial modulus is the slope of the law at zero on its loading side: the secant
+        // to a tiny strain matches it within the curvature of the parabola.
+        #[test]
+        fn the_initial_modulus_is_the_slope_at_zero(step in 1e-9f64..1e-7) {
+            for law in every_law() {
+                let modulus = law.initial_modulus().unwrap().si();
+                let secant = law.stress(-step).unwrap().si() / -step;
+                prop_assert!((secant - modulus).abs() <= modulus * 1e-3, "{law:?}");
+            }
         }
     }
 }
