@@ -204,6 +204,24 @@ fn the_schema_rejects_what_the_decoder_rejects() {
     assert!(!set.0.is_valid(&value));
 }
 
+#[test]
+fn sources_follow_the_rules_the_core_checks() {
+    let document = document();
+    let source = Check::at(&document, "/$defs/Source");
+    source.assert_valid(&json!({ "document": "EN 1990:2002", "clause": "6.4.3" }));
+    source.assert_valid(&serde_json::to_value(core_model::Source::user()).unwrap());
+    let long = "x".repeat(MAX_SOURCE_LEN + 1);
+    for bad in [
+        json!({ "document": "   ", "clause": "6.4.3" }),
+        json!({ "document": "EN 1990:2002", "clause": long }),
+        json!({ "document": "", "clause": "6.4.3" }),
+        json!({ "entered_by_user": false }),
+        json!({ "document": "EN 1990:2002", "clause": "6.4.3", "entered_by_user": true }),
+    ] {
+        assert!(!source.0.is_valid(&bad), "{bad}");
+    }
+}
+
 proptest! {
     #![proptest_config(crate::proptest_config())]
 

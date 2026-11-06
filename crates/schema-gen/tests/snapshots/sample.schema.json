@@ -171,11 +171,15 @@
           "additionalProperties": false,
           "properties": {
             "clause": {
+              "maxLength": 200,
               "minLength": 1,
+              "pattern": "\\S",
               "type": "string"
             },
             "document": {
+              "maxLength": 200,
               "minLength": 1,
+              "pattern": "\\S",
               "type": "string"
             }
           },

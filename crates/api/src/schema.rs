@@ -2,6 +2,7 @@
 //! and result are written with, and the document that gathers every registered command and query
 //! with the entity schema.
 
+use core_model::MAX_SOURCE_LEN;
 use serde_json::{Map, Value, json};
 
 use crate::{Descriptor, Kind, Registry};
@@ -115,7 +116,8 @@ fn shared() -> Map<String, Value> {
             ),
         ],
     });
-    let part = || json!({ "type": "string", "minLength": 1 });
+    // The server also trims the text and refuses control characters (ADR 0018).
+    let part = || json!({ "type": "string", "minLength": 1, "maxLength": MAX_SOURCE_LEN, "pattern": "\\S" });
     let source = json!({
         "description": "Where a sourced value comes from (ADR 0018): the document and clause it is taken from, or the user who entered it.",
         "oneOf": [

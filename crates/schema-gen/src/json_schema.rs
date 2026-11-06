@@ -163,9 +163,11 @@ fn value_type_schema(value: &ValueType) -> Json {
     }
 }
 
-/// A document and clause, each non-empty text.
+/// A source: a document and clause, each a non-blank text of at most 200 characters
+/// (`core_model::MAX_SOURCE_LEN`), or a value the user entered. Core also trims the texts and
+/// refuses control characters (ADR 0018).
 fn source_definition() -> Json {
-    let text = json!({ "type": "string", "minLength": 1 });
+    let text = json!({ "type": "string", "minLength": 1, "maxLength": 200, "pattern": "\\S" });
     json!({
         "description": "Where a value comes from: the document and clause it is taken from, or the user who entered it.",
         "oneOf": [
