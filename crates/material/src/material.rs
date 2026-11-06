@@ -408,8 +408,8 @@ impl Material {
 
     /// The design behaviour law to `annex`: the characteristic law with its strength divided by
     /// the category's partial factors (fcd = αcc fck / γc, fyd = fyk / γs, fy / γM0, and
-    /// fk / γM). A linear elastic law, or a category without a design law, is returned
-    /// unchanged.
+    /// fk / γM). A law without a strength (linear elastic, or none), or a category without a
+    /// design law, is returned unchanged.
     ///
     /// # Errors
     ///
@@ -418,7 +418,7 @@ impl Material {
         let Some((factor, over)) = self.category.strength_divisor() else {
             return Ok(self.law);
         };
-        if self.law.kind() == LawKind::LinearElastic {
+        if matches!(self.law.kind(), LawKind::LinearElastic | LawKind::None) {
             return Ok(self.law);
         }
         let mut divisor = self.partial_factor(factor, annex)?.value;
@@ -896,6 +896,22 @@ pub(crate) mod tests {
         assert_eq!(
             concrete.design_law(NationalAnnex::France),
             Ok(*concrete.law())
+        );
+        // Masonry has a design factor, γM, but a material without a law has nothing to divide.
+        let masonry = Material::new(
+            "Clay masonry",
+            Category::Masonry,
+            LawKind::None,
+            None,
+            BTreeMap::from([(
+                Property::MasonryCompressiveStrength,
+                sourced(5e6, "3.6.1.2"),
+            )]),
+        )
+        .unwrap();
+        assert_eq!(
+            masonry.design_law(NationalAnnex::France),
+            Ok(BehaviourLaw::None)
         );
         assert_eq!(Category::Finish.strength_divisor(), None);
         assert_eq!(
