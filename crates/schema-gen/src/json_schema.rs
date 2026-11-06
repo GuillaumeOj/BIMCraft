@@ -43,10 +43,7 @@ pub fn emit_json_schema(
     options: &JsonSchemaOptions,
 ) -> Result<String, Vec<Error>> {
     let structs = layout::plan(namespace, |name| format!("`{name}`"))?;
-    let sourced = structs
-        .iter()
-        .flat_map(|item| &item.fields)
-        .any(|field| matches!(field.ty, FieldType::Sourced(_)));
+    let sourced = layout::has_sourced(&structs);
     check_names(
         structs
             .iter()

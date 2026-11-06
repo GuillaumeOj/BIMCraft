@@ -57,6 +57,14 @@ pub enum FieldKind {
     OptionalList,
 }
 
+/// Whether any field of `structs` holds sourced values, so the emitters add the source types.
+pub fn has_sourced(structs: &[Struct]) -> bool {
+    structs
+        .iter()
+        .flat_map(|item| &item.fields)
+        .any(|field| matches!(field.ty, FieldType::Sourced(_)))
+}
+
 /// The records of a namespace: each entity followed by its type, then the property sets.
 ///
 /// The namespace is validated first, so emitters only see valid input. `name_ref` writes a

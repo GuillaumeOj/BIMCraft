@@ -220,6 +220,15 @@ fn sources_follow_the_rules_the_core_checks() {
     ] {
         assert!(!source.0.is_valid(&bad), "{bad}");
     }
+    // schema-gen cannot depend on core-model, so it writes the limit as a literal: check it.
+    let entity_source = &entities()["$defs"]["Source"]["oneOf"][0]["properties"];
+    for part in ["document", "clause"] {
+        assert_eq!(
+            entity_source[part]["maxLength"],
+            json!(MAX_SOURCE_LEN),
+            "{part}"
+        );
+    }
 }
 
 proptest! {
