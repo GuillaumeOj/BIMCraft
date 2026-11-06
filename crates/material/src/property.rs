@@ -155,20 +155,7 @@ impl Property {
             Self::CharacteristicDensity => "rho_k",
             Self::MeanDensity => "rho_mean",
             Self::MasonryCompressiveStrength => "fk",
-            Self::PartialFactor(Factor::GammaC, NationalAnnex::Recommended) => "gamma_c",
-            Self::PartialFactor(Factor::GammaC, NationalAnnex::France) => "gamma_c_fr",
-            Self::PartialFactor(Factor::AlphaCc, NationalAnnex::Recommended) => "alpha_cc",
-            Self::PartialFactor(Factor::AlphaCc, NationalAnnex::France) => "alpha_cc_fr",
-            Self::PartialFactor(Factor::GammaS, NationalAnnex::Recommended) => "gamma_s",
-            Self::PartialFactor(Factor::GammaS, NationalAnnex::France) => "gamma_s_fr",
-            Self::PartialFactor(Factor::GammaM0, NationalAnnex::Recommended) => "gamma_m0",
-            Self::PartialFactor(Factor::GammaM0, NationalAnnex::France) => "gamma_m0_fr",
-            Self::PartialFactor(Factor::GammaM1, NationalAnnex::Recommended) => "gamma_m1",
-            Self::PartialFactor(Factor::GammaM1, NationalAnnex::France) => "gamma_m1_fr",
-            Self::PartialFactor(Factor::GammaM2, NationalAnnex::Recommended) => "gamma_m2",
-            Self::PartialFactor(Factor::GammaM2, NationalAnnex::France) => "gamma_m2_fr",
-            Self::PartialFactor(Factor::GammaM, NationalAnnex::Recommended) => "gamma_m",
-            Self::PartialFactor(Factor::GammaM, NationalAnnex::France) => "gamma_m_fr",
+            Self::PartialFactor(factor, annex) => factor.attribute(annex),
         }
     }
 

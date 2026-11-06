@@ -81,6 +81,24 @@ impl Factor {
         }
     }
 
+    /// The name of the `Material` attribute holding the factor's value to `annex`: its key for
+    /// the recommended value, with a `_fr` suffix for the French annex.
+    #[must_use]
+    pub const fn attribute(self, annex: NationalAnnex) -> &'static str {
+        match annex {
+            NationalAnnex::Recommended => self.key(),
+            NationalAnnex::France => match self {
+                Self::GammaC => "gamma_c_fr",
+                Self::AlphaCc => "alpha_cc_fr",
+                Self::GammaS => "gamma_s_fr",
+                Self::GammaM0 => "gamma_m0_fr",
+                Self::GammaM1 => "gamma_m1_fr",
+                Self::GammaM2 => "gamma_m2_fr",
+                Self::GammaM => "gamma_m_fr",
+            },
+        }
+    }
+
     /// The factor with key `key`, if any.
     #[must_use]
     pub fn from_key(key: &str) -> Option<Self> {
@@ -126,6 +144,13 @@ mod tests {
             assert_eq!(Factor::from_key(factor.key()), Some(factor));
         }
         assert_eq!(Factor::from_key("gamma_g"), None);
+        for factor in Factor::ALL {
+            assert_eq!(factor.attribute(NationalAnnex::Recommended), factor.key());
+            assert_eq!(
+                factor.attribute(NationalAnnex::France),
+                format!("{}_fr", factor.key())
+            );
+        }
     }
 
     #[test]

@@ -5,7 +5,7 @@ use core_model::{AttributeValue, EntityId, Model, ModelError, Source};
 use core_txn::ModelCommand;
 use thiserror::Error;
 
-use super::{ENTITY, ReadError, read};
+use super::{ENTITY, ReadError, read, sourced_real, sourced_value};
 use crate::material::MaterialError;
 use crate::property::Property;
 use crate::source::Sourced;
@@ -59,14 +59,12 @@ pub fn originals(model: &Model, id: EntityId) -> Result<Vec<Original>, ModelErro
             .as_ref()
             .and_then(AttributeValue::as_text)
             .and_then(Property::from_name);
-        if let (Some(property), Some(AttributeValue::Sourced(sourced))) =
-            (property, model.get(object, "value")?)
-            && let AttributeValue::Real(value) = sourced.value
+        if let (Some(property), Some(value)) = (property, sourced_real(model.get(object, "value")?))
         {
             originals.push(Original {
                 id: object,
                 property,
-                value: Sourced::new(value, sourced.source),
+                value,
             });
         }
     }
@@ -157,10 +155,6 @@ pub fn delete(model: &Model, id: EntityId) -> Result<ModelCommand, EditError> {
         .chain([ModelCommand::Delete { id }])
         .collect();
     Ok(ModelCommand::Batch { commands })
-}
-
-pub(super) fn sourced_value(value: &Sourced<f64>) -> AttributeValue {
-    AttributeValue::sourced(AttributeValue::Real(value.value), value.source.clone())
 }
 
 fn set(id: EntityId, property: Property, value: &Sourced<f64>) -> ModelCommand {

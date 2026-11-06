@@ -58,7 +58,7 @@ pub fn commands(id: EntityId, material: &Material) -> ModelCommand {
     values.extend(
         material
             .properties()
-            .map(|(property, value)| (property.name().to_owned(), edit::sourced_value(value))),
+            .map(|(property, value)| (property.name().to_owned(), sourced_value(value))),
     );
     ModelCommand::Create {
         id,
@@ -87,13 +87,10 @@ pub fn read(model: &Model, id: EntityId) -> Result<Material, ReadError> {
     let design_code = attribute(model, id, "design_code")?;
     let library_key = attribute(model, id, "library_key")?;
     let mut properties = BTreeMap::new();
+    // Every property, so that a stored value outside the category is refused, not hidden.
     for property in Property::ALL {
-        // The model keeps every value of these sourced attributes with its source (ADR 0018).
-        let Some(AttributeValue::Sourced(sourced)) = model.get(id, property.name())? else {
-            continue;
-        };
-        if let AttributeValue::Real(value) = sourced.value {
-            properties.insert(property, Sourced::new(value, sourced.source));
+        if let Some(value) = sourced_real(model.get(id, property.name())?) {
+            properties.insert(property, value);
         }
     }
     let material = Material::new(&name, category, law, design_code.as_deref(), properties)?;
@@ -105,11 +102,26 @@ fn text(name: &str, value: &str) -> (String, AttributeValue) {
 }
 
 fn attribute(model: &Model, id: EntityId, name: &str) -> Result<Option<String>, ModelError> {
-    Ok(model
-        .get(id, name)?
-        .as_ref()
-        .and_then(AttributeValue::as_text)
-        .map(str::to_owned))
+    Ok(match model.get(id, name)? {
+        Some(AttributeValue::Text(text)) => Some(text),
+        _ => None,
+    })
+}
+
+/// A material property as a sourced attribute value.
+fn sourced_value(value: &Sourced<f64>) -> AttributeValue {
+    AttributeValue::sourced(AttributeValue::Real(value.value), value.source.clone())
+}
+
+/// A sourced attribute value read back as a material property; `None` for anything else.
+fn sourced_real(value: Option<AttributeValue>) -> Option<Sourced<f64>> {
+    let Some(AttributeValue::Sourced(sourced)) = value else {
+        return None;
+    };
+    let AttributeValue::Real(real) = sourced.value else {
+        return None;
+    };
+    Some(Sourced::new(real, sourced.source))
 }
 
 #[cfg(test)]
