@@ -8,16 +8,12 @@ Version 3 of the `core` schema: its [entities](entities.md), [property sets](pro
 
 | Entity | Kind | Description |
 | --- | --- | --- |
-| [Material](entities.md#Material) | resource | A substance that elements are made of, such as a concrete or steel grade (MAT-01). Its behaviour law says how it responds to strain; its properties, in the property sets below, each cite the design-code clause they come from (REP-05). |
+| [Material](entities.md#Material) | resource | A substance that elements are made of, such as a concrete or steel grade (MAT-01). Its behaviour law says how it responds to strain. Each property value cites the document and clause it comes from (REP-05, ADR 0018); a material gives only the properties its category uses (ADR 0019). |
 | [Site](entities.md#Site) | spatial | The piece of land the project stands on, and where it lies on Earth: the projected coordinate reference system, the base point, the grid rotation, the scale and an optional survey point (GEOREF-01, ADR 0017). A project has at most one site. |
 
 ## Property sets
 
-| Property set | Applies to |
-| --- | --- |
-| [BIMCraft_MaterialConcrete](property-sets.md#BIMCraft_MaterialConcrete) | [Material](entities.md#Material) |
-| [BIMCraft_MaterialMechanical](property-sets.md#BIMCraft_MaterialMechanical) | [Material](entities.md#Material) |
-| [BIMCraft_MaterialSteel](property-sets.md#BIMCraft_MaterialSteel) | [Material](entities.md#Material) |
+The schema defines no property sets yet.
 
 ## Enumerations
 

@@ -147,6 +147,30 @@ impl Model {
         })
     }
 
+    /// A model of `namespace` holding the objects of `store`, such as a store read back from a
+    /// project file (ADR 0016). Project files keep objects and their attributes only;
+    /// relationships, property-set values and type links are not saved yet (#35).
+    ///
+    /// # Errors
+    ///
+    /// Fails when the namespace does not pass [`schema::validate`], or when the store holds a
+    /// relationship object or an object `namespace` rejects.
+    pub fn from_store(namespace: &Namespace, store: &Store) -> Result<Self, ModelError> {
+        let mut model = Self::new(namespace)?;
+        for id in store.ids() {
+            if let Some(object) = store.entity(id) {
+                model.insert(id, &object.entity, object.values)?;
+            }
+        }
+        Ok(model)
+    }
+
+    /// The objects and their attribute values, as a project file saves them (ADR 0016).
+    #[must_use]
+    pub const fn store(&self) -> &Store {
+        &self.store
+    }
+
     /// Number of stored objects, relationships included.
     #[must_use]
     pub fn len(&self) -> usize {

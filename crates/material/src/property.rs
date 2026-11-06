@@ -1,105 +1,151 @@
-//! The material properties the core schema defines, and the property sets that hold them.
+//! The material properties the core schema defines, each a sourced attribute of `Material`.
 
-/// The property set for mechanical and physical properties.
-pub const MECHANICAL_SET: &str = "BIMCraft_MaterialMechanical";
-/// The property set for concrete strengths and strains.
-pub const CONCRETE_SET: &str = "BIMCraft_MaterialConcrete";
-/// The property set for steel strengths and ductility.
-pub const STEEL_SET: &str = "BIMCraft_MaterialSteel";
-
-/// A material property (MAT-01). Values are in SI units: stresses in pascals, densities in
-/// kilograms per cubic metre, strains and ratios without unit, expansion per kelvin.
+/// A material property (MAT-01), stored in the `Material` attribute [`Property::name`] gives.
+/// Values are in SI units: stresses and moduli in pascals, densities in kilograms per cubic
+/// metre, strains and ratios without unit, expansion per kelvin, conductivity in W/(m·K) and
+/// specific heat in J/(kg·K).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Property {
-    /// Mass per unit volume.
+    /// Mass per unit volume, in kg/m³.
     MassDensity,
-    /// Modulus of elasticity; for concrete, the secant modulus.
+    /// Modulus of elasticity; for concrete, the secant modulus Ecm.
     YoungModulus,
-    /// Ratio of lateral to axial strain.
+    /// Shear modulus G.
+    ShearModulus,
+    /// Ratio of lateral to axial strain under axial load.
     PoissonRatio,
-    /// Linear thermal expansion, per kelvin.
+    /// Linear thermal expansion coefficient, per kelvin.
     ThermalExpansionCoefficient,
-    /// Characteristic cylinder compressive strength of concrete.
+    /// Thermal conductivity λ, in W/(m·K).
+    ThermalConductivity,
+    /// Specific heat capacity, in J/(kg·K).
+    SpecificHeat,
+    /// Concrete characteristic cylinder compressive strength at 28 days, fck.
     CharacteristicCompressiveStrength,
-    /// Mean cylinder compressive strength of concrete.
+    /// Concrete characteristic cube compressive strength at 28 days, fck,cube.
+    CharacteristicCubeStrength,
+    /// Concrete mean cylinder compressive strength at 28 days, fcm.
     MeanCompressiveStrength,
-    /// Mean axial tensile strength of concrete.
+    /// Concrete mean axial tensile strength, fctm.
     MeanTensileStrength,
-    /// Compressive strain at the peak of the concrete parabola.
+    /// Concrete compressive strain at the peak of the parabola-rectangle diagram, εc2, as a ratio.
     StrainAtPeakStress,
-    /// Ultimate compressive strain of concrete.
+    /// Concrete ultimate compressive strain of the parabola-rectangle diagram, εcu2, as a ratio.
     UltimateCompressiveStrain,
-    /// Exponent of the concrete parabola.
+    /// Exponent n of the parabola of the parabola-rectangle diagram.
     ParabolaExponent,
-    /// Yield strength of steel.
+    /// Concrete compressive strain at the end of the rising branch of the bilinear diagram, εc3, as a ratio.
+    BilinearStrainAtPeakStress,
+    /// Concrete ultimate compressive strain of the bilinear diagram, εcu3, as a ratio.
+    BilinearUltimateCompressiveStrain,
+    /// Steel yield strength: fy for structural steel, fyk for reinforcement.
     YieldStrength,
-    /// Ultimate tensile strength of steel.
+    /// Steel ultimate tensile strength: fu for structural steel, ftk for reinforcement.
     UltimateStrength,
-    /// Strain of steel at maximum load.
-    UltimateStrain,
-    /// Ratio of steel tensile strength to yield strength.
+    /// Ratio k of the tensile strength to the yield strength, at least 1.
     HardeningRatio,
+    /// Steel strain at maximum load: εu for structural steel, εuk for reinforcement, as a ratio.
+    UltimateStrain,
+    /// Timber characteristic bending strength, fm,k.
+    TimberBendingStrength,
+    /// Timber characteristic tensile strength parallel to the grain, ft,0,k.
+    TimberTensileStrength,
+    /// Timber characteristic compressive strength parallel to the grain, fc,0,k.
+    TimberCompressiveStrength,
+    /// Timber characteristic shear strength, fv,k.
+    TimberShearStrength,
+    /// Timber mean modulus of elasticity parallel to the grain, E0,mean.
+    TimberMeanModulus,
+    /// Timber fifth-percentile modulus of elasticity parallel to the grain, E0,05.
+    TimberFifthPercentileModulus,
+    /// Timber mean shear modulus, Gmean.
+    TimberMeanShearModulus,
+    /// Timber characteristic density, ρk.
+    CharacteristicDensity,
+    /// Timber mean density, ρmean.
+    MeanDensity,
+    /// Masonry characteristic compressive strength, fk.
+    MasonryCompressiveStrength,
 }
 
 impl Property {
     /// Every property, in declaration order.
-    pub const ALL: [Self; 14] = [
+    pub const ALL: [Self; 30] = [
         Self::MassDensity,
         Self::YoungModulus,
+        Self::ShearModulus,
         Self::PoissonRatio,
         Self::ThermalExpansionCoefficient,
+        Self::ThermalConductivity,
+        Self::SpecificHeat,
         Self::CharacteristicCompressiveStrength,
+        Self::CharacteristicCubeStrength,
         Self::MeanCompressiveStrength,
         Self::MeanTensileStrength,
         Self::StrainAtPeakStress,
         Self::UltimateCompressiveStrain,
         Self::ParabolaExponent,
+        Self::BilinearStrainAtPeakStress,
+        Self::BilinearUltimateCompressiveStrain,
         Self::YieldStrength,
         Self::UltimateStrength,
-        Self::UltimateStrain,
         Self::HardeningRatio,
+        Self::UltimateStrain,
+        Self::TimberBendingStrength,
+        Self::TimberTensileStrength,
+        Self::TimberCompressiveStrength,
+        Self::TimberShearStrength,
+        Self::TimberMeanModulus,
+        Self::TimberFifthPercentileModulus,
+        Self::TimberMeanShearModulus,
+        Self::CharacteristicDensity,
+        Self::MeanDensity,
+        Self::MasonryCompressiveStrength,
     ];
 
-    /// The property's name in its property set.
+    /// The name of the `Material` attribute that stores the property.
     #[must_use]
     pub const fn name(self) -> &'static str {
         match self {
-            Self::MassDensity => "MassDensity",
-            Self::YoungModulus => "YoungModulus",
-            Self::PoissonRatio => "PoissonRatio",
-            Self::ThermalExpansionCoefficient => "ThermalExpansionCoefficient",
-            Self::CharacteristicCompressiveStrength => "CharacteristicCompressiveStrength",
-            Self::MeanCompressiveStrength => "MeanCompressiveStrength",
-            Self::MeanTensileStrength => "MeanTensileStrength",
-            Self::StrainAtPeakStress => "StrainAtPeakStress",
-            Self::UltimateCompressiveStrain => "UltimateCompressiveStrain",
-            Self::ParabolaExponent => "ParabolaExponent",
-            Self::YieldStrength => "YieldStrength",
-            Self::UltimateStrength => "UltimateStrength",
-            Self::UltimateStrain => "UltimateStrain",
-            Self::HardeningRatio => "HardeningRatio",
+            Self::MassDensity => "density",
+            Self::YoungModulus => "e_modulus",
+            Self::ShearModulus => "shear_modulus",
+            Self::PoissonRatio => "poisson_ratio",
+            Self::ThermalExpansionCoefficient => "thermal_expansion",
+            Self::ThermalConductivity => "thermal_conductivity",
+            Self::SpecificHeat => "specific_heat",
+            Self::CharacteristicCompressiveStrength => "fck",
+            Self::CharacteristicCubeStrength => "fck_cube",
+            Self::MeanCompressiveStrength => "fcm",
+            Self::MeanTensileStrength => "fctm",
+            Self::StrainAtPeakStress => "eps_c2",
+            Self::UltimateCompressiveStrain => "eps_cu2",
+            Self::ParabolaExponent => "n",
+            Self::BilinearStrainAtPeakStress => "eps_c3",
+            Self::BilinearUltimateCompressiveStrain => "eps_cu3",
+            Self::YieldStrength => "fy",
+            Self::UltimateStrength => "fu",
+            Self::HardeningRatio => "k",
+            Self::UltimateStrain => "eps_u",
+            Self::TimberBendingStrength => "fm_k",
+            Self::TimberTensileStrength => "ft0_k",
+            Self::TimberCompressiveStrength => "fc0_k",
+            Self::TimberShearStrength => "fv_k",
+            Self::TimberMeanModulus => "e0_mean",
+            Self::TimberFifthPercentileModulus => "e0_05",
+            Self::TimberMeanShearModulus => "g_mean",
+            Self::CharacteristicDensity => "rho_k",
+            Self::MeanDensity => "rho_mean",
+            Self::MasonryCompressiveStrength => "fk",
         }
     }
 
-    /// The property set that holds the property.
+    /// The property stored under the attribute `name`, if any.
     #[must_use]
-    pub const fn property_set(self) -> &'static str {
-        match self {
-            Self::MassDensity
-            | Self::YoungModulus
-            | Self::PoissonRatio
-            | Self::ThermalExpansionCoefficient => MECHANICAL_SET,
-            Self::CharacteristicCompressiveStrength
-            | Self::MeanCompressiveStrength
-            | Self::MeanTensileStrength
-            | Self::StrainAtPeakStress
-            | Self::UltimateCompressiveStrain
-            | Self::ParabolaExponent => CONCRETE_SET,
-            Self::YieldStrength
-            | Self::UltimateStrength
-            | Self::UltimateStrain
-            | Self::HardeningRatio => STEEL_SET,
-        }
+    pub fn from_name(name: &str) -> Option<Self> {
+        Self::ALL
+            .into_iter()
+            .find(|property| property.name() == name)
     }
 
     /// Whether `value` is physically meaningful for the property.
@@ -107,9 +153,11 @@ impl Property {
     pub fn accepts(self, value: f64) -> bool {
         match self {
             Self::PoissonRatio => (0.0..0.5).contains(&value),
-            Self::StrainAtPeakStress | Self::UltimateCompressiveStrain | Self::UltimateStrain => {
-                value > 0.0 && value < 1.0
-            }
+            Self::StrainAtPeakStress
+            | Self::UltimateCompressiveStrain
+            | Self::BilinearStrainAtPeakStress
+            | Self::BilinearUltimateCompressiveStrain
+            | Self::UltimateStrain => value > 0.0 && value < 1.0,
             Self::HardeningRatio => value.is_finite() && value >= 1.0,
             _ => value.is_finite() && value > 0.0,
         }
@@ -121,11 +169,12 @@ mod tests {
     use super::*;
 
     #[test]
-    fn names_and_sets_follow_the_schema_naming() {
-        assert_eq!(Property::YoungModulus.name(), "YoungModulus");
-        assert_eq!(Property::PoissonRatio.property_set(), MECHANICAL_SET);
-        assert_eq!(Property::ParabolaExponent.property_set(), CONCRETE_SET);
-        assert_eq!(Property::HardeningRatio.property_set(), STEEL_SET);
+    fn properties_round_trip_through_their_attribute_names() {
+        assert_eq!(Property::YoungModulus.name(), "e_modulus");
+        for property in Property::ALL {
+            assert_eq!(Property::from_name(property.name()), Some(property));
+        }
+        assert_eq!(Property::from_name("YoungModulus"), None);
     }
 
     #[test]
@@ -140,9 +189,11 @@ mod tests {
         assert!(!Property::PoissonRatio.accepts(0.5));
         assert!(Property::UltimateStrain.accepts(0.05));
         assert!(!Property::UltimateStrain.accepts(1.0));
+        assert!(Property::BilinearUltimateCompressiveStrain.accepts(0.0035));
         assert!(Property::HardeningRatio.accepts(1.0));
         assert!(!Property::HardeningRatio.accepts(0.99));
         assert!(Property::YoungModulus.accepts(210e9));
         assert!(!Property::YoungModulus.accepts(0.0));
+        assert!(Property::ThermalConductivity.accepts(0.035));
     }
 }

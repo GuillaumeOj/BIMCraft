@@ -1,4 +1,5 @@
-//! Materials in the model: the core schema's `Material` entity and its property sets.
+//! Materials in the model: the core schema's `Material` entity, whose property values are
+//! sourced attributes, so they are saved in the project file with their sources (ADR 0019).
 
 use std::collections::BTreeMap;
 
@@ -34,8 +35,8 @@ pub enum ReadError {
     Model(#[from] ModelError),
 }
 
-/// The command that stores `material` as a new object `id`: the entity, then one property set
-/// per group of properties it gives, each value with its source. Run it through a
+/// The command that stores `material` as a new object `id`: one object holding its name,
+/// category, law, design code and every property value with its source. Run it through a
 /// `core_txn::Document` to make it undoable.
 #[must_use]
 pub fn commands(id: EntityId, material: &Material) -> ModelCommand {
@@ -47,28 +48,16 @@ pub fn commands(id: EntityId, material: &Material) -> ModelCommand {
     if let Some(code) = material.design_code() {
         values.push(text("design_code", code));
     }
-    let mut commands = vec![ModelCommand::Create {
+    values.extend(material.properties().map(|(property, sourced)| {
+        let value =
+            AttributeValue::sourced(AttributeValue::Real(sourced.value), sourced.source.clone());
+        (property.name().to_owned(), value)
+    }));
+    ModelCommand::Create {
         id,
         entity: ENTITY.to_owned(),
         values,
-    }];
-    let mut sets: BTreeMap<&str, Vec<(String, AttributeValue)>> = BTreeMap::new();
-    for (property, sourced) in material.properties() {
-        let value =
-            AttributeValue::sourced(AttributeValue::Real(sourced.value), sourced.source.clone());
-        sets.entry(property.property_set())
-            .or_default()
-            .push((property.name().to_owned(), value));
     }
-    commands.extend(
-        sets.into_iter()
-            .map(|(set, values)| ModelCommand::AttachPropertySet {
-                id,
-                set: set.to_owned(),
-                values,
-            }),
-    );
-    ModelCommand::Batch { commands }
 }
 
 /// Reads material `id` back from the model.
@@ -91,10 +80,8 @@ pub fn read(model: &Model, id: EntityId) -> Result<Material, ReadError> {
     let design_code = attribute(model, id, "design_code")?;
     let mut properties = BTreeMap::new();
     for property in Property::ALL {
-        // The model keeps every value of these sourced properties with its source (ADR 0018).
-        let Some(AttributeValue::Sourced(sourced)) =
-            model.property(id, property.property_set(), property.name())?
-        else {
+        // The model keeps every value of these sourced attributes with its source (ADR 0018).
+        let Some(AttributeValue::Sourced(sourced)) = model.get(id, property.name())? else {
             continue;
         };
         if let AttributeValue::Real(value) = sourced.value {

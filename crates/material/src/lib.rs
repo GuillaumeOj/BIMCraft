@@ -2,8 +2,8 @@
 //! stress for a strain, and design-code [`Property`] values. Every value carries the [`Source`]
 //! it comes from, a document and clause number; this crate never holds standards text (REP-05).
 //!
-//! [`commands`] turns a material into model commands on the core schema's `Material` entity and
-//! its property sets, and [`read`] reads one back.
+//! [`commands`] turns a material into a model command on the core schema's `Material` entity,
+//! and [`read`] reads one back.
 //!
 //! This crate builds for native targets and `wasm32-unknown-unknown` (ARCH-01) and never touches
 //! the platform directly (ARCH-02).
@@ -24,7 +24,7 @@ pub use law::{
 };
 pub use material::{Category, Material, MaterialError};
 pub use model::{ENTITY, ReadError, commands, read};
-pub use property::{CONCRETE_SET, MECHANICAL_SET, Property, STEEL_SET};
+pub use property::Property;
 pub use source::{MAX_TEXT_LEN, Sourced};
 
 /// Property-test settings shared by the crate. A fixed seed keeps runs reproducible; with no

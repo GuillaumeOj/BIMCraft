@@ -296,6 +296,36 @@ fn stores_objects_through_the_attribute_tables() {
 }
 
 #[test]
+fn a_model_rebuilt_from_its_store_keeps_every_object_and_value() {
+    let mut original = model();
+    let name = AttributeValue::Text("W1".into());
+    original
+        .set(id(WALLS[0]), "name", Some(name.clone()))
+        .unwrap();
+    let rebuilt = Model::from_store(&namespace(), original.store()).unwrap();
+    assert_eq!(rebuilt.len(), original.len());
+    for object in original.store().ids() {
+        assert_eq!(rebuilt.entity_of(object), original.entity_of(object));
+    }
+    assert_eq!(rebuilt.get(id(WALLS[0]), "name"), Ok(Some(name)));
+}
+
+#[test]
+fn a_store_with_relationships_does_not_rebuild_a_model() {
+    let original = contained();
+    assert_eq!(
+        Model::from_store(&namespace(), original.store()).map(|model| model.len()),
+        Err(ModelError::RelationshipEntity("Containment".into()))
+    );
+    let mut invalid = namespace();
+    invalid.version = 0;
+    assert!(matches!(
+        Model::from_store(&invalid, model().store()),
+        Err(ModelError::Store(StoreError::InvalidSchema(_)))
+    ));
+}
+
+#[test]
 fn relationship_entities_need_their_roles() {
     let mut model = model();
     assert_eq!(

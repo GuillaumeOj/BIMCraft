@@ -483,11 +483,11 @@ pub(crate) mod tests {
         );
         assert_eq!(
             MaterialError::OutOfRange(Property::PoissonRatio).to_string(),
-            "the property PoissonRatio is out of range"
+            "the property poisson_ratio is out of range"
         );
         assert_eq!(
             MaterialError::MissingProperty(Property::YoungModulus).to_string(),
-            "the behaviour law needs the property YoungModulus"
+            "the behaviour law needs the property e_modulus"
         );
         assert_eq!(
             MaterialError::EmptyName.to_string(),
@@ -499,8 +499,7 @@ pub(crate) mod tests {
         };
         assert_eq!(
             inconsistent.to_string(),
-            "the property MeanCompressiveStrength is below the property \
-             CharacteristicCompressiveStrength"
+            "the property fcm is below the property fck"
         );
         assert_eq!(
             MaterialError::TooLong("name").to_string(),

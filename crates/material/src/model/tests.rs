@@ -7,7 +7,7 @@ use core_txn::{Document, ModelCommand, Origin};
 use schema::Namespace;
 
 use super::*;
-use crate::{LawKind, MECHANICAL_SET, STEEL_SET, Source};
+use crate::{LawKind, Source};
 
 /// The core schema, loaded once for every test.
 static CORE: LazyLock<Namespace> = LazyLock::new(|| {
@@ -54,11 +54,10 @@ fn set(document: &mut Document<ModelCommand>, command: ModelCommand) {
     document.execute(command, Origin::Ui).unwrap();
 }
 
-fn set_property(set: &str, property: &str, value: Option<AttributeValue>) -> ModelCommand {
-    ModelCommand::SetProperty {
+fn set_attribute(attribute: &str, value: Option<AttributeValue>) -> ModelCommand {
+    ModelCommand::Set {
         id: ID,
-        set: set.into(),
-        property: property.into(),
+        attribute: attribute.into(),
         value,
     }
 }
@@ -67,9 +66,7 @@ fn set_property(set: &str, property: &str, value: Option<AttributeValue>) -> Mod
 fn a_material_round_trips_through_the_model() {
     let document = stored();
     assert_eq!(read(document.model(), ID), Ok(s355()));
-    let modulus = document
-        .model()
-        .property(ID, MECHANICAL_SET, "YoungModulus");
+    let modulus = document.model().get(ID, "e_modulus");
     let source = Source::new("EN 1993-1-1:2005", "3.2.6(1)").unwrap();
     assert_eq!(
         modulus,
@@ -90,23 +87,20 @@ fn storing_a_material_is_undoable() {
 }
 
 #[test]
-fn every_property_maps_onto_the_core_schema() {
-    let model = model();
+fn every_property_is_a_sourced_attribute_of_the_core_schema() {
+    let entity = &CORE.entities[ENTITY];
     for property in Property::ALL {
-        let set = model.property_set(property.property_set()).unwrap();
-        let found = set.properties.iter().find(|p| p.name == property.name());
-        assert!(found.is_some_and(|p| p.sourced), "{property:?}");
+        let found = entity.attributes.iter().find(|a| a.name == property.name());
+        assert!(found.is_some_and(|a| a.sourced), "{property:?}");
     }
+    let sourced = entity.attributes.iter().filter(|a| a.sourced).count();
+    assert_eq!(sourced, Property::ALL.len());
 }
 
 #[test]
 fn tampered_materials_are_rejected_with_the_reason() {
     let text = |value: &str| Some(AttributeValue::Text(value.into()));
-    let attribute = |name: &str, value: &str| ModelCommand::Set {
-        id: ID,
-        attribute: name.into(),
-        value: text(value),
-    };
+    let attribute = |name: &str, value: &str| set_attribute(name, text(value));
     let cases = [
         (
             attribute("category", "concrete"),
@@ -116,7 +110,7 @@ fn tampered_materials_are_rejected_with_the_reason() {
             }),
         ),
         (
-            set_property(STEEL_SET, "YieldStrength", None),
+            set_attribute("fy", None),
             ReadError::Invalid(MaterialError::MissingProperty(Property::YieldStrength)),
         ),
     ];
@@ -130,7 +124,7 @@ fn tampered_materials_are_rejected_with_the_reason() {
 #[test]
 fn the_model_rejects_values_without_their_source() {
     let mut document = stored();
-    let command = set_property(STEEL_SET, "YieldStrength", Some(AttributeValue::Real(1.0)));
+    let command = set_attribute("fy", Some(AttributeValue::Real(1.0)));
     assert!(document.execute(command, Origin::Ui).is_err());
     assert_eq!(read(document.model(), ID), Ok(s355()));
 }

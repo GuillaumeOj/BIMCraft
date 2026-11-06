@@ -29,11 +29,10 @@ The piece of land the project stands on, and where it lies on Earth: the project
 
 ### <a id="Material"></a>Material
 
-A substance that elements are made of, such as a concrete or steel grade (MAT-01). Its behaviour law says how it responds to strain; its properties, in the property sets below, each cite the design-code clause they come from (REP-05).
+A substance that elements are made of, such as a concrete or steel grade (MAT-01). Its behaviour law says how it responds to strain. Each property value cites the document and clause it comes from (REP-05, ADR 0018); a material gives only the properties its category uses (ADR 0019).
 
 - **Introduced in:** version 3
 - **IFC:** `IfcMaterial`
-- **Property sets:** [BIMCraft_MaterialMechanical](property-sets.md#BIMCraft_MaterialMechanical), [BIMCraft_MaterialConcrete](property-sets.md#BIMCraft_MaterialConcrete), [BIMCraft_MaterialSteel](property-sets.md#BIMCraft_MaterialSteel)
 
 #### Attributes
 
@@ -43,3 +42,33 @@ A substance that elements are made of, such as a concrete or steel grade (MAT-01
 | `category` | enumeration [MaterialCategory](enumerations.md#MaterialCategory) | required | instance | What the material is. |
 | `behaviour_law` | enumeration [BehaviourLaw](enumerations.md#BehaviourLaw) | required | instance | How stress follows strain. |
 | `design_code` | text | optional | instance | The design code the properties follow, such as `EN 1992-1-1:2004`. |
+| `density` | mass density (kg/m³), sourced | optional | instance | Mass per unit volume, in kg/m³. |
+| `e_modulus` | pressure (Pa), sourced | optional | instance | Modulus of elasticity; for concrete, the secant modulus Ecm. |
+| `shear_modulus` | pressure (Pa), sourced | optional | instance | Shear modulus G. |
+| `poisson_ratio` | real, sourced | optional | instance | Ratio of lateral to axial strain under axial load. |
+| `thermal_expansion` | real, sourced | optional | instance | Linear thermal expansion coefficient, per kelvin. |
+| `thermal_conductivity` | thermal conductivity (W/(m·K)), sourced | optional | instance | Thermal conductivity λ, in W/(m·K). |
+| `specific_heat` | real, sourced | optional | instance | Specific heat capacity, in J/(kg·K). |
+| `fck` | pressure (Pa), sourced | optional | instance | Concrete characteristic cylinder compressive strength at 28 days, fck. |
+| `fck_cube` | pressure (Pa), sourced | optional | instance | Concrete characteristic cube compressive strength at 28 days, fck,cube. |
+| `fcm` | pressure (Pa), sourced | optional | instance | Concrete mean cylinder compressive strength at 28 days, fcm. |
+| `fctm` | pressure (Pa), sourced | optional | instance | Concrete mean axial tensile strength, fctm. |
+| `eps_c2` | real, sourced | optional | instance | Concrete compressive strain at the peak of the parabola-rectangle diagram, εc2, as a ratio. |
+| `eps_cu2` | real, sourced | optional | instance | Concrete ultimate compressive strain of the parabola-rectangle diagram, εcu2, as a ratio. |
+| `n` | real, sourced | optional | instance | Exponent n of the parabola of the parabola-rectangle diagram. |
+| `eps_c3` | real, sourced | optional | instance | Concrete compressive strain at the end of the rising branch of the bilinear diagram, εc3, as a ratio. |
+| `eps_cu3` | real, sourced | optional | instance | Concrete ultimate compressive strain of the bilinear diagram, εcu3, as a ratio. |
+| `fy` | pressure (Pa), sourced | optional | instance | Steel yield strength: fy for structural steel, fyk for reinforcement. |
+| `fu` | pressure (Pa), sourced | optional | instance | Steel ultimate tensile strength: fu for structural steel, ftk for reinforcement. |
+| `k` | real, sourced | optional | instance | Ratio k of the tensile strength to the yield strength, at least 1. |
+| `eps_u` | real, sourced | optional | instance | Steel strain at maximum load: εu for structural steel, εuk for reinforcement, as a ratio. |
+| `fm_k` | pressure (Pa), sourced | optional | instance | Timber characteristic bending strength, fm,k. |
+| `ft0_k` | pressure (Pa), sourced | optional | instance | Timber characteristic tensile strength parallel to the grain, ft,0,k. |
+| `fc0_k` | pressure (Pa), sourced | optional | instance | Timber characteristic compressive strength parallel to the grain, fc,0,k. |
+| `fv_k` | pressure (Pa), sourced | optional | instance | Timber characteristic shear strength, fv,k. |
+| `e0_mean` | pressure (Pa), sourced | optional | instance | Timber mean modulus of elasticity parallel to the grain, E0,mean. |
+| `e0_05` | pressure (Pa), sourced | optional | instance | Timber fifth-percentile modulus of elasticity parallel to the grain, E0,05. |
+| `g_mean` | pressure (Pa), sourced | optional | instance | Timber mean shear modulus, Gmean. |
+| `rho_k` | mass density (kg/m³), sourced | optional | instance | Timber characteristic density, ρk. |
+| `rho_mean` | mass density (kg/m³), sourced | optional | instance | Timber mean density, ρmean. |
+| `fk` | pressure (Pa), sourced | optional | instance | Masonry characteristic compressive strength, fk. |

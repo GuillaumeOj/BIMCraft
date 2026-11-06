@@ -5,14 +5,9 @@ name = "Material"
 kind = "resource"
 doc = """
 A substance that elements are made of, such as a concrete or steel grade (MAT-01). Its behaviour \
-law says how it responds to strain; its properties, in the property sets below, each cite the \
-design-code clause they come from (REP-05).\
+law says how it responds to strain. Each property value cites the document and clause it comes \
+from (REP-05, ADR 0018); a material gives only the properties its category uses (ADR 0019).\
 """
-property_sets = [
-  "BIMCraft_MaterialMechanical",
-  "BIMCraft_MaterialConcrete",
-  "BIMCraft_MaterialSteel",
-]
 
 [ifc]
 entity = "IfcMaterial"
@@ -39,3 +34,183 @@ doc = "How stress follows strain."
 name = "design_code"
 value = "text"
 doc = "The design code the properties follow, such as `EN 1992-1-1:2004`."
+
+[[attribute]]
+name = "density"
+value = "quantity:mass_density"
+sourced = true
+doc = "Mass per unit volume, in kg/m³."
+
+[[attribute]]
+name = "e_modulus"
+value = "quantity:pressure"
+sourced = true
+doc = "Modulus of elasticity; for concrete, the secant modulus Ecm."
+
+[[attribute]]
+name = "shear_modulus"
+value = "quantity:pressure"
+sourced = true
+doc = "Shear modulus G."
+
+[[attribute]]
+name = "poisson_ratio"
+value = "real"
+sourced = true
+doc = "Ratio of lateral to axial strain under axial load."
+
+[[attribute]]
+name = "thermal_expansion"
+value = "real"
+sourced = true
+doc = "Linear thermal expansion coefficient, per kelvin."
+
+[[attribute]]
+name = "thermal_conductivity"
+value = "quantity:thermal_conductivity"
+sourced = true
+doc = "Thermal conductivity λ, in W/(m·K)."
+
+[[attribute]]
+name = "specific_heat"
+value = "real"
+sourced = true
+doc = "Specific heat capacity, in J/(kg·K)."
+
+[[attribute]]
+name = "fck"
+value = "quantity:pressure"
+sourced = true
+doc = "Concrete characteristic cylinder compressive strength at 28 days, fck."
+
+[[attribute]]
+name = "fck_cube"
+value = "quantity:pressure"
+sourced = true
+doc = "Concrete characteristic cube compressive strength at 28 days, fck,cube."
+
+[[attribute]]
+name = "fcm"
+value = "quantity:pressure"
+sourced = true
+doc = "Concrete mean cylinder compressive strength at 28 days, fcm."
+
+[[attribute]]
+name = "fctm"
+value = "quantity:pressure"
+sourced = true
+doc = "Concrete mean axial tensile strength, fctm."
+
+[[attribute]]
+name = "eps_c2"
+value = "real"
+sourced = true
+doc = "Concrete compressive strain at the peak of the parabola-rectangle diagram, εc2, as a ratio."
+
+[[attribute]]
+name = "eps_cu2"
+value = "real"
+sourced = true
+doc = "Concrete ultimate compressive strain of the parabola-rectangle diagram, εcu2, as a ratio."
+
+[[attribute]]
+name = "n"
+value = "real"
+sourced = true
+doc = "Exponent n of the parabola of the parabola-rectangle diagram."
+
+[[attribute]]
+name = "eps_c3"
+value = "real"
+sourced = true
+doc = "Concrete compressive strain at the end of the rising branch of the bilinear diagram, εc3, as a ratio."
+
+[[attribute]]
+name = "eps_cu3"
+value = "real"
+sourced = true
+doc = "Concrete ultimate compressive strain of the bilinear diagram, εcu3, as a ratio."
+
+[[attribute]]
+name = "fy"
+value = "quantity:pressure"
+sourced = true
+doc = "Steel yield strength: fy for structural steel, fyk for reinforcement."
+
+[[attribute]]
+name = "fu"
+value = "quantity:pressure"
+sourced = true
+doc = "Steel ultimate tensile strength: fu for structural steel, ftk for reinforcement."
+
+[[attribute]]
+name = "k"
+value = "real"
+sourced = true
+doc = "Ratio k of the tensile strength to the yield strength, at least 1."
+
+[[attribute]]
+name = "eps_u"
+value = "real"
+sourced = true
+doc = "Steel strain at maximum load: εu for structural steel, εuk for reinforcement, as a ratio."
+
+[[attribute]]
+name = "fm_k"
+value = "quantity:pressure"
+sourced = true
+doc = "Timber characteristic bending strength, fm,k."
+
+[[attribute]]
+name = "ft0_k"
+value = "quantity:pressure"
+sourced = true
+doc = "Timber characteristic tensile strength parallel to the grain, ft,0,k."
+
+[[attribute]]
+name = "fc0_k"
+value = "quantity:pressure"
+sourced = true
+doc = "Timber characteristic compressive strength parallel to the grain, fc,0,k."
+
+[[attribute]]
+name = "fv_k"
+value = "quantity:pressure"
+sourced = true
+doc = "Timber characteristic shear strength, fv,k."
+
+[[attribute]]
+name = "e0_mean"
+value = "quantity:pressure"
+sourced = true
+doc = "Timber mean modulus of elasticity parallel to the grain, E0,mean."
+
+[[attribute]]
+name = "e0_05"
+value = "quantity:pressure"
+sourced = true
+doc = "Timber fifth-percentile modulus of elasticity parallel to the grain, E0,05."
+
+[[attribute]]
+name = "g_mean"
+value = "quantity:pressure"
+sourced = true
+doc = "Timber mean shear modulus, Gmean."
+
+[[attribute]]
+name = "rho_k"
+value = "quantity:mass_density"
+sourced = true
+doc = "Timber characteristic density, ρk."
+
+[[attribute]]
+name = "rho_mean"
+value = "quantity:mass_density"
+sourced = true
+doc = "Timber mean density, ρmean."
+
+[[attribute]]
+name = "fk"
+value = "quantity:pressure"
+sourced = true
+doc = "Masonry characteristic compressive strength, fk."
