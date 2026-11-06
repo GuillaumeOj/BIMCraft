@@ -61,7 +61,7 @@ pub(crate) fn sourced_from_sql(
             Ok(Some(AttributeValue::sourced(value, Source::user())))
         }
         (Some(value), ValueRef::Text(document), ValueRef::Text(clause)) => {
-            let source = Source::new(&text_from(document)?, &text_from(clause)?)
+            let source = Source::new(str_from(document)?, str_from(clause)?)
                 .map_err(|_| PersistError::Corrupt)?;
             Ok(Some(AttributeValue::sourced(value, source)))
         }
@@ -145,7 +145,12 @@ fn bool_from(value: i64) -> Result<bool, PersistError> {
 }
 
 fn text_from(bytes: &[u8]) -> Result<String, PersistError> {
-    String::from_utf8(bytes.to_vec()).map_err(|_| PersistError::Corrupt)
+    str_from(bytes).map(str::to_owned)
+}
+
+/// The text stored in `bytes`, borrowed: sources copy it themselves once trimmed.
+fn str_from(bytes: &[u8]) -> Result<&str, PersistError> {
+    std::str::from_utf8(bytes).map_err(|_| PersistError::Corrupt)
 }
 
 fn id_from_bytes(bytes: &[u8]) -> Result<EntityId, PersistError> {
