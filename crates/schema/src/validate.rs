@@ -306,7 +306,7 @@ fn validate_namespace(namespace: &Namespace, errors: &mut Errors) {
     if errors.too_many(&owner, None, &limits) {
         return;
     }
-    check_type_names(namespace, errors);
+    let record_names = check_type_names(namespace, errors);
     check_ifc_uniqueness(namespace, errors);
     for (key, entity) in &namespace.entities {
         check_key(key, &entity.name, Owner::Entity, errors);
@@ -318,25 +318,25 @@ fn validate_namespace(namespace: &Namespace, errors: &mut Errors) {
     }
     for (key, enumeration) in &namespace.enumerations {
         check_key(key, &enumeration.name, Owner::Enumeration, errors);
-        validate_enumeration(namespace, enumeration, errors);
+        validate_enumeration(namespace, &record_names, enumeration, errors);
     }
 }
 
-fn validate_enumeration(namespace: &Namespace, enumeration: &Enumeration, errors: &mut Errors) {
+/// `record_names` holds the entity and type names, which [`check_type_names`] gathers once.
+fn validate_enumeration(
+    namespace: &Namespace,
+    record_names: &BTreeSet<&str>,
+    enumeration: &Enumeration,
+    errors: &mut Errors,
+) {
     let owner = Owner::Enumeration(enumeration.name.clone());
     check_name(&enumeration.name, NameRule::Pascal, &owner, None, errors);
     check_doc(enumeration.doc.as_deref(), &owner, None, errors);
     // Generated code and the API's JSON Schema give enumerations, entities, types and property
     // sets one namespace of names.
-    let taken = namespace.entities.contains_key(&enumeration.name)
+    if record_names.contains(enumeration.name.as_str())
         || namespace.property_sets.contains_key(&enumeration.name)
-        || namespace.entities.values().any(|entity| {
-            entity
-                .type_def
-                .as_ref()
-                .is_some_and(|type_def| type_def.name == enumeration.name)
-        });
-    if taken {
+    {
         let kind = ValidationErrorKind::Duplicate {
             name: enumeration.name.clone(),
         };
@@ -374,8 +374,9 @@ fn check_key(key: &str, name: &str, owner: fn(String) -> Owner, errors: &mut Err
     }
 }
 
-/// Type names share the entity namespace: generated code and the API name both.
-fn check_type_names(namespace: &Namespace, errors: &mut Errors) {
+/// Type names share the entity namespace: generated code and the API name both. Returns the
+/// entity and type names.
+fn check_type_names<'a>(namespace: &'a Namespace, errors: &mut Errors) -> BTreeSet<&'a str> {
     let mut seen: BTreeSet<&str> = namespace.entities.keys().map(String::as_str).collect();
     for entity in namespace.entities.values() {
         if let Some(type_def) = &entity.type_def
@@ -390,6 +391,7 @@ fn check_type_names(namespace: &Namespace, errors: &mut Errors) {
             );
         }
     }
+    seen
 }
 
 /// Import rebuilds an entity from its IFC mapping, so no two entities may share one.

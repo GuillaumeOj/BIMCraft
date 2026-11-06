@@ -122,7 +122,7 @@ impl<'a> EntityTable<'a> {
     /// `INSERT` statement taking the id then every column, in order. Columns are named, so
     /// their order in the file does not matter: migrations append the columns they add.
     pub fn insert_sql(&self) -> String {
-        let placeholders = ", ?".repeat(self.sql_columns().count());
+        let placeholders = ", ?".repeat(self.columns.iter().map(Column::width).sum());
         format!(
             "INSERT INTO {} ({}) VALUES (?{placeholders})",
             quote(&self.name),
