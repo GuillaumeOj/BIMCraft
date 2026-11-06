@@ -12,7 +12,10 @@ How the stress in a material follows its strain.
 | --- | --- |
 | `linear_elastic` | Stress proportional to strain, in tension and compression. |
 | `concrete_parabola_rectangle` | The parabola-rectangle diagram for concrete in compression (EN 1992-1-1, 3.1.7). |
+| `concrete_bilinear` | The bi-linear diagram for concrete in compression (EN 1992-1-1, 3.1.7(2)). |
 | `steel_bilinear` | Linear up to yield, then a hardening or horizontal branch (EN 1992-1-1, 3.2.7; EN 1993-1-1, 5.4.3). |
+| `timber_elastic_brittle` | Linear up to the strength, brittle in tension and plastic in compression, for timber parallel to the grain (EN 1995-1-1). |
+| `none` | No structural behaviour: the material carries no stress in design. |
 
 ## <a id="MaterialCategory"></a>MaterialCategory
 

@@ -1446,7 +1446,10 @@
           "enum": [
             "linear_elastic",
             "concrete_parabola_rectangle",
-            "steel_bilinear"
+            "concrete_bilinear",
+            "steel_bilinear",
+            "timber_elastic_brittle",
+            "none"
           ],
           "type": "string"
         },

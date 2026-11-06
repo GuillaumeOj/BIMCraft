@@ -21,8 +21,8 @@ mod source;
 pub use annex::{Factor, NationalAnnex};
 pub use core_model::{Source, SourceError};
 pub use law::{
-    BehaviourLaw, ConcreteParabolaRectangle, Hardening, LawError, LawKind, LinearElastic,
-    SteelBilinear,
+    BehaviourLaw, ConcreteBilinear, ConcreteParabolaRectangle, Hardening, LawError, LawKind,
+    LinearElastic, SteelBilinear, TimberElasticBrittle,
 };
 pub use material::{Category, Material, MaterialError};
 pub use model::{

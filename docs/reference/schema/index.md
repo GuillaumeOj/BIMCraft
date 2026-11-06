@@ -20,5 +20,5 @@ The schema defines no property sets yet.
 
 | Enumeration | Items |
 | --- | --- |
-| [BehaviourLaw](enumerations.md#BehaviourLaw) | `linear_elastic`, `concrete_parabola_rectangle`, `steel_bilinear` |
+| [BehaviourLaw](enumerations.md#BehaviourLaw) | `linear_elastic`, `concrete_parabola_rectangle`, `concrete_bilinear`, `steel_bilinear`, `timber_elastic_brittle`, `none` |
 | [MaterialCategory](enumerations.md#MaterialCategory) | `concrete`, `reinforcement`, `steel`, `timber`, `masonry`, `insulation`, `finish`, `generic` |

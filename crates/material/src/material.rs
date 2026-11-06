@@ -7,8 +7,8 @@ use thiserror::Error;
 
 use crate::annex::{Factor, NationalAnnex};
 use crate::law::{
-    BehaviourLaw, ConcreteParabolaRectangle, Hardening, LawError, LawKind, LinearElastic,
-    SteelBilinear,
+    BehaviourLaw, ConcreteBilinear, ConcreteParabolaRectangle, Hardening, LawError, LawKind,
+    LinearElastic, SteelBilinear, TimberElasticBrittle,
 };
 use crate::property::Property;
 use crate::source::{MAX_TEXT_LEN, Sourced, bounded_text};
@@ -124,8 +124,16 @@ impl Category {
         matches!(
             (self, law),
             (_, LawKind::LinearElastic)
-                | (Self::Concrete, LawKind::ConcreteParabolaRectangle)
+                | (
+                    Self::Concrete,
+                    LawKind::ConcreteParabolaRectangle | LawKind::ConcreteBilinear
+                )
                 | (Self::Reinforcement | Self::Steel, LawKind::SteelBilinear)
+                | (Self::Timber, LawKind::TimberElasticBrittle)
+                | (
+                    Self::Masonry | Self::Insulation | Self::Finish | Self::Generic,
+                    LawKind::None
+                )
         )
     }
 
@@ -244,10 +252,11 @@ impl Material {
     /// A material named `name` following a law of kind `law`, whose parameters come from
     /// `properties`; `design_code` names the code the values follow.
     ///
-    /// The laws read these properties: linear elastic, [`Property::YoungModulus`]; concrete,
-    /// the characteristic compressive strength, the peak and ultimate strains and the parabola
-    /// exponent; steel, the yield strength and Young's modulus, plus the hardening ratio and
-    /// ultimate strain, which make it harden instead of staying perfectly plastic.
+    /// The laws read these properties: linear elastic, [`Property::YoungModulus`]; concrete
+    /// parabola-rectangle, the characteristic compressive strength, εc2, εcu2 and the parabola
+    /// exponent; concrete bi-linear, the strength, εc3 and εcu3; steel, the yield strength and
+    /// Young's modulus, plus the hardening ratio and ultimate strain, which make it harden
+    /// instead of staying perfectly plastic; timber, E0,mean, ft,0,k and fc,0,k; none, nothing.
     ///
     /// # Errors
     ///
@@ -472,6 +481,19 @@ fn build_law(
                 value(Property::ParabolaExponent)?,
             )?)
         }
+        LawKind::ConcreteBilinear => BehaviourLaw::ConcreteBilinear(ConcreteBilinear::new(
+            Quantity::from_si(value(Property::CharacteristicCompressiveStrength)?),
+            value(Property::BilinearStrainAtPeakStress)?,
+            value(Property::BilinearUltimateCompressiveStrain)?,
+        )?),
+        LawKind::TimberElasticBrittle => {
+            BehaviourLaw::TimberElasticBrittle(TimberElasticBrittle::new(
+                Quantity::from_si(value(Property::TimberMeanModulus)?),
+                Quantity::from_si(value(Property::TimberTensileStrength)?),
+                Quantity::from_si(value(Property::TimberCompressiveStrength)?),
+            )?)
+        }
+        LawKind::None => BehaviourLaw::None,
         LawKind::SteelBilinear => {
             let hardening = if properties.contains_key(&Property::HardeningRatio)
                 || properties.contains_key(&Property::UltimateStrain)
@@ -899,6 +921,98 @@ pub(crate) mod tests {
             c30_37().with_property(gamma_c, Some(sourced(0.5, "2.4.2.4"))),
             Err(MaterialError::OutOfRange(gamma_c))
         );
+    }
+
+    #[test]
+    fn the_new_laws_build_from_their_properties() {
+        let concrete = Material::new(
+            "C30/37",
+            Category::Concrete,
+            LawKind::ConcreteBilinear,
+            None,
+            BTreeMap::from([
+                (
+                    Property::CharacteristicCompressiveStrength,
+                    sourced(30e6, "Table 3.1"),
+                ),
+                (
+                    Property::BilinearStrainAtPeakStress,
+                    sourced(0.001_75, "Table 3.1"),
+                ),
+                (
+                    Property::BilinearUltimateCompressiveStrain,
+                    sourced(0.0035, "Table 3.1"),
+                ),
+            ]),
+        )
+        .unwrap();
+        assert_eq!(concrete.law().stress(-0.002), Ok(Quantity::from_si(-30e6)));
+        let en14080 =
+            |value, clause| Sourced::new(value, Source::new("EN 14080:2013", clause).unwrap());
+        let mut timber_properties = BTreeMap::from([
+            (Property::TimberBendingStrength, en14080(24e6, "Table 5")),
+            (Property::TimberMeanModulus, en14080(11.5e9, "Table 5")),
+            (Property::TimberTensileStrength, en14080(19.2e6, "Table 5")),
+        ]);
+        let timber = |properties: &BTreeMap<_, _>| {
+            Material::new(
+                "GL24h",
+                Category::Timber,
+                LawKind::TimberElasticBrittle,
+                None,
+                properties.clone(),
+            )
+        };
+        assert_eq!(
+            timber(&timber_properties),
+            Err(MaterialError::MissingProperty(
+                Property::TimberCompressiveStrength
+            ))
+        );
+        timber_properties.insert(
+            Property::TimberCompressiveStrength,
+            en14080(24e6, "Table 5"),
+        );
+        let glulam = timber(&timber_properties).unwrap();
+        assert_eq!(glulam.law().stress(-0.01), Ok(Quantity::from_si(-24e6)));
+        let wool = Material::new(
+            "Mineral wool",
+            Category::Insulation,
+            LawKind::None,
+            None,
+            BTreeMap::from([(Property::ThermalConductivity, sourced(0.035, "Table 1"))]),
+        )
+        .unwrap();
+        assert_eq!(wool.law(), &BehaviourLaw::None);
+        assert_eq!(
+            wool.design_law(NationalAnnex::France),
+            Ok(BehaviourLaw::None)
+        );
+    }
+
+    #[test]
+    fn each_category_allows_only_its_laws() {
+        use LawKind::{ConcreteBilinear, None, TimberElasticBrittle};
+        assert!(Category::Concrete.allows(ConcreteBilinear));
+        assert!(!Category::Steel.allows(ConcreteBilinear));
+        assert!(Category::Timber.allows(TimberElasticBrittle));
+        assert!(!Category::Concrete.allows(TimberElasticBrittle));
+        for category in [
+            Category::Masonry,
+            Category::Insulation,
+            Category::Finish,
+            Category::Generic,
+        ] {
+            assert!(category.allows(None), "{category:?}");
+        }
+        for category in [
+            Category::Concrete,
+            Category::Reinforcement,
+            Category::Steel,
+            Category::Timber,
+        ] {
+            assert!(!category.allows(None), "{category:?}");
+        }
     }
 
     #[test]
