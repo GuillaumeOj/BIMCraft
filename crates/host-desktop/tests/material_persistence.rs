@@ -3,6 +3,7 @@
 
 use std::collections::BTreeMap;
 use std::path::Path;
+use std::sync::LazyLock;
 
 use core_model::{EntityId, Model, Source};
 use core_txn::{Document, ModelCommand, Origin};
@@ -12,6 +13,10 @@ use persist::{Connection, Schema, open_model, open_project, save_model};
 use proptest::prelude::*;
 use schema::Namespace;
 use tempfile::TempDir;
+
+/// The core schema the application embeds, parsed once for every test.
+#[cfg(test)] // Lets the initialiser unwrap, as tests may (clippy.toml).
+static NAMESPACE: LazyLock<Namespace> = LazyLock::new(|| core_namespace().unwrap());
 
 #[cfg(test)] // Lets the helper unwrap, as tests may (clippy.toml).
 fn sourced(value: f64, document: &str, clause: &str) -> Sourced<f64> {
@@ -137,9 +142,9 @@ fn assert_same(saved: &Model, reopened: &Model, materials: &[Material]) {
 
 #[test]
 fn materials_keep_every_value_and_source_after_reopening() {
-    let namespace = core_namespace().unwrap();
+    let namespace = &*NAMESPACE;
     let mut materials = materials();
-    let mut document = Document::<ModelCommand>::new(model_with(&namespace, &materials));
+    let mut document = Document::<ModelCommand>::new(model_with(namespace, &materials));
     // The user edits fck of C30/37 and fu of S355: their library values are kept aside.
     let concrete = EntityId::new(1);
     let steel = EntityId::new(2);
@@ -163,8 +168,8 @@ fn materials_keep_every_value_and_source_after_reopening() {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("materials.bim");
 
-    save(&path, &namespace, &saved);
-    let reopened = reopen(&path, &namespace);
+    save(&path, namespace, &saved);
+    let reopened = reopen(&path, namespace);
 
     assert_same(&saved, &reopened, &materials);
     for id in [concrete, steel] {
@@ -257,12 +262,12 @@ proptest! {
     ) {
         let materials: Vec<Material> = materials.into_iter().flatten().collect();
         prop_assume!(!materials.is_empty());
-        let namespace = core_namespace().unwrap();
-        let saved = model_with(&namespace, &materials);
+        let namespace = &*NAMESPACE;
+        let saved = model_with(namespace, &materials);
         let dir = TempDir::new().unwrap();
         let path = dir.path().join("random.bim");
-        save(&path, &namespace, &saved);
-        let reopened = reopen(&path, &namespace);
+        save(&path, namespace, &saved);
+        let reopened = reopen(&path, namespace);
         assert_same(&saved, &reopened, &materials);
     }
 }
