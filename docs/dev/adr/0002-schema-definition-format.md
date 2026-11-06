@@ -60,7 +60,7 @@ Every definition file starts with `format`, the version of the definition file f
 
 | Key | Content |
 | --- | --- |
-| `[entity]` | `name`, `kind` (`element`, `spatial`, `relationship`, `resource`, …), `doc`, optional `deprecated` (version), `property_sets` (CORE-04) |
+| `[entity]` | `name`, `kind` (`element`, `spatial`, `relationship`, `resource`, …; a `resource` such as a material has no type and no representation, [ADR 0019](0019-materials-and-layered-build-ups.md)), `doc`, optional `deprecated` (version), `property_sets` (CORE-04) |
 | `[type]` | For elements with types (CORE-02): `doc`. The type is named `<Entity>Type`, unless `name` overrides it |
 | `[ifc]` | `entity` and `predefined_type` (CORE-10); for `USERDEFINED`, `object_type`. The IFC type entity is `<entity>Type`, unless `type_entity` overrides it |
 | `[[attribute]]` | `name`, `value`, `required` or `default`, `on`, `doc`, and `sourced` when each value carries the document and clause it comes from ([ADR 0018](0018-sourced-values.md)) |
