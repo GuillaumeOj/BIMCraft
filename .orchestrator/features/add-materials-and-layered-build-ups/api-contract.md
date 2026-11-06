@@ -70,3 +70,16 @@ Errors (with `index` of the offending layer where it applies): `not_found`, `inv
 ## Generated types
 
 The backend adds the methods to the protocol schema (`schema/api/protocol.schema.json`) and regenerates `ui/src/api/protocol.gen.ts`. Frontend writes the typed helpers (`ui/src/api/materials.ts`, `ui/src/api/buildups.ts`) on top of them, as `ui/src/api/georef.ts` does.
+
+## Amendments (lead, after the UX notes)
+
+These answer the open questions of `design/ux-notes.md` and supersede the tables above where they differ.
+
+1. **Annex-dependent values are addressable.** `materials.create` and `materials.update` take `properties: { key: string, annex?: Annex, value: number | null }[]` instead of a key → value map. `annex` is required for annex-dependent keys (partial factors) and refused for the others (`invalid_value` with `key`).
+2. **Range hints.** `PropertyValue` gains `range: { min: number | null, min_inclusive: boolean, max: number | null, max_inclusive: boolean }`, so the UI can say "Between 0 and 0.5." The server still enforces it.
+3. **Law branch.** `Law` gains `branch: "horizontal" | "inclined" | null` (reinforcement top branch, steel hardening).
+4. **Design codes on the wire** are keys (`"en1992-1-1"`); the UI shows the label.
+5. **No stress–strain curve query** in this feature. The detail pane shows the law name and its source.
+6. **`buildups.preview` (query)**, so the UI never recomputes material maths (ENG-04): params `{ usage: Usage, layers: LayerInput[] }`; result `{ layers: { priority, core, thermal_resistance: number | null }[], total_thickness, thermal_resistance, layers_without_thermal_data: number, errors: { code, index? }[] }`. It validates without saving and returns every error at once. The editor calls it on each draft change (debounced) for the live totals and the inline errors; Apply still calls `create`/`update`.
+7. **Partial thermal resistance.** `thermal_resistance` (in `get`, `preview`) is the sum over the layers whose material has λ, and `layers_without_thermal_data` counts the others (air gaps included: conventional air-layer resistances belong to the thermal module). It is `null` only when no layer has λ. The UI shows the sum with "N layers without thermal data".
+8. **Air gaps.** New error `invalid_material` (with `index`): an `air_gap` layer whose material is not of category `generic`. The picker offers only `generic` materials for an air gap.
