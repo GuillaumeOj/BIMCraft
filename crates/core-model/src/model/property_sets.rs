@@ -308,10 +308,11 @@ impl Model {
     ) -> Result<Option<Quantity<U>>, ModelError> {
         self.check_quantity::<U>(set, property)?;
         let value = value.map(|quantity| AttributeValue::Real(quantity.si()));
-        Ok(match self.set_property(id, set, property, value)? {
-            Some(AttributeValue::Real(si)) => Some(Quantity::from_si(si)),
-            _ => None,
-        })
+        Ok(self
+            .set_property(id, set, property, value)?
+            .as_ref()
+            .and_then(AttributeValue::as_real)
+            .map(Quantity::from_si))
     }
 
     /// The definition of `set`, which must apply to the entity of the object with this id, and

@@ -2,7 +2,7 @@ use schema::{Attribute, Placement, Presence, PropertySet, ValueType};
 
 use super::tests::{STOREY, WALLS, bool, id, model, text, wall_common};
 use super::*;
-use crate::units::{Area, AreaUnit, Dimension, Length, LengthUnit};
+use crate::units::{Area, AreaUnit, Dimension, Length, LengthUnit, Stress, StressUnit};
 
 const BUILT_IN: &str = "Pset_WallCommon";
 const CUSTOM: &str = "Acme_WallChecks";
@@ -559,6 +559,19 @@ fn sourced_properties_keep_value_and_source_together() {
             error: StoreError::UnexpectedSource("Reference".into()),
         })
     );
+    // Quantities see through the source, when read and when replaced.
+    let strength = Stress::new(30.0, StressUnit::Megapascal);
+    assert_eq!(
+        model.quantity_property::<StressUnit>(wall, CUSTOM, "Strength"),
+        Ok(Some(strength))
+    );
+    assert_eq!(
+        model.set_quantity_property::<StressUnit>(wall, CUSTOM, "Strength", None),
+        Ok(Some(strength))
+    );
+    model
+        .set_property(wall, CUSTOM, "Strength", Some(sourced.clone()))
+        .unwrap();
     assert_eq!(
         model.set_property(wall, CUSTOM, "Strength", None),
         Ok(Some(sourced))
