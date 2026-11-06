@@ -103,3 +103,17 @@ Merge order: T1 (end of PR 1); T2, T4, T5 (end of PR 2); T6, T7, T8 (end of PR 3
 - Targeted checks only (AGENTS.md §3a): `cargo test`/`clippy` on the crates touched, `cargo fmt --all --check`, the `wasm` section for the new core crate, `bun scripts/check-architecture.ts` for the new crate, `scripts/check-all.sh repo` before each commit; `bunx vitest`/`biome`/`tsc` and the Playwright spec for the UI.
 - Conventional Commits, signed off, with the issue (`Refs #85`…) and requirement IDs. No `wip` subjects: orchestrated agents cannot reword commits.
 - Each task is reviewed by its owner (`/code-review` with fixes, then `/simplify`) before it is reported done.
+
+## Amendment A1 (lead, 2026-11-06): port the existing work, then extend it
+
+The epic already has an implementation on local branches `claude/244-material-objects` (049946f, bcc65b5, f043f25, d661647, 22c21c5), `claude/245-european-grades` (3940bbe) and `claude/246-layer-sets` (02dbe20), written for issues #244–#246, which refine #85–#87, on a main 118 commits old. The user left the choice to the lead. Decision: **port it, don't rewrite it**, then extend it to this spec. It supersedes D1–D5 where they differ:
+
+- **Crate name `material`** (singular, as in the existing work, like `geom` and `georef`). Read `materials` as `material` everywhere above.
+- **Kept from the port:** the `resource` kind, schema **enumerations** (closed sets are `enum:` types, not text), property-set docs, **sourced values** (`sourced = true`, `core_model::Source`), and the `material` crate with its laws, library loader (`Library::builtin`, `Library::extend`) and layer sets on `geom::LayerSet`.
+- **Renumbering:** the ported ADR "sourced values" becomes **0018**; "Materials and layered build-ups" becomes **0019**. Core schema snapshots follow the Site's 0002: one new version per PR that changes the schema.
+- **Gate: values must persist.** Property-set values are not written to the project file yet (ADR 0013, #35). Before T1's code is accepted, a material saved, closed and reopened must keep every value and source. If the ported design stores values in property sets that do not persist, T1 either stores them as sourced attributes or makes those property sets persist. It is the backend's choice, stated in its revised plan.
+- **Extensions still owed, per this spec:**
+  - T1: "Entered by user" sources and reset with the library original kept (D4); national annexes and partial factors (D3); the 8 categories; the concrete bilinear, timber elastic-brittle and `none` laws; and the limit-strain and initial-modulus queries.
+  - T2: the library grows from 13 grades to about 40 (D4), and the `materials.*` API.
+  - T6: `usage`, `function` and `description`; priority 1–5 with defaults by function, mapped to IFC 0–100 in ADR 0019; and the `buildups.*` API. The existing entity names `MaterialLayerSet` / `MaterialLayer` are kept instead of `BuildUp` / `BuildUpLayer` (IFC names); the API stays `buildups.*`.
+- **Commits:** ported commits keep their subject and body, with the references rewritten to this stack's issue (`Refs #85` for T1, `#86` for T2, `#87` for T6) and `#244`/`#245`/`#246` kept as `Refs`. Each ends with the sign-off. The user docs `choose-a-material.md` (EN/FR) from 3940bbe are merged into T5's page `manage-project-materials.md`, so that only one page remains.
