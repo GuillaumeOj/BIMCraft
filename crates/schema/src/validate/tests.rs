@@ -848,7 +848,7 @@ fn keys_must_match_names() {
 #[test]
 fn entity_kind_names() {
     let names: Vec<_> = EntityKind::ALL.iter().map(|kind| kind.name()).collect();
-    assert_eq!(names, ["element", "spatial", "relationship"]);
+    assert_eq!(names, ["element", "spatial", "relationship", "resource"]);
 }
 
 fn arbitrary_value_type() -> impl Strategy<Value = ValueType> {

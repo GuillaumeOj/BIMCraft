@@ -10,6 +10,7 @@ Checks: validation rejects an entity with no mapping; `cargo test -p interop-ifc
 | --- | --- | --- | --- | --- | --- |
 | `Beam` | element | `IfcBeam` | `BEAM` |  | `IfcBeamType` |
 | `Containment` | relationship | `IfcRelContainedInSpatialStructure` |  |  |  |
+| `Material` | resource | `IfcMaterial` |  |  |  |
 | `Opening` | element | `IfcOpeningElement` | `OPENING` |  |  |
 | `Recess` | element | `IfcOpeningElement` | `USERDEFINED` | `Recess` |  |
 | `Storey` | spatial | `IfcBuildingStorey` |  |  |  |

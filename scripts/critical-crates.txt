@@ -6,6 +6,7 @@ core-model
 core-txn
 persist
 geom
+material
 georef
 analysis
 api

@@ -1,0 +1,67 @@
+# Strength and strain properties of a concrete grade, each with its source. An IFC export writes the
+# values to Pset_MaterialConcrete.
+format = 1
+
+[property_set]
+name = "BIMCraft_MaterialConcrete"
+applies_to = ["Material"]
+
+[[property]]
+name = "CharacteristicCompressiveStrength"
+value = "quantity:pressure"
+doc = "Characteristic cylinder compressive strength at 28 days."
+
+[[property]]
+name = "CharacteristicCompressiveStrengthSource"
+value = "text"
+doc = "Design-code document and clause that CharacteristicCompressiveStrength comes from, such as `EN 1992-1-1:2004, Table 3.1`."
+
+[[property]]
+name = "MeanCompressiveStrength"
+value = "quantity:pressure"
+doc = "Mean cylinder compressive strength at 28 days."
+
+[[property]]
+name = "MeanCompressiveStrengthSource"
+value = "text"
+doc = "Design-code document and clause that MeanCompressiveStrength comes from, such as `EN 1992-1-1:2004, Table 3.1`."
+
+[[property]]
+name = "MeanTensileStrength"
+value = "quantity:pressure"
+doc = "Mean axial tensile strength."
+
+[[property]]
+name = "MeanTensileStrengthSource"
+value = "text"
+doc = "Design-code document and clause that MeanTensileStrength comes from, such as `EN 1992-1-1:2004, Table 3.1`."
+
+[[property]]
+name = "StrainAtPeakStress"
+value = "real"
+doc = "Compressive strain at which the parabola reaches the peak stress, as a ratio."
+
+[[property]]
+name = "StrainAtPeakStressSource"
+value = "text"
+doc = "Design-code document and clause that StrainAtPeakStress comes from, such as `EN 1992-1-1:2004, Table 3.1`."
+
+[[property]]
+name = "UltimateCompressiveStrain"
+value = "real"
+doc = "Ultimate compressive strain, as a ratio."
+
+[[property]]
+name = "UltimateCompressiveStrainSource"
+value = "text"
+doc = "Design-code document and clause that UltimateCompressiveStrain comes from, such as `EN 1992-1-1:2004, Table 3.1`."
+
+[[property]]
+name = "ParabolaExponent"
+value = "real"
+doc = "Exponent of the parabola of the parabola-rectangle diagram."
+
+[[property]]
+name = "ParabolaExponentSource"
+value = "text"
+doc = "Design-code document and clause that ParabolaExponent comes from, such as `EN 1992-1-1:2004, Table 3.1`."

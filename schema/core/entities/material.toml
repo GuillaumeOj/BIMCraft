@@ -1,0 +1,44 @@
+format = 1
+
+[entity]
+name = "Material"
+kind = "resource"
+doc = """
+A substance that elements are made of, such as a concrete or steel grade (MAT-01). Its behaviour \
+law says how it responds to strain; its properties, in the property sets below, each cite the \
+design-code clause they come from (REP-05).\
+"""
+property_sets = [
+  "BIMCraft_MaterialMechanical",
+  "BIMCraft_MaterialConcrete",
+  "BIMCraft_MaterialSteel",
+]
+
+[ifc]
+entity = "IfcMaterial"
+
+[[attribute]]
+name = "name"
+value = "text"
+required = true
+doc = "The material's name, such as `C30/37` or `S355`."
+
+[[attribute]]
+name = "category"
+value = "text"
+required = true
+doc = "One of `concrete`, `reinforcing_steel`, `structural_steel` or `other`."
+
+[[attribute]]
+name = "behaviour_law"
+value = "text"
+required = true
+doc = """
+How stress follows strain: `linear_elastic`, `concrete_parabola_rectangle` or \
+`steel_bilinear`.\
+"""
+
+[[attribute]]
+name = "design_code"
+value = "text"
+doc = "The design code the properties follow, such as `EN 1992-1-1:2004`."

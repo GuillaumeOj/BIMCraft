@@ -120,3 +120,18 @@ Cuts an opening or a recess into its host.
 | --- | --- | --- | --- |
 | `host` | [Wall](#Wall), [Beam](#Beam) | one | no |
 | `opening` | [Opening](#Opening), [Recess](#Recess) | one | yes |
+
+## Resources
+
+### <a id="Material"></a>Material
+
+A substance that elements are made of.
+
+- **Introduced in:** version 2
+- **IFC:** `IfcMaterial`
+
+#### Attributes
+
+| Attribute | Value | Presence | Set on | Description |
+| --- | --- | --- | --- | --- |
+| `name` | text | required | instance |  |

@@ -435,6 +435,7 @@ mod tests {
                 RoleTarget::Kind(EntityKind::Element),
                 RoleTarget::Kind(EntityKind::Spatial),
                 RoleTarget::Kind(EntityKind::Relationship),
+                RoleTarget::Kind(EntityKind::Resource),
                 RoleTarget::Entity("Wall".into()),
             ],
             cardinality: Cardinality::One,

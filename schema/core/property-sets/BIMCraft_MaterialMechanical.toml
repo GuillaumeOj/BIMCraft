@@ -1,0 +1,47 @@
+# Mechanical and physical properties of a material, each with its source. An IFC export writes the
+# values to Pset_MaterialCommon and Pset_MaterialMechanical.
+format = 1
+
+[property_set]
+name = "BIMCraft_MaterialMechanical"
+applies_to = ["Material"]
+
+[[property]]
+name = "MassDensity"
+value = "quantity:mass_density"
+doc = "Mass per unit volume."
+
+[[property]]
+name = "MassDensitySource"
+value = "text"
+doc = "Design-code document and clause that MassDensity comes from, such as `EN 1992-1-1:2004, Table 3.1`."
+
+[[property]]
+name = "YoungModulus"
+value = "quantity:pressure"
+doc = "Modulus of elasticity; for concrete, the secant modulus."
+
+[[property]]
+name = "YoungModulusSource"
+value = "text"
+doc = "Design-code document and clause that YoungModulus comes from, such as `EN 1992-1-1:2004, Table 3.1`."
+
+[[property]]
+name = "PoissonRatio"
+value = "real"
+doc = "Ratio of lateral to axial strain under axial load."
+
+[[property]]
+name = "PoissonRatioSource"
+value = "text"
+doc = "Design-code document and clause that PoissonRatio comes from, such as `EN 1992-1-1:2004, Table 3.1`."
+
+[[property]]
+name = "ThermalExpansionCoefficient"
+value = "real"
+doc = "Linear thermal expansion, per kelvin."
+
+[[property]]
+name = "ThermalExpansionCoefficientSource"
+value = "text"
+doc = "Design-code document and clause that ThermalExpansionCoefficient comes from, such as `EN 1992-1-1:2004, Table 3.1`."

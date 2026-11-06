@@ -70,6 +70,20 @@ pub struct Containment {
     pub elements: Vec<crate::EntityId>,
 }
 
+/// A substance that elements are made of.
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+#[allow(
+    clippy::doc_markdown,
+    clippy::struct_excessive_bools,
+    clippy::struct_field_names,
+    reason = "docs and names come from the schema definitions, not from Rust authors"
+)]
+pub struct Material {
+    /// The `name` value.
+    pub name: String,
+}
+
 /// A void through a wall or a slab.
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]

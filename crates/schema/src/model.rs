@@ -50,11 +50,19 @@ pub enum EntityKind {
     Spatial,
     /// A first-class relationship between objects (CORE-03).
     Relationship,
+    /// A resource that objects refer to but that is not placed in the model by itself: a
+    /// material, a material layer, a grid axis.
+    Resource,
 }
 
 impl EntityKind {
     /// Every kind.
-    pub const ALL: [Self; 3] = [Self::Element, Self::Spatial, Self::Relationship];
+    pub const ALL: [Self; 4] = [
+        Self::Element,
+        Self::Spatial,
+        Self::Relationship,
+        Self::Resource,
+    ];
 
     /// The name used in definition files and after `kind:` in role targets.
     #[must_use]
@@ -63,6 +71,7 @@ impl EntityKind {
             Self::Element => "element",
             Self::Spatial => "spatial",
             Self::Relationship => "relationship",
+            Self::Resource => "resource",
         }
     }
 }

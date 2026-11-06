@@ -1,0 +1,38 @@
+//! Materials (MAT-01): a [`Material`] is a named grade with a [`BehaviourLaw`], which gives the
+//! stress for a strain, and design-code [`Property`] values. Every value carries the [`Source`]
+//! it comes from, a document and clause number; this crate never holds standards text (REP-05).
+//!
+//! [`commands`] turns a material into model commands on the core schema's `Material` entity and
+//! its property sets, and [`read`] reads one back.
+//!
+//! This crate builds for native targets and `wasm32-unknown-unknown` (ARCH-01) and never touches
+//! the platform directly (ARCH-02).
+
+// ARCH-02: forbid, not deny, so nothing in this crate can opt out. See docs/dev/quality.md.
+#![forbid(clippy::disallowed_methods, clippy::disallowed_types)]
+
+mod law;
+mod material;
+mod model;
+mod property;
+mod source;
+
+pub use law::{
+    BehaviourLaw, ConcreteParabolaRectangle, Hardening, LawError, LawKind, LinearElastic,
+    SteelBilinear,
+};
+pub use material::{Category, Material, MaterialError};
+pub use model::{ENTITY, ReadError, commands, read};
+pub use property::{CONCRETE_SET, MECHANICAL_SET, Property, STEEL_SET};
+pub use source::{MAX_TEXT_LEN, Source, SourceError, Sourced};
+
+/// Property-test settings shared by the crate. A fixed seed keeps runs reproducible; with no
+/// persistence, no regression files are written next to the sources.
+#[cfg(test)]
+fn proptest_config() -> proptest::test_runner::Config {
+    proptest::test_runner::Config {
+        rng_seed: proptest::test_runner::RngSeed::Fixed(0x00C0_FFEE),
+        failure_persistence: None,
+        ..proptest::test_runner::Config::default()
+    }
+}

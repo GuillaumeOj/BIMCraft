@@ -1,0 +1,156 @@
+use std::collections::BTreeMap;
+use std::path::Path;
+
+use core_model::{AttributeValue, EntityId, Model};
+use core_txn::{Document, ModelCommand, Origin};
+
+use super::*;
+use crate::{LawKind, SourceError};
+
+fn model() -> Model {
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../schema/core");
+    let sources = schema_gen::load_dir(&dir).unwrap();
+    Model::new(&schema_gen::parse_sources(&sources).unwrap()).unwrap()
+}
+
+fn s355() -> Material {
+    let sourced =
+        |value, clause| Sourced::new(value, Source::new("EN 1993-1-1:2005", clause).unwrap());
+    let properties = BTreeMap::from([
+        (Property::YieldStrength, sourced(355e6, "Table 3.1")),
+        (Property::UltimateStrength, sourced(490e6, "Table 3.1")),
+        (Property::YoungModulus, sourced(210e9, "3.2.6(1)")),
+        (Property::PoissonRatio, sourced(0.3, "3.2.6(1)")),
+        (
+            Property::MassDensity,
+            sourced(7850.0, "EN 1991-1-1, Table A.4"),
+        ),
+    ]);
+    Material::new(
+        "S355",
+        Category::StructuralSteel,
+        LawKind::SteelBilinear,
+        Some("EN 1993-1-1:2005"),
+        properties,
+    )
+    .unwrap()
+}
+
+const ID: EntityId = EntityId::new(7);
+
+fn stored() -> Document<ModelCommand> {
+    let mut document = Document::new(model());
+    document.execute(commands(ID, &s355()), Origin::Ui).unwrap();
+    document
+}
+
+fn set(document: &mut Document<ModelCommand>, command: ModelCommand) {
+    document.execute(command, Origin::Ui).unwrap();
+}
+
+fn set_property(set: &str, property: &str, value: Option<AttributeValue>) -> ModelCommand {
+    ModelCommand::SetProperty {
+        id: ID,
+        set: set.into(),
+        property: property.into(),
+        value,
+    }
+}
+
+#[test]
+fn a_material_round_trips_through_the_model() {
+    let document = stored();
+    assert_eq!(read(document.model(), ID), Ok(s355()));
+    let modulus =
+        document
+            .model()
+            .property(ID, "BIMCraft_MaterialMechanical", "YoungModulusSource");
+    assert_eq!(
+        modulus,
+        Ok(Some(AttributeValue::Text(
+            "EN 1993-1-1:2005, 3.2.6(1)".into()
+        )))
+    );
+}
+
+#[test]
+fn storing_a_material_is_undoable() {
+    let mut document = stored();
+    document.undo().unwrap();
+    assert_eq!(read(document.model(), ID), Err(ReadError::NotAMaterial));
+    document.redo().unwrap();
+    assert_eq!(read(document.model(), ID), Ok(s355()));
+}
+
+#[test]
+fn every_property_maps_onto_the_core_schema() {
+    let model = model();
+    for property in Property::ALL {
+        let set = model.property_set(property.property_set()).unwrap();
+        for name in [property.name(), property.source_name()] {
+            assert!(set.properties.iter().any(|p| p.name == name), "{name}");
+        }
+    }
+}
+
+#[test]
+fn tampered_materials_are_rejected_with_the_reason() {
+    let text = |value: &str| Some(AttributeValue::Text(value.into()));
+    let attribute = |name: &str, value: &str| ModelCommand::Set {
+        id: ID,
+        attribute: name.into(),
+        value: text(value),
+    };
+    let cases = [
+        (attribute("category", "timber"), ReadError::UnknownCategory),
+        (attribute("behaviour_law", "plastic"), ReadError::UnknownLaw),
+        (
+            attribute("category", "concrete"),
+            ReadError::Invalid(MaterialError::LawNotForCategory {
+                category: Category::Concrete,
+                law: LawKind::SteelBilinear,
+            }),
+        ),
+        (
+            set_property("BIMCraft_MaterialSteel", "YieldStrengthSource", None),
+            ReadError::MissingSource(Property::YieldStrength),
+        ),
+        (
+            set_property("BIMCraft_MaterialSteel", "YieldStrength", None),
+            ReadError::SourceWithoutValue(Property::YieldStrength),
+        ),
+        (
+            set_property(
+                "BIMCraft_MaterialSteel",
+                "YieldStrengthSource",
+                text("EN 1993-1-1"),
+            ),
+            ReadError::InvalidSource(Property::YieldStrength, SourceError::EmptyClause),
+        ),
+    ];
+    for (command, error) in cases {
+        let mut document = stored();
+        set(&mut document, command);
+        assert_eq!(read(document.model(), ID), Err(error));
+    }
+}
+
+#[test]
+fn read_errors_explain_without_values() {
+    assert_eq!(
+        ReadError::NotAMaterial.to_string(),
+        "the object is not a material"
+    );
+    assert_eq!(
+        ReadError::InvalidSource(Property::YoungModulus, SourceError::EmptyClause).to_string(),
+        "the source of property YoungModulus is not valid: the source names no clause"
+    );
+    assert_eq!(
+        ReadError::SourceWithoutValue(Property::YoungModulus).to_string(),
+        "the property YoungModulus has a source but no value"
+    );
+    assert_eq!(
+        ReadError::MissingSource(Property::YoungModulus).to_string(),
+        "the property YoungModulus has no source"
+    );
+}

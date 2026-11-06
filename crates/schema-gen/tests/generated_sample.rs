@@ -15,8 +15,8 @@ mod generated {
 }
 
 use generated::{
-    Beam, BeamSection, Containment, Opening, PsetWallCommon, Recess, Storey, Voiding, Wall,
-    WallType,
+    Beam, BeamSection, Containment, Material, Opening, PsetWallCommon, Recess, Storey, Voiding,
+    Wall, WallType,
 };
 
 /// The sample's JSON Schema, parsed once.
@@ -217,6 +217,12 @@ fn every_type_round_trips() -> Result<(), serde_json::Error> {
             name: "Ground floor".into(),
             elevation: 0.0,
             index: 0,
+        },
+    )?;
+    round_trip(
+        "Material",
+        &Material {
+            name: "C30/37".into(),
         },
     )?;
     round_trip("Opening", &Opening { depth: 0.3 })?;

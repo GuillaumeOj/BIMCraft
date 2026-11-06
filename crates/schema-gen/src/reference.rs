@@ -162,6 +162,7 @@ const fn kind_title(kind: EntityKind) -> &'static str {
         EntityKind::Element => "Elements",
         EntityKind::Spatial => "Spatial elements",
         EntityKind::Relationship => "Relationships",
+        EntityKind::Resource => "Resources",
     }
 }
 

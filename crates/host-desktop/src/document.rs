@@ -16,8 +16,24 @@ pub(crate) const CORE_SCHEMA: &[(&str, &str)] = &[
         include_str!("../../../schema/core/namespace.toml"),
     ),
     (
+        "entities/material.toml",
+        include_str!("../../../schema/core/entities/material.toml"),
+    ),
+    (
         "entities/site.toml",
         include_str!("../../../schema/core/entities/site.toml"),
+    ),
+    (
+        "property-sets/BIMCraft_MaterialConcrete.toml",
+        include_str!("../../../schema/core/property-sets/BIMCraft_MaterialConcrete.toml"),
+    ),
+    (
+        "property-sets/BIMCraft_MaterialMechanical.toml",
+        include_str!("../../../schema/core/property-sets/BIMCraft_MaterialMechanical.toml"),
+    ),
+    (
+        "property-sets/BIMCraft_MaterialSteel.toml",
+        include_str!("../../../schema/core/property-sets/BIMCraft_MaterialSteel.toml"),
     ),
 ];
 

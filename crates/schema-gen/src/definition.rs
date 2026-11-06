@@ -54,6 +54,7 @@ pub enum KindDef {
     Element,
     Spatial,
     Relationship,
+    Resource,
 }
 
 #[derive(Debug, Deserialize)]
@@ -161,6 +162,10 @@ macro_rules! same_variants {
     };
 }
 
-same_variants!(KindDef, EntityKind, [Element, Spatial, Relationship]);
+same_variants!(
+    KindDef,
+    EntityKind,
+    [Element, Spatial, Relationship, Resource]
+);
 same_variants!(PlacementDef, Placement, [Instance, Type, TypeOverridable]);
 same_variants!(CardinalityDef, Cardinality, [One, Many]);

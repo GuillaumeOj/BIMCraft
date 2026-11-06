@@ -67,6 +67,20 @@
       ],
       "type": "object"
     },
+    "Material": {
+      "additionalProperties": false,
+      "description": "A substance that elements are made of.",
+      "properties": {
+        "name": {
+          "description": "The `name` value.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "type": "object"
+    },
     "ObjectId": {
       "minimum": 0,
       "type": "integer"

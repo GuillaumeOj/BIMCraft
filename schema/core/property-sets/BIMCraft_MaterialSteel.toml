@@ -1,0 +1,47 @@
+# Strength and ductility properties of a steel grade, each with its source. An IFC export writes the
+# values to Pset_MaterialSteel.
+format = 1
+
+[property_set]
+name = "BIMCraft_MaterialSteel"
+applies_to = ["Material"]
+
+[[property]]
+name = "YieldStrength"
+value = "quantity:pressure"
+doc = "Characteristic or nominal yield strength."
+
+[[property]]
+name = "YieldStrengthSource"
+value = "text"
+doc = "Design-code document and clause that YieldStrength comes from, such as `EN 1992-1-1:2004, Table 3.1`."
+
+[[property]]
+name = "UltimateStrength"
+value = "quantity:pressure"
+doc = "Characteristic or nominal ultimate tensile strength."
+
+[[property]]
+name = "UltimateStrengthSource"
+value = "text"
+doc = "Design-code document and clause that UltimateStrength comes from, such as `EN 1992-1-1:2004, Table 3.1`."
+
+[[property]]
+name = "UltimateStrain"
+value = "real"
+doc = "Strain at maximum load, as a ratio."
+
+[[property]]
+name = "UltimateStrainSource"
+value = "text"
+doc = "Design-code document and clause that UltimateStrain comes from, such as `EN 1992-1-1:2004, Table 3.1`."
+
+[[property]]
+name = "HardeningRatio"
+value = "real"
+doc = "Ratio of tensile strength to yield strength."
+
+[[property]]
+name = "HardeningRatioSource"
+value = "text"
+doc = "Design-code document and clause that HardeningRatio comes from, such as `EN 1992-1-1:2004, Table 3.1`."

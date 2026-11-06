@@ -10,6 +10,7 @@ Version 2 of the `core` schema: its [entities](entities.md) and [property sets](
 | --- | --- | --- |
 | [Beam](entities.md#Beam) | element | A horizontal or near-horizontal linear structural member. |
 | [Containment](entities.md#Containment) | relationship | Places elements in the spatial structure, such as a storey. |
+| [Material](entities.md#Material) | resource | A substance that elements are made of. |
 | [Opening](entities.md#Opening) | element | A void through a wall or a slab. |
 | [Recess](entities.md#Recess) | element | **Deprecated since version 2.** |
 | [Storey](entities.md#Storey) | spatial | A level of a building. |

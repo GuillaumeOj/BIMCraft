@@ -2152,6 +2152,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "material"
+version = "0.0.0"
+dependencies = [
+ "core-model",
+ "core-txn",
+ "libm",
+ "proptest",
+ "schema-gen",
+ "thiserror 2.0.21",
+]
+
+[[package]]
 name = "memchr"
 version = "2.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
