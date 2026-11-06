@@ -1,6 +1,6 @@
-//! Any bytes, read as an entity file and as a property set file, are either accepted and turned
-//! into Rust and reference pages, or rejected with errors; nothing panics, overflows the stack or
-//! runs away.
+//! Any bytes, read as an entity file, a property set file and an enumeration file, are either
+//! accepted and turned into Rust and reference pages, or rejected with errors; nothing panics,
+//! overflows the stack or runs away.
 
 #![no_main]
 
@@ -13,7 +13,11 @@ fuzz_target!(|data: &[u8]| {
     let Ok(text) = std::str::from_utf8(data) else {
         return;
     };
-    for path in ["entities/fuzz.toml", "property-sets/fuzz.toml"] {
+    for path in [
+        "entities/fuzz.toml",
+        "property-sets/fuzz.toml",
+        "enumerations/fuzz.toml",
+    ] {
         let sources = [
             Source {
                 path: "namespace.toml".into(),
