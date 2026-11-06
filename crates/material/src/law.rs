@@ -969,4 +969,69 @@ mod tests {
             }
         }
     }
+
+    // Every law starts from rest: no strain, no stress.
+    #[test]
+    fn every_law_is_at_rest_at_zero_strain() {
+        for law in every_law() {
+            assert!(
+                law.stress(0.0).unwrap().si().abs() < f64::EPSILON,
+                "{law:?}"
+            );
+        }
+    }
+
+    proptest! {
+        #![proptest_config(crate::proptest_config())]
+
+        // Linear elasticity and steel behave the same in tension and compression.
+        #[test]
+        fn elastic_and_steel_laws_are_odd(strain in 0.0f64..0.05) {
+            for law in [elastic(), steel(Some(B500B_HARDENING)), steel(None)] {
+                let tension = law.stress(strain).unwrap().si();
+                let compression = law.stress(-strain).unwrap().si();
+                prop_assert!((tension + compression).abs() <= tension.abs() * 1e-12, "{:?}", law);
+            }
+        }
+
+        // σ = E ε: doubling the strain doubles the stress (ENG-03, by proportionality).
+        #[test]
+        fn linear_elasticity_is_proportional(strain in -0.01f64..0.01) {
+            let law = elastic();
+            let single = law.stress(strain).unwrap().get(Megapascal);
+            let double = law.stress(2.0 * strain).unwrap().get(Megapascal);
+            prop_assert!((single - 33_000.0 * strain).abs() < 1e-9);
+            prop_assert!((double - 2.0 * single).abs() < 1e-9);
+        }
+
+        // The parabola meets the rectangle at εc2 and steel turns at εy with no jump: across a
+        // step δ the stress changes by at most the steepest slope times δ (n fc / εc2 for the
+        // parabola, Es for steel).
+        #[test]
+        fn the_ported_laws_are_continuous(strain in -0.0034f64..0.0499, step in 0.0f64..1e-5) {
+            let concrete = concrete();
+            if strain + step <= 0.01 {
+                let jump = (concrete.stress(strain + step).unwrap()
+                    - concrete.stress(strain).unwrap()).get(Megapascal).abs();
+                prop_assert!(jump <= 2.0 * 30.0 / 0.002 * step + 1e-9);
+            }
+            let steel = steel(Some(B500B_HARDENING));
+            let jump = (steel.stress(strain + step).unwrap() - steel.stress(strain).unwrap())
+                .get(Megapascal)
+                .abs();
+            prop_assert!(jump <= 200_000.0 * step + 1e-9);
+        }
+
+        // On the plateau, a design law carries the characteristic stress over the divisor:
+        // fcd = fck / γ for the parabola-rectangle, fyd = fy / γ for plastic steel.
+        #[test]
+        fn design_laws_scale_the_plateau(divisor in 1.0f64..2.0) {
+            let concrete = concrete().with_strength_divided_by(divisor).unwrap();
+            let plateau = concrete.stress(-0.003).unwrap().get(Megapascal);
+            prop_assert!((plateau + 30.0 / divisor).abs() < 1e-9);
+            let steel = steel(None).with_strength_divided_by(divisor).unwrap();
+            let plateau = steel.stress(0.04).unwrap().get(Megapascal);
+            prop_assert!((plateau - 500.0 / divisor).abs() < 1e-9);
+        }
+    }
 }
