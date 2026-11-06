@@ -224,7 +224,7 @@ impl WallType {
     }
 }
 
-/// The `Pset_WallCommon` property set.
+/// Properties common to every wall.
 ///
 /// Applies to [`Wall`].
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]

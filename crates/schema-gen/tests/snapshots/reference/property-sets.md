@@ -4,6 +4,8 @@
 
 ## <a id="Pset_WallCommon"></a>Pset_WallCommon
 
+Properties common to every wall.
+
 - **Introduced in:** version 2
 - **Applies to:** [Wall](entities.md#Wall)
 

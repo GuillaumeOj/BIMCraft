@@ -523,6 +523,7 @@ fn validate_property_set(namespace: &Namespace, property_set: &PropertySet, erro
         None,
         errors,
     );
+    check_doc(property_set.doc.as_deref(), &owner, None, errors);
     let limits = [
         (
             property_set.applies_to.len(),

@@ -102,6 +102,7 @@ pub fn namespace() -> Namespace {
     let wall_common = PropertySet {
         name: PSET.into(),
         applies_to: vec!["Wall".into()],
+        doc: None,
         properties: vec![
             attribute("Reference", ValueType::Text, Presence::Optional, Instance),
             attribute(

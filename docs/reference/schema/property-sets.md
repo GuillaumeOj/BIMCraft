@@ -4,6 +4,8 @@
 
 ## <a id="BIMCraft_MaterialConcrete"></a>BIMCraft_MaterialConcrete
 
+Strength and strain properties of a concrete grade, each with its source. An IFC export writes the values to `Pset_MaterialConcrete`.
+
 - **Introduced in:** version 3
 - **Applies to:** [Material](entities.md#Material)
 
@@ -24,6 +26,8 @@
 
 ## <a id="BIMCraft_MaterialMechanical"></a>BIMCraft_MaterialMechanical
 
+Mechanical and physical properties of a material, each with its source. An IFC export writes the values to `Pset_MaterialCommon` and `Pset_MaterialMechanical`.
+
 - **Introduced in:** version 3
 - **Applies to:** [Material](entities.md#Material)
 
@@ -39,6 +43,8 @@
 | `ThermalExpansionCoefficientSource` | text | optional | instance | Design-code document and clause that ThermalExpansionCoefficient comes from, such as `EN 1992-1-1:2004, Table 3.1`. |
 
 ## <a id="BIMCraft_MaterialSteel"></a>BIMCraft_MaterialSteel
+
+Strength and ductility properties of a steel grade, each with its source. An IFC export writes the values to `Pset_MaterialSteel`.
 
 - **Introduced in:** version 3
 - **Applies to:** [Material](entities.md#Material)

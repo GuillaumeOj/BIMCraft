@@ -138,6 +138,7 @@ pub struct PropertySetFile {
 pub struct PropertySetSection {
     pub name: Spanned<String>,
     pub applies_to: Vec<String>,
+    pub doc: Option<String>,
 }
 
 /// Converts between a file-format enum and its model enum, both ways, variant by variant;

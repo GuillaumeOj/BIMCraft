@@ -101,6 +101,7 @@ fn sample() -> Namespace {
     let property_set = PropertySet {
         name: "Pset_WallCommon".into(),
         applies_to: vec!["Wall".into()],
+        doc: None,
         properties: vec![
             Attribute {
                 presence: Presence::Default(Value::Bool(false)),
@@ -245,7 +246,9 @@ fn rejects_long_descriptions() {
         .unwrap()
         .doc
         .clone_from(&long);
-    wall(&mut namespace).attributes[0].doc = long;
+    wall(&mut namespace).attributes[0].doc.clone_from(&long);
+    let wall_common = namespace.property_sets.get_mut("Pset_WallCommon").unwrap();
+    wall_common.doc = long;
     let errors = errors_of(&namespace);
     assert_eq!(
         errors
@@ -256,6 +259,10 @@ fn rejects_long_descriptions() {
             entity_at("Wall", None),
             entity_at("Wall", Some(Item::Type)),
             entity_at("Wall", Some(Item::Attribute("axis".into()))),
+            Location {
+                owner: Owner::PropertySet("Pset_WallCommon".into()),
+                item: None,
+            },
         ]
     );
     assert!(

@@ -3,6 +3,7 @@ format = 1
 [property_set]
 name = "Pset_WallCommon"
 applies_to = ["Wall"]
+doc = "Properties common to every wall."
 
 [[property]]
 name = "IsExternal"

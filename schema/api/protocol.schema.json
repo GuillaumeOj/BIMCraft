@@ -1383,7 +1383,7 @@
       "$defs": {
         "BIMCraft_MaterialConcrete": {
           "additionalProperties": false,
-          "description": "The `BIMCraft_MaterialConcrete` property set.\n\nApplies to `Material`.",
+          "description": "Strength and strain properties of a concrete grade, each with its source. An IFC export writes the values to `Pset_MaterialConcrete`.\n\nApplies to `Material`.",
           "properties": {
             "CharacteristicCompressiveStrength": {
               "anyOf": [
@@ -1522,7 +1522,7 @@
         },
         "BIMCraft_MaterialMechanical": {
           "additionalProperties": false,
-          "description": "The `BIMCraft_MaterialMechanical` property set.\n\nApplies to `Material`.",
+          "description": "Mechanical and physical properties of a material, each with its source. An IFC export writes the values to `Pset_MaterialCommon` and `Pset_MaterialMechanical`.\n\nApplies to `Material`.",
           "properties": {
             "MassDensity": {
               "anyOf": [
@@ -1617,7 +1617,7 @@
         },
         "BIMCraft_MaterialSteel": {
           "additionalProperties": false,
-          "description": "The `BIMCraft_MaterialSteel` property set.\n\nApplies to `Material`.",
+          "description": "Strength and ductility properties of a steel grade, each with its source. An IFC export writes the values to `Pset_MaterialSteel`.\n\nApplies to `Material`.",
           "properties": {
             "HardeningRatio": {
               "anyOf": [

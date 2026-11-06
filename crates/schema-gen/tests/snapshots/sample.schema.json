@@ -101,7 +101,7 @@
     },
     "Pset_WallCommon": {
       "additionalProperties": false,
-      "description": "The `Pset_WallCommon` property set.\n\nApplies to `Wall`.",
+      "description": "Properties common to every wall.\n\nApplies to `Wall`.",
       "properties": {
         "FireRating": {
           "anyOf": [

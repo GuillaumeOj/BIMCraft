@@ -1,10 +1,12 @@
-# Strength and strain properties of a concrete grade, each with its source. An IFC export writes the
-# values to Pset_MaterialConcrete.
 format = 1
 
 [property_set]
 name = "BIMCraft_MaterialConcrete"
 applies_to = ["Material"]
+doc = """
+Strength and strain properties of a concrete grade, each with its source. An IFC export writes \
+the values to `Pset_MaterialConcrete`.\
+"""
 
 [[property]]
 name = "CharacteristicCompressiveStrength"

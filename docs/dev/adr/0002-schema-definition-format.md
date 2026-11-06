@@ -70,7 +70,7 @@ Every definition file starts with `format`, the version of the definition file f
 - **Placement** (CORE-02): `on = "instance"` (the default), `"type"` (fixed by the type) or `"type_overridable"` (set by the type, overridable per instance).
 - `depends_on` is the dependency graph's input (CORE-08) and tells IFC export which parameters are geometric (INT-07).
 
-A property set file has `[property_set]` (`name`, `applies_to`) and `[[property]]` entries with the same keys as attributes, placement included. User-defined property sets (CORE-04) are model data with this same structure, but they live in the project file, not in `schema/`.
+A property set file has `[property_set]` (`name`, `applies_to`, optional `doc`) and `[[property]]` entries with the same keys as attributes, placement included. User-defined property sets (CORE-04) are model data with this same structure, but they live in the project file, not in `schema/`.
 
 Allowed relationships are declared once, on the relationship entity, not on each participant. An element therefore takes part in containment, connections or voids through its `kind`, and a plugin element joins core relationships without changing any core file.
 

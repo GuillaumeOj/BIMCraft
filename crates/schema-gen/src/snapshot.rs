@@ -138,6 +138,8 @@ struct RepresentationJson {
 struct PropertySetJson {
     name: String,
     applies_to: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    doc: Option<String>,
     properties: Vec<AttributeJson>,
 }
 
@@ -153,6 +155,7 @@ impl From<&Namespace> for NamespaceJson {
                 .map(|set| PropertySetJson {
                     name: set.name.clone(),
                     applies_to: set.applies_to.clone(),
+                    doc: set.doc.clone(),
                     properties: set.properties.iter().map(AttributeJson::from).collect(),
                 })
                 .collect(),
@@ -257,6 +260,7 @@ impl TryFrom<NamespaceJson> for Namespace {
             let set = PropertySet {
                 name: set.name,
                 applies_to: set.applies_to,
+                doc: set.doc,
                 properties,
             };
             Ok((set.name.clone(), set))

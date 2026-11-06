@@ -150,6 +150,7 @@
       "applies_to": [
         "Material"
       ],
+      "doc": "Strength and strain properties of a concrete grade, each with its source. An IFC export writes the values to `Pset_MaterialConcrete`.",
       "properties": [
         {
           "name": "CharacteristicCompressiveStrength",
@@ -242,6 +243,7 @@
       "applies_to": [
         "Material"
       ],
+      "doc": "Mechanical and physical properties of a material, each with its source. An IFC export writes the values to `Pset_MaterialCommon` and `Pset_MaterialMechanical`.",
       "properties": [
         {
           "name": "MassDensity",
@@ -306,6 +308,7 @@
       "applies_to": [
         "Material"
       ],
+      "doc": "Strength and ductility properties of a steel grade, each with its source. An IFC export writes the values to `Pset_MaterialSteel`.",
       "properties": [
         {
           "name": "YieldStrength",

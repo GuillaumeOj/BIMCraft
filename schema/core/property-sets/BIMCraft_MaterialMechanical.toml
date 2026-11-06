@@ -1,10 +1,12 @@
-# Mechanical and physical properties of a material, each with its source. An IFC export writes the
-# values to Pset_MaterialCommon and Pset_MaterialMechanical.
 format = 1
 
 [property_set]
 name = "BIMCraft_MaterialMechanical"
 applies_to = ["Material"]
+doc = """
+Mechanical and physical properties of a material, each with its source. An IFC export writes the \
+values to `Pset_MaterialCommon` and `Pset_MaterialMechanical`.\
+"""
 
 [[property]]
 name = "MassDensity"

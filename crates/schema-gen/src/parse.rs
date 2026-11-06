@@ -218,6 +218,7 @@ impl<'a> Builder<'a> {
         let property_set = PropertySet {
             name: name.clone(),
             applies_to: file.property_set.applies_to,
+            doc: file.property_set.doc,
             properties,
         };
         if let Some((_, first)) = self.property_sets.get(&name) {

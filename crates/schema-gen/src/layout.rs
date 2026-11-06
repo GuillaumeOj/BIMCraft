@@ -133,11 +133,16 @@ fn property_set_struct(property_set: &PropertySet, name_ref: fn(&str) -> String)
         name: property_set.name.clone(),
         property_set: true,
         deprecated: false,
-        doc: vec![
-            format!("The `{}` property set.", property_set.name),
-            String::new(),
-            format!("Applies to {}.", applies_to.join(", ")),
-        ],
+        doc: {
+            let mut doc = doc_lines(property_set.doc.as_deref(), || {
+                format!("The `{}` property set.", property_set.name)
+            });
+            doc.extend([
+                String::new(),
+                format!("Applies to {}.", applies_to.join(", ")),
+            ]);
+            doc
+        },
         fields: property_set
             .properties
             .iter()

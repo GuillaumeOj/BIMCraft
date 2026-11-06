@@ -201,6 +201,8 @@ pub struct PropertySet {
     pub name: String,
     /// Entities the property set applies to.
     pub applies_to: Vec<String>,
+    /// Description of the property set.
+    pub doc: Option<String>,
     /// Properties, in declaration order.
     pub properties: Vec<Attribute>,
 }

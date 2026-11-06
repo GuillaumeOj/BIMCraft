@@ -282,6 +282,9 @@ fn property_sets_page(namespace: &Namespace, introduced: &BTreeMap<&str, u32>) -
 
 fn write_property_set(out: &mut String, property_set: &PropertySet, introduced: u32) {
     let _ = writeln!(out, "\n## {}\n", anchored(&property_set.name));
+    if let Some(doc) = &property_set.doc {
+        let _ = writeln!(out, "{}\n", prose(doc));
+    }
     let _ = writeln!(out, "- **Introduced in:** version {introduced}");
     let _ = writeln!(
         out,

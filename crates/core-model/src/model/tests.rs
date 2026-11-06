@@ -154,6 +154,7 @@ pub(super) fn wall_common() -> PropertySet {
     PropertySet {
         name: "Pset_WallCommon".into(),
         applies_to: vec!["Wall".into()],
+        doc: None,
         properties: vec![
             property("Reference", ValueType::Text, Presence::Required, Instance),
             property(
