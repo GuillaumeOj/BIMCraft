@@ -272,3 +272,183 @@ fn errors_name_positions_not_values() {
         "material #4: the value of e_modulus is not a finite number"
     );
 }
+
+fn grades(prefix: &str) -> Vec<(&'static str, &'static Material)> {
+    // Leak the library once per call: tests only, and it keeps the borrows simple.
+    let library: &'static Library = Box::leak(Box::new(builtin()));
+    library
+        .iter()
+        .filter(|(key, _)| key.starts_with(prefix))
+        .collect()
+}
+
+fn si(material: &Material, property: Property) -> f64 {
+    material.property(property).unwrap().value
+}
+
+#[test]
+fn the_builtin_library_holds_about_forty_grades_of_every_family() {
+    let library = builtin();
+    assert_eq!(library.len(), 38);
+    for (prefix, count) in [
+        ("en1992-1-1/C", 9),
+        ("en1992-1-1/B", 3),
+        ("en1993-1-1/", 5),
+        ("en1995-1-1/", 10),
+        ("en1996-1-1/", 3),
+        ("bimcraft/", 8),
+    ] {
+        assert_eq!(grades(prefix).len(), count, "{prefix}");
+    }
+}
+
+#[test]
+fn every_builtin_value_cites_a_document_and_a_clause() {
+    for (key, material) in builtin().iter() {
+        assert!(material.properties().count() > 0, "{key}");
+        for (property, value) in material.properties() {
+            let (Some(document), Some(clause)) = (value.source.document(), value.source.clause())
+            else {
+                panic!("{key} {property:?}: the source cites nothing");
+            };
+            assert!(
+                !document.is_empty() && !clause.is_empty(),
+                "{key} {property:?}"
+            );
+            assert!(!value.source.is_user(), "{key} {property:?}");
+        }
+    }
+}
+
+// ENG-03: the derived concrete values follow the formulas of EN 1992-1-1 3.1.3 within the
+// rounding of Table 3.1: fcm = fck + 8, fctm = 0.30 fck^(2/3), Ecm = 22 (fcm / 10)^0.3.
+#[test]
+fn concrete_values_follow_the_code_formulas() {
+    let mpa = |material: &Material, property| si(material, property) / 1e6;
+    let grades = grades("en1992-1-1/C");
+    for (key, material) in grades {
+        let fck = mpa(material, Property::CharacteristicCompressiveStrength);
+        let fcm = mpa(material, Property::MeanCompressiveStrength);
+        assert!((fcm - (fck + 8.0)).abs() < 1e-9, "{key} fcm");
+        let tensile = 0.30 * libm::pow(fck, 2.0 / 3.0);
+        assert!(
+            (mpa(material, Property::MeanTensileStrength) - tensile).abs() <= 0.05,
+            "{key} fctm"
+        );
+        let ecm = 22.0 * libm::pow(fcm / 10.0, 0.3);
+        assert!(
+            (si(material, Property::YoungModulus) / 1e9 - ecm).abs() <= 0.5,
+            "{key} Ecm"
+        );
+    }
+}
+
+// ENG-03: G = E / (2 (1 + ν)) for steel (EN 1993-1-1 3.2.6(1)), about 81 GPa; reinforcement has
+// the ductility of its class (EN 1992-1-1 Annex C): k 1.05, 1.08, 1.15 and εuk 2.5, 5, 7.5 %.
+#[test]
+fn steel_values_follow_the_code_formulas() {
+    for (key, material) in grades("en1993-1-1/") {
+        let e = si(material, Property::YoungModulus);
+        let nu = si(material, Property::PoissonRatio);
+        let g = si(material, Property::ShearModulus);
+        assert!((g - e / (2.0 * (1.0 + nu))).abs() <= 0.5e9, "{key} G");
+        assert!(si(material, Property::UltimateStrength) > si(material, Property::YieldStrength));
+    }
+    let library = builtin();
+    for (key, k, eps) in [("A", 1.05, 0.025), ("B", 1.08, 0.05), ("C", 1.15, 0.075)] {
+        let bar = library.get(&format!("en1992-1-1/B500{key}")).unwrap();
+        assert!(
+            (si(bar, Property::HardeningRatio) - k).abs() < 1e-12,
+            "{key}"
+        );
+        assert!(
+            (si(bar, Property::UltimateStrain) - eps).abs() < 1e-12,
+            "{key}"
+        );
+    }
+}
+
+// ENG-03: solid timber follows EN 338: E0,05 = 2/3 E0,mean and G = E0,mean / 16, within the
+// rounding of the table.
+#[test]
+fn solid_timber_values_follow_the_strength_class_relations() {
+    for (key, material) in grades("en1995-1-1/C") {
+        let e0 = si(material, Property::TimberMeanModulus);
+        let e05 = si(material, Property::TimberFifthPercentileModulus);
+        let g = si(material, Property::TimberMeanShearModulus);
+        assert!((e05 / e0 - 2.0 / 3.0).abs() < 0.01, "{key} E0,05");
+        assert!((g - e0 / 16.0).abs() <= 0.01 * (e0 / 16.0), "{key} G");
+    }
+    for (key, material) in grades("en1995-1-1/") {
+        assert!(
+            si(material, Property::TimberCompressiveStrength)
+                >= si(material, Property::TimberTensileStrength),
+            "{key}"
+        );
+        assert!(
+            si(material, Property::MeanDensity) > si(material, Property::CharacteristicDensity)
+        );
+    }
+}
+
+// ENG-03: masonry fk = K fb^0.7 fm^0.3 with K = 0.55 (EN 1996-1-1 3.6.1.2(1), Table 3.3), and
+// E = 1000 fk (3.7.2(2)).
+#[test]
+fn masonry_values_follow_the_code_formulas() {
+    let library = builtin();
+    for (name, fb, fm) in [
+        ("Clay masonry fb10 M10", 10.0, 10.0),
+        ("Clay masonry fb20 M10", 20.0, 10.0),
+        ("Concrete block masonry fb10 M10", 10.0, 10.0),
+    ] {
+        let material = library.get(&format!("en1996-1-1/{name}")).unwrap();
+        let fk = 0.55 * libm::pow(fb, 0.7) * libm::pow(fm, 0.3);
+        let given = si(material, Property::MasonryCompressiveStrength) / 1e6;
+        assert!((given - fk).abs() <= 0.05, "{name}");
+        assert!(
+            (si(material, Property::YoungModulus) - 1000.0 * given * 1e6).abs() < 1.0,
+            "{name}"
+        );
+    }
+}
+
+#[test]
+fn structural_grades_have_the_partial_factors_of_both_annexes_and_design_laws() {
+    use crate::{NationalAnnex, annex::Factor};
+    for (key, material) in builtin().iter() {
+        let Some((factor, _)) = material.category().strength_divisor() else {
+            continue;
+        };
+        if material.category() == Category::Masonry {
+            continue;
+        }
+        for annex in NationalAnnex::ALL {
+            let given = material
+                .partial_factor(factor, annex)
+                .unwrap_or_else(|_| panic!("{key} {annex:?}"));
+            assert!(given.value >= 1.0, "{key}");
+            assert!(material.design_law(annex).is_ok(), "{key} {annex:?}");
+        }
+    }
+    // The values the codes recommend: γc 1.5 and αcc 1.0, γs 1.15, γM0 1.0, γM2 1.25, γM 1.25 / 1.3.
+    let library = builtin();
+    let c30 = library.get(C30).unwrap();
+    assert!(
+        (c30.partial_factor(Factor::GammaC, NationalAnnex::Recommended)
+            .unwrap()
+            .value
+            - 1.5)
+            .abs()
+            < 1e-12
+    );
+    let s355 = library.get(S355).unwrap();
+    assert!(
+        (s355
+            .partial_factor(Factor::GammaM2, NationalAnnex::France)
+            .unwrap()
+            .value
+            - 1.25)
+            .abs()
+            < 1e-12
+    );
+}

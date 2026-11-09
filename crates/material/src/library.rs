@@ -34,7 +34,13 @@ pub const MAX_SOURCE_NAME: usize = 32;
 const BUILTIN_SOURCE: &str = "bimcraft";
 
 /// The grades shipped with `BIMCraft`, one file per family.
-const BUILTIN: [&str; 1] = [include_str!("../data/eurocode-grades.json")];
+const BUILTIN: [&str; 5] = [
+    include_str!("../data/en1992-1-1.json"),
+    include_str!("../data/en1993-1-1.json"),
+    include_str!("../data/timber.json"),
+    include_str!("../data/en1996-1-1.json"),
+    include_str!("../data/non-structural.json"),
+];
 
 /// Why a library source was rejected. Messages give the position of the faulty material, never
 /// its values (SEC-03).
