@@ -38,15 +38,21 @@ export function ProjectPane(props: Props) {
     <div className="materials-left">
       {!empty && (
         <>
-          <input
-            id={props.searchId}
-            type="search"
-            className="search"
-            aria-label={t("materials.search.label")}
-            placeholder={t("materials.search.placeholder")}
-            value={props.search}
-            onChange={(event) => props.setSearch(event.target.value)}
-          />
+          <div className="search-field">
+            <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+              <circle cx="7" cy="7" r="4.5" fill="none" stroke="currentColor" strokeWidth="1.5" />
+              <path d="M10.5 10.5 14 14" stroke="currentColor" strokeWidth="1.5" />
+            </svg>
+            <input
+              id={props.searchId}
+              type="search"
+              className="search"
+              aria-label={t("materials.search.label")}
+              placeholder={t("materials.search.placeholder")}
+              value={props.search}
+              onChange={(event) => props.setSearch(event.target.value)}
+            />
+          </div>
           <select
             className="select"
             aria-label={t("materials.category.label")}
