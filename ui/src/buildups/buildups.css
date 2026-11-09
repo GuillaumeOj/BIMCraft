@@ -315,7 +315,7 @@
   color: var(--bc-ink-2);
 }
 
-/* The band is dark in both themes: its number must not use the band's own colour. */
+/* The band is --bc-ink-2, so its number takes --bc-surface to stay readable in both themes. */
 .preview-layer[data-function="membrane"] .preview-number {
   color: var(--bc-surface);
 }
