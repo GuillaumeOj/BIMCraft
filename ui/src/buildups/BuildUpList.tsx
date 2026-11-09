@@ -90,7 +90,7 @@ export function BuildUpList(props: Props) {
           onChange={props.onFilter}
         />
         <ActionMenu
-          className="button button-primary"
+          className="button"
           items={[
             { label: t("buildups.action.newWall"), onSelect: () => props.onNew("wall") },
             { label: t("buildups.action.newSlab"), onSelect: () => props.onNew("slab") },
@@ -116,7 +116,12 @@ export function BuildUpList(props: Props) {
         onKeyDown={onKeyDown}
       >
         {items.map((item) => (
-          <div key={item.id} className="buildup-row" data-selected={item.id === selected}>
+          <div
+            key={item.id}
+            className="buildup-row"
+            data-selected={item.id === selected}
+            inert={inline?.kind === "delete" && inline.id !== item.id}
+          >
             {inline?.id === item.id && inline.kind === "rename" ? (
               <NameForm
                 label={t("buildups.rename.label")}

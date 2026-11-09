@@ -24,6 +24,8 @@ const TEXT_PAIRS = [
   ["danger", "raised"],
   ["danger", "paper"],
   ["on-danger", "danger"],
+  // The insulation band of the build-up preview carries its number.
+  ["ink", "warn-tint"],
 ] as const;
 
 // Interface parts against their surroundings (WCAG 2.2 AA: 3:1): the focus outline and the borders of form fields.

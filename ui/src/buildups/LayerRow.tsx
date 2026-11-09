@@ -193,9 +193,14 @@ export function LayerRow(props: LayerRowProps) {
           className="layer-resistance"
           title={props.resistance == null ? t("buildups.resistance.why") : undefined}
         >
-          {props.resistance == null
-            ? t("buildups.resistance.none")
-            : formatNumber(props.resistance, 2, language)}
+          {props.resistance == null ? (
+            <>
+              {t("buildups.resistance.none")}
+              <span className="visually-hidden">{t("buildups.resistance.why")}</span>
+            </>
+          ) : (
+            formatNumber(props.resistance, 2, language)
+          )}
         </td>
         <td className="layer-actions">
           <button
