@@ -487,6 +487,9 @@
 }
 
 .toast {
+  display: flex;
+  align-items: center;
+  gap: 12px;
   margin: 0;
   padding: 8px 14px;
   color: var(--bc-ink);
@@ -589,4 +592,14 @@
 .tooltip-anchor:hover .tooltip,
 .tooltip-anchor:focus-within .tooltip {
   visibility: visible;
+}
+
+.toast-action {
+  padding: 2px 10px;
+  font: inherit;
+  color: var(--bc-verdigris);
+  background: none;
+  border: 1px solid var(--bc-verdigris);
+  border-radius: 6px;
+  cursor: pointer;
 }

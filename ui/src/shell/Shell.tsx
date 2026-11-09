@@ -4,6 +4,8 @@ import { useGeoref } from "../georef/GeorefContext";
 import { LocationDialog } from "../georef/LocationDialog";
 import { useI18n } from "../i18n/I18nProvider";
 import { LanguageSelect } from "../i18n/LanguageSelect";
+import { MaterialsDialog } from "../materials/MaterialsDialog";
+import { useShellState } from "./ShellState";
 import "./shell.css";
 
 const RIGHT_PANELS = ["properties", "history", "coordinates"] as const;
@@ -32,18 +34,27 @@ const isCoordinatesShortcut = (event: globalThis.KeyboardEvent) =>
   !event.altKey &&
   event.key.toLowerCase() === "k";
 
+// Ctrl+Shift+M (Cmd+Shift+M on macOS) opens the Materials dialog.
+const isMaterialsShortcut = (event: globalThis.KeyboardEvent) =>
+  (event.ctrlKey || event.metaKey) &&
+  event.shiftKey &&
+  !event.altKey &&
+  event.key.toLowerCase() === "m";
+
 /**
  * The empty application shell (UI-02, UI-06): title bar, viewport and the panel slots, from the
  * "Workspace" boards of the FigCraft design. F6 and Shift+F6 move focus between the regions;
  * Ctrl+` opens and closes the console, Ctrl+Shift+K shows the Coordinates panel and
- * Ctrl+Shift+L opens the Project location dialog.
+ * Ctrl+Shift+L opens the Project location dialog and Ctrl+Shift+M the Materials dialog.
  */
 export function Shell() {
   const { t } = useI18n();
   const ids = useId();
   const [rightPanel, setRightPanel] = useState<RightPanel>("properties");
   const { dialogOpen, openDialog } = useGeoref();
+  const { modalOpen } = useShellState();
   const [consoleOpen, setConsoleOpen] = useState(false);
+  const [materialsOpen, setMaterialsOpen] = useState(false);
   const viewport = useRef<HTMLElement>(null);
   const tabs = useRef<Partial<Record<RightPanel, HTMLButtonElement | null>>>({});
 
@@ -61,13 +72,16 @@ export function Shell() {
   useEffect(() => {
     const onKeyDown = (event: globalThis.KeyboardEvent) => {
       // A modal dialog keeps the keyboard: these shortcuts would move focus behind it.
-      if (dialogOpen) return;
+      if (modalOpen) return;
       if (isConsoleShortcut(event)) {
         event.preventDefault();
         setConsoleOpen((open) => !open);
       } else if (isCoordinatesShortcut(event)) {
         event.preventDefault();
         selectTab("coordinates");
+      } else if (isMaterialsShortcut(event)) {
+        event.preventDefault();
+        setMaterialsOpen(true);
       } else if (event.key === "F6") {
         event.preventDefault();
         nextRegion(event.shiftKey)?.focus();
@@ -75,7 +89,7 @@ export function Shell() {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [selectTab, dialogOpen]);
+  }, [selectTab, modalOpen]);
 
   const onTabKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
     const at = RIGHT_PANELS.indexOf(rightPanel);
@@ -116,6 +130,15 @@ export function Shell() {
         <nav className="open-views" aria-label={t("shell.openViews")}>
           <span className="empty">{t("shell.noOpenViews")}</span>
         </nav>
+        <button
+          type="button"
+          className="ghost-button"
+          aria-haspopup="dialog"
+          aria-keyshortcuts="Control+Shift+M Meta+Shift+M"
+          onClick={() => setMaterialsOpen(true)}
+        >
+          {t("materials.open")}
+        </button>
         <button
           type="button"
           className="ghost-button"
@@ -218,6 +241,7 @@ export function Shell() {
         )}
       </div>
       {dialogOpen && <LocationDialog />}
+      {materialsOpen && <MaterialsDialog onClose={() => setMaterialsOpen(false)} />}
     </div>
   );
 }

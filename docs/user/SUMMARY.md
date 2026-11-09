@@ -20,12 +20,12 @@
 
 # Materials
 
-- [Choose a material](choose-a-material.md)
+- [Manage the project's materials](manage-project-materials.md)
 
 # Français
 
 - [Définir la localisation du projet](set-up-the-project-location.fr.md)
 - [Lire et saisir des coordonnées](read-and-enter-coordinates.fr.md)
-- [Choisir un matériau](choose-a-material.fr.md)
+- [Gérer les matériaux du projet](manage-project-materials.fr.md)
 
 <!-- Add one entry per task page, grouped by discipline or activity. Copy _template.md to start. -->
