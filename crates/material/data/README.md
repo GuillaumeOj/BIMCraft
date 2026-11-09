@@ -37,12 +37,13 @@ The grades shipped with BIMCraft (MAT-02), one JSON file per family, loaded by
 
 - The densities are values inside the density bands of Règles Th-Bât, not measured point values:
   the upper limit of the band for plaster, render, brick and block, and the density the band is
-  stated for (EPS 20, rock wool and glass wool 30, softwood 500) otherwise.
+  stated for (EPS 20, softwood 500) otherwise. Rock wool and glass wool take 30, the lowest density
+  their two bands share.
 - Concrete block takes the conductivity of its no-fines concrete band ("béton caverneux", 1600 to 1800
   kg/m³). It is a generic default: real masonry units are in another fascicule of the rules, which
   was not read.
 - Mineral wool is two entries: rock wool (25 to 40 kg/m³, 0.044) and glass wool (30 to 40 kg/m³,
-  0.039). Each takes density 30, the lowest density the two bands share.
+  0.039).
 - Softwood cladding reads 500 kg/m³ as the density at 15 % moisture; a dry density of 500 would give
   a conductivity of 0.15.
 - These are default values, for use when no declared product value exists. Wood-fibre board has no

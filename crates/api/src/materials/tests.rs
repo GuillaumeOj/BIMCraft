@@ -96,6 +96,18 @@ fn the_library_lists_filters_and_pages_its_grades() {
         json!({ "category": "steel" }),
     );
     assert_eq!(steel["total"], 5);
+    let wools = ok(
+        &mut session,
+        "materials.library",
+        json!({ "search": "wool" }),
+    );
+    let keys: Vec<&str> = wools["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|item| item["key"].as_str().unwrap())
+        .collect();
+    assert_eq!(keys, ["bimcraft/Glass wool", "bimcraft/Rock wool"]);
     let searched = ok(
         &mut session,
         "materials.library",
