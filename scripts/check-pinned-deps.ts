@@ -16,6 +16,9 @@ const EXACT_TOOLCHAIN = /^\d+\.\d+\.\d+$/;
 // workspace's root toolchain stays a stable release.
 const DATED_NIGHTLY = /^nightly-\d{4}-\d{2}-\d{2}$/;
 const COMMIT_SHA = /^[0-9a-f]{40}$/;
+// The shape the Renovate regex manager of .github/renovate.json5 reads: a comment, then the line it bumps.
+const RENOVATE_COMMENT = /^# renovate: datasource=\S+ depName=\S+( extractVersion=\S+)?$/;
+const TOOL_VERSION = /^([A-Z_]+_VERSION)=(.*)$/;
 const CARGO_DEP_SECTIONS = ["dependencies", "dev-dependencies", "build-dependencies"];
 const NPM_DEP_SECTIONS = ["dependencies", "devDependencies", "optionalDependencies", "overrides"];
 
@@ -120,6 +123,30 @@ export function checkRustToolchain(file: string, content: string): Issue[] {
   return [{ file, message: `toolchain channel must be ${expected}, got "${String(channel)}"` }];
 }
 
+/** Each tool version is exact and carries the `# renovate:` comment that keeps Renovate bumping it. */
+export function checkToolVersions(file: string, content: string): Issue[] {
+  const lines = content.split("\n");
+  return lines.flatMap((line, index): Issue[] => {
+    if (line === "" || line.startsWith("#")) return [];
+    const at = `line ${index + 1}`;
+    const [, name, value] = TOOL_VERSION.exec(line) ?? [];
+    if (name === undefined || value === undefined) {
+      return [{ file, message: `${at}: expected "NAME_VERSION=x.y.z", got "${line}"` }];
+    }
+    const issues: Issue[] = [];
+    if (!EXACT_TOOLCHAIN.test(value)) {
+      issues.push({ file, message: `${at}: ${name} must be an exact version "x.y.z", got "${value}"` });
+    }
+    if (!RENOVATE_COMMENT.test(lines[index - 1] ?? "")) {
+      issues.push({
+        file,
+        message: `${at}: ${name} needs a "# renovate: datasource=… depName=…" comment on the line above`,
+      });
+    }
+    return issues;
+  });
+}
+
 type Checker = (file: string, content: string) => Issue[];
 
 function checkerFor(file: string): Checker | undefined {
@@ -127,6 +154,7 @@ function checkerFor(file: string): Checker | undefined {
   if (name === "Cargo.toml") return checkCargoToml;
   if (name === "package.json") return checkPackageJson;
   if (name === "rust-toolchain.toml") return checkRustToolchain;
+  if (file === "scripts/tool-versions.env") return checkToolVersions;
   if (/^\.github\/(workflows\/[^/]+|actions\/[^/]+\/action)\.ya?ml$/.test(file)) return checkWorkflow;
   return undefined;
 }
