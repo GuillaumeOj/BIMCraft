@@ -38,13 +38,25 @@ check_repo() {
 }
 
 # Separate from `repo`, which stays fast and offline: this one downloads Renovate from npm.
+# Installed in a scratch project rather than with bunx, which runs the install scripts of Bun's
+# default trusted packages (re2's) and ignores the release age: an empty trustedDependencies blocks
+# every script (AGENTS.md §4), and the 14-day age applies to Renovate's dependencies too. Without
+# re2, Renovate checks regexes with JavaScript's engine, so RENOVATE_X_IGNORE_RE2 silences its warning.
 # --bun runs it on Bun, so it does not depend on the Node.js version installed. --no-global validates
 # the file as a repository config, as the Renovate app reads it, not as a self-hosted global config.
 check_renovate() {
   step "Renovate: .github/renovate.json5 is valid, with no warning"
   require bun
   version=$(sed -n 's/^RENOVATE_VERSION=//p' scripts/tool-versions.env)
-  bunx --bun --package "renovate@$version" renovate-config-validator --strict --no-global .github/renovate.json5
+  scratch=$(mktemp -d "${TMPDIR:-/tmp}/check-renovate.XXXXXX")
+  printf '{"private":true,"dependencies":{"renovate":"%s"},"trustedDependencies":[]}\n' "$version" \
+    >"$scratch/package.json"
+  status=0
+  { (cd "$scratch" && bun install --silent --minimum-release-age=1209600) &&
+    RENOVATE_X_IGNORE_RE2=true bun --bun "$scratch/node_modules/.bin/renovate-config-validator" \
+      --strict --no-global .github/renovate.json5; } || status=$?
+  rm -rf "$scratch"
+  return "$status"
 }
 
 check_rust() {
