@@ -5,6 +5,7 @@ use std::collections::BTreeMap;
 use core_model::units::Quantity;
 use thiserror::Error;
 
+use crate::SourceError;
 use crate::annex::{Factor, NationalAnnex};
 use crate::law::{
     BehaviourLaw, ConcreteBilinear, ConcreteParabolaRectangle, Hardening, LawError, LawKind,
@@ -192,6 +193,9 @@ pub enum MaterialError {
     /// The name or design code is longer than [`MAX_TEXT_LEN`] characters.
     #[error("the material's {0} is longer than {MAX_TEXT_LEN} characters")]
     TooLong(&'static str),
+    /// The name, design code or library key holds a control character, such as a line break.
+    #[error("the material's {0} contains a control character")]
+    ControlCharacter(&'static str),
     /// The law does not suit the category, such as a concrete law for steel.
     #[error("a {} material cannot follow a {} law", .category.name(), .law.name())]
     LawNotForCategory {
@@ -270,14 +274,13 @@ impl Material {
         design_code: Option<&str>,
         properties: BTreeMap<Property, Sourced<f64>>,
     ) -> Result<Self, MaterialError> {
-        let too_long = |field| move |_| MaterialError::TooLong(field);
         let name = bounded_text(name)
-            .map_err(too_long("name"))?
+            .map_err(text_error("name"))?
             .ok_or(MaterialError::EmptyName)?;
         let design_code = design_code
             .map(bounded_text)
             .transpose()
-            .map_err(too_long("design code"))?
+            .map_err(text_error("design code"))?
             .flatten();
         if !category.allows(law) {
             return Err(MaterialError::LawNotForCategory { category, law });
@@ -322,7 +325,7 @@ impl Material {
     ///
     /// Fails when the key is longer than [`MAX_TEXT_LEN`] characters.
     pub fn with_library_key(mut self, key: &str) -> Result<Self, MaterialError> {
-        let key = bounded_text(key).map_err(|_| MaterialError::TooLong("library key"))?;
+        let key = bounded_text(key).map_err(text_error("library key"))?;
         self.library_key = key.map(str::to_owned);
         Ok(self)
     }
@@ -433,6 +436,14 @@ impl Material {
         self.properties
             .iter()
             .map(|(property, value)| (*property, value))
+    }
+}
+
+/// The error for a text field that [`bounded_text`] refused.
+fn text_error(field: &'static str) -> impl Fn(SourceError) -> MaterialError {
+    move |error| match error {
+        SourceError::ControlCharacter => MaterialError::ControlCharacter(field),
+        _ => MaterialError::TooLong(field),
     }
 }
 
@@ -732,6 +743,18 @@ pub(crate) mod tests {
         assert_eq!(
             elastic("A", Some(&long), 1.0),
             Err(MaterialError::TooLong("design code"))
+        );
+        assert_eq!(
+            elastic("C30\n37", None, 1.0),
+            Err(MaterialError::ControlCharacter("name"))
+        );
+        assert_eq!(
+            elastic("A", Some("EN\r1992"), 1.0),
+            Err(MaterialError::ControlCharacter("design code"))
+        );
+        assert_eq!(
+            elastic("A", None, 1.0).unwrap().with_library_key("a\u{0}b"),
+            Err(MaterialError::ControlCharacter("library key"))
         );
         assert_eq!(
             steel(&[
@@ -1068,6 +1091,10 @@ pub(crate) mod tests {
         assert_eq!(
             inconsistent.to_string(),
             "the property fcm is below the property fck"
+        );
+        assert_eq!(
+            MaterialError::ControlCharacter("name").to_string(),
+            "the material's name contains a control character"
         );
         assert_eq!(
             MaterialError::TooLong("name").to_string(),

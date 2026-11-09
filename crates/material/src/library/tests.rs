@@ -193,6 +193,13 @@ fn malformed_sources_are_rejected_with_the_reason() {
                 error: MaterialError::OutOfRange(Property::YoungModulus),
             },
         ),
+        (
+            file(r"A\nB", "generic", "linear_elastic", &modulus("1e9", "1")),
+            LibraryError::Invalid {
+                index: 1,
+                error: MaterialError::ControlCharacter("name"),
+            },
+        ),
     ];
     for (json, error) in cases {
         let result = library.extend("mine", &json);
