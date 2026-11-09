@@ -114,7 +114,11 @@ export function ShellStateProvider({ children }: { children: ReactNode }) {
           <p className="toast">
             <span>{toast.message}</span>
             {toast.undoable && (
-              <button type="button" className="toast-action" onClick={() => void undo()}>
+              <button
+                type="button"
+                className="toast-action"
+                onClick={() => undo().catch(() => notify(t("toast.undoFailed")))}
+              >
                 {t("toast.undo")}
               </button>
             )}

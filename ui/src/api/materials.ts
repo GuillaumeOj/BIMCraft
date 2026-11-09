@@ -176,7 +176,8 @@ export async function historyDepth(api: ApiClient): Promise<number> {
       limit: HISTORY_PAGE,
     });
     depth += page.entries.filter((entry) => !entry.undone).length;
-    start = page.next;
+    // A core that repeats its cursor must not keep us here.
+    start = page.next !== null && page.next > start ? page.next : null;
   }
   return depth;
 }

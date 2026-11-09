@@ -41,6 +41,8 @@ export function MaterialsDialog({ onClose }: { onClose: () => void }) {
   const libraryButton = useRef<HTMLButtonElement>(null);
   const newButton = useRef<HTMLButtonElement>(null);
   const focusList = useRef(false);
+  // A material just added: kept selected until the list that contains it has arrived.
+  const pendingSelection = useRef<EntityId | null>(null);
   const opened = useRef(false);
 
   const fail = useCallback((error: unknown) => setBanner(failureMessage(error)), []);
@@ -55,6 +57,10 @@ export function MaterialsDialog({ onClose }: { onClose: () => void }) {
   // The first row is selected when the dialog opens, and the next one after a deletion.
   useEffect(() => {
     if (list.status !== "ready") return;
+    if (pendingSelection.current !== null) {
+      if (!list.value.some((item) => item.id === pendingSelection.current)) return;
+      pendingSelection.current = null;
+    }
     if (selected === null || !list.value.some((item) => item.id === selected)) {
       setSelected(list.value[0]?.id ?? null);
     }
@@ -69,13 +75,14 @@ export function MaterialsDialog({ onClose }: { onClose: () => void }) {
 
   // After an add or a deletion the list takes the focus once the detail view is back.
   useEffect(() => {
-    if (focusList.current && view === "detail") {
+    if (focusList.current && view === "detail" && listRef.current) {
       focusList.current = false;
       listRef.current?.focus();
     }
   });
 
   const select = (id: EntityId) => {
+    setBanner(null);
     setSelected(id);
     setInUse(null);
     setRenaming(false);
@@ -85,6 +92,7 @@ export function MaterialsDialog({ onClose }: { onClose: () => void }) {
     setBanner(null);
     setSearch("");
     setCategory(null);
+    pendingSelection.current = id;
     setSelected(id);
     setView("detail");
     focusList.current = true;
@@ -94,7 +102,8 @@ export function MaterialsDialog({ onClose }: { onClose: () => void }) {
 
   const startDelete = () => {
     const current = items.find((item) => item.id === selected);
-    if (current === undefined) return;
+    // The confirmation names and deletes `detail`: wait until it is the selected material's.
+    if (current === undefined || detail?.id !== selected) return;
     if (current.used_by > 0) setInUse(current.used_by);
     else setConfirming(true);
   };
@@ -105,6 +114,7 @@ export function MaterialsDialog({ onClose }: { onClose: () => void }) {
     const index = items.findIndex((item) => item.id === detail.id);
     try {
       await deleteMaterial(api, detail.id);
+      setBanner(null);
       setSelected((items[index + 1] ?? items[index - 1])?.id ?? null);
       focusList.current = true;
       reload();
@@ -163,7 +173,6 @@ export function MaterialsDialog({ onClose }: { onClose: () => void }) {
         <div className="materials-right">
           {shownView === "library" && (
             <LibraryBrowser
-              inProject={items}
               back={empty ? null : { label: backLabel, onBack: leaveSubview }}
               onAdded={(id, name) => created(id, name, true)}
               onFailure={fail}

@@ -347,7 +347,10 @@ function fieldFailure(
 const withRange = (message: string, range: string | null): string =>
   range === null ? message : `${message} ${range}`;
 
-/** "Between 0 and 0.5.", "At least 0.", "At most 1."; null for a property with no bound. */
+/**
+ * "Between 0 and 0.5.", "At least 0.", "More than 0.", "At most 1.", "Less than 1."; null for a
+ * property with no bound. A single bound says whether the value itself is accepted.
+ */
 function rangeHelp(
   property: MaterialProperty,
   language: Language,
@@ -355,8 +358,16 @@ function rangeHelp(
 ): string | null {
   const { min, max } = formatBounds(property, language);
   if (min !== null && max !== null) return t("materials.error.range", { min, max });
-  if (min !== null) return t("materials.error.rangeMin", { min });
-  return max === null ? null : t("materials.error.rangeMax", { max });
+  const { range } = property;
+  if (min !== null) {
+    return t(range.min_inclusive ? "materials.error.rangeMin" : "materials.error.rangeAbove", {
+      min,
+    });
+  }
+  if (max === null) return null;
+  return t(range.max_inclusive ? "materials.error.rangeMax" : "materials.error.rangeBelow", {
+    max,
+  });
 }
 
 type Edit = { kind: "unchanged" } | { kind: "invalid" } | { kind: "value"; value: number | null };

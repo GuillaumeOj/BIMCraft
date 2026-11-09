@@ -59,6 +59,19 @@ describe("ShellStateProvider", () => {
     expect(screen.queryByRole("button", { name: "Undo" })).not.toBeInTheDocument();
   });
 
+  it("says so when the undo is refused, instead of failing silently", async () => {
+    const core = fakeCore();
+    core.materials.seed("en1992-1-1/C25/30");
+    core.override("history.undo", () => {
+      throw new Error("refused");
+    });
+    const user = userEvent.setup();
+    renderWithCore(<Probe />, core);
+    await user.click(screen.getByRole("button", { name: "Notify with undo" }));
+    await user.click(await screen.findByRole("button", { name: "Undo" }));
+    expect(await screen.findByText("Could not undo. Try again.")).toBeInTheDocument();
+  });
+
   it("stops offering Undo once the model has moved on", async () => {
     const core = fakeCore();
     const user = userEvent.setup();

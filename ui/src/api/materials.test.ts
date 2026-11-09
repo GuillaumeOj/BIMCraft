@@ -150,6 +150,20 @@ describe("commands", () => {
 });
 
 describe("historyDepth", () => {
+  it("stops when the core repeats its cursor", async () => {
+    const transport: Transport = {
+      async send(message) {
+        const request = JSON.parse(message);
+        const result = { entries: [{ undone: false }], next: 0 };
+        return JSON.stringify({ jsonrpc: "2.0", id: request.id, result });
+      },
+      async listen() {
+        return () => {};
+      },
+    };
+    expect(await historyDepth(new ApiClient(transport))).toBe(1);
+  });
+
   it("counts the applied steps over every page", async () => {
     const pages = [
       { entries: [{ undone: false }, { undone: true }], next: 2 },

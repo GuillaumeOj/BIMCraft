@@ -103,7 +103,7 @@ describe("the project list", () => {
     core.materials.setUsedBy("C25/30", 3);
     open(core);
     const first = await option(/^C25\/30/);
-    expect(first).toHaveAttribute("aria-selected", "true");
+    await waitFor(() => expect(first).toHaveAttribute("aria-selected", "true"));
     expect(first).toHaveTextContent("Concrete · C25/30");
     expect(first).toHaveTextContent("Used by 3");
     expect(await option(/^S355/)).toHaveAttribute("aria-selected", "false");
@@ -308,6 +308,17 @@ describe("editing a value", () => {
     expect(field).toHaveAttribute("aria-invalid", "true");
     expect(field).toHaveAttribute("aria-describedby", message.id);
     expect(field).toHaveFocus();
+  });
+
+  it("says that a value must be above an excluded bound, not at least that bound", async () => {
+    const { user } = open(seeded(C25));
+    await user.click(await editButton("Characteristic compressive strength"));
+    const field = screen.getByRole("textbox", { name: /strength \(MPa\)/ });
+    await user.clear(field);
+    await user.type(field, "0{Enter}");
+    expect(
+      await screen.findByText("Enter a valid value for this property. More than 0."),
+    ).toBeInTheDocument();
   });
 
   it("refuses text that is not a number without asking the core", async () => {
@@ -621,6 +632,34 @@ describe("deleting", () => {
     await ask(user);
     await user.click(screen.getByRole("button", { name: "Delete material" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("This material no longer exists.");
+  });
+});
+
+describe("adding while the list is filtered", () => {
+  it("selects the new material and marks the grades of the whole project in the library", async () => {
+    const { user } = open(seeded(S355));
+    await user.type(await screen.findByRole("searchbox"), "s35");
+    await user.click(screen.getByRole("button", { name: "Add from library…" }));
+    expect(await grade(/^S355/)).toHaveTextContent("In the project");
+    await user.click(await grade(/^C25\/30/));
+    await user.click(screen.getByRole("button", { name: "Add to project" }));
+    expect(await screen.findByRole("heading", { name: "C25/30" })).toBeInTheDocument();
+    expect(await option(/^C25\/30/)).toHaveAttribute("aria-selected", "true");
+  });
+
+  it("keeps the toast's Undo in the dialog's Tab loop", async () => {
+    const { user } = open(seeded(S355));
+    await user.click(await screen.findByRole("button", { name: "Add from library…" }));
+    await user.click(await grade(/^C25\/30/));
+    await user.click(screen.getByRole("button", { name: "Add to project" }));
+    const undo = await screen.findByRole("button", { name: "Undo" });
+    screen.getByRole("button", { name: "Done" }).focus();
+    await user.tab();
+    expect(undo).toHaveFocus();
+    await user.tab();
+    expect(screen.getByRole("searchbox")).toHaveFocus();
+    await user.tab({ shift: true });
+    expect(undo).toHaveFocus();
   });
 });
 

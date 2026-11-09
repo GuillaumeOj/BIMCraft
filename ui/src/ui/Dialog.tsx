@@ -12,14 +12,23 @@ function tabStops(root: HTMLElement): HTMLElement[] {
   );
 }
 
-/** Wraps Tab and Shift+Tab around the ends of `root`, and pulls stray focus back in. */
-function keepTabInside(event: KeyboardEvent, root: HTMLElement) {
-  const stops = tabStops(root);
+/**
+ * Wraps Tab and Shift+Tab around the ends of `root` and pulls stray focus back in. The toast
+ * region is part of the loop: an Undo raised by the dialog must be reachable from it.
+ */
+function keepTabInside(
+  event: { shiftKey: boolean; preventDefault: () => void },
+  root: HTMLElement,
+) {
+  const toast = document.querySelector<HTMLElement>(".toast-region");
+  const stops = [...tabStops(root), ...(toast ? tabStops(toast) : [])];
   const [first, last] = [stops[0], stops.at(-1)];
   const [edge, other] = event.shiftKey ? [first, last] : [last, first];
-  if (!root.contains(document.activeElement) || document.activeElement === edge) {
+  const active = document.activeElement;
+  const inside = active !== null && stops.includes(active as HTMLElement);
+  if (!inside || active === edge) {
     event.preventDefault();
-    (root.contains(document.activeElement) ? other : first)?.focus();
+    (inside ? other : first)?.focus();
   }
 }
 
@@ -50,6 +59,17 @@ export function Dialog({ titleId, onCancel, children }: DialogProps) {
       if (opener instanceof HTMLElement && opener.isConnected) opener.focus();
     };
   }, [opener]);
+
+  // Tab pressed in the toast, which sits outside the dialog, goes back into the loop.
+  useEffect(() => {
+    const onToastKey = (event: globalThis.KeyboardEvent) => {
+      const toast = document.querySelector(".toast-region");
+      const inToast = event.target instanceof Node && toast?.contains(event.target);
+      if (event.key === "Tab" && inToast && dialog.current) keepTabInside(event, dialog.current);
+    };
+    document.addEventListener("keydown", onToastKey);
+    return () => document.removeEventListener("keydown", onToastKey);
+  }, []);
 
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     if (event.key === "Escape" && !event.defaultPrevented) {

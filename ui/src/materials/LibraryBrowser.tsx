@@ -4,9 +4,9 @@ import {
   type GradeDetail,
   type GradeSummary,
   getGrade,
+  listMaterials,
   MATERIAL_CATEGORIES,
   type MaterialCategory,
-  type MaterialSummary,
   searchLibrary,
   useApi,
 } from "../api";
@@ -24,8 +24,6 @@ import { useDebounced } from "./useDebounced";
 const PAGE = 50;
 
 type Props = {
-  /** The project's materials, to mark the grades already in the project. */
-  inProject: readonly MaterialSummary[];
   /** Null when there is nothing to go back to (the project has no material yet). */
   back: { label: string; onBack: () => void } | null;
   onAdded: (id: string, name: string) => void;
@@ -38,7 +36,7 @@ type Page =
   | { status: "error" };
 
 /** The "Add from library" sub-view: search, filter, preview and add. */
-export function LibraryBrowser({ inProject, back, onAdded, onFailure }: Props) {
+export function LibraryBrowser({ back, onAdded, onFailure }: Props) {
   const { t } = useI18n();
   const api = useApi();
   const [search, setSearch] = useState("");
@@ -51,10 +49,23 @@ export function LibraryBrowser({ inProject, back, onAdded, onFailure }: Props) {
   const [nameError, setNameError] = useState<string | undefined>();
   const [busy, setBusy] = useState(false);
   const [nameId, searchId] = [useId(), useId()];
+  // The grades of the whole project, not the filtered list of the left pane.
+  const [projectGrades, setProjectGrades] = useState<ReadonlySet<string | null>>(new Set());
   const list = useRef<HTMLDivElement>(null);
   const root = useRef<HTMLDivElement>(null);
   const prefix = useId();
   const latest = useRef(0);
+
+  useEffect(() => {
+    let current = true;
+    listMaterials(api).then(
+      (items) => current && setProjectGrades(new Set(items.map((item) => item.grade))),
+      () => undefined,
+    );
+    return () => {
+      current = false;
+    };
+  }, [api]);
 
   // The first field takes the focus when the sub-view opens.
   useEffect(() => root.current?.querySelector("input")?.focus(), []);
@@ -133,7 +144,6 @@ export function LibraryBrowser({ inProject, back, onAdded, onFailure }: Props) {
     }
   };
 
-  const inProjectKeys = new Set(inProject.map((material) => material.grade));
   const shownProperties = grade?.properties.filter((property) => property.value !== null) ?? [];
 
   return (
@@ -198,7 +208,7 @@ export function LibraryBrowser({ inProject, back, onAdded, onFailure }: Props) {
                     {item.design_code === null
                       ? gradeName(item.key)
                       : designCodeLabel(item.design_code)}
-                    {inProjectKeys.has(item.key) &&
+                    {projectGrades.has(item.key) &&
                       `${SEPARATOR}${t("materials.library.inProject")}`}
                   </span>
                 </span>
