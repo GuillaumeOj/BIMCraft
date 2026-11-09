@@ -11,6 +11,8 @@ publish = false
 core-model = { workspace = true }
 core-txn = { workspace = true }
 libm = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
 thiserror = { workspace = true }
 
 [dev-dependencies]
