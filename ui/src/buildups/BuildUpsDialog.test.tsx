@@ -504,6 +504,14 @@ describe("layers", () => {
     ).toBeInTheDocument();
   });
 
+  it("clears a material that an air gap cannot use, rather than showing a blank select over it", async () => {
+    const { user } = await edit();
+    await user.selectOptions(select("Function of layer 1"), "structure");
+    await user.selectOptions(select("Material of layer 1"), "C25/30");
+    await user.selectOptions(select("Function of layer 1"), "air_gap");
+    expect(select("Material of layer 1")).toHaveDisplayValue("Choose a material");
+  });
+
   it("keeps defaults while the function changes, and marks a chosen priority as modified", async () => {
     const { user } = await edit();
     expect(screen.getByRole("checkbox", { name: "Core, layer 1" })).not.toBeChecked();

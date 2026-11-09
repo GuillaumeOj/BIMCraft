@@ -87,12 +87,17 @@ export function LayerRow(props: LayerRowProps) {
             className="select"
             aria-label={t("buildups.function.label", { n })}
             value={layer.function}
-            onChange={(event) =>
-              props.onChange({
-                function:
-                  BUILDUP_FUNCTIONS.find((fn) => fn === event.target.value) ?? layer.function,
-              })
-            }
+            onChange={(event) => {
+              const next =
+                BUILDUP_FUNCTIONS.find((fn) => fn === event.target.value) ?? layer.function;
+              // The material select could not show a material the new function does not allow.
+              const dropped =
+                next === "air_gap" &&
+                props.materials.some(
+                  (material) => material.id === layer.material && material.category !== "generic",
+                );
+              props.onChange({ function: next, ...(dropped ? { material: null } : {}) });
+            }}
             {...control("function")}
           >
             {BUILDUP_FUNCTIONS.map((fn) => (

@@ -12,8 +12,8 @@ const DELAY_MS = 250;
  */
 export function useBuildUpPreview(draft: Draft, revision: number): BuildUpPreview | null {
   const api = useApi();
-  const { usage, layers } = draft;
-  const inputs = useMemo(() => layerInputs({ ...draft, layers }), [draft, layers]);
+  const { usage } = draft;
+  const inputs = useMemo(() => layerInputs(draft), [draft]);
   // A name or description edit leaves the question as it was: no new call.
   const question = useDebounced(
     useMemo(() => JSON.stringify([usage, inputs, revision]), [usage, inputs, revision]),
