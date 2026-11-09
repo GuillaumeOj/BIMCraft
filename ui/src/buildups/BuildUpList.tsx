@@ -189,6 +189,7 @@ export function BuildUpList(props: Props) {
                 onKeep={() => closeInline(item.id)}
                 onDelete={async () => {
                   setInline(null);
+                  setBannerKey(null);
                   try {
                     await props.onDelete(item.id);
                   } catch (error) {

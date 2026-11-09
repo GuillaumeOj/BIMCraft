@@ -21,7 +21,7 @@ A few words used on this page:
 3. Enter a **Name**, and a **Description** if you like.
 4. Fill in the first layer: choose its **Function** and its **Material**, and enter its **Thickness** in millimetres. A decimal point and a decimal comma both work. Only a membrane may be 0 mm thick.
 5. Choose **Add layer** for each further layer (or press Ctrl+Enter in a layer: the new layer goes after it).
-6. Optional: adjust the **Join priority** or the **Core** box of a layer. A priority you changed is marked **Modified**; choose "Use the default for this function" to go back.
+6. Optional: adjust the **Join priority** or the **Core** box of a layer. A priority you changed is marked **Modified**; choose the option marked "(default)" in the list to go back.
 7. Choose **Apply**. **Shortcut:** Enter in a text field.
 
 **Result:** the build-up appears in the list, with a message "Build-up applied" and an **Undo** button. Applying is one undo step.

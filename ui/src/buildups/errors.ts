@@ -46,7 +46,8 @@ function coreSpan(draft: Draft): [number, number] | null {
 
 function clientErrors(draft: Draft): CoreError[] {
   const name = draft.name.trim();
-  const errors: CoreError[] = name === "" || name.length > 120 ? [{ code: "invalid_name" }] : [];
+  const errors: CoreError[] =
+    name === "" || [...name].length > 120 ? [{ code: "invalid_name" }] : [];
   draft.layers.forEach((layer, index) => {
     if (layer.material === null) errors.push({ code: "material_required", index });
     if (!isThickness(layer.thickness)) errors.push({ code: "invalid_thickness", index });

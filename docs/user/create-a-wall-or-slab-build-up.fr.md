@@ -21,7 +21,7 @@ Quelques mots employés sur cette page :
 3. Saisissez un **Nom**, et une **Description** si vous le souhaitez.
 4. Remplissez la première couche : choisissez sa **Fonction** et son **Matériau**, et saisissez son **Épaisseur** en millimètres. Le point décimal et la virgule décimale fonctionnent tous deux. Seule une membrane peut faire 0 mm.
 5. Choisissez **Ajouter une couche** pour chaque couche suivante (ou appuyez sur Ctrl+Entrée dans une couche : la nouvelle couche se place après elle).
-6. Facultatif : ajustez la **Priorité de jonction** ou la case **Noyau** d'une couche. Une priorité modifiée porte la mention **Modifiée** ; choisissez « Utiliser la valeur par défaut de la fonction » pour y revenir.
+6. Facultatif : ajustez la **Priorité de jonction** ou la case **Noyau** d'une couche. Une priorité modifiée porte la mention **Modifiée** ; choisissez dans la liste l'option marquée « (par défaut) » pour y revenir.
 7. Choisissez **Appliquer**. **Raccourci :** Entrée dans un champ de texte.
 
 **Résultat :** la composition apparaît dans la liste, avec un message « Composition appliquée » et un bouton **Annuler**. Appliquer est une seule étape d'annulation.

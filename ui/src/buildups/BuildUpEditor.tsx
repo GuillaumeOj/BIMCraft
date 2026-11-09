@@ -1,5 +1,5 @@
 import { type ReactNode, useEffect, useId, useRef, useState } from "react";
-import { type BuildUpPreview, MAX_LAYERS, type MaterialSummary } from "../api";
+import type { BuildUpPreview, MaterialSummary } from "../api";
 import { formatPlain } from "../georef/units";
 import { useI18n } from "../i18n/I18nProvider";
 import type { MessageKey } from "../i18n/i18n";
@@ -207,7 +207,6 @@ export function BuildUpEditor(props: Props) {
           {t("buildups.layers.add")}
         </button>
         <span className="hint">{t("buildups.layers.addHint")}</span>
-        {!canAddLayer(draft) && <span className="visually-hidden">{`${MAX_LAYERS}`}</span>}
       </div>
       <div className="editor-summary">
         <SectionPreview draft={draft} selected={selected} />

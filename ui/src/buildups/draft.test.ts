@@ -99,6 +99,14 @@ describe("draftFromDetail", () => {
     expect(draft.layers[1]).toMatchObject({ thickness: "200", priority: 2, core: false });
   });
 
+  it("keeps a thickness finer than a tenth of a millimetre", () => {
+    const [first] = detail.layers;
+    const fine = { ...detail, layers: first ? [{ ...first, thickness: 0.00025 }] : [] };
+    const draft = draftFromDetail(fine, "en");
+    expect(draft.layers[0]?.thickness).toBe("0.25");
+    expect(thicknessInMetres("0.25")).toBe(0.00025);
+  });
+
   it("writes the decimal comma in French and keeps a description", () => {
     const draft = draftFromDetail({ ...detail, description: "South" }, "fr");
     expect(draft.layers[0]?.thickness).toBe("12,5");

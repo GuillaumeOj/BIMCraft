@@ -44,11 +44,12 @@ export function BuildUpEditorView({ titleId, id, saved, title, onClose, cancelRe
   const [managing, setManaging] = useState<string | null>(null);
   const [live, setLive] = useState({ text: "", n: 0 });
   const [busy, setBusy] = useState(false);
-  const { materials, reload } = useProjectMaterials();
+  const applying = useRef(false);
+  const { materials, revision, reload } = useProjectMaterials();
   const before = useRef<ReadonlySet<string>>(new Set());
   const body = useRef<HTMLFormElement>(null);
 
-  const preview = useBuildUpPreview(draft, 0);
+  const preview = useBuildUpPreview(draft, revision);
   const dirty = isDirty(draft, saved);
   const errors = submitted
     ? buildErrors(draft, [...(preview?.errors ?? []), ...refusals])
@@ -91,7 +92,18 @@ export function BuildUpEditorView({ titleId, id, saved, title, onClose, cancelRe
   };
 
   const apply = async () => {
-    if (busy) return;
+    if (applying.current) return;
+    applying.current = true;
+    setBusy(true);
+    try {
+      await check();
+    } finally {
+      applying.current = false;
+      setBusy(false);
+    }
+  };
+
+  const check = async () => {
     setSubmitted(true);
     const layers = layerInputs(draft);
     const { answer, found } = await problems(layers);
@@ -111,15 +123,12 @@ export function BuildUpEditorView({ titleId, id, saved, title, onClose, cancelRe
   };
 
   const commit = async (layers: BuildUpLayerInput[]) => {
-    setBusy(true);
     try {
       onClose(await save(api, id, draft, layers));
     } catch (error) {
       const refusal = buildUpRefusal(error);
       setRefusals([{ code: refusal?.code ?? "", index: refusal?.index ?? undefined }]);
       setTimeout(focusFirstProblem);
-    } finally {
-      setBusy(false);
     }
   };
 

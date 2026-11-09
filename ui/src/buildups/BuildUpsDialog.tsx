@@ -118,6 +118,7 @@ export function BuildUpsDialog({ onClose }: { onClose: () => void }) {
     const name = items?.[index]?.name ?? "";
     await deleteBuildUp(api, id);
     setSelected(next?.id ?? null);
+    focusRow.current = next?.id ?? null;
     reload();
     notify(t("buildups.toast.deleted", { name }), { undoable: true });
   };

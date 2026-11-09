@@ -84,12 +84,16 @@ export function draftFromDetail(detail: BuildUpDetail, language: Language): Draf
       id: layer.id,
       function: layer.function,
       material: layer.material,
-      thickness: formatPlain(roundMetres(layer.thickness * 1000), 1, language),
+      thickness: formatPlain(roundMetres(layer.thickness * 1000), THICKNESS_DIGITS, language),
       priority: layer.priority === DEFAULT_PRIORITY[layer.function] ? null : layer.priority,
       core: layer.core === defaultCore(layer) ? null : layer.core,
     })),
   };
 }
+
+// Enough decimals for any thickness the core stores: Apply sends back what the field shows, so a
+// rounded field would silently change the layer (0.25 mm must not become 0.3 mm).
+const THICKNESS_DIGITS = 6;
 
 // Multiplying by a power of ten can leave binary noise (0.0125 × 1000 = 12.500000000000002).
 const roundMetres = (value: number): number => Number(value.toPrecision(12));

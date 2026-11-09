@@ -5,6 +5,8 @@ import { listMaterials, type MaterialSummary, useApi } from "../api";
 export function useProjectMaterials() {
   const api = useApi();
   const [materials, setMaterials] = useState<MaterialSummary[]>([]);
+  // Bumped by every read, so that what depends on a material's values (the totals) asks again.
+  const [revision, setRevision] = useState(0);
   const latest = useRef(0);
 
   const reload = useCallback(async () => {
@@ -12,7 +14,10 @@ export function useProjectMaterials() {
     const mine = latest.current;
     try {
       const items = await listMaterials(api);
-      if (mine === latest.current) setMaterials(items);
+      if (mine === latest.current) {
+        setMaterials(items);
+        setRevision((current) => current + 1);
+      }
       return items;
     } catch {
       // The picker keeps what it had; the editor still works with those.
@@ -28,5 +33,5 @@ export function useProjectMaterials() {
     };
   }, [api, reload]);
 
-  return { materials, reload };
+  return { materials, revision, reload };
 }

@@ -314,7 +314,6 @@
   "buildups.thickness.label": "Épaisseur de la couche {n} (mm)",
   "buildups.priority.label": "Priorité de jonction de la couche {n}",
   "buildups.priority.default": "{n} (par défaut)",
-  "buildups.priority.useDefault": "Utiliser la valeur par défaut de la fonction ({n})",
   "buildups.priority.modified": "Modifiée",
   "buildups.priority.help.title": "À propos de la priorité de jonction",
   "buildups.priority.help": "Quand deux murs se rencontrent, les couches de priorité plus haute (1) traversent celles de priorité plus basse (5). Les couches de même priorité se joignent.",

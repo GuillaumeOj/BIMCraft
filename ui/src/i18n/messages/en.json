@@ -314,7 +314,6 @@
   "buildups.thickness.label": "Thickness of layer {n} (mm)",
   "buildups.priority.label": "Join priority of layer {n}",
   "buildups.priority.default": "{n} (default)",
-  "buildups.priority.useDefault": "Use the default for this function ({n})",
   "buildups.priority.modified": "Modified",
   "buildups.priority.help.title": "About join priority",
   "buildups.priority.help": "When two walls meet, layers with a higher priority (1) run through layers with a lower priority (5). Layers with the same priority meet.",
