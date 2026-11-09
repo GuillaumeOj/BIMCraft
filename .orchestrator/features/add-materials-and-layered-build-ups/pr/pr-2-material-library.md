@@ -35,6 +35,6 @@ Boards 4.7–4.14 in the FigCraft design. Where the code differs from them, and 
 - [x] No new dependency
 - [x] End-user docs updated
 - [x] Code review and simplification pass done
-- [ ] Commits signed off (DCO): two `.orchestrator/` planning commits (a942e0f, 10f8f1b) have no sign-off; see the stack notes
+- [x] Commits signed off (DCO)
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)

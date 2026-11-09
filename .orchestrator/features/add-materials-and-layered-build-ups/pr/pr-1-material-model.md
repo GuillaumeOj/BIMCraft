@@ -30,6 +30,6 @@ N/A: internal change. Users see materials in the next PR (#86).
 - [x] No new dependency
 - [x] End-user docs: N/A, explained above
 - [x] Code review and simplification pass done
-- [ ] Commits signed off (DCO): six `.orchestrator/` planning and design commits (3b9df09, b6c0f19, 4c1debd, 13ead78, ba0d987, 81fcfca) have no sign-off; see the stack notes
+- [x] Commits signed off (DCO)
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)
