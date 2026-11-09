@@ -90,7 +90,7 @@ A substance that elements are made of, such as a concrete or steel grade (MAT-01
 
 ### <a id="MaterialLayer"></a>MaterialLayer
 
-One layer of a wall or slab build-up (MAT-03): a material and a thickness. Where layered elements meet, the layer with the higher join priority runs through (GEO-11).
+One layer of a wall or slab build-up (MAT-03): a material, a thickness and a function. Where layered elements meet, the layer with the higher join priority runs through (GEO-11). The layer's object id is its stable LayerId (ADR 0010): reordering, renaming or resizing never changes it.
 
 - **Introduced in:** version 3
 - **IFC:** `IfcMaterialLayer`
@@ -100,8 +100,9 @@ One layer of a wall or slab build-up (MAT-03): a material and a thickness. Where
 | Attribute | Value | Presence | Set on | Description |
 | --- | --- | --- | --- | --- |
 | `material` | reference to [Material](#Material) | required | instance | What the layer is made of. |
-| `thickness` | length (m) | required | instance | Thickness of the layer. |
-| `priority` | integer | default `0` | instance | Join priority from 0 to 100, as IFC's Priority: the structural core highest, finishes lowest. |
+| `thickness` | length (m) | required | instance | Thickness of the layer. A membrane may have none. |
+| `function` | enumeration [LayerFunction](enumerations.md#LayerFunction) | required | instance | What the layer does. |
+| `priority` | integer | required | instance | Join priority from 1 (highest) to 5 (lowest): where layered elements meet, a layer of higher priority runs through layers of lower priority, and equal priorities meet. An IFC export writes 0 to 100 (ADR 0019). |
 | `is_core` | boolean | default `false` | instance | Whether the layer belongs to the structural core, which the default location line follows. |
 | `name` | text | optional | instance | Name shown in plans and schedules, such as `Insulation`. |
 
@@ -117,7 +118,9 @@ A wall or slab build-up (MAT-03): layers in order from the exterior face to the 
 | Attribute | Value | Presence | Set on | Description |
 | --- | --- | --- | --- | --- |
 | `name` | text | required | instance | Name of the build-up, such as `Exterior wall 300`. |
-| `layers` | list of reference to [MaterialLayer](#MaterialLayer) | required | instance | The layers, from the exterior face to the interior face. |
+| `usage` | enumeration [BuildUpUsage](enumerations.md#BuildUpUsage) | required | instance | Whether the build-up is for walls or for slabs. |
+| `description` | text | optional | instance | Free text about the build-up. |
+| `layers` | list of reference to [MaterialLayer](#MaterialLayer) | required | instance | The layers, from the exterior face to the interior face (walls) or from the top face down (slabs). |
 
 ### <a id="MaterialOriginal"></a>MaterialOriginal
 

@@ -1,0 +1,29 @@
+format = 1
+
+[enumeration]
+name = "LayerFunction"
+doc = "What a layer of a build-up does; it decides the default join priority (MAT-03)."
+
+[[item]]
+name = "structure"
+doc = "The load-bearing layer."
+
+[[item]]
+name = "substrate"
+doc = "A base for another layer, such as a screed or a backing wall."
+
+[[item]]
+name = "insulation"
+doc = "Thermal or acoustic insulation."
+
+[[item]]
+name = "air_gap"
+doc = "A ventilated or still air layer."
+
+[[item]]
+name = "membrane"
+doc = "A thin sheet, such as a vapour barrier or a waterproofing layer; it may have no thickness."
+
+[[item]]
+name = "finish"
+doc = "An exposed surface, such as plaster, render or cladding."

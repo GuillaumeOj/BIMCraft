@@ -41,6 +41,14 @@ pub(crate) const CORE_SCHEMA: &[(&str, &str)] = &[
         include_str!("../../../schema/core/enumerations/behaviour_law.toml"),
     ),
     (
+        "enumerations/build_up_usage.toml",
+        include_str!("../../../schema/core/enumerations/build_up_usage.toml"),
+    ),
+    (
+        "enumerations/layer_function.toml",
+        include_str!("../../../schema/core/enumerations/layer_function.toml"),
+    ),
+    (
         "enumerations/material_category.toml",
         include_str!("../../../schema/core/enumerations/material_category.toml"),
     ),

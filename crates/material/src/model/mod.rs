@@ -20,7 +20,8 @@ pub use edit::{
     set_value,
 };
 pub use layer_sets::{
-    LAYER_ENTITY, LAYER_SET_ENTITY, LayerSetReadError, layer_set_commands, read_layer_set,
+    LAYER_ENTITY, LAYER_SET_ENTITY, LayerSetReadError, delete_layer_set, layer_ids,
+    layer_set_commands, read_layer_set, replace_layer_set,
 };
 
 /// The core schema entity that stores materials.

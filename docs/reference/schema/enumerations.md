@@ -17,6 +17,32 @@ How the stress in a material follows its strain.
 | `timber_elastic_brittle` | Linear up to the strength, brittle in tension and plastic in compression, for timber parallel to the grain (EN 1995-1-1). |
 | `none` | No structural behaviour: the material carries no stress in design. |
 
+## <a id="BuildUpUsage"></a>BuildUpUsage
+
+What a build-up is for: layers of a wall run from the exterior face in, layers of a slab from the top face down (ADR 0010).
+
+- **Introduced in:** version 3
+
+| Item | Description |
+| --- | --- |
+| `wall` | A wall build-up. |
+| `slab` | A slab build-up. |
+
+## <a id="LayerFunction"></a>LayerFunction
+
+What a layer of a build-up does; it decides the default join priority (MAT-03).
+
+- **Introduced in:** version 3
+
+| Item | Description |
+| --- | --- |
+| `structure` | The load-bearing layer. |
+| `substrate` | A base for another layer, such as a screed or a backing wall. |
+| `insulation` | Thermal or acoustic insulation. |
+| `air_gap` | A ventilated or still air layer. |
+| `membrane` | A thin sheet, such as a vapour barrier or a waterproofing layer; it may have no thickness. |
+| `finish` | An exposed surface, such as plaster, render or cladding. |
+
 ## <a id="MaterialCategory"></a>MaterialCategory
 
 What a material is; it decides which properties it gives and which behaviour laws suit it.

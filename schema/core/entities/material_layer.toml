@@ -4,8 +4,9 @@ format = 1
 name = "MaterialLayer"
 kind = "resource"
 doc = """
-One layer of a wall or slab build-up (MAT-03): a material and a thickness. Where layered \
-elements meet, the layer with the higher join priority runs through (GEO-11).\
+One layer of a wall or slab build-up (MAT-03): a material, a thickness and a function. Where \
+layered elements meet, the layer with the higher join priority runs through (GEO-11). The layer's \
+object id is its stable LayerId (ADR 0010): reordering, renaming or resizing never changes it.\
 """
 
 [ifc]
@@ -21,13 +22,19 @@ doc = "What the layer is made of."
 name = "thickness"
 value = "quantity:length"
 required = true
-doc = "Thickness of the layer."
+doc = "Thickness of the layer. A membrane may have none."
+
+[[attribute]]
+name = "function"
+value = "enum:LayerFunction"
+required = true
+doc = "What the layer does."
 
 [[attribute]]
 name = "priority"
 value = "integer"
-default = 0
-doc = "Join priority from 0 to 100, as IFC's Priority: the structural core highest, finishes lowest."
+required = true
+doc = "Join priority from 1 (highest) to 5 (lowest): where layered elements meet, a layer of higher priority runs through layers of lower priority, and equal priorities meet. An IFC export writes 0 to 100 (ADR 0019)."
 
 [[attribute]]
 name = "is_core"

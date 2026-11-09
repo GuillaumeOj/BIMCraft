@@ -18,7 +18,18 @@ required = true
 doc = "Name of the build-up, such as `Exterior wall 300`."
 
 [[attribute]]
+name = "usage"
+value = "enum:BuildUpUsage"
+required = true
+doc = "Whether the build-up is for walls or for slabs."
+
+[[attribute]]
+name = "description"
+value = "text"
+doc = "Free text about the build-up."
+
+[[attribute]]
 name = "layers"
 value = "list:ref:MaterialLayer"
 required = true
-doc = "The layers, from the exterior face to the interior face."
+doc = "The layers, from the exterior face to the interior face (walls) or from the top face down (slabs)."
