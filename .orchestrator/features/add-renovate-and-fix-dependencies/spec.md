@@ -87,3 +87,8 @@ One task, `back`. This is repository tooling (`.github/`, `scripts/`, `docs/dev/
 4. The config has the groups of D1 and the `prBodyNotes` of D3, and lock-file maintenance is on.
 5. `docs/dev/quality.md` (dependencies and fuzzing sections) and AGENTS.md describe the result. "User docs: N/A (developer tooling)."
 6. `scripts/check-all.sh repo` and the targeted checks pass. Commits are Conventional (`ci(deps): …`, `build(deps): …`) and signed off.
+
+## Findings during T1 (plan approved)
+
+- **G1 was false.** Renovate has a built-in `rust-toolchain` manager: it matches `(^|/)rust-toolchain(\.toml)?$`, uses the `rust-version` datasource, which has release timestamps (so the 14-day age applies), and the `rust-release-channel` versioning. It already reads both toolchain files, so D2's custom manager is dropped. The fuzz nightly rule works: nightly is only ever updated to a newer nightly. It becomes the `fuzz-nightly` group.
+- **Lock-file maintenance and the 14-day age.** Renovate does not apply `minimumReleaseAge` to lock-file maintenance. For bun, `ui/bunfig.toml` (`minimumReleaseAge`) enforces the age on its own; cargo has no such guard. The user decides whether cargo keeps lock-file maintenance. Lock-file maintenance goes in its own commit so that decision can change it alone.
