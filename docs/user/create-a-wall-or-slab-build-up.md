@@ -40,7 +40,7 @@ If a layer has a material without a thermal conductivity, such as an air gap, it
 
 ## Choose or add a material
 
-In the **Material** list, choose a material of your project. The last item, **Manage materials…**, opens the Materials dialog on top of the editor: add or create a material, press **Done**, and the new material is chosen for the layer. An **air gap** layer can only use generic materials.
+In the **Material** list, choose a material of your project. The **Manage materials…** button next to the list opens the Materials dialog on top of the editor: add or create a material, press **Done**, and the new material is chosen for the layer. An **air gap** layer can only use generic materials.
 
 ## Edit, duplicate, rename and delete a build-up
 

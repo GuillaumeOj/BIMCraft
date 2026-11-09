@@ -635,10 +635,20 @@ describe("leaving the editor", () => {
 });
 
 describe("the materials of a layer", () => {
+  it("does not offer the Materials dialog as an option of the select", async () => {
+    const { user } = open();
+    await user.click(await screen.findByRole("button", { name: "New wall build-up" }));
+    expect(
+      within(select("Material of layer 1")).queryByRole("option", { name: "Manage materials…" }),
+    ).not.toBeInTheDocument();
+  });
+
   it("opens the Materials dialog over the editor and picks the material that was added", async () => {
     const { user } = open();
     await user.click(await screen.findByRole("button", { name: "New wall build-up" }));
-    await user.selectOptions(select("Material of layer 1"), "Manage materials…");
+    await user.click(
+      screen.getAllByRole("button", { name: "Manage materials…" })[0] as HTMLElement,
+    );
     const materials = await screen.findByRole("dialog", { name: "Materials" });
     await user.click(await within(materials).findByRole("button", { name: "New material…" }));
     await user.type(within(materials).getByRole("textbox", { name: "Name" }), "Brick");
@@ -655,7 +665,9 @@ describe("the materials of a layer", () => {
     const { user } = open();
     await user.click(await screen.findByRole("button", { name: "New wall build-up" }));
     await user.selectOptions(select("Material of layer 1"), "C25/30");
-    await user.selectOptions(select("Material of layer 1"), "Manage materials…");
+    await user.click(
+      screen.getAllByRole("button", { name: "Manage materials…" })[0] as HTMLElement,
+    );
     await user.click(await screen.findByRole("button", { name: "Done" }));
     await waitFor(() =>
       expect(screen.queryByRole("dialog", { name: "Materials" })).not.toBeInTheDocument(),

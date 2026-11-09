@@ -167,6 +167,10 @@
   min-width: 0;
 }
 
+.layer-manage {
+  margin-top: 4px;
+}
+
 .layer-thickness input {
   text-align: right;
 }
@@ -309,6 +313,11 @@
 
 .preview-number {
   color: var(--bc-ink-2);
+}
+
+/* The band is dark in both themes: its number must not use the band's own colour. */
+.preview-layer[data-function="membrane"] .preview-number {
+  color: var(--bc-surface);
 }
 
 .preview-core {

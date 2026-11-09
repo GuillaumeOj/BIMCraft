@@ -8,8 +8,6 @@ import { ErrorIcon } from "../ui/ErrorIcon";
 import { DEFAULT_PRIORITY, type DraftLayer, defaultCore, effectiveCore, PRIORITIES } from "./draft";
 import type { RowErrors } from "./errors";
 
-/** The value of the material select that opens the Materials dialog. */
-export const MANAGE = "__manage__";
 const USE_DEFAULT = "default";
 
 export type LayerRowProps = {
@@ -110,10 +108,7 @@ export function LayerRow(props: LayerRowProps) {
             aria-label={t("buildups.material.label", { n })}
             aria-invalid={errors.material !== undefined}
             value={layer.material ?? ""}
-            onChange={(event) => {
-              if (event.target.value === MANAGE) props.onManage();
-              else props.onChange({ material: event.target.value || null });
-            }}
+            onChange={(event) => props.onChange({ material: event.target.value || null })}
             {...control("material")}
             {...withMaterial("material")}
           >
@@ -123,8 +118,17 @@ export function LayerRow(props: LayerRowProps) {
                 {material.name}
               </option>
             ))}
-            <option value={MANAGE}>{t("buildups.material.manage")}</option>
           </select>
+          {/* A button, not a select option: arrow keys on a closed select pick an option at once,
+              and opening a dialog on input is a change of context (WCAG 3.2.2). */}
+          <button
+            type="button"
+            className="button button-small layer-manage"
+            onClick={props.onManage}
+            {...control("manage")}
+          >
+            {t("buildups.material.manage")}
+          </button>
         </td>
         <td>
           <div
