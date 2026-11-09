@@ -1,0 +1,41 @@
+format = 1
+
+[entity]
+name = "MaterialLayer"
+kind = "resource"
+doc = """
+One layer of a wall or slab build-up (MAT-03): a material and a thickness. Where layered \
+elements meet, the layer with the higher join priority runs through (GEO-11).\
+"""
+
+[ifc]
+entity = "IfcMaterialLayer"
+
+[[attribute]]
+name = "material"
+value = "ref:Material"
+required = true
+doc = "What the layer is made of."
+
+[[attribute]]
+name = "thickness"
+value = "quantity:length"
+required = true
+doc = "Thickness of the layer."
+
+[[attribute]]
+name = "priority"
+value = "integer"
+default = 0
+doc = "Join priority from 0 to 100, as IFC's Priority: the structural core highest, finishes lowest."
+
+[[attribute]]
+name = "is_core"
+value = "bool"
+default = false
+doc = "Whether the layer belongs to the structural core, which the default location line follows."
+
+[[attribute]]
+name = "name"
+value = "text"
+doc = "Name shown in plans and schedules, such as `Insulation`."

@@ -88,6 +88,37 @@ A substance that elements are made of, such as a concrete or steel grade (MAT-01
 | `gamma_m` | real, sourced | optional | instance | Partial factor γM for timber or masonry, to the recommended values. |
 | `gamma_m_fr` | real, sourced | optional | instance | Partial factor γM for timber or masonry, to the French national annex. |
 
+### <a id="MaterialLayer"></a>MaterialLayer
+
+One layer of a wall or slab build-up (MAT-03): a material and a thickness. Where layered elements meet, the layer with the higher join priority runs through (GEO-11).
+
+- **Introduced in:** version 3
+- **IFC:** `IfcMaterialLayer`
+
+#### Attributes
+
+| Attribute | Value | Presence | Set on | Description |
+| --- | --- | --- | --- | --- |
+| `material` | reference to [Material](#Material) | required | instance | What the layer is made of. |
+| `thickness` | length (m) | required | instance | Thickness of the layer. |
+| `priority` | integer | default `0` | instance | Join priority from 0 to 100, as IFC's Priority: the structural core highest, finishes lowest. |
+| `is_core` | boolean | default `false` | instance | Whether the layer belongs to the structural core, which the default location line follows. |
+| `name` | text | optional | instance | Name shown in plans and schedules, such as `Insulation`. |
+
+### <a id="MaterialLayerSet"></a>MaterialLayerSet
+
+A wall or slab build-up (MAT-03): layers in order from the exterior face to the interior face, or from the top face down for slabs.
+
+- **Introduced in:** version 3
+- **IFC:** `IfcMaterialLayerSet`
+
+#### Attributes
+
+| Attribute | Value | Presence | Set on | Description |
+| --- | --- | --- | --- | --- |
+| `name` | text | required | instance | Name of the build-up, such as `Exterior wall 300`. |
+| `layers` | list of reference to [MaterialLayer](#MaterialLayer) | required | instance | The layers, from the exterior face to the interior face. |
+
 ### <a id="MaterialOriginal"></a>MaterialOriginal
 
 The library value of a material property that the user has since edited, kept with its source so that resetting the property restores it (MAT-02, ADR 0019). A material has at most one per property.

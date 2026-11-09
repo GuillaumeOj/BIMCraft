@@ -13,10 +13,14 @@ use crate::property::Property;
 use crate::source::Sourced;
 
 mod edit;
+mod layer_sets;
 
 pub use edit::{
     Edit, EditError, ORIGINAL_ENTITY, Original, delete, edit, original_ids, originals, reset_value,
     set_value,
+};
+pub use layer_sets::{
+    LAYER_ENTITY, LAYER_SET_ENTITY, LayerSetReadError, layer_set_commands, read_layer_set,
 };
 
 /// The core schema entity that stores materials.

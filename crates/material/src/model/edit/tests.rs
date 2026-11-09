@@ -257,7 +257,7 @@ fn malformed_originals_are_skipped() {
 
 #[test]
 fn the_library_key_is_stored_and_read_back() {
-    let mut document = Document::new(super::super::tests::model());
+    let mut document = Document::new(crate::test_support::model());
     let material = s355().with_library_key(" steel/S355 ").unwrap();
     assert_eq!(material.library_key(), Some("steel/S355"));
     run(&mut document, super::super::commands(ID, &material));

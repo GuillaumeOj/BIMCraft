@@ -403,6 +403,89 @@
       "representations": []
     },
     {
+      "name": "MaterialLayer",
+      "kind": "resource",
+      "doc": "One layer of a wall or slab build-up (MAT-03): a material and a thickness. Where layered elements meet, the layer with the higher join priority runs through (GEO-11).",
+      "property_sets": [],
+      "ifc": {
+        "entity": "IfcMaterialLayer"
+      },
+      "attributes": [
+        {
+          "name": "material",
+          "value": "ref:Material",
+          "presence": "required",
+          "placement": "instance",
+          "doc": "What the layer is made of."
+        },
+        {
+          "name": "thickness",
+          "value": "quantity:length",
+          "presence": "required",
+          "placement": "instance",
+          "doc": "Thickness of the layer."
+        },
+        {
+          "name": "priority",
+          "value": "integer",
+          "presence": {
+            "default": {
+              "integer": 0
+            }
+          },
+          "placement": "instance",
+          "doc": "Join priority from 0 to 100, as IFC's Priority: the structural core highest, finishes lowest."
+        },
+        {
+          "name": "is_core",
+          "value": "bool",
+          "presence": {
+            "default": {
+              "bool": false
+            }
+          },
+          "placement": "instance",
+          "doc": "Whether the layer belongs to the structural core, which the default location line follows."
+        },
+        {
+          "name": "name",
+          "value": "text",
+          "presence": "optional",
+          "placement": "instance",
+          "doc": "Name shown in plans and schedules, such as `Insulation`."
+        }
+      ],
+      "roles": [],
+      "representations": []
+    },
+    {
+      "name": "MaterialLayerSet",
+      "kind": "resource",
+      "doc": "A wall or slab build-up (MAT-03): layers in order from the exterior face to the interior face, or from the top face down for slabs.",
+      "property_sets": [],
+      "ifc": {
+        "entity": "IfcMaterialLayerSet"
+      },
+      "attributes": [
+        {
+          "name": "name",
+          "value": "text",
+          "presence": "required",
+          "placement": "instance",
+          "doc": "Name of the build-up, such as `Exterior wall 300`."
+        },
+        {
+          "name": "layers",
+          "value": "list:ref:MaterialLayer",
+          "presence": "required",
+          "placement": "instance",
+          "doc": "The layers, from the exterior face to the interior face."
+        }
+      ],
+      "roles": [],
+      "representations": []
+    },
+    {
       "name": "MaterialOriginal",
       "kind": "resource",
       "doc": "The library value of a material property that the user has since edited, kept with its source so that resetting the property restores it (MAT-02, ADR 0019). A material has at most one per property.",

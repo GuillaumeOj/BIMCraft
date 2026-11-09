@@ -1,23 +1,11 @@
 use std::collections::BTreeMap;
-use std::path::Path;
-use std::sync::LazyLock;
 
-use core_model::{AttributeValue, EntityId, Model};
+use core_model::{AttributeValue, EntityId};
 use core_txn::{Document, ModelCommand, Origin};
-use schema::Namespace;
 
 use super::*;
+use crate::test_support::{CORE, model};
 use crate::{LawKind, Source};
-
-/// The core schema, loaded once for every test.
-pub(super) static CORE: LazyLock<Namespace> = LazyLock::new(|| {
-    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../schema/core");
-    schema_gen::load_namespace(&dir).unwrap()
-});
-
-pub(super) fn model() -> Model {
-    Model::new(&CORE).unwrap()
-}
 
 pub(super) fn s355() -> Material {
     let sourced =

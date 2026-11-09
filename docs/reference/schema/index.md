@@ -9,6 +9,8 @@ Version 3 of the `core` schema: its [entities](entities.md), [property sets](pro
 | Entity | Kind | Description |
 | --- | --- | --- |
 | [Material](entities.md#Material) | resource | A substance that elements are made of, such as a concrete or steel grade (MAT-01). Its behaviour law says how it responds to strain. Each property value cites the document and clause it comes from (REP-05, ADR 0018); a material gives only the properties its category uses (ADR 0019). |
+| [MaterialLayer](entities.md#MaterialLayer) | resource | One layer of a wall or slab build-up (MAT-03): a material and a thickness. Where layered elements meet, the layer with the higher join priority runs through (GEO-11). |
+| [MaterialLayerSet](entities.md#MaterialLayerSet) | resource | A wall or slab build-up (MAT-03): layers in order from the exterior face to the interior face, or from the top face down for slabs. |
 | [MaterialOriginal](entities.md#MaterialOriginal) | resource | The library value of a material property that the user has since edited, kept with its source so that resetting the property restores it (MAT-02, ADR 0019). A material has at most one per property. |
 | [Site](entities.md#Site) | spatial | The piece of land the project stands on, and where it lies on Earth: the projected coordinate reference system, the base point, the grid rotation, the scale and an optional survey point (GEOREF-01, ADR 0017). A project has at most one site. |
 

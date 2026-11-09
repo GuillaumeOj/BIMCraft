@@ -13,7 +13,7 @@ fn model() -> Model {
     let mut layer = namespace.entities["MaterialOriginal"].clone();
     layer.name = "Layer".into();
     layer.kind = EntityKind::Resource;
-    layer.ifc.as_mut().unwrap().entity = "IfcMaterialLayer".into();
+    layer.ifc.as_mut().unwrap().entity = "IfcBuildingElementProxy".into();
     layer.attributes = vec![Attribute {
         name: "material".into(),
         value: ValueType::Ref("Material".into()),

@@ -16,11 +16,14 @@
 
 mod annex;
 mod law;
+mod layers;
 mod library;
 mod material;
 mod model;
 mod property;
 mod source;
+#[cfg(test)]
+mod test_support;
 
 pub use annex::{Factor, NationalAnnex};
 pub use core_model::{Source, SourceError};
@@ -28,6 +31,7 @@ pub use law::{
     BehaviourLaw, ConcreteBilinear, ConcreteParabolaRectangle, Hardening, LawError, LawKind,
     LinearElastic, SteelBilinear, StrainLimits, TimberElasticBrittle,
 };
+pub use layers::{Layer, LayerSet, LayerSetError, MAX_PRIORITY, layer_id};
 pub use library::{
     LIBRARY_FORMAT, Library, LibraryError, MAX_LIBRARY_SIZE, MAX_MATERIALS, MAX_SOURCE_NAME,
     design_code_key,
@@ -36,6 +40,9 @@ pub use material::{Category, Material, MaterialError};
 pub use model::{
     ENTITY, Edit, EditError, ORIGINAL_ENTITY, Original, ReadError, commands, delete, edit,
     original_ids, originals, read, reset_value, set_value,
+};
+pub use model::{
+    LAYER_ENTITY, LAYER_SET_ENTITY, LayerSetReadError, layer_set_commands, read_layer_set,
 };
 pub use property::{Property, Quantity, Range};
 pub use source::{MAX_TEXT_LEN, Sourced};

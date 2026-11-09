@@ -1,0 +1,24 @@
+format = 1
+
+[entity]
+name = "MaterialLayerSet"
+kind = "resource"
+doc = """
+A wall or slab build-up (MAT-03): layers in order from the exterior face to the interior face, \
+or from the top face down for slabs.\
+"""
+
+[ifc]
+entity = "IfcMaterialLayerSet"
+
+[[attribute]]
+name = "name"
+value = "text"
+required = true
+doc = "Name of the build-up, such as `Exterior wall 300`."
+
+[[attribute]]
+name = "layers"
+value = "list:ref:MaterialLayer"
+required = true
+doc = "The layers, from the exterior face to the interior face."
