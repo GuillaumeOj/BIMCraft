@@ -28,7 +28,9 @@ export type ShellState = {
   notify: (message: string, options?: { undoable?: boolean }) => void;
 };
 
-const TOAST_MS = 7000;
+// A toast with Undo stays longer: the user needs time to reach the button.
+const TOAST_MS = 5000;
+const UNDO_TOAST_MS = 7000;
 
 const ShellStateContext = createContext<ShellState | null>(null);
 
@@ -62,7 +64,7 @@ export function ShellStateProvider({ children }: { children: ReactNode }) {
       const undoable = options.undoable === true;
       announcedDepth.current = null;
       setToast({ id, message, undoable });
-      timer.current = setTimeout(() => setToast(null), TOAST_MS);
+      timer.current = setTimeout(() => setToast(null), undoable ? UNDO_TOAST_MS : TOAST_MS);
       if (undoable) {
         historyDepth(api).then(
           (depth) => {

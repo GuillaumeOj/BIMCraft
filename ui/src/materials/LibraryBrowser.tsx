@@ -16,7 +16,7 @@ import { Banner } from "../ui/Banner";
 import { TextField } from "../ui/TextField";
 import { BACK_ARROW, CHECK_MARK, SEPARATOR } from "./glyphs";
 import { gradeName } from "./MaterialList";
-import { failureMessage } from "./messages";
+import { nameFailureMessage } from "./messages";
 import { PropertyTable } from "./PropertyTable";
 import { designCodeLabel } from "./units";
 import { useDebounced } from "./useDebounced";
@@ -132,8 +132,8 @@ export function LibraryBrowser({ back, onAdded, onFailure }: Props) {
       );
       onAdded(id, trimmed);
     } catch (failure) {
-      const key = failureMessage(failure);
-      if (key === "materials.error.invalid_name" || key === "materials.error.duplicate_name") {
+      const key = nameFailureMessage(failure);
+      if (key !== null) {
         setNameError(t(key));
         root.current?.querySelector<HTMLInputElement>(`#${CSS.escape(nameId)}`)?.focus();
       } else {

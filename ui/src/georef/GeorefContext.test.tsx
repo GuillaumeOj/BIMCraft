@@ -125,7 +125,7 @@ describe("GeorefProvider", () => {
     expect(screen.getByRole("status")).toHaveTextContent("Hello");
     act(() => screen.getByRole("button", { name: "Notify second" }).click());
     expect(screen.getByRole("status")).toHaveTextContent("Second");
-    act(() => vi.advanceTimersByTime(7001));
+    act(() => vi.advanceTimersByTime(5001));
     expect(screen.getByRole("status")).toBeEmptyDOMElement();
   });
 

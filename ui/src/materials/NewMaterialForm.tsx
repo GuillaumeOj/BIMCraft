@@ -4,7 +4,7 @@ import { useI18n } from "../i18n/I18nProvider";
 import type { MessageKey } from "../i18n/i18n";
 import { TextField } from "../ui/TextField";
 import { BACK_ARROW } from "./glyphs";
-import { failureMessage } from "./messages";
+import { nameFailureMessage } from "./messages";
 
 type Props = {
   onBack: () => void;
@@ -34,8 +34,8 @@ export function NewMaterialForm({ onBack, backLabel, onCreated, onFailure }: Pro
       const id = await createMaterial(api, trimmed, category);
       onCreated(id, trimmed);
     } catch (failure) {
-      const key = failureMessage(failure);
-      if (key === "materials.error.invalid_name" || key === "materials.error.duplicate_name") {
+      const key = nameFailureMessage(failure);
+      if (key !== null) {
         setError(t(key));
         form.current?.querySelector("input")?.focus();
       } else {

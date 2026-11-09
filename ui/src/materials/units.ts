@@ -70,7 +70,7 @@ export function formatBounds(
 }
 
 /** The properties of the Thermal tab; all the others are mechanical. */
-export const THERMAL_KEYS: readonly string[] = [
+const THERMAL_KEYS: readonly string[] = [
   "thermal_conductivity",
   "specific_heat",
   "thermal_expansion",

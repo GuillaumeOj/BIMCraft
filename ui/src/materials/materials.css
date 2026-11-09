@@ -350,3 +350,8 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+.banner-info {
+  color: var(--bc-ink);
+  border-color: var(--bc-line);
+}

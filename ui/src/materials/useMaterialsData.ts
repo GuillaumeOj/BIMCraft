@@ -48,25 +48,23 @@ export function useMaterialsData(
     );
   }, [api, selected, onDetailError]);
 
-  useEffect(reloadList, [reloadList]);
-  useEffect(reloadDetail, [reloadDetail]);
-
-  useEffect(() => {
-    const unsubscribe = api
-      .onChange(() => {
-        reloadList();
-        reloadDetail();
-      })
-      .catch(() => undefined);
-    return () => {
-      void unsubscribe.then((stop) => stop?.());
-    };
-  }, [api, reloadList, reloadDetail]);
-
   const reload = useCallback(() => {
     reloadList();
     reloadDetail();
   }, [reloadList, reloadDetail]);
+
+  useEffect(reloadList, [reloadList]);
+  useEffect(reloadDetail, [reloadDetail]);
+
+  // One subscription for the dialog's life: it calls whichever `reload` is the latest.
+  const latestReload = useRef(reload);
+  latestReload.current = reload;
+  useEffect(() => {
+    const unsubscribe = api.onChange(() => latestReload.current()).catch(() => undefined);
+    return () => {
+      void unsubscribe.then((stop) => stop?.());
+    };
+  }, [api]);
 
   return { query, list, detail, reload };
 }

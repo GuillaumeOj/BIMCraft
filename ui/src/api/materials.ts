@@ -1,5 +1,5 @@
 import type { ApiClient } from "./client";
-import { newEntityId } from "./georef";
+import { apiReason, newEntityId } from "./georef";
 import { ApiError } from "./jsonrpc";
 import type {
   EntityId,
@@ -43,11 +43,9 @@ const field = (data: object, name: string): unknown =>
 
 /** What the core refused with, or null when `error` is not a refusal carrying a reason. */
 export function materialRefusal(error: unknown): MaterialRefusal | null {
-  if (!(error instanceof ApiError)) return null;
-  const { data } = error;
-  if (typeof data !== "object" || data === null) return null;
-  const reason = asString(field(data, "reason"));
-  if (reason === null) return null;
+  const reason = apiReason(error);
+  if (reason === null || !(error instanceof ApiError)) return null;
+  const data = typeof error.data === "object" && error.data !== null ? error.data : {};
   // `model.delete` says `count` where `materials.delete` says `used_by`.
   return {
     reason,

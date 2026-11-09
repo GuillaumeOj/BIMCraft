@@ -63,9 +63,11 @@ export function Dialog({ titleId, onCancel, children }: DialogProps) {
   // Tab pressed in the toast, which sits outside the dialog, goes back into the loop.
   useEffect(() => {
     const onToastKey = (event: globalThis.KeyboardEvent) => {
+      if (event.key !== "Tab" || !dialog.current) return;
       const toast = document.querySelector(".toast-region");
-      const inToast = event.target instanceof Node && toast?.contains(event.target);
-      if (event.key === "Tab" && inToast && dialog.current) keepTabInside(event, dialog.current);
+      if (event.target instanceof Node && toast?.contains(event.target)) {
+        keepTabInside(event, dialog.current);
+      }
     };
     document.addEventListener("keydown", onToastKey);
     return () => document.removeEventListener("keydown", onToastKey);

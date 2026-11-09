@@ -10,7 +10,7 @@ import { useI18n } from "../i18n/I18nProvider";
 import type { MessageKey } from "../i18n/i18n";
 import { TextField } from "../ui/TextField";
 import { MORE_DOTS } from "./glyphs";
-import { failureMessage } from "./messages";
+import { nameFailureMessage } from "./messages";
 import { PropertyTable } from "./PropertyTable";
 import { designCodeLabel, type PropertyTab, tabOf } from "./units";
 
@@ -46,16 +46,6 @@ export function MaterialDetail({
   const ids = useId();
   const tabButtons = useRef<Partial<Record<Tab, HTMLButtonElement | null>>>({});
 
-  // A material selected after another one starts on the Mechanical tab.
-  const lastId = useRef(material.id);
-  useEffect(() => {
-    if (lastId.current !== material.id) {
-      lastId.current = material.id;
-      setTab("mechanical");
-      setMenuOpen(false);
-    }
-  }, [material.id]);
-
   const save = async (property: MaterialProperty, value: number | null) => {
     await setPropertyValue(api, material.id, property, value);
     if (value === null && property.library_value !== null) {
@@ -67,18 +57,16 @@ export function MaterialDetail({
   const onTabKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
     // Arrows move from the tab that has focus, which may be a disabled one.
     const at = TABS.findIndex((name) => tabButtons.current[name] === event.currentTarget);
-    const last = TABS.length - 1;
+    const count = TABS.length;
     const targets: Partial<Record<string, number>> = {
-      ArrowRight: at === last ? 0 : at + 1,
-      ArrowLeft: at === 0 ? last : at - 1,
+      ArrowRight: (at + 1) % count,
+      ArrowLeft: (at + count - 1) % count,
       Home: 0,
-      End: last,
+      End: count - 1,
     };
-    const target = targets[event.key];
-    if (target === undefined) return;
-    event.preventDefault();
-    const next = TABS[target];
+    const next = TABS[targets[event.key] ?? -1];
     if (next === undefined) return;
+    event.preventDefault();
     // A disabled tab can be reached by the arrows but cannot be opened.
     if (AVAILABLE.includes(next)) setTab(next);
     tabButtons.current[next]?.focus();
@@ -109,7 +97,16 @@ export function MaterialDetail({
           )}
           <p className="detail-sub">{t("materials.detail.designCode", { category, code })}</p>
         </div>
-        <div className="menu-anchor">
+        {/* biome-ignore lint/a11y/noStaticElementInteractions: Escape on the button or its menu closes the menu. */}
+        <div
+          className="menu-anchor"
+          onKeyDown={(event) => {
+            if (event.key === "Escape" && menuOpen) {
+              event.preventDefault();
+              setMenuOpen(false);
+            }
+          }}
+        >
           <button
             type="button"
             className="icon-button"
@@ -117,26 +114,11 @@ export function MaterialDetail({
             aria-expanded={menuOpen}
             aria-label={t("materials.menu.label", { name: material.name })}
             onClick={() => setMenuOpen((open) => !open)}
-            onKeyDown={(event) => {
-              if (event.key === "Escape" && menuOpen) {
-                event.preventDefault();
-                setMenuOpen(false);
-              }
-            }}
           >
             <span aria-hidden="true">{MORE_DOTS}</span>
           </button>
           {menuOpen && (
-            <div
-              className="menu"
-              role="menu"
-              onKeyDown={(event) => {
-                if (event.key === "Escape") {
-                  event.preventDefault();
-                  setMenuOpen(false);
-                }
-              }}
-            >
+            <div className="menu" role="menu">
               <button
                 type="button"
                 role="menuitem"
@@ -253,8 +235,8 @@ function RenameField({
       await renameMaterial(api, material.id, trimmed);
       onDone();
     } catch (failure) {
-      const key = failureMessage(failure);
-      if (key === "materials.error.invalid_name" || key === "materials.error.duplicate_name") {
+      const key = nameFailureMessage(failure);
+      if (key !== null) {
         setError(t(key));
       } else {
         onFailure(failure);

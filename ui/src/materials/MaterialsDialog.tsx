@@ -188,6 +188,8 @@ export function MaterialsDialog({ onClose }: { onClose: () => void }) {
           )}
           {shownView === "detail" && detail !== null && (
             <MaterialDetail
+              // Another material starts on the Mechanical tab, with its menu closed.
+              key={detail.id}
               material={detail}
               renaming={renaming}
               setRenaming={setRenaming}

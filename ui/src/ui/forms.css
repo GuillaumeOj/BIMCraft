@@ -603,8 +603,3 @@
   border-radius: 6px;
   cursor: pointer;
 }
-
-.banner-info {
-  color: var(--bc-ink);
-  border-color: var(--bc-line);
-}
