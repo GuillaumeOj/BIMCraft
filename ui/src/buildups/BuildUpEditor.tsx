@@ -49,8 +49,7 @@ export function BuildUpEditor(props: Props) {
   const [selected, setSelected] = useState<number | null>(null);
   const focusAfter = useRef<Focus | null>(null);
   const root = useRef<HTMLDivElement>(null);
-  const ids = [useId(), useId(), useId()];
-  const [nameId, descriptionId, tableId] = ids;
+  const [nameId, descriptionId] = [useId(), useId()];
 
   // The focused control of a moved row stays where the user is (same control of the same layer).
   useEffect(() => {
@@ -124,7 +123,7 @@ export function BuildUpEditor(props: Props) {
     <div className="buildup-editor" ref={root}>
       <div className="editor-names">
         <TextField
-          id={nameId ?? ""}
+          id={nameId}
           label={t("buildups.editor.name")}
           value={draft.name}
           onChange={(name) => onChange({ ...draft, name })}
@@ -132,7 +131,7 @@ export function BuildUpEditor(props: Props) {
           inputMode="text"
         />
         <TextField
-          id={descriptionId ?? ""}
+          id={descriptionId}
           label={t("buildups.editor.description")}
           value={draft.description}
           onChange={(description) => onChange({ ...draft, description })}
@@ -147,7 +146,7 @@ export function BuildUpEditor(props: Props) {
           {t(key)}
         </p>
       ))}
-      <table className="layer-table" id={tableId}>
+      <table className="layer-table">
         <thead>
           <tr>
             <th scope="col">{t("buildups.layers.col.position")}</th>

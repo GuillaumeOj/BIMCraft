@@ -50,9 +50,6 @@ export const PRIORITIES: readonly number[] = [1, 2, 3, 4, 5];
 export const defaultCore = (layer: Pick<DraftLayer, "function">): boolean =>
   layer.function === "structure";
 
-export const effectivePriority = (layer: DraftLayer): number =>
-  layer.priority ?? DEFAULT_PRIORITY[layer.function];
-
 export const effectiveCore = (layer: DraftLayer): boolean => layer.core ?? defaultCore(layer);
 
 /** The starter layer of a new build-up, so that the table is never empty. */

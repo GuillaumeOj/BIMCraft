@@ -1,4 +1,4 @@
-import { type MutableRefObject, useEffect, useRef, useState } from "react";
+import { type MutableRefObject, useEffect, useMemo, useRef, useState } from "react";
 import {
   type ApiClient,
   type BuildUpLayerInput,
@@ -11,7 +11,6 @@ import {
   useApi,
 } from "../api";
 import { useI18n } from "../i18n/I18nProvider";
-import type { MessageKey } from "../i18n/i18n";
 import { MaterialsDialog } from "../materials/MaterialsDialog";
 import { Banner } from "../ui/Banner";
 import { BuildUpEditor } from "./BuildUpEditor";
@@ -50,7 +49,7 @@ export function BuildUpEditorView({ titleId, id, saved, title, onClose, cancelRe
   const body = useRef<HTMLFormElement>(null);
 
   const preview = useBuildUpPreview(draft, revision);
-  const dirty = isDirty(draft, saved);
+  const dirty = useMemo(() => isDirty(draft, saved), [draft, saved]);
   const errors = submitted
     ? buildErrors(draft, [...(preview?.errors ?? []), ...refusals])
     : noErrors(draft);
@@ -155,7 +154,6 @@ export function BuildUpEditorView({ titleId, id, saved, title, onClose, cancelRe
   const subtitle = t(
     draft.usage === "wall" ? "buildups.editor.subtitleWall" : "buildups.editor.subtitleSlab",
   );
-  const banner: MessageKey | null = errors.banner;
 
   return (
     <>
@@ -165,7 +163,7 @@ export function BuildUpEditorView({ titleId, id, saved, title, onClose, cancelRe
         </h2>
         <p className="editor-subtitle">{subtitle}</p>
       </div>
-      {banner !== null && <Banner>{t(banner)}</Banner>}
+      {errors.banner !== null && <Banner>{t(errors.banner)}</Banner>}
       <form
         className="editor-body"
         ref={body}

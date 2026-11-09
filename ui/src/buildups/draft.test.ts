@@ -7,7 +7,6 @@ import {
   defaultCore,
   draftFromDetail,
   effectiveCore,
-  effectivePriority,
   insertLayer,
   isDirty,
   isThickness,
@@ -32,9 +31,6 @@ const keys = (layers: DraftLayer[]) => layers.map((entry) => entry.key).join("")
 
 describe("defaults", () => {
   it("gives each function its priority and only structure its core", () => {
-    expect(effectivePriority(layer({ function: "structure" }))).toBe(1);
-    expect(effectivePriority(layer({ function: "air_gap" }))).toBe(3);
-    expect(effectivePriority(layer({ priority: 4 }))).toBe(4);
     expect(defaultCore({ function: "structure" })).toBe(true);
     expect(effectiveCore(layer({ function: "finish" }))).toBe(false);
     expect(effectiveCore(layer({ function: "finish", core: true }))).toBe(true);

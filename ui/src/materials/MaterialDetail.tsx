@@ -8,6 +8,7 @@ import {
 } from "../api";
 import { useI18n } from "../i18n/I18nProvider";
 import type { MessageKey } from "../i18n/i18n";
+import { ActionMenu } from "../ui/ActionMenu";
 import { TextField } from "../ui/TextField";
 import { MORE_DOTS } from "./glyphs";
 import { nameFailureMessage } from "./messages";
@@ -44,7 +45,6 @@ export function MaterialDetail({
   const { t } = useI18n();
   const api = useApi();
   const [tab, setTab] = useState<Tab>("mechanical");
-  const [menuOpen, setMenuOpen] = useState(false);
   const ids = useId();
   const tabButtons = useRef<Partial<Record<Tab, HTMLButtonElement | null>>>({});
 
@@ -99,53 +99,16 @@ export function MaterialDetail({
           )}
           <p className="detail-sub">{t("materials.detail.designCode", { category, code })}</p>
         </div>
-        {/* biome-ignore lint/a11y/noStaticElementInteractions: Escape on the button or its menu closes the menu. */}
-        <div
-          className="menu-anchor"
-          onKeyDown={(event) => {
-            if (event.key === "Escape" && menuOpen) {
-              event.preventDefault();
-              setMenuOpen(false);
-            }
-          }}
+        <ActionMenu
+          className="icon-button"
+          label={t("materials.menu.label", { name: material.name })}
+          items={[
+            { label: t("materials.action.rename"), onSelect: () => setRenaming(true) },
+            { label: t("materials.action.delete"), onSelect: onDelete },
+          ]}
         >
-          <button
-            type="button"
-            className="icon-button"
-            aria-haspopup="menu"
-            aria-expanded={menuOpen}
-            aria-label={t("materials.menu.label", { name: material.name })}
-            onClick={() => setMenuOpen((open) => !open)}
-          >
-            <span aria-hidden="true">{MORE_DOTS}</span>
-          </button>
-          {menuOpen && (
-            <div className="menu" role="menu">
-              <button
-                type="button"
-                role="menuitem"
-                ref={(element) => element?.focus()}
-                onClick={() => {
-                  setMenuOpen(false);
-                  setRenaming(true);
-                }}
-              >
-                {t("materials.action.rename")}
-              </button>
-
-              <button
-                type="button"
-                role="menuitem"
-                onClick={() => {
-                  setMenuOpen(false);
-                  onDelete();
-                }}
-              >
-                {t("materials.action.delete")}
-              </button>
-            </div>
-          )}
-        </div>
+          <span aria-hidden="true">{MORE_DOTS}</span>
+        </ActionMenu>
       </div>
       {inUse !== null && (
         <div className="banner banner-info" role="status">

@@ -34,6 +34,8 @@ export function BuildUpsDialog({ onClose }: { onClose: () => void }) {
   const [selected, setSelected] = useState<string | null>(null);
   const [editing, setEditing] = useState<Editing | null>(null);
   const [banner, setBanner] = useState<MessageKey | null>(null);
+  const editingRef = useRef<Editing | null>(null);
+  editingRef.current = editing;
   const cancelRef = useRef<(() => void) | null>(null);
   const listRef = useRef<HTMLElement>(null);
   const focusRow = useRef<string | null>(null);
@@ -55,7 +57,10 @@ export function BuildUpsDialog({ onClose }: { onClose: () => void }) {
   useEffect(reload, [reload]);
 
   useEffect(() => {
-    const unsubscribe = api.onChange(reload).catch(() => undefined);
+    // The list is read again when the editor closes, not on every change behind it.
+    const unsubscribe = api
+      .onChange(() => editingRef.current === null && reload())
+      .catch(() => undefined);
     return () => {
       void unsubscribe.then((stop) => stop?.());
     };
@@ -116,7 +121,13 @@ export function BuildUpsDialog({ onClose }: { onClose: () => void }) {
     const index = items?.findIndex((item) => item.id === id) ?? -1;
     const next = items?.[index + 1] ?? items?.[index - 1];
     const name = items?.[index]?.name ?? "";
-    await deleteBuildUp(api, id);
+    try {
+      await deleteBuildUp(api, id);
+    } catch (error) {
+      fail(error);
+      return;
+    }
+    setBanner(null);
     setSelected(next?.id ?? null);
     focusRow.current = next?.id ?? null;
     reload();

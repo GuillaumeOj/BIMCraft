@@ -49,7 +49,6 @@ export function BuildUpList(props: Props) {
     // After the render that puts the row back.
     setTimeout(() => document.getElementById(`${listId}-${id}`)?.focus());
   };
-  const [bannerKey, setBannerKey] = useState<MessageKey | null>(null);
   const { items, selected } = props;
   const at = items.findIndex((item) => item.id === selected);
   const empty = !props.loading && !props.loadFailed && items.length === 0;
@@ -100,7 +99,6 @@ export function BuildUpList(props: Props) {
           {t("buildups.action.new")}
         </ActionMenu>
       </div>
-      {bannerKey !== null && <Banner>{t(bannerKey)}</Banner>}
       {props.loading && <p className="empty-note">{t("buildups.loading")}</p>}
       {props.loadFailed && (
         <div>
@@ -120,10 +118,13 @@ export function BuildUpList(props: Props) {
         {items.map((item) => (
           <div key={item.id} className="buildup-row" data-selected={item.id === selected}>
             {inline?.id === item.id && inline.kind === "rename" ? (
-              <RenameRow
-                item={item}
+              <NameForm
+                label={t("buildups.rename.label")}
+                initial={item.name}
+                submit={async (name) =>
+                  name === item.name ? undefined : props.onRename(item.id, name)
+                }
                 onDone={() => closeInline(item.id)}
-                onRename={(name) => props.onRename(item.id, name)}
               />
             ) : (
               <>
@@ -177,10 +178,12 @@ export function BuildUpList(props: Props) {
               </>
             )}
             {inline?.id === item.id && inline.kind === "duplicate" && (
-              <DuplicateForm
-                item={item}
+              <NameForm
+                label={t("buildups.duplicate.name")}
+                initial={t("buildups.duplicate.suggest", { name: item.name })}
+                submit={(name) => props.onDuplicate(item.id, name)}
                 onDone={() => closeInline(item.id)}
-                onDuplicate={(name) => props.onDuplicate(item.id, name)}
+                confirmLabel={t("buildups.duplicate.confirm")}
               />
             )}
             {inline?.id === item.id && inline.kind === "delete" && (
@@ -189,12 +192,7 @@ export function BuildUpList(props: Props) {
                 onKeep={() => closeInline(item.id)}
                 onDelete={async () => {
                   setInline(null);
-                  setBannerKey(null);
-                  try {
-                    await props.onDelete(item.id);
-                  } catch (error) {
-                    setBannerKey(failureMessage(error));
-                  }
+                  await props.onDelete(item.id);
                 }}
               />
             )}
@@ -269,22 +267,24 @@ function useNameForm(initial: string, submit: (name: string) => Promise<void>, o
   };
 }
 
-function RenameRow({
-  item,
+/** A name field in the row, for renaming or for the copy's name: Enter saves, Esc cancels. */
+function NameForm({
+  label,
+  initial,
+  submit,
   onDone,
-  onRename,
+  confirmLabel,
 }: {
-  item: BuildUpSummary;
+  label: string;
+  initial: string;
+  submit: (name: string) => Promise<void>;
   onDone: () => void;
-  onRename: (name: string) => Promise<void>;
+  /** With a label, the form also has Cancel and confirm buttons (the duplicate form). */
+  confirmLabel?: string;
 }) {
   const { t } = useI18n();
   const id = useId();
-  const form = useNameForm(
-    item.name,
-    async (name) => (name === item.name ? undefined : onRename(name)),
-    onDone,
-  );
+  const form = useNameForm(initial, submit, onDone);
   const field = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const input = field.current?.querySelector("input");
@@ -295,7 +295,7 @@ function RenameRow({
     <div ref={field} className="inline-field">
       <TextField
         id={id}
-        label={t("buildups.rename.label")}
+        label={label}
         value={form.name}
         onChange={form.setName}
         error={form.error === null ? undefined : t(form.error)}
@@ -310,63 +310,20 @@ function RenameRow({
           }
         }}
       />
-    </div>
-  );
-}
-
-function DuplicateForm({
-  item,
-  onDone,
-  onDuplicate,
-}: {
-  item: BuildUpSummary;
-  onDone: () => void;
-  onDuplicate: (name: string) => Promise<void>;
-}) {
-  const { t } = useI18n();
-  const id = useId();
-  const form = useNameForm(
-    t("buildups.duplicate.suggest", { name: item.name }),
-    onDuplicate,
-    onDone,
-  );
-  const field = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const input = field.current?.querySelector("input");
-    input?.focus();
-    input?.select();
-  }, []);
-  return (
-    <div ref={field} className="inline-field">
-      <TextField
-        id={id}
-        label={t("buildups.duplicate.name")}
-        value={form.name}
-        onChange={form.setName}
-        error={form.error === null ? undefined : t(form.error)}
-        inputMode="text"
-        onKeyDown={(event) => {
-          if (event.key === "Enter") {
-            event.preventDefault();
-            void form.run();
-          } else if (event.key === "Escape") {
-            event.preventDefault();
-            onDone();
-          }
-        }}
-      />
-      <div className="dialog-actions">
-        <button type="button" className="button button-small" onClick={onDone}>
-          {t("buildups.action.cancel")}
-        </button>
-        <button
-          type="button"
-          className="button button-small button-primary"
-          onClick={() => void form.run()}
-        >
-          {t("buildups.duplicate.confirm")}
-        </button>
-      </div>
+      {confirmLabel !== undefined && (
+        <div className="dialog-actions">
+          <button type="button" className="button button-small" onClick={onDone}>
+            {t("buildups.action.cancel")}
+          </button>
+          <button
+            type="button"
+            className="button button-small button-primary"
+            onClick={() => void form.run()}
+          >
+            {confirmLabel}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
