@@ -4,6 +4,14 @@
 /** An attribute or property value; reals are in SI units. */
 export type AttributeValue = { Bool: boolean } | { Integer: number } | { Real: number } | { Text: string } | { Ref: EntityId } | { List: Array<AttributeValue> } | { Sourced: { source: Source; value: AttributeValue } };
 
+export type BuildUpFunction = "structure" | "substrate" | "insulation" | "air_gap" | "membrane" | "finish";
+
+export type BuildUpLayer = { core: boolean; function: BuildUpFunction; id: EntityId; material: EntityId; material_name: string; name: string | null; priority: number; thermal_resistance: number | null; thickness: number };
+
+export type BuildUpLayerInput = { core?: boolean; function: BuildUpFunction; id?: EntityId; material: EntityId; name?: string; priority?: number; thickness: number };
+
+export type BuildUpUsage = "wall" | "slab";
+
 export type ChangeEvent = { created: Array<EntityId>; deleted: Array<EntityId>; modified: Array<EntityId> };
 
 export type CrsSummary = { area: string; epsg: number; geographic_name: string; kind: "projected" | "geographic"; name: string };
@@ -36,6 +44,14 @@ export type Source = { clause: string; document: string } | { entered_by_user: t
 
 /** Every command: its parameters and its result. */
 export interface Commands {
+  /** Creates a build-up with its layers. */
+  "buildups.create": { params: { description?: string; id: EntityId; layers: Array<BuildUpLayerInput>; name: string; usage: BuildUpUsage }; result: { id: EntityId; layers: Array<EntityId> } };
+  /** Deletes a build-up with its layers. */
+  "buildups.delete": { params: { buildup: EntityId }; result: Record<string, never> };
+  /** Copies a build-up under a new name, with new layers. */
+  "buildups.duplicate": { params: { buildup: EntityId; id: EntityId; name: string }; result: { id: EntityId; layers: Array<EntityId> } };
+  /** Renames a build-up and replaces its layers; layers it names keep their identity. */
+  "buildups.update": { params: { buildup: EntityId; description?: string | null; layers?: Array<BuildUpLayerInput>; name?: string; usage?: BuildUpUsage }; result: { layers: Array<EntityId> } };
   /** Removes the project's georeference. */
   "georef.clear": { params: Record<string, never>; result: Record<string, never> };
   /** Sets the project's georeference. */
@@ -84,6 +100,12 @@ export interface Commands {
 
 /** Every query: its parameters and its result. */
 export interface Queries {
+  /** Reads one build-up with its layers and its thermal resistance. */
+  "buildups.get": { params: { buildup: EntityId }; result: { description: string | null; id: EntityId; layers: Array<BuildUpLayer>; layers_without_thermal_data: number; name: string; thermal_resistance: number | null; total_thickness: number; usage: BuildUpUsage } };
+  /** Lists the wall and slab build-ups of the project. */
+  "buildups.list": { params: { usage?: BuildUpUsage }; result: { items: Array<{ id: EntityId; layer_count: number; name: string; total_thickness: number; usage: BuildUpUsage }> } };
+  /** Checks a draft build-up without saving it and returns its totals and every error. */
+  "buildups.preview": { params: { layers: Array<BuildUpLayerInput>; usage: BuildUpUsage }; result: { errors: Array<{ code: string; index?: number }>; layers: Array<{ core: boolean; priority: number; thermal_resistance: number | null }>; layers_without_thermal_data: number; thermal_resistance: number | null; total_thickness: number } };
   /** Converts points between local, projected and geographic coordinates. */
   "georef.convert": { params: { from: "local" | "projected" | "geographic"; points: Array<[number, number, number]> }; result: { points: Array<{ geographic: [number, number, number]; local: [number, number, number]; projected: [number, number, number] }> } };
   /** Reads the project's georeference and the values derived from it. */
