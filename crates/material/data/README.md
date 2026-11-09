@@ -9,7 +9,7 @@ The grades shipped with BIMCraft (MAT-02), one JSON file per family, loaded by
 | `en1993-1-1.json` | Structural steel S235, S275, S355, S420, S460 (t ≤ 40 mm; fu of S235, S275, S355 to EN 10025-2, of S420 and S460 to EN 10025-3) | EN 1993-1-1:2005, NF EN 1993-1-1/NA:2007, EN 1991-1-1:2002 |
 | `timber.json` | Solid C16 to C35, glulam GL24h, GL28h, GL32h | EN 338:2016, EN 14080:2013, EN 1995-1-1:2004, NF EN 1995-1-1/NA:2010 |
 | `en1996-1-1.json` | Clay and concrete block masonry | EN 1996-1-1:2005 |
-| `non-structural.json` | Plaster, render, EPS, mineral wool, wood-fibre board, brick, concrete block, softwood cladding | EN ISO 10456:2007 |
+| `non-structural.json` | Plaster, render, EPS, mineral wool, clay brick, concrete block, softwood cladding | Règles Th-Bât, Fascicule Matériaux (2017) |
 
 ## Rules
 
@@ -26,6 +26,22 @@ The grades shipped with BIMCraft (MAT-02), one JSON file per family, loaded by
 
 ## To verify
 
-The thermal and density values of `non-structural.json` are typical tabulated design values and the
-partial factors of the French annexes follow the national annexes as published; both should be
-checked against the editions above before a release.
+- The partial factors of the French annexes follow the national annexes as published; check them
+  before a release.
+- The structural values of the concrete, steel, masonry and glulam files were reviewed by a
+  structural engineer from knowledge of the standards, not against the purchased texts. A final
+  check against the editions is still recommended.
+- Règles Th-Bât is dated 2017 and was written for RT 2012: confirm it is still the edition to cite.
+
+### How the non-structural values are read
+
+- The densities are the upper limits of the dry density bands of Règles Th-Bât, not point values.
+- Concrete block takes the conductivity of its lightweight-aggregate concrete band (1600 to 1800
+  kg/m³). It is a generic default: real masonry units are in another fascicule of the rules, which
+  was not read.
+- Mineral wool is one entry with the conservative conductivity of rock wool (25 to 40 kg/m³, 0.044).
+  Glass wool (30 to 40 kg/m³) gives 0.039.
+- Softwood cladding reads 500 kg/m³ as the density at 15 % moisture; a dry density of 500 would give
+  a conductivity of 0.15.
+- These are default values, for use when no declared product value exists. Wood-fibre board has no
+  default in the rules, so it is not shipped.

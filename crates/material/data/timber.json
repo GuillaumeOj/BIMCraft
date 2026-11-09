@@ -13,7 +13,7 @@
           "clause": "Table 1"
         },
         "ft0_k": {
-          "value": 10000000.0,
+          "value": 8500000.0,
           "document": "EN 338:2016",
           "clause": "Table 1"
         },
@@ -76,7 +76,7 @@
           "clause": "Table 1"
         },
         "ft0_k": {
-          "value": 11000000.0,
+          "value": 10000000.0,
           "document": "EN 338:2016",
           "clause": "Table 1"
         },
@@ -265,7 +265,7 @@
           "clause": "Table 1"
         },
         "ft0_k": {
-          "value": 16000000.0,
+          "value": 16500000.0,
           "document": "EN 338:2016",
           "clause": "Table 1"
         },
@@ -295,12 +295,12 @@
           "clause": "Table 1"
         },
         "rho_k": {
-          "value": 370.0,
+          "value": 360.0,
           "document": "EN 338:2016",
           "clause": "Table 1"
         },
         "rho_mean": {
-          "value": 450.0,
+          "value": 430.0,
           "document": "EN 338:2016",
           "clause": "Table 1"
         },
@@ -391,7 +391,7 @@
           "clause": "Table 1"
         },
         "ft0_k": {
-          "value": 21000000.0,
+          "value": 22500000.0,
           "document": "EN 338:2016",
           "clause": "Table 1"
         },
@@ -401,7 +401,7 @@
           "clause": "Table 1"
         },
         "fv_k": {
-          "value": 4200000.0,
+          "value": 4000000.0,
           "document": "EN 338:2016",
           "clause": "Table 1"
         },
@@ -421,12 +421,12 @@
           "clause": "Table 1"
         },
         "rho_k": {
-          "value": 400.0,
+          "value": 390.0,
           "document": "EN 338:2016",
           "clause": "Table 1"
         },
         "rho_mean": {
-          "value": 480.0,
+          "value": 470.0,
           "document": "EN 338:2016",
           "clause": "Table 1"
         },

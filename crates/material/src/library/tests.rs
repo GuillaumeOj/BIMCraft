@@ -296,14 +296,14 @@ fn si(material: &Material, property: Property) -> f64 {
 #[test]
 fn the_builtin_library_holds_about_forty_grades_of_every_family() {
     let library = builtin();
-    assert_eq!(library.len(), 38);
+    assert_eq!(library.len(), 37);
     for (prefix, count) in [
         ("en1992-1-1/C", 9),
         ("en1992-1-1/B", 3),
         ("en1993-1-1/", 5),
         ("en1995-1-1/", 10),
         ("en1996-1-1/", 3),
-        ("bimcraft/", 8),
+        ("bimcraft/", 7),
     ] {
         assert_eq!(grades(prefix).len(), count, "{prefix}");
     }
@@ -505,4 +505,30 @@ mod properties {
             }
         }
     }
+}
+
+#[test]
+fn the_engineer_review_corrections_are_in_the_library() {
+    let library = builtin();
+    let near = |key: &str, property: Property, expected: f64| {
+        assert!((si(library.get(key).unwrap(), property) - expected).abs() <= expected * 1e-12);
+    };
+    // EN 338:2016, Table 1 (the engineer's reading, MPa converted to Pa).
+    near("en1995-1-1/C16", Property::TimberTensileStrength, 8.5e6);
+    near("en1995-1-1/C27", Property::MeanDensity, 430.0);
+    // Règles Th-Bât, Fascicule Matériaux (2017): conductivities and the removed entry.
+    near(
+        "bimcraft/Mineral wool",
+        Property::ThermalConductivity,
+        0.044,
+    );
+    near("bimcraft/Clay brick", Property::ThermalConductivity, 0.69);
+    assert!(library.get("bimcraft/Wood-fibre board").is_none());
+    let wool = library.get("bimcraft/Mineral wool").unwrap();
+    let source = &wool.property(Property::ThermalConductivity).unwrap().source;
+    assert_eq!(
+        source.document(),
+        Some("Règles Th-Bât, Fascicule Matériaux (2017)")
+    );
+    assert_eq!(source.clause(), Some("2.6.2.1"));
 }

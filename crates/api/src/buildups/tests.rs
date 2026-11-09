@@ -116,13 +116,13 @@ fn a_build_up_is_created_with_defaults_and_derived_layer_ids() {
     assert_eq!(defaults, [(5, false), (3, false), (1, true)]);
     assert_eq!(detail["layers"][1]["material_name"], "Mineral wool");
     assert!((detail["total_thickness"].as_f64().unwrap() - 0.30).abs() < 1e-12);
-    // R: plaster 0.02 / 0.40 = 0.05, wool 0.12 / 0.035 = 3.4286, concrete has no λ in the library.
+    // R: plaster 0.02 / 0.40 = 0.05, wool 0.12 / 0.044 = 2.7273, concrete has no λ in the library.
     let wool = detail["layers"][1]["thermal_resistance"].as_f64().unwrap();
-    assert!((wool - 0.12 / 0.035).abs() < 1e-9);
+    assert!((wool - 0.12 / 0.044).abs() < 1e-9);
     assert_eq!(detail["layers"][2]["thermal_resistance"], Value::Null);
     assert_eq!(detail["layers_without_thermal_data"], 1);
     assert!(
-        (detail["thermal_resistance"].as_f64().unwrap() - (0.02 / 0.40 + 0.12 / 0.035)).abs()
+        (detail["thermal_resistance"].as_f64().unwrap() - (0.02 / 0.40 + 0.12 / 0.044)).abs()
             < 1e-9
     );
     // The same call on another session derives the same layers (CORE-11).
@@ -424,7 +424,7 @@ fn a_preview_returns_the_totals_and_every_error_without_saving() {
     assert!((good["total_thickness"].as_f64().unwrap() - 0.30).abs() < 1e-12);
     assert_eq!(good["layers_without_thermal_data"], 1);
     assert!(
-        (good["thermal_resistance"].as_f64().unwrap() - (0.02 / 0.40 + 0.12 / 0.035)).abs() < 1e-9
+        (good["thermal_resistance"].as_f64().unwrap() - (0.02 / 0.40 + 0.12 / 0.044)).abs() < 1e-9
     );
 
     // Every problem at once, each with its layer, and a partial total all the same.
