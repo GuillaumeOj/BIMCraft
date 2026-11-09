@@ -498,3 +498,20 @@ fn errors_the_server_cannot_provoke_still_have_codes() {
     assert_eq!(code(&internal), codes::INTERNAL_ERROR);
     assert_eq!(internal["error"]["message"], "internal error");
 }
+
+#[test]
+fn deleting_an_object_that_is_still_referenced_says_how_many_use_it() {
+    let still_used = ApiError::Rejected(CommandError::Model(ModelError::StillReferenced {
+        count: 2,
+    }));
+    let response = error_response(&json!(1), &still_used);
+    assert_eq!(code(&response), codes::REJECTED);
+    assert_eq!(
+        response["error"]["data"],
+        json!({ "reason": "in_use", "count": 2 })
+    );
+    assert_eq!(
+        response["error"]["message"],
+        "2 other object(s) still refer to the object"
+    );
+}

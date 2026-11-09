@@ -8,7 +8,7 @@
 //! Everything read from a file is hostile (AGENTS.md §8): a value of the wrong type, a malformed
 //! blob or trailing bytes is [`PersistError::Corrupt`], never a panic.
 
-use core_model::{AttributeValue, EntityId};
+use core_model::{AttributeValue, EntityId, Source};
 use rusqlite::types::{Value, ValueRef};
 use schema::ValueType;
 
@@ -27,6 +27,45 @@ pub(crate) fn to_sql(value: &AttributeValue) -> Value {
             encode_list(items, &mut bytes);
             Value::Blob(bytes)
         }
+        // The source has columns of its own; see `push_row_values`.
+        AttributeValue::Sourced(sourced) => to_sql(&sourced.value),
+    }
+}
+
+/// Appends to `row` the `SQLite` values of one attribute: the value, then, for a sourced
+/// attribute, the document and the clause of its source (ADR 0018). A value the user entered
+/// has an empty document and clause, which no cited source can have. An absent value is `NULL`
+/// in each.
+pub(crate) fn push_row_values(row: &mut Vec<Value>, value: Option<&AttributeValue>, sourced: bool) {
+    row.push(value.map_or(Value::Null, to_sql));
+    if sourced {
+        match value {
+            Some(AttributeValue::Sourced(sourced)) => {
+                let source = &sourced.source;
+                let part = |part: Option<&str>| Value::Text(part.unwrap_or_default().to_owned());
+                row.extend([part(source.document()), part(source.clause())]);
+            }
+            _ => row.extend([Value::Null, Value::Null]),
+        }
+    }
+}
+
+/// Reads a sourced value from its value, document and clause columns: all three or none.
+pub(crate) fn sourced_from_sql(
+    [value, document, clause]: [ValueRef<'_>; 3],
+    value_type: &ValueType,
+) -> Result<Option<AttributeValue>, PersistError> {
+    match (from_sql(value, value_type)?, document, clause) {
+        (None, ValueRef::Null, ValueRef::Null) => Ok(None),
+        (Some(value), ValueRef::Text(b""), ValueRef::Text(b"")) => {
+            Ok(Some(AttributeValue::sourced(value, Source::user())))
+        }
+        (Some(value), ValueRef::Text(document), ValueRef::Text(clause)) => {
+            let source = Source::new(str_from(document)?, str_from(clause)?)
+                .map_err(|_| PersistError::Corrupt)?;
+            Ok(Some(AttributeValue::sourced(value, source)))
+        }
+        _ => Err(PersistError::Corrupt),
     }
 }
 
@@ -75,7 +114,7 @@ pub(crate) fn from_sql(
 fn encode_list(items: &[AttributeValue], bytes: &mut Vec<u8>) {
     encode_len(items.len(), bytes);
     for item in items {
-        match item {
+        match item.plain() {
             AttributeValue::Bool(value) => bytes.push(u8::from(*value)),
             AttributeValue::Integer(value) => bytes.extend(value.to_le_bytes()),
             AttributeValue::Real(value) => bytes.extend(value.to_le_bytes()),
@@ -85,6 +124,8 @@ fn encode_list(items: &[AttributeValue], bytes: &mut Vec<u8>) {
             }
             AttributeValue::Ref(id) => bytes.extend(id.get().to_be_bytes()),
             AttributeValue::List(items) => encode_list(items, bytes),
+            // `plain` never returns a sourced value.
+            AttributeValue::Sourced(_) => {}
         }
     }
 }
@@ -104,7 +145,12 @@ fn bool_from(value: i64) -> Result<bool, PersistError> {
 }
 
 fn text_from(bytes: &[u8]) -> Result<String, PersistError> {
-    String::from_utf8(bytes.to_vec()).map_err(|_| PersistError::Corrupt)
+    str_from(bytes).map(str::to_owned)
+}
+
+/// The text stored in `bytes`, borrowed: sources copy it themselves once trimmed.
+fn str_from(bytes: &[u8]) -> Result<&str, PersistError> {
+    std::str::from_utf8(bytes).map_err(|_| PersistError::Corrupt)
 }
 
 fn id_from_bytes(bytes: &[u8]) -> Result<EntityId, PersistError> {

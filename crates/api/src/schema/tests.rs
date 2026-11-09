@@ -204,6 +204,33 @@ fn the_schema_rejects_what_the_decoder_rejects() {
     assert!(!set.0.is_valid(&value));
 }
 
+#[test]
+fn sources_follow_the_rules_the_core_checks() {
+    let document = document();
+    let source = Check::at(&document, "/$defs/Source");
+    source.assert_valid(&json!({ "document": "EN 1990:2002", "clause": "6.4.3" }));
+    source.assert_valid(&serde_json::to_value(core_model::Source::user()).unwrap());
+    let long = "x".repeat(MAX_SOURCE_LEN + 1);
+    for bad in [
+        json!({ "document": "   ", "clause": "6.4.3" }),
+        json!({ "document": "EN 1990:2002", "clause": long }),
+        json!({ "document": "", "clause": "6.4.3" }),
+        json!({ "entered_by_user": false }),
+        json!({ "document": "EN 1990:2002", "clause": "6.4.3", "entered_by_user": true }),
+    ] {
+        assert!(!source.0.is_valid(&bad), "{bad}");
+    }
+    // schema-gen cannot depend on core-model, so it writes the limit as a literal: check it.
+    let entity_source = &entities()["$defs"]["Source"]["oneOf"][0]["properties"];
+    for part in ["document", "clause"] {
+        assert_eq!(
+            entity_source[part]["maxLength"],
+            json!(MAX_SOURCE_LEN),
+            "{part}"
+        );
+    }
+}
+
 proptest! {
     #![proptest_config(crate::proptest_config())]
 
@@ -230,6 +257,11 @@ fn every_value_and_origin_matches_the_schema() {
         json!({ "Text": "W" }),
         json!({ "Ref": format!("{:032x}", 9) }),
         json!({ "List": [{ "List": [] }, { "Real": 1 }] }),
+        serde_json::to_value(core_model::AttributeValue::sourced(
+            core_model::AttributeValue::Real(30e6),
+            core_model::Source::new("EN 1992-1-1:2004", "Table 3.1").unwrap(),
+        ))
+        .unwrap(),
     ] {
         value.assert_valid(&instance);
     }

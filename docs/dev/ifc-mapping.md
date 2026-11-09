@@ -2,10 +2,12 @@
 
 # IFC mapping of the `core` schema
 
-How each entity of version 2 of the `core` schema maps onto IFC 4.3 (CORE-10). The rows come from the `[ifc]` section of each definition (ADR 0002).
+How each entity of version 3 of the `core` schema maps onto IFC 4.3 (CORE-10). The rows come from the `[ifc]` section of each definition (ADR 0002).
 
 Checks: validation rejects an entity with no mapping; `cargo test -p interop-ifc` checks every name against the IFC 4.3 schema; `cargo test -p schema-gen` fails when this page is out of date, and `UPDATE_SNAPSHOTS=1 cargo test -p schema-gen` regenerates it.
 
 | Entity | Kind | IFC entity | Predefined type | Object type | IFC type entity |
 | --- | --- | --- | --- | --- | --- |
+| `Material` | resource | `IfcMaterial` |  |  |  |
+| `MaterialOriginal` | resource | `IfcMaterialProperties` |  |  |  |
 | `Site` | spatial | `IfcSite` |  |  |  |

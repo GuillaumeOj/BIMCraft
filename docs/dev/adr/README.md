@@ -36,5 +36,7 @@ Copy [`_template.md`](_template.md) and follow its comments.
 | [0015](0015-commands-and-transactions.md) | Commands and transactions | Accepted |
 | [0016](0016-project-file-layout.md) | Project file layout | Accepted |
 | [0017](0017-georeference-storage-and-ifc-mapping.md) | Georeference storage and IFC mapping | Accepted |
+| [0018](0018-sourced-values.md) | Sourced values | Accepted |
+| [0019](0019-materials-and-layered-build-ups.md) | Materials and layered build-ups | Accepted |
 
 One decision predates this folder and stays in the specification: the web UI over an all-Rust UI ([specification §13](../../specifications.md#13-ui-and-rendering), "Decision record").

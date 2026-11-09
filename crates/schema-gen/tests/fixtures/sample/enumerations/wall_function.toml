@@ -1,0 +1,12 @@
+format = 1
+
+[enumeration]
+name = "WallFunction"
+doc = "What a wall does in the building."
+
+[[item]]
+name = "load_bearing"
+doc = "Carries loads from above."
+
+[[item]]
+name = "partition"

@@ -150,4 +150,11 @@ pub enum ModelError {
     /// Types made from the component still exist.
     #[error("the component still has types")]
     ComponentInUse,
+    /// Other objects hold a required reference to the object, so removing it would leave them
+    /// pointing at nothing (CORE-03). Remove or change them first.
+    #[error("{count} other object(s) still refer to the object")]
+    StillReferenced {
+        /// How many objects refer to it.
+        count: usize,
+    },
 }

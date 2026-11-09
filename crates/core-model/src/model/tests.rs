@@ -28,6 +28,7 @@ pub(super) fn entity(name: &str, kind: EntityKind, ifc: &str) -> Entity {
             presence: Presence::Optional,
             placement: Placement::Instance,
             doc: None,
+            sourced: false,
         }],
         roles: Vec::new(),
         representations: Vec::new(),
@@ -118,6 +119,7 @@ pub(super) fn namespace() -> Namespace {
             .map(|entity| (entity.name.clone(), entity))
             .collect(),
         property_sets: BTreeMap::from([("Pset_WallCommon".into(), wall_common())]),
+        enumerations: BTreeMap::new(),
     }
 }
 
@@ -145,6 +147,7 @@ fn property(name: &str, value: ValueType, presence: Presence, placement: Placeme
         presence,
         placement,
         doc: None,
+        sourced: false,
     }
 }
 
@@ -154,6 +157,7 @@ pub(super) fn wall_common() -> PropertySet {
     PropertySet {
         name: "Pset_WallCommon".into(),
         applies_to: vec!["Wall".into()],
+        doc: None,
         properties: vec![
             property("Reference", ValueType::Text, Presence::Required, Instance),
             property(
@@ -289,6 +293,119 @@ fn stores_objects_through_the_attribute_tables() {
         model.insert(id(STOREY), "Storey", NO_VALUES),
         Err(ModelError::Store(StoreError::DuplicateId(id(STOREY))))
     );
+}
+
+#[test]
+fn a_model_rebuilt_from_its_store_keeps_every_object_and_value() {
+    let mut original = model();
+    let name = AttributeValue::Text("W1".into());
+    original
+        .set(id(WALLS[0]), "name", Some(name.clone()))
+        .unwrap();
+    let rebuilt = Model::from_store(&namespace(), original.store()).unwrap();
+    assert_eq!(rebuilt.len(), original.len());
+    for object in original.store().ids() {
+        assert_eq!(rebuilt.entity_of(object), original.entity_of(object));
+    }
+    assert_eq!(rebuilt.get(id(WALLS[0]), "name"), Ok(Some(name)));
+}
+
+#[test]
+fn a_store_with_relationships_does_not_rebuild_a_model() {
+    let original = contained();
+    assert_eq!(
+        Model::from_store(&namespace(), original.store()).map(|model| model.len()),
+        Err(ModelError::RelationshipEntity("Containment".into()))
+    );
+    let mut invalid = namespace();
+    invalid.version = 0;
+    assert!(matches!(
+        Model::from_store(&invalid, model().store()),
+        Err(ModelError::Store(StoreError::InvalidSchema(_)))
+    ));
+}
+
+/// The walls namespace plus anchors, which hold a required reference to a wall, and bundles,
+/// which hold a required list of references to walls.
+fn anchored() -> Model {
+    let mut namespace = namespace();
+    for (name, ifc, value) in [
+        ("Anchor", "IfcFastener", ValueType::Ref("Wall".into())),
+        (
+            "Bundle",
+            "IfcElementAssembly",
+            ValueType::List(Box::new(ValueType::Ref("Wall".into()))),
+        ),
+    ] {
+        let mut holder = entity(name, EntityKind::Element, ifc);
+        holder.attributes.push(property(
+            "wall",
+            value,
+            Presence::Required,
+            Placement::Instance,
+        ));
+        namespace.entities.insert(name.into(), holder);
+    }
+    let mut model = Model::new(&namespace).unwrap();
+    model.insert(id(WALLS[0]), "Wall", NO_VALUES).unwrap();
+    model.insert(id(WALLS[1]), "Wall", NO_VALUES).unwrap();
+    model
+}
+
+#[test]
+fn an_object_a_required_reference_targets_cannot_be_removed() {
+    let mut model = anchored();
+    let wall = AttributeValue::Ref(id(WALLS[0]));
+    for (raw, entity, value) in [
+        (41, "Anchor", wall.clone()),
+        (42, "Anchor", wall.clone()),
+        (
+            43,
+            "Bundle",
+            AttributeValue::List(vec![AttributeValue::Ref(id(WALLS[1])), wall]),
+        ),
+    ] {
+        model.insert(id(raw), entity, [("wall", value)]).unwrap();
+    }
+    let before = model.clone();
+    // Two anchors and one bundle refer to the first wall; the second wall has the bundle only.
+    assert_eq!(
+        model.remove(id(WALLS[0])),
+        Err(ModelError::StillReferenced { count: 3 })
+    );
+    assert_eq!(
+        model.remove(id(WALLS[1])),
+        Err(ModelError::StillReferenced { count: 1 })
+    );
+    assert_eq!(model, before);
+    assert_eq!(
+        ModelError::StillReferenced { count: 3 }.to_string(),
+        "3 other object(s) still refer to the object"
+    );
+
+    // Removing the holders first frees the wall; undoing brings both back.
+    for raw in [41, 42, 43] {
+        model.remove(id(raw)).unwrap();
+    }
+    let removal = model.remove(id(WALLS[0])).unwrap();
+    assert!(!model.contains(id(WALLS[0])));
+    model.restore(removal).unwrap();
+    assert!(model.contains(id(WALLS[0])));
+}
+
+#[test]
+fn objects_nothing_requires_are_removed_as_before() {
+    let mut model = anchored();
+    // An anchor refers to a wall; the anchor itself is referred to by nobody.
+    model
+        .insert(
+            id(41),
+            "Anchor",
+            [("wall", AttributeValue::Ref(id(WALLS[0])))],
+        )
+        .unwrap();
+    assert!(model.remove(id(41)).is_ok());
+    assert!(model.remove(id(WALLS[0])).is_ok());
 }
 
 #[test]

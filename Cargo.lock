@@ -1552,8 +1552,12 @@ dependencies = [
  "api",
  "core-model",
  "core-txn",
+ "material",
+ "persist",
  "platform",
+ "proptest",
  "rayon",
+ "schema",
  "schema-gen",
  "serde_json",
  "tauri",
@@ -2149,6 +2153,19 @@ dependencies = [
  "log",
  "tendril",
  "web_atoms",
+]
+
+[[package]]
+name = "material"
+version = "0.0.0"
+dependencies = [
+ "core-model",
+ "core-txn",
+ "libm",
+ "proptest",
+ "schema",
+ "schema-gen",
+ "thiserror 2.0.21",
 ]
 
 [[package]]

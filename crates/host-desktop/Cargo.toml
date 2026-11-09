@@ -13,6 +13,7 @@ core-model = { workspace = true }
 core-txn = { workspace = true }
 platform = { workspace = true }
 rayon = { workspace = true }
+schema = { workspace = true }
 schema-gen = { workspace = true }
 tempfile = { workspace = true }
 tauri = { workspace = true }
@@ -20,8 +21,11 @@ thiserror = { workspace = true }
 
 [dev-dependencies]
 api = { workspace = true, features = ["conformance"] }
-serde_json = { workspace = true }
+material = { workspace = true }
+persist = { workspace = true }
 platform = { workspace = true, features = ["testing"] }
+proptest = { workspace = true }
+serde_json = { workspace = true }
 tauri = { workspace = true, features = ["test"] }
 
 # Test fixture: a stand-in solver that the compute tests start as a child process.

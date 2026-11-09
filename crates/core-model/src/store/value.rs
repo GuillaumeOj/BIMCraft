@@ -1,6 +1,6 @@
 use schema::{Value, ValueType};
 
-use crate::EntityId;
+use crate::{EntityId, Source, SourcedValue};
 
 /// A value held in an attribute of a stored object.
 ///
@@ -20,9 +20,52 @@ pub enum AttributeValue {
     Ref(EntityId),
     /// A `list:<value type>` value.
     List(Vec<AttributeValue>),
+    /// The value of a `sourced` attribute, with its source (ADR 0018).
+    Sourced(Box<SourcedValue>),
 }
 
 impl AttributeValue {
+    /// `value`, citing `source`: the value of a sourced attribute (ADR 0018).
+    #[must_use]
+    pub fn sourced(value: Self, source: Source) -> Self {
+        Self::Sourced(Box::new(SourcedValue { value, source }))
+    }
+    /// The value without its source: the inner value of a sourced value, else itself.
+    #[must_use]
+    pub fn plain(&self) -> &Self {
+        match self {
+            Self::Sourced(sourced) => &sourced.value,
+            other => other,
+        }
+    }
+
+    /// The number of a `real` or `quantity:<kind>` value, sourced or not.
+    #[must_use]
+    pub fn as_real(&self) -> Option<f64> {
+        match self.plain() {
+            Self::Real(value) => Some(*value),
+            _ => None,
+        }
+    }
+
+    /// The text of a `text` or `enum:<Name>` value, sourced or not.
+    #[must_use]
+    pub fn as_text(&self) -> Option<&str> {
+        match self.plain() {
+            Self::Text(text) => Some(text),
+            _ => None,
+        }
+    }
+
+    /// The object a `ref:<Entity>` value refers to.
+    #[must_use]
+    pub const fn as_entity(&self) -> Option<EntityId> {
+        match self {
+            Self::Ref(id) => Some(*id),
+            _ => None,
+        }
+    }
+
     /// Heap memory owned by the value, not counting the value itself.
     pub(super) fn heap_bytes(&self) -> usize {
         match self {
@@ -30,6 +73,9 @@ impl AttributeValue {
             Self::List(items) => {
                 items.capacity() * size_of::<Self>()
                     + items.iter().map(Self::heap_bytes).sum::<usize>()
+            }
+            Self::Sourced(sourced) => {
+                size_of::<SourcedValue>() + sourced.value.heap_bytes() + sourced.source.heap_bytes()
             }
             Self::Bool(_) | Self::Integer(_) | Self::Real(_) | Self::Ref(_) => 0,
         }
@@ -55,6 +101,12 @@ pub(super) enum ValueError {
     Mismatch,
     /// A real is NaN or infinite.
     NonFinite,
+    /// A text is not an item of the attribute's enumeration.
+    UnknownItem,
+    /// A plain value is written to a sourced attribute.
+    MissingSource,
+    /// A sourced value is written to an attribute that is not sourced.
+    UnexpectedSource,
 }
 
 /// Checks that `value`, lists included, has the value type `value_type`.
@@ -71,6 +123,19 @@ pub(super) fn conforms(value: &AttributeValue, value_type: &ValueType) -> Result
         | (AttributeValue::Text(_), ValueType::Text | ValueType::Enum(_))
         | (AttributeValue::Ref(_), ValueType::Ref(_)) => Ok(()),
         _ => Err(ValueError::Mismatch),
+    }
+}
+
+/// Checks that every text in `value`, lists included, is one of `items`.
+pub(super) fn known_items(value: &AttributeValue, items: &[Box<str>]) -> Result<(), ValueError> {
+    match value {
+        AttributeValue::Text(text) if !items.iter().any(|item| **item == **text) => {
+            Err(ValueError::UnknownItem)
+        }
+        AttributeValue::List(values) => values
+            .iter()
+            .try_for_each(|value| known_items(value, items)),
+        _ => Ok(()),
     }
 }
 
@@ -158,6 +223,21 @@ mod tests {
                 Err(ValueError::NonFinite)
             );
         }
+    }
+
+    #[test]
+    fn accessors_see_through_sources() {
+        let source = Source::new("EN 1992-1-1:2004", "Table 3.1").unwrap();
+        let sourced = AttributeValue::sourced(AttributeValue::Real(30e6), source);
+        assert_eq!(sourced.as_real(), Some(30e6));
+        assert_eq!(AttributeValue::Text("W".into()).as_text(), Some("W"));
+        assert_eq!(
+            AttributeValue::Ref(EntityId::new(3)).as_entity(),
+            Some(EntityId::new(3))
+        );
+        assert_eq!(AttributeValue::Bool(true).as_real(), None);
+        assert_eq!(AttributeValue::Bool(true).as_text(), None);
+        assert_eq!(AttributeValue::Bool(true).as_entity(), None);
     }
 
     #[test]

@@ -2,7 +2,7 @@
 
 use std::collections::BTreeMap;
 
-use core_model::{AttributeValue, EntityId, Store};
+use core_model::{AttributeValue, EntityId, Source, Store};
 use proptest::prelude::*;
 use schema::{
     Attribute, Entity, EntityKind, IfcMapping, Namespace, Placement, Presence, QuantityKind,
@@ -26,6 +26,7 @@ fn attribute(name: &str, value: ValueType, presence: Presence, placement: Placem
         presence,
         placement,
         doc: None,
+        sourced: false,
     }
 }
 
@@ -100,6 +101,10 @@ pub fn namespace() -> Namespace {
             optional("hosts", list_of(ValueType::Ref("Storey".into()))),
             optional("counts", list_of(ValueType::Integer)),
             optional("offsets", list_of(length())),
+            Attribute {
+                sourced: true,
+                ..optional("strength", ValueType::Real)
+            },
         ],
     );
     wall.type_def = Some(TypeDef {
@@ -114,6 +119,7 @@ pub fn namespace() -> Namespace {
             .map(|entity| (entity.name.clone(), entity))
             .collect(),
         property_sets: BTreeMap::new(),
+        enumerations: BTreeMap::new(),
     }
 }
 
@@ -142,7 +148,16 @@ pub fn object() -> Vec<(&'static str, AttributeValue)> {
             AttributeValue::List(vec![AttributeValue::Integer(i64::MAX)]),
         ),
         ("offsets", AttributeValue::List(vec![real(0.5), real(-0.0)])),
+        (
+            "strength",
+            sourced(real(30e6), "EN 1992-1-1:2004", "Table 3.1"),
+        ),
     ]
+}
+
+fn sourced(value: AttributeValue, document: &str, clause: &str) -> AttributeValue {
+    let source = Source::new(document, clause).expect("test sources are valid");
+    AttributeValue::sourced(value, source)
 }
 
 /// Every object of a store with owned names: id, entity, attribute values.
@@ -201,13 +216,18 @@ fn wall() -> impl Strategy<Value = Vec<(&'static str, AttributeValue)>> {
             proptest::option::of(list(reference())),
             proptest::option::of(list(integer())),
             proptest::option::of(list(finite())),
+            proptest::option::of(prop_oneof![
+                (finite(), "[A-Z][A-Za-z0-9 :-]{0,20}", "[0-9][0-9.()]{0,8}")
+                    .prop_map(|(value, document, clause)| sourced(value, &document, &clause)),
+                finite().prop_map(|value| AttributeValue::sourced(value, Source::user())),
+            ]),
         ),
     )
         .prop_map(
             |(
                 axis,
                 (height, flags, count, name, external, tags),
-                (ratio, hosts, counts, offsets),
+                (ratio, hosts, counts, offsets, strength),
             )| {
                 let optional = [
                     ("height", height),
@@ -220,6 +240,7 @@ fn wall() -> impl Strategy<Value = Vec<(&'static str, AttributeValue)>> {
                     ("hosts", hosts),
                     ("counts", counts),
                     ("offsets", offsets),
+                    ("strength", strength),
                 ];
                 std::iter::once(("axis", axis))
                     .chain(

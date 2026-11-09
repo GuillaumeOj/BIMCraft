@@ -22,6 +22,7 @@ fn attribute(name: &str, value: ValueType) -> Attribute {
         presence: Presence::Optional,
         placement: Placement::Instance,
         doc: None,
+        sourced: false,
     }
 }
 
@@ -61,6 +62,7 @@ fn namespace() -> Namespace {
         version: 1,
         entities: BTreeMap::from([("Space".to_owned(), space)]),
         property_sets: BTreeMap::new(),
+        enumerations: BTreeMap::new(),
     }
 }
 

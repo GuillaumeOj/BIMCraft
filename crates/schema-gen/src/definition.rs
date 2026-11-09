@@ -54,6 +54,7 @@ pub enum KindDef {
     Element,
     Spatial,
     Relationship,
+    Resource,
 }
 
 #[derive(Debug, Deserialize)]
@@ -84,6 +85,8 @@ pub struct AttributeDef {
     #[serde(default)]
     pub on: PlacementDef,
     pub doc: Option<String>,
+    #[serde(default)]
+    pub sourced: bool,
 }
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, Serialize)]
@@ -137,6 +140,31 @@ pub struct PropertySetFile {
 pub struct PropertySetSection {
     pub name: Spanned<String>,
     pub applies_to: Vec<String>,
+    pub doc: Option<String>,
+}
+
+/// An enumeration file.
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct EnumerationFile {
+    pub format: Spanned<u32>,
+    pub enumeration: EnumerationSection,
+    #[serde(default, rename = "item")]
+    pub items: Vec<EnumItemDef>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct EnumerationSection {
+    pub name: Spanned<String>,
+    pub doc: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct EnumItemDef {
+    pub name: Spanned<String>,
+    pub doc: Option<String>,
 }
 
 /// Converts between a file-format enum and its model enum, both ways, variant by variant;
@@ -161,6 +189,10 @@ macro_rules! same_variants {
     };
 }
 
-same_variants!(KindDef, EntityKind, [Element, Spatial, Relationship]);
+same_variants!(
+    KindDef,
+    EntityKind,
+    [Element, Spatial, Relationship, Resource]
+);
 same_variants!(PlacementDef, Placement, [Instance, Type, TypeOverridable]);
 same_variants!(CardinalityDef, Cardinality, [One, Many]);

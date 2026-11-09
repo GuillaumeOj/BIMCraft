@@ -10,7 +10,7 @@ use rusqlite::ErrorCode;
 use rusqlite::types::Value as SqlValue;
 use schema::{Step, ValueType};
 
-use crate::layout::{Column, EntityTable, quote, sql_type, table_name};
+use crate::layout::{Column, EntityTable, quote, source_columns, sql_type, table_name};
 use crate::{PersistError, Schema, Transaction, codec};
 
 /// Runs every migration from version `from` of the namespace to its current version.
@@ -64,7 +64,14 @@ fn apply(tx: &Transaction<'_>, schema: &Schema<'_>, step: &Step) -> Result<(), P
                 [],
             )?;
         }
-        Step::RenameAttribute { entity, from, to } => rename_column(tx, &table(entity), from, to)?,
+        Step::RenameAttribute { entity, from, to } => {
+            rename_column(tx, &table(entity), from, to)?;
+            if let Some(sources) = stored_sources(tx, namespace, entity, from)? {
+                for (from, to) in sources.iter().zip(&source_columns(to)) {
+                    rename_column(tx, &table(entity), from, to)?;
+                }
+            }
+        }
         Step::AddEntity { entity, attributes } => {
             let columns = attributes.iter().map(Column::from).collect();
             tx.execute(
@@ -77,7 +84,17 @@ fn apply(tx: &Transaction<'_>, schema: &Schema<'_>, step: &Step) -> Result<(), P
             attribute,
             default,
         } => {
-            add_column(tx, &table(entity), &attribute.name, &attribute.value)?;
+            add_column(
+                tx,
+                &table(entity),
+                &attribute.name,
+                sql_type(&attribute.value),
+            )?;
+            if attribute.sourced {
+                for name in source_columns(&attribute.name) {
+                    add_column(tx, &table(entity), &name, "TEXT")?;
+                }
+            }
             if let Some(default) = default {
                 let sql = format!(
                     "UPDATE {} SET {} = ?1",
@@ -117,7 +134,15 @@ fn apply(tx: &Transaction<'_>, schema: &Schema<'_>, step: &Step) -> Result<(), P
         Step::RemoveEntity { entity } => {
             tx.execute(&format!("DROP TABLE {}", table(entity)), [])?;
         }
-        Step::RemoveAttribute { entity, attribute } => drop_column(tx, &table(entity), attribute)?,
+        Step::RemoveAttribute { entity, attribute } => {
+            drop_column(tx, &table(entity), attribute)?;
+            for name in stored_sources(tx, namespace, entity, attribute)?
+                .into_iter()
+                .flatten()
+            {
+                drop_column(tx, &table(entity), &name)?;
+            }
+        }
     }
     Ok(())
 }
@@ -137,6 +162,23 @@ fn rename_column(
     Ok(())
 }
 
+/// The source columns of `attribute` in the table of `entity`, when it is sourced; steps that
+/// rename or remove an attribute do not say whether it is, so the table is asked.
+fn stored_sources(
+    tx: &Transaction<'_>,
+    namespace: &str,
+    entity: &str,
+    attribute: &str,
+) -> Result<Option<[String; 2]>, PersistError> {
+    let columns = source_columns(attribute);
+    let found: i64 = tx.query_row(
+        "SELECT count(*) FROM pragma_table_info(?1) WHERE name = ?2",
+        [table_name(namespace, entity).as_str(), columns[0].as_str()],
+        |row| row.get(0),
+    )?;
+    Ok((found > 0).then_some(columns))
+}
+
 fn drop_column(tx: &Transaction<'_>, table: &str, name: &str) -> Result<(), PersistError> {
     tx.execute(
         &format!("ALTER TABLE {table} DROP COLUMN {}", quote(name)),
@@ -149,13 +191,9 @@ fn add_column(
     tx: &Transaction<'_>,
     table: &str,
     name: &str,
-    value_type: &ValueType,
+    sql_type: &str,
 ) -> Result<(), PersistError> {
-    let sql = format!(
-        "ALTER TABLE {table} ADD COLUMN {} {}",
-        quote(name),
-        sql_type(value_type)
-    );
+    let sql = format!("ALTER TABLE {table} ADD COLUMN {} {sql_type}", quote(name));
     tx.execute(&sql, [])?;
     Ok(())
 }
@@ -172,7 +210,7 @@ fn change_value(
 ) -> Result<(), PersistError> {
     // `~` never appears in a schema name, so the temporary column cannot clash.
     let temporary = format!("{attribute}~");
-    add_column(tx, table, &temporary, to)?;
+    add_column(tx, table, &temporary, sql_type(to))?;
     if matches!(from, ValueType::List(_)) {
         convert_rows(tx, table, attribute, &temporary, (from, to), factor)?;
     } else {
@@ -369,6 +407,57 @@ mod tests {
         assert_eq!(width(&conn), SqlValue::Integer(200));
     }
 
+    fn columns(conn: &Connection, table: &str) -> Vec<String> {
+        let mut info = conn
+            .prepare("SELECT name FROM pragma_table_info(?1) ORDER BY cid")
+            .unwrap();
+        info.query_map([table], |row| row.get(0))
+            .unwrap()
+            .collect::<Result<_, _>>()
+            .unwrap()
+    }
+
+    #[test]
+    fn source_columns_follow_their_attribute() {
+        let mut conn = project();
+        let sourced = |name: &str| StoredAttribute {
+            name: name.into(),
+            value: ValueType::Real,
+            sourced: true,
+        };
+        let steps = vec![
+            Step::AddAttribute {
+                entity: "Wall".into(),
+                attribute: sourced("strength"),
+                default: None,
+            },
+            Step::RenameAttribute {
+                entity: "Wall".into(),
+                from: "strength".into(),
+                to: "fck".into(),
+            },
+            Step::AddEntity {
+                entity: "Slab".into(),
+                attributes: vec![sourced("modulus")],
+            },
+        ];
+        run(&mut conn, steps, &[]).unwrap();
+        assert_eq!(
+            columns(&conn, "core/Wall"),
+            ["id", "width", "fck", "fck@document", "fck@clause"]
+        );
+        assert_eq!(
+            columns(&conn, "core/Slab"),
+            ["id", "modulus", "modulus@document", "modulus@clause"]
+        );
+        let remove = vec![Step::RemoveAttribute {
+            entity: "Wall".into(),
+            attribute: "fck".into(),
+        }];
+        run(&mut conn, remove, &[]).unwrap();
+        assert_eq!(columns(&conn, "core/Wall"), ["id", "width"]);
+    }
+
     #[test]
     fn structure_steps_rename_add_and_remove() {
         let mut conn = project();
@@ -387,6 +476,7 @@ mod tests {
                 attribute: StoredAttribute {
                     name: "height".into(),
                     value: ValueType::Real,
+                    sourced: false,
                 },
                 default: Some(Value::Real(2.5)),
             },
@@ -395,6 +485,7 @@ mod tests {
                 attribute: StoredAttribute {
                     name: "name".into(),
                     value: ValueType::Text,
+                    sourced: false,
                 },
                 default: None,
             },
@@ -407,6 +498,7 @@ mod tests {
                 attributes: vec![StoredAttribute {
                     name: "depth".into(),
                     value: ValueType::Real,
+                    sourced: false,
                 }],
             },
             Step::RemoveEntity {

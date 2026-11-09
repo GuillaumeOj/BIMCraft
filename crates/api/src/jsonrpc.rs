@@ -4,7 +4,8 @@
 //! before it is parsed, and every malformed, oversized or too deeply nested one gets a JSON-RPC
 //! error, never a panic. Batches are supported, each request in them handled on its own.
 
-use core_txn::{ChangeEvent, Origin};
+use core_model::ModelError;
+use core_txn::{ChangeEvent, CommandError, Origin};
 use serde_json::{Map, Value, json};
 
 use crate::{ApiError, GeorefError, Registry, RegistryError, Session};
@@ -242,6 +243,12 @@ fn error_response(id: &Value, error: &ApiError) -> Value {
             if let GeorefError::OutsideDomain { index: Some(index) } = georef {
                 response["error"]["data"]["index"] = json!(index);
             }
+            return response;
+        }
+        // Other objects still use it: a stable reason and how many, so the UI can say "in use".
+        ApiError::Rejected(CommandError::Model(ModelError::StillReferenced { count })) => {
+            let mut response = failure(id, codes::REJECTED, &error.to_string());
+            response["error"]["data"] = json!({ "reason": "in_use", "count": count });
             return response;
         }
         ApiError::NotFound => codes::NOT_FOUND,

@@ -47,6 +47,37 @@ describe("typeOf", () => {
     expect(typeOf({ type: "object", additionalProperties: false }, "s")).toBe("Record<string, never>");
   });
 
+  test("maps enumerations of primitives to unions of their literals", () => {
+    expect(typeOf({ enum: ["concrete", "steel"] }, "s")).toBe('"concrete" | "steel"');
+    expect(typeOf({ type: "string", enum: ["a", "a", "b"] }, "s")).toBe('"a" | "b"');
+    expect(typeOf({ type: "integer", enum: [1, 2] }, "s")).toBe("1 | 2");
+    expect(typeOf({ type: "number", enum: [0.5] }, "s")).toBe("0.5");
+    expect(typeOf({ type: "boolean", enum: [true] }, "s")).toBe("true");
+    expect(typeOf({ type: "null", enum: [null] }, "s")).toBe("null");
+  });
+
+  test("accepts string bounds and defaults without changing the type", () => {
+    expect(typeOf({ type: "string", minLength: 1, maxLength: 200 }, "s")).toBe("string");
+    expect(typeOf({ type: "number", default: 0 }, "s")).toBe("number");
+    expect(typeOf({ enum: ["a", "b"], default: "a" }, "s")).toBe('"a" | "b"');
+  });
+
+  test("rejects enumerations it cannot type faithfully, naming where", () => {
+    const mixed = "a: enum items must all be strings, numbers, booleans or null";
+    expect(() => typeOf({ enum: [] }, "a")).toThrow("a: enum must be a non-empty array");
+    expect(() => typeOf({ enum: "x" }, "a")).toThrow("a: enum must be a non-empty array");
+    expect(() => typeOf({ enum: ["x", 1] }, "a")).toThrow(mixed);
+    expect(() => typeOf({ enum: [{ x: 1 }] }, "a")).toThrow(mixed);
+    expect(() => typeOf({ enum: [Number.NaN] }, "a")).toThrow(mixed);
+    expect(() => typeOf({ type: "string", enum: [1] }, "a")).toThrow('a: enum items contradict type "string"');
+    expect(() => typeOf({ type: "integer", enum: [1.5] }, "a")).toThrow('a: enum items contradict type "integer"');
+    expect(() => typeOf({ type: "object", enum: ["x"] }, "a")).toThrow('a: enum items contradict type "object"');
+    expect(() => typeOf({ type: "array", items: { type: "null" }, enum: ["x"] }, "a")).toThrow(
+      "a: cannot combine enum, items",
+    );
+    expect(() => typeOf({ enum: ["x"], oneOf: [{ type: "null" }] }, "a")).toThrow("a: cannot combine oneOf, enum");
+  });
+
   test("rejects what it cannot type faithfully, naming where", () => {
     expect(() => typeOf(true, "a")).toThrow("a: expected a schema object");
     expect(() => typeOf({ type: "string", format: "date" }, "a")).toThrow(

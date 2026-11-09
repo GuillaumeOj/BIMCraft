@@ -1,0 +1,14 @@
+format = 1
+
+[entity]
+name = "Material"
+kind = "resource"
+doc = "A substance that elements are made of."
+
+[ifc]
+entity = "IfcMaterial"
+
+[[attribute]]
+name = "name"
+value = "text"
+required = true

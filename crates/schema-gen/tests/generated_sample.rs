@@ -15,8 +15,8 @@ mod generated {
 }
 
 use generated::{
-    Beam, BeamSection, Containment, Opening, PsetWallCommon, Recess, Storey, Voiding, Wall,
-    WallType,
+    Beam, BeamSection, Containment, Material, Opening, PsetWallCommon, Recess, Source, Sourced,
+    Storey, Voiding, Wall, WallFunction, WallType,
 };
 
 /// The sample's JSON Schema, parsed once.
@@ -56,6 +56,7 @@ fn absent_values_take_their_defaults() {
             height: None,
             base_offset: 0.0,
             mark: None,
+            function: None,
         }
     );
     let wall_type: WallType = serde_json::from_value(json!({ "thickness": 0.2 })).unwrap();
@@ -65,6 +66,7 @@ fn absent_values_take_their_defaults() {
             thickness: 0.2,
             layer_names: Vec::new(),
             height: 2.5,
+            function: WallFunction::Partition,
         }
     );
     let beam: Beam = serde_json::from_value(json!({ "span": 6.0 })).unwrap();
@@ -153,6 +155,7 @@ fn absent_options_are_not_written() {
         height: None,
         base_offset: 0.1,
         mark: Some("W1".into()),
+        function: None,
     };
     assert_eq!(
         serde_json::to_value(&wall).unwrap(),
@@ -162,11 +165,13 @@ fn absent_options_are_not_written() {
         thickness: 0.3,
         layer_names: Vec::new(),
         height: 3.0,
+        function: WallFunction::LoadBearing,
     };
     assert_eq!(
         serde_json::to_value(&wall_type).unwrap(),
-        json!({ "thickness": 0.3, "height": 3.0 })
+        json!({ "thickness": 0.3, "height": 3.0, "function": "load_bearing" })
     );
+    assert!(serde_json::from_value::<Wall>(json!({ "function": "curtain" })).is_err());
 }
 
 #[test]
@@ -175,13 +180,40 @@ fn property_names_keep_their_ifc_spelling() {
         is_external: Some(true),
         load_bearing: true,
         fire_rating: Some("REI 60".into()),
-        u_value: Some(0.25),
+        u_value: Some(Sourced {
+            value: 0.25,
+            source: Source::Cited {
+                document: "EN ISO 6946:2017".into(),
+                clause: "6.7".into(),
+            },
+        }),
     };
     assert_eq!(
         serde_json::to_value(&property_set).unwrap(),
-        json!({ "IsExternal": true, "LoadBearing": true, "FireRating": "REI 60", "UValue": 0.25 })
+        json!({
+            "IsExternal": true,
+            "LoadBearing": true,
+            "FireRating": "REI 60",
+            "UValue": { "value": 0.25, "source": { "document": "EN ISO 6946:2017", "clause": "6.7" } }
+        })
     );
+    let unsourced = json!({ "LoadBearing": true, "UValue": 0.25 });
+    assert!(serde_json::from_value::<PsetWallCommon>(unsourced).is_err());
     round_trip("Pset_WallCommon", &property_set).unwrap();
+    let entered = PsetWallCommon {
+        u_value: Some(Sourced {
+            value: 0.3,
+            source: Source::EnteredByUser {
+                entered_by_user: true,
+            },
+        }),
+        ..property_set
+    };
+    assert_eq!(
+        serde_json::to_value(&entered).unwrap()["UValue"],
+        json!({ "value": 0.3, "source": { "entered_by_user": true } })
+    );
+    round_trip("Pset_WallCommon", &entered).unwrap();
 }
 
 #[test]
@@ -192,6 +224,7 @@ fn every_type_round_trips() -> Result<(), serde_json::Error> {
             height: Some(3.1),
             base_offset: -0.2,
             mark: Some("W2".into()),
+            function: Some(WallFunction::LoadBearing),
         },
     )?;
     round_trip(
@@ -200,8 +233,10 @@ fn every_type_round_trips() -> Result<(), serde_json::Error> {
             thickness: 0.25,
             layer_names: vec!["Brick".into(), "Insulation".into()],
             height: 2.7,
+            function: WallFunction::Partition,
         },
     )?;
+    round_trip("WallFunction", &WallFunction::LoadBearing)?;
     round_trip(
         "Beam",
         &Beam {
@@ -217,6 +252,12 @@ fn every_type_round_trips() -> Result<(), serde_json::Error> {
             name: "Ground floor".into(),
             elevation: 0.0,
             index: 0,
+        },
+    )?;
+    round_trip(
+        "Material",
+        &Material {
+            name: "C30/37".into(),
         },
     )?;
     round_trip("Opening", &Opening { depth: 0.3 })?;

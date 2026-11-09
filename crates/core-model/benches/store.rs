@@ -26,6 +26,7 @@ fn attribute(name: &str, value: ValueType, presence: Presence) -> Attribute {
         presence,
         placement: Placement::Instance,
         doc: None,
+        sourced: false,
     }
 }
 
@@ -61,6 +62,7 @@ fn namespace() -> Namespace {
         version: 1,
         entities: [(wall.name.clone(), wall)].into(),
         property_sets: [].into(),
+        enumerations: [].into(),
     }
 }
 

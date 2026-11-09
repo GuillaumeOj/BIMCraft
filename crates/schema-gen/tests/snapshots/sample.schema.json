@@ -67,6 +67,20 @@
       ],
       "type": "object"
     },
+    "Material": {
+      "additionalProperties": false,
+      "description": "A substance that elements are made of.",
+      "properties": {
+        "name": {
+          "description": "The `name` value.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "type": "object"
+    },
     "ObjectId": {
       "minimum": 0,
       "type": "integer"
@@ -87,7 +101,7 @@
     },
     "Pset_WallCommon": {
       "additionalProperties": false,
-      "description": "The `Pset_WallCommon` property set.\n\nApplies to `Wall`.",
+      "description": "Properties common to every wall.\n\nApplies to `Wall`.",
       "properties": {
         "FireRating": {
           "anyOf": [
@@ -119,13 +133,26 @@
         "UValue": {
           "anyOf": [
             {
-              "type": "number"
+              "additionalProperties": false,
+              "properties": {
+                "source": {
+                  "$ref": "#/$defs/Source"
+                },
+                "value": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "value",
+                "source"
+              ],
+              "type": "object"
             },
             {
               "type": "null"
             }
           ],
-          "description": "The `UValue` value.\n\nIn W/(m²·K)."
+          "description": "Thermal transmittance, with the test report or standard it comes from.\n\nIn W/(m²·K)."
         }
       },
       "type": "object"
@@ -136,6 +163,45 @@
       "description": "A `Recess`.\n\nDeprecated since schema version 2.",
       "properties": {},
       "type": "object"
+    },
+    "Source": {
+      "description": "Where a value comes from: the document and clause it is taken from, or the user who entered it.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "clause": {
+              "maxLength": 200,
+              "minLength": 1,
+              "pattern": "\\S",
+              "type": "string"
+            },
+            "document": {
+              "maxLength": 200,
+              "minLength": 1,
+              "pattern": "\\S",
+              "type": "string"
+            }
+          },
+          "required": [
+            "document",
+            "clause"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "entered_by_user": {
+              "const": true
+            }
+          },
+          "required": [
+            "entered_by_user"
+          ],
+          "type": "object"
+        }
+      ]
     },
     "Storey": {
       "additionalProperties": false,
@@ -191,6 +257,17 @@
           "description": "Height of the bottom face above the storey.\n\nIn m.",
           "type": "number"
         },
+        "function": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/WallFunction"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Overrides the type's value for this object when set.\n\nThe `function` value."
+        },
         "height": {
           "anyOf": [
             {
@@ -216,10 +293,23 @@
       },
       "type": "object"
     },
+    "WallFunction": {
+      "description": "What a wall does in the building.",
+      "enum": [
+        "load_bearing",
+        "partition"
+      ],
+      "type": "string"
+    },
     "WallType": {
       "additionalProperties": false,
       "description": "A named wall build-up shared by many walls.",
       "properties": {
+        "function": {
+          "$ref": "#/$defs/WallFunction",
+          "default": "partition",
+          "description": "The `function` value."
+        },
         "height": {
           "default": 2.5,
           "description": "The `height` value.\n\nIn m.",

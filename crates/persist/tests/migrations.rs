@@ -119,6 +119,7 @@ fn attribute(name: &str, value: &str, presence: Presence) -> Attribute {
         presence,
         placement: Placement::Instance,
         doc: None,
+        sourced: false,
     }
 }
 
@@ -218,6 +219,7 @@ fn sample(version: u32) -> Namespace {
             .map(|entity| (entity.name.clone(), entity))
             .collect(),
         property_sets: BTreeMap::new(),
+        enumerations: BTreeMap::new(),
     }
 }
 

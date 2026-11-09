@@ -84,6 +84,15 @@ pub enum StoreError {
     /// A real value is NaN or infinite.
     #[error("attribute \"{0}\" only accepts finite numbers")]
     NonFinite(String),
+    /// A plain value is written to a sourced attribute, which needs its source (ADR 0018).
+    #[error("attribute \"{0}\" needs the source of its value")]
+    MissingSource(String),
+    /// A sourced value is written to an attribute that does not hold sources.
+    #[error("attribute \"{0}\" does not hold sources")]
+    UnexpectedSource(String),
+    /// A text is not an item of the attribute's enumeration.
+    #[error("attribute \"{0}\" does not accept this enumeration item")]
+    UnknownItem(String),
 }
 
 impl Store {
@@ -99,11 +108,16 @@ impl Store {
             .entities
             .values()
             .flat_map(|entity| {
-                let instances = Table::new(&entity.name, &entity.attributes, Side::Instance);
-                let types = entity
-                    .type_def
-                    .iter()
-                    .map(|type_def| Table::new(&type_def.name, &entity.attributes, Side::Type));
+                let enumerations = &namespace.enumerations;
+                let instances = Table::new(
+                    &entity.name,
+                    &entity.attributes,
+                    Side::Instance,
+                    enumerations,
+                );
+                let types = entity.type_def.iter().map(|type_def| {
+                    Table::new(&type_def.name, &entity.attributes, Side::Type, enumerations)
+                });
                 std::iter::once(instances).chain(types)
             })
             .collect();

@@ -14,6 +14,36 @@ pub struct Namespace {
     pub entities: BTreeMap<String, Entity>,
     /// Property sets by name.
     pub property_sets: BTreeMap<String, PropertySet>,
+    /// Enumerations by name, the value types `enum:<Name>` refers to.
+    pub enumerations: BTreeMap<String, Enumeration>,
+}
+
+/// A closed list of named values that an `enum:<Name>` attribute or property takes.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Enumeration {
+    /// `PascalCase` name, unique among entities, types, property sets and enumerations.
+    pub name: String,
+    /// Description of the enumeration.
+    pub doc: Option<String>,
+    /// The values, in declaration order.
+    pub items: Vec<EnumItem>,
+}
+
+/// One value of an [`Enumeration`].
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct EnumItem {
+    /// `snake_case` name, the text stored in the model.
+    pub name: String,
+    /// Description of the value.
+    pub doc: Option<String>,
+}
+
+impl Enumeration {
+    /// Whether `name` is one of the enumeration's items.
+    #[must_use]
+    pub fn contains(&self, name: &str) -> bool {
+        self.items.iter().any(|item| item.name == name)
+    }
 }
 
 /// An entity: an element, a spatial structure element or a relationship.
@@ -50,11 +80,19 @@ pub enum EntityKind {
     Spatial,
     /// A first-class relationship between objects (CORE-03).
     Relationship,
+    /// A resource that objects refer to but that is not placed in the model by itself: a
+    /// material, a material layer, a grid axis.
+    Resource,
 }
 
 impl EntityKind {
     /// Every kind.
-    pub const ALL: [Self; 3] = [Self::Element, Self::Spatial, Self::Relationship];
+    pub const ALL: [Self; 4] = [
+        Self::Element,
+        Self::Spatial,
+        Self::Relationship,
+        Self::Resource,
+    ];
 
     /// The name used in definition files and after `kind:` in role targets.
     #[must_use]
@@ -63,6 +101,7 @@ impl EntityKind {
             Self::Element => "element",
             Self::Spatial => "spatial",
             Self::Relationship => "relationship",
+            Self::Resource => "resource",
         }
     }
 }
@@ -102,6 +141,8 @@ pub struct Attribute {
     pub placement: Placement,
     /// Description of the attribute.
     pub doc: Option<String>,
+    /// Whether every value comes with the document and clause it is taken from (ADR 0018).
+    pub sourced: bool,
 }
 
 /// Whether an attribute needs a value.
@@ -192,6 +233,8 @@ pub struct PropertySet {
     pub name: String,
     /// Entities the property set applies to.
     pub applies_to: Vec<String>,
+    /// Description of the property set.
+    pub doc: Option<String>,
     /// Properties, in declaration order.
     pub properties: Vec<Attribute>,
 }

@@ -66,6 +66,7 @@ A named wall build-up shared by many walls. Attributes set on the type are share
 | `height` | length (m) | default `2.5` | type, instance may override |  |
 | `base_offset` | length (m) | default `0.0` | instance | Height of the bottom face above the storey. |
 | `mark` | text | optional | instance | Short label shown on drawings. |
+| `function` | enumeration [WallFunction](enumerations.md#WallFunction) | default `"partition"` | type, instance may override |  |
 
 #### Representations
 
@@ -120,3 +121,18 @@ Cuts an opening or a recess into its host.
 | --- | --- | --- | --- |
 | `host` | [Wall](#Wall), [Beam](#Beam) | one | no |
 | `opening` | [Opening](#Opening), [Recess](#Recess) | one | yes |
+
+## Resources
+
+### <a id="Material"></a>Material
+
+A substance that elements are made of.
+
+- **Introduced in:** version 2
+- **IFC:** `IfcMaterial`
+
+#### Attributes
+
+| Attribute | Value | Presence | Set on | Description |
+| --- | --- | --- | --- | --- |
+| `name` | text | required | instance |  |

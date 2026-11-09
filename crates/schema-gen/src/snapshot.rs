@@ -8,8 +8,8 @@
 use std::collections::BTreeMap;
 
 use schema::{
-    Attribute, Entity, EntityKind, IfcMapping, Namespace, Presence, PropertySet, Representation,
-    Role, RoleTarget, TypeDef, Value,
+    Attribute, Entity, EntityKind, EnumItem, Enumeration, IfcMapping, Namespace, Presence,
+    PropertySet, Representation, Role, RoleTarget, TypeDef, Value,
 };
 use serde::{Deserialize, Serialize};
 
@@ -45,6 +45,26 @@ struct NamespaceJson {
     version: u32,
     entities: Vec<EntityJson>,
     property_sets: Vec<PropertySetJson>,
+    // Absent from snapshots taken before enumerations existed.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    enumerations: Vec<EnumerationJson>,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct EnumerationJson {
+    name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    doc: Option<String>,
+    items: Vec<EnumItemJson>,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct EnumItemJson {
+    name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    doc: Option<String>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -95,6 +115,9 @@ struct AttributeJson {
     placement: PlacementDef,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     doc: Option<String>,
+    // Absent from snapshots taken before sourced values existed (ADR 0018).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    sourced: bool,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -138,6 +161,8 @@ struct RepresentationJson {
 struct PropertySetJson {
     name: String,
     applies_to: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    doc: Option<String>,
     properties: Vec<AttributeJson>,
 }
 
@@ -153,7 +178,24 @@ impl From<&Namespace> for NamespaceJson {
                 .map(|set| PropertySetJson {
                     name: set.name.clone(),
                     applies_to: set.applies_to.clone(),
+                    doc: set.doc.clone(),
                     properties: set.properties.iter().map(AttributeJson::from).collect(),
+                })
+                .collect(),
+            enumerations: namespace
+                .enumerations
+                .values()
+                .map(|enumeration| EnumerationJson {
+                    name: enumeration.name.clone(),
+                    doc: enumeration.doc.clone(),
+                    items: enumeration
+                        .items
+                        .iter()
+                        .map(|item| EnumItemJson {
+                            name: item.name.clone(),
+                            doc: item.doc.clone(),
+                        })
+                        .collect(),
                 })
                 .collect(),
         }
@@ -215,6 +257,7 @@ impl From<&Attribute> for AttributeJson {
             },
             placement: attribute.placement.into(),
             doc: attribute.doc.clone(),
+            sourced: attribute.sourced,
         }
     }
 }
@@ -257,16 +300,34 @@ impl TryFrom<NamespaceJson> for Namespace {
             let set = PropertySet {
                 name: set.name,
                 applies_to: set.applies_to,
+                doc: set.doc,
                 properties,
             };
             Ok((set.name.clone(), set))
         });
         let property_sets = unique(property_sets, "property set")?;
+        let enumerations = json.enumerations.into_iter().map(|enumeration| {
+            let enumeration = Enumeration {
+                name: enumeration.name,
+                doc: enumeration.doc,
+                items: enumeration
+                    .items
+                    .into_iter()
+                    .map(|item| EnumItem {
+                        name: item.name,
+                        doc: item.doc,
+                    })
+                    .collect(),
+            };
+            Ok((enumeration.name.clone(), enumeration))
+        });
+        let enumerations = unique(enumerations, "enumeration")?;
         Ok(Self {
             name: json.name,
             version: json.version,
             entities,
             property_sets,
+            enumerations,
         })
     }
 }
@@ -341,6 +402,7 @@ impl TryFrom<AttributeJson> for Attribute {
             placement: json.placement.into(),
             name: json.name,
             doc: json.doc,
+            sourced: json.sourced,
         })
     }
 }
@@ -435,6 +497,7 @@ mod tests {
                 RoleTarget::Kind(EntityKind::Element),
                 RoleTarget::Kind(EntityKind::Spatial),
                 RoleTarget::Kind(EntityKind::Relationship),
+                RoleTarget::Kind(EntityKind::Resource),
                 RoleTarget::Entity("Wall".into()),
             ],
             cardinality: Cardinality::One,
