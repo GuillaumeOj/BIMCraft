@@ -123,5 +123,5 @@ The epic already has an implementation on local branches `claude/244-material-ob
 - PR 1 (#85, MAT-01): ends at `219f8bc` (merge of T1, task 273).
 - PR 2 gate (user decision): the user checks the library values written from memory (EN 338 C18/C22/C27/C35, EN 14080 GL28h/GL32h, the French annex partial factors, the EN ISO 10456 values of the 8 non-structural materials, and the cited law clauses) before the PR request. Lead reminds the user at PR time.
 - PR 2 (#86, MAT-02): ends at `dca3b3e` (merge of T5, task 277; T2 merged before it).
-- PR 3 (#87, MAT-03): T6 merged after `dca3b3e`; it ends at the merge of T8.
+- PR 3 (#87, MAT-03): ends at `186cee7` (merge of T8, task 280), plus the design review fixes if any.
 - PR-time fix: commits 3b9df09, b6c0f19, 4c1debd, 13ead78, a942e0f, 10f8f1b (lead) and ba0d987, 81fcfca (ui) have no `Signed-off-by:`. They touch only `.orchestrator/`, which does not ship. Drop or sign them when the stack is cut, before CI's commit check.
