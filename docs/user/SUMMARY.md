@@ -18,9 +18,14 @@
 - [Set up the project location](set-up-the-project-location.md)
 - [Read and enter coordinates](read-and-enter-coordinates.md)
 
+# Materials
+
+- [Choose a material](choose-a-material.md)
+
 # Français
 
 - [Définir la localisation du projet](set-up-the-project-location.fr.md)
 - [Lire et saisir des coordonnées](read-and-enter-coordinates.fr.md)
+- [Choisir un matériau](choose-a-material.fr.md)
 
 <!-- Add one entry per task page, grouped by discipline or activity. Copy _template.md to start. -->

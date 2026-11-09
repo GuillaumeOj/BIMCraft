@@ -24,6 +24,7 @@ interop-ifc = { path = "../crates/interop-ifc" }
 libfuzzer-sys = "=0.4.13"
 # Already in the lockfile through geom: turns the fuzzed boxes the way the kernel would (ENG-04).
 libm = "=0.2.16"
+material = { path = "../crates/material" }
 persist = { path = "../crates/persist" }
 schema = { path = "../crates/schema" }
 schema-gen = { path = "../crates/schema-gen" }
@@ -129,3 +130,10 @@ bench = false
 
 [workspace]
 members = ["."]
+
+[[bin]]
+name = "material_library"
+path = "fuzz_targets/material_library.rs"
+test = false
+doc = false
+bench = false

@@ -1,0 +1,370 @@
+{
+  "format": 1,
+  "materials": [
+    {
+      "name": "S235",
+      "category": "steel",
+      "behaviour_law": "steel_bilinear",
+      "design_code": "EN 1993-1-1:2005",
+      "properties": {
+        "fy": {
+          "value": 235000000.0,
+          "document": "EN 1993-1-1:2005",
+          "clause": "Table 3.1"
+        },
+        "fu": {
+          "value": 360000000.0,
+          "document": "EN 1993-1-1:2005",
+          "clause": "Table 3.1"
+        },
+        "e_modulus": {
+          "value": 210000000000.0,
+          "document": "EN 1993-1-1:2005",
+          "clause": "3.2.6(1)"
+        },
+        "shear_modulus": {
+          "value": 81000000000.0,
+          "document": "EN 1993-1-1:2005",
+          "clause": "3.2.6(1)"
+        },
+        "poisson_ratio": {
+          "value": 0.3,
+          "document": "EN 1993-1-1:2005",
+          "clause": "3.2.6(1)"
+        },
+        "thermal_expansion": {
+          "value": 1.2e-05,
+          "document": "EN 1993-1-1:2005",
+          "clause": "3.2.6(1)"
+        },
+        "density": {
+          "value": 7850.0,
+          "document": "EN 1991-1-1:2002",
+          "clause": "Table A.4"
+        },
+        "gamma_m0": {
+          "value": 1.0,
+          "document": "EN 1993-1-1:2005",
+          "clause": "6.1(1)"
+        },
+        "gamma_m1": {
+          "value": 1.0,
+          "document": "EN 1993-1-1:2005",
+          "clause": "6.1(1)"
+        },
+        "gamma_m2": {
+          "value": 1.25,
+          "document": "EN 1993-1-1:2005",
+          "clause": "6.1(1)"
+        },
+        "gamma_m0_fr": {
+          "value": 1.0,
+          "document": "NF EN 1993-1-1/NA:2007",
+          "clause": "6.1(1)"
+        },
+        "gamma_m1_fr": {
+          "value": 1.0,
+          "document": "NF EN 1993-1-1/NA:2007",
+          "clause": "6.1(1)"
+        },
+        "gamma_m2_fr": {
+          "value": 1.25,
+          "document": "NF EN 1993-1-1/NA:2007",
+          "clause": "6.1(1)"
+        }
+      }
+    },
+    {
+      "name": "S275",
+      "category": "steel",
+      "behaviour_law": "steel_bilinear",
+      "design_code": "EN 1993-1-1:2005",
+      "properties": {
+        "fy": {
+          "value": 275000000.0,
+          "document": "EN 1993-1-1:2005",
+          "clause": "Table 3.1"
+        },
+        "fu": {
+          "value": 430000000.0,
+          "document": "EN 1993-1-1:2005",
+          "clause": "Table 3.1"
+        },
+        "e_modulus": {
+          "value": 210000000000.0,
+          "document": "EN 1993-1-1:2005",
+          "clause": "3.2.6(1)"
+        },
+        "shear_modulus": {
+          "value": 81000000000.0,
+          "document": "EN 1993-1-1:2005",
+          "clause": "3.2.6(1)"
+        },
+        "poisson_ratio": {
+          "value": 0.3,
+          "document": "EN 1993-1-1:2005",
+          "clause": "3.2.6(1)"
+        },
+        "thermal_expansion": {
+          "value": 1.2e-05,
+          "document": "EN 1993-1-1:2005",
+          "clause": "3.2.6(1)"
+        },
+        "density": {
+          "value": 7850.0,
+          "document": "EN 1991-1-1:2002",
+          "clause": "Table A.4"
+        },
+        "gamma_m0": {
+          "value": 1.0,
+          "document": "EN 1993-1-1:2005",
+          "clause": "6.1(1)"
+        },
+        "gamma_m1": {
+          "value": 1.0,
+          "document": "EN 1993-1-1:2005",
+          "clause": "6.1(1)"
+        },
+        "gamma_m2": {
+          "value": 1.25,
+          "document": "EN 1993-1-1:2005",
+          "clause": "6.1(1)"
+        },
+        "gamma_m0_fr": {
+          "value": 1.0,
+          "document": "NF EN 1993-1-1/NA:2007",
+          "clause": "6.1(1)"
+        },
+        "gamma_m1_fr": {
+          "value": 1.0,
+          "document": "NF EN 1993-1-1/NA:2007",
+          "clause": "6.1(1)"
+        },
+        "gamma_m2_fr": {
+          "value": 1.25,
+          "document": "NF EN 1993-1-1/NA:2007",
+          "clause": "6.1(1)"
+        }
+      }
+    },
+    {
+      "name": "S355",
+      "category": "steel",
+      "behaviour_law": "steel_bilinear",
+      "design_code": "EN 1993-1-1:2005",
+      "properties": {
+        "fy": {
+          "value": 355000000.0,
+          "document": "EN 1993-1-1:2005",
+          "clause": "Table 3.1"
+        },
+        "fu": {
+          "value": 510000000.0,
+          "document": "EN 1993-1-1:2005",
+          "clause": "Table 3.1"
+        },
+        "e_modulus": {
+          "value": 210000000000.0,
+          "document": "EN 1993-1-1:2005",
+          "clause": "3.2.6(1)"
+        },
+        "shear_modulus": {
+          "value": 81000000000.0,
+          "document": "EN 1993-1-1:2005",
+          "clause": "3.2.6(1)"
+        },
+        "poisson_ratio": {
+          "value": 0.3,
+          "document": "EN 1993-1-1:2005",
+          "clause": "3.2.6(1)"
+        },
+        "thermal_expansion": {
+          "value": 1.2e-05,
+          "document": "EN 1993-1-1:2005",
+          "clause": "3.2.6(1)"
+        },
+        "density": {
+          "value": 7850.0,
+          "document": "EN 1991-1-1:2002",
+          "clause": "Table A.4"
+        },
+        "gamma_m0": {
+          "value": 1.0,
+          "document": "EN 1993-1-1:2005",
+          "clause": "6.1(1)"
+        },
+        "gamma_m1": {
+          "value": 1.0,
+          "document": "EN 1993-1-1:2005",
+          "clause": "6.1(1)"
+        },
+        "gamma_m2": {
+          "value": 1.25,
+          "document": "EN 1993-1-1:2005",
+          "clause": "6.1(1)"
+        },
+        "gamma_m0_fr": {
+          "value": 1.0,
+          "document": "NF EN 1993-1-1/NA:2007",
+          "clause": "6.1(1)"
+        },
+        "gamma_m1_fr": {
+          "value": 1.0,
+          "document": "NF EN 1993-1-1/NA:2007",
+          "clause": "6.1(1)"
+        },
+        "gamma_m2_fr": {
+          "value": 1.25,
+          "document": "NF EN 1993-1-1/NA:2007",
+          "clause": "6.1(1)"
+        }
+      }
+    },
+    {
+      "name": "S420",
+      "category": "steel",
+      "behaviour_law": "steel_bilinear",
+      "design_code": "EN 1993-1-1:2005",
+      "properties": {
+        "fy": {
+          "value": 420000000.0,
+          "document": "EN 1993-1-1:2005",
+          "clause": "Table 3.1"
+        },
+        "fu": {
+          "value": 520000000.0,
+          "document": "EN 1993-1-1:2005",
+          "clause": "Table 3.1"
+        },
+        "e_modulus": {
+          "value": 210000000000.0,
+          "document": "EN 1993-1-1:2005",
+          "clause": "3.2.6(1)"
+        },
+        "shear_modulus": {
+          "value": 81000000000.0,
+          "document": "EN 1993-1-1:2005",
+          "clause": "3.2.6(1)"
+        },
+        "poisson_ratio": {
+          "value": 0.3,
+          "document": "EN 1993-1-1:2005",
+          "clause": "3.2.6(1)"
+        },
+        "thermal_expansion": {
+          "value": 1.2e-05,
+          "document": "EN 1993-1-1:2005",
+          "clause": "3.2.6(1)"
+        },
+        "density": {
+          "value": 7850.0,
+          "document": "EN 1991-1-1:2002",
+          "clause": "Table A.4"
+        },
+        "gamma_m0": {
+          "value": 1.0,
+          "document": "EN 1993-1-1:2005",
+          "clause": "6.1(1)"
+        },
+        "gamma_m1": {
+          "value": 1.0,
+          "document": "EN 1993-1-1:2005",
+          "clause": "6.1(1)"
+        },
+        "gamma_m2": {
+          "value": 1.25,
+          "document": "EN 1993-1-1:2005",
+          "clause": "6.1(1)"
+        },
+        "gamma_m0_fr": {
+          "value": 1.0,
+          "document": "NF EN 1993-1-1/NA:2007",
+          "clause": "6.1(1)"
+        },
+        "gamma_m1_fr": {
+          "value": 1.0,
+          "document": "NF EN 1993-1-1/NA:2007",
+          "clause": "6.1(1)"
+        },
+        "gamma_m2_fr": {
+          "value": 1.25,
+          "document": "NF EN 1993-1-1/NA:2007",
+          "clause": "6.1(1)"
+        }
+      }
+    },
+    {
+      "name": "S460",
+      "category": "steel",
+      "behaviour_law": "steel_bilinear",
+      "design_code": "EN 1993-1-1:2005",
+      "properties": {
+        "fy": {
+          "value": 460000000.0,
+          "document": "EN 1993-1-1:2005",
+          "clause": "Table 3.1"
+        },
+        "fu": {
+          "value": 540000000.0,
+          "document": "EN 1993-1-1:2005",
+          "clause": "Table 3.1"
+        },
+        "e_modulus": {
+          "value": 210000000000.0,
+          "document": "EN 1993-1-1:2005",
+          "clause": "3.2.6(1)"
+        },
+        "shear_modulus": {
+          "value": 81000000000.0,
+          "document": "EN 1993-1-1:2005",
+          "clause": "3.2.6(1)"
+        },
+        "poisson_ratio": {
+          "value": 0.3,
+          "document": "EN 1993-1-1:2005",
+          "clause": "3.2.6(1)"
+        },
+        "thermal_expansion": {
+          "value": 1.2e-05,
+          "document": "EN 1993-1-1:2005",
+          "clause": "3.2.6(1)"
+        },
+        "density": {
+          "value": 7850.0,
+          "document": "EN 1991-1-1:2002",
+          "clause": "Table A.4"
+        },
+        "gamma_m0": {
+          "value": 1.0,
+          "document": "EN 1993-1-1:2005",
+          "clause": "6.1(1)"
+        },
+        "gamma_m1": {
+          "value": 1.0,
+          "document": "EN 1993-1-1:2005",
+          "clause": "6.1(1)"
+        },
+        "gamma_m2": {
+          "value": 1.25,
+          "document": "EN 1993-1-1:2005",
+          "clause": "6.1(1)"
+        },
+        "gamma_m0_fr": {
+          "value": 1.0,
+          "document": "NF EN 1993-1-1/NA:2007",
+          "clause": "6.1(1)"
+        },
+        "gamma_m1_fr": {
+          "value": 1.0,
+          "document": "NF EN 1993-1-1/NA:2007",
+          "clause": "6.1(1)"
+        },
+        "gamma_m2_fr": {
+          "value": 1.25,
+          "document": "NF EN 1993-1-1/NA:2007",
+          "clause": "6.1(1)"
+        }
+      }
+    }
+  ]
+}

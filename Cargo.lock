@@ -96,6 +96,7 @@ dependencies = [
  "core-txn",
  "georef",
  "jsonschema",
+ "material",
  "proptest",
  "schema",
  "schema-gen",
@@ -2165,6 +2166,8 @@ dependencies = [
  "proptest",
  "schema",
  "schema-gen",
+ "serde",
+ "serde_json",
  "thiserror 2.0.21",
 ]
 

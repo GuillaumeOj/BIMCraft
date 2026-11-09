@@ -2,6 +2,9 @@
 //! stress for a strain, and design-code [`Property`] values. Every value carries the [`Source`]
 //! it comes from, a document and clause number; this crate never holds standards text (REP-05).
 //!
+//! [`Library::builtin`] holds the common European grades (MAT-02), and [`Library::extend`] adds
+//! libraries from users and plugins in the same format.
+//!
 //! [`commands`] turns a material into a model command on the core schema's `Material` entity,
 //! and [`read`] reads one back.
 //!
@@ -13,6 +16,7 @@
 
 mod annex;
 mod law;
+mod library;
 mod material;
 mod model;
 mod property;
@@ -24,12 +28,16 @@ pub use law::{
     BehaviourLaw, ConcreteBilinear, ConcreteParabolaRectangle, Hardening, LawError, LawKind,
     LinearElastic, SteelBilinear, StrainLimits, TimberElasticBrittle,
 };
+pub use library::{
+    LIBRARY_FORMAT, Library, LibraryError, MAX_LIBRARY_SIZE, MAX_MATERIALS, MAX_SOURCE_NAME,
+    design_code_key,
+};
 pub use material::{Category, Material, MaterialError};
 pub use model::{
-    ENTITY, EditError, ORIGINAL_ENTITY, Original, ReadError, commands, delete, originals, read,
-    reset_value, set_value,
+    ENTITY, Edit, EditError, ORIGINAL_ENTITY, Original, ReadError, commands, delete, edit,
+    original_ids, originals, read, reset_value, set_value,
 };
-pub use property::Property;
+pub use property::{Property, Quantity, Range};
 pub use source::{MAX_TEXT_LEN, Sourced};
 
 /// Property-test settings shared by the crate. A fixed seed keeps runs reproducible; with no
