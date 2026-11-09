@@ -67,7 +67,7 @@ fn builtin_values_match_the_code_tables() {
     assert_close(mpa(C30, Property::MeanTensileStrength), 2.9);
     assert_close(value(&library, C30, Property::YoungModulus) / 1e9, 33.0);
     assert_close(mpa(S355, Property::YieldStrength), 355.0);
-    assert_close(mpa(S355, Property::UltimateStrength), 490.0);
+    assert_close(mpa(S355, Property::UltimateStrength), 510.0);
     assert_close(mpa(B500B, Property::YieldStrength), 500.0);
     assert_close(value(&library, B500B, Property::HardeningRatio), 1.08);
     let source = &library
@@ -458,4 +458,51 @@ fn structural_grades_have_the_partial_factors_of_both_annexes_and_design_laws() 
             .abs()
             < 1e-12
     );
+}
+
+mod properties {
+    use proptest::prelude::*;
+
+    use super::*;
+
+    proptest! {
+        #![proptest_config(crate::proptest_config())]
+
+        // Whatever a user or plugin writes, loading answers and a failure adds nothing (ENG-02).
+        #[test]
+        fn arbitrary_text_never_panics_and_a_failure_adds_nothing(text in "\\PC{0,400}") {
+            let mut library = builtin();
+            let before = library.clone();
+            if library.extend("mine", &text).is_err() {
+                prop_assert_eq!(library, before);
+            }
+        }
+
+        // Structured libraries with odd names and numbers: every material is either added whole
+        // under its key or the whole source is refused.
+        #[test]
+        fn structured_sources_are_added_whole_or_refused_whole(
+            names in proptest::collection::vec("[ -~]{0,40}", 0..6),
+            value in -1e12f64..1e12,
+        ) {
+            let entries: Vec<String> = names
+                .iter()
+                .map(|name| format!(
+                    r#"{{"name": {name:?}, "category": "generic", "behaviour_law": "linear_elastic",
+                        "properties": {{"e_modulus": {{"value": {value}, "document": "D", "clause": "1"}}}}}}"#
+                ))
+                .collect();
+            let json = format!(r#"{{"format": 1, "materials": [{}]}}"#, entries.join(","));
+            let mut library = Library::default();
+            match library.extend("mine", &json) {
+                Ok(()) => {
+                    prop_assert_eq!(library.len(), names.len());
+                    for (key, material) in library.iter() {
+                        prop_assert_eq!(material.library_key(), Some(key));
+                    }
+                }
+                Err(_) => prop_assert!(library.is_empty()),
+            }
+        }
+    }
 }

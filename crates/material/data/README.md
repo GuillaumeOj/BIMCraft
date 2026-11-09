@@ -6,7 +6,7 @@ The grades shipped with BIMCraft (MAT-02), one JSON file per family, loaded by
 | File | Grades | Documents (editions used) |
 | --- | --- | --- |
 | `en1992-1-1.json` | Concrete C12/15 to C50/60, reinforcement B500A, B500B, B500C | EN 1992-1-1:2004, NF EN 1992-1-1/NA:2016, EN 1991-1-1:2002 |
-| `en1993-1-1.json` | Structural steel S235, S275, S355, S420, S460 (t ≤ 40 mm) | EN 1993-1-1:2005, NF EN 1993-1-1/NA:2007, EN 1991-1-1:2002 |
+| `en1993-1-1.json` | Structural steel S235, S275, S355, S420, S460 (t ≤ 40 mm; fu of S235, S275, S355 to EN 10025-2, of S420 and S460 to EN 10025-3) | EN 1993-1-1:2005, NF EN 1993-1-1/NA:2007, EN 1991-1-1:2002 |
 | `timber.json` | Solid C16 to C35, glulam GL24h, GL28h, GL32h | EN 338:2016, EN 14080:2013, EN 1995-1-1:2004, NF EN 1995-1-1/NA:2010 |
 | `en1996-1-1.json` | Clay and concrete block masonry | EN 1996-1-1:2005 |
 | `non-structural.json` | Plaster, render, EPS, mineral wool, wood-fibre board, brick, concrete block, softwood cladding | EN ISO 10456:2007 |
