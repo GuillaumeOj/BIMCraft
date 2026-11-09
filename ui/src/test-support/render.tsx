@@ -4,6 +4,7 @@ import type { ReactElement } from "react";
 import { ApiProvider } from "../api";
 import { GeorefProvider } from "../georef/GeorefContext";
 import { I18nProvider } from "../i18n/I18nProvider";
+import { ShellStateProvider } from "../shell/ShellState";
 import type { fakeCore } from "./fakeCore";
 
 /** Renders `ui` with the providers the app has: language, API client and georeference. */
@@ -13,7 +14,9 @@ export function renderWithCore(ui: ReactElement, core: ReturnType<typeof fakeCor
     wrapper: ({ children }) => (
       <I18nProvider>
         <ApiProvider client={core.client}>
-          <GeorefProvider>{children}</GeorefProvider>
+          <ShellStateProvider>
+            <GeorefProvider>{children}</GeorefProvider>
+          </ShellStateProvider>
         </ApiProvider>
       </I18nProvider>
     ),

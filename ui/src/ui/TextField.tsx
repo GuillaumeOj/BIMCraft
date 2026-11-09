@@ -23,6 +23,8 @@ type TextFieldProps = {
   describedBy?: string | undefined;
   /** Makes an error come from a group message shown elsewhere. */
   invalid?: boolean;
+  /** "text" for a name; numbers use the decimal keypad. */
+  inputMode?: "decimal" | "text";
 };
 
 /** A labelled text field for numbers (UI-06: visible label, linked error and help). */
@@ -40,6 +42,7 @@ export function TextField({
   onKeyDown,
   describedBy,
   invalid = false,
+  inputMode = "decimal",
 }: TextFieldProps) {
   const { t } = useI18n();
   const [helpOpen, setHelpOpen] = useState(false);
@@ -72,7 +75,7 @@ export function TextField({
         <input
           id={id}
           type="text"
-          inputMode="decimal"
+          inputMode={inputMode}
           autoComplete="off"
           spellCheck={false}
           value={value}

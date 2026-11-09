@@ -84,6 +84,7 @@ The thermal resistance is d / λ per layer and their sum over the layers whose m
 - Partial factors are flat attributes, which two annexes (recommended and France) are enough for in the MVP. A new annex is a schema version: seven attributes and a migration.
 - The schema history does not check enumeration items between versions, so removing an item of `MaterialCategory` or `BehaviourLaw` in a later version needs a migration step.
 - `analysis` and the discipline crates read laws through `material`, which sits in layer 3 beside `georef` (ARCH-04).
+- Two limits remain for the wall and slab work (epic #88), the first to store a layer id. The geometry kernel's `geom::LayerId` is still the layer's position, a `u64`, not the layer's object id. A location line kept by kernel id would therefore follow a reorder, so #88 must map object ids to kernel ids. The ids of new layers derive from the build-up's id and a counter, so a deleted layer's id can come back on a later layer. #88 needs a persisted counter or caller-supplied ids before anything refers to a layer by id.
 
 ## Alternatives considered
 

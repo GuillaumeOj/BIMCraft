@@ -1,4 +1,6 @@
 import { ApiClient, ApiError, type CrsSummary, type Georeference, type Transport } from "../api";
+import { fakeBuildUps } from "./fakeBuildUps";
+import { fakeMaterials } from "./fakeMaterials";
 
 export const LAMBERT93: CrsSummary = {
   epsg: 2154,
@@ -31,6 +33,8 @@ export function fakeCore(options: { georeference?: Georeference | null } = {}) {
   const override: Record<string, Handler> = {};
   const failures: Record<string, Error[]> = {};
 
+  const materials = fakeMaterials();
+  const buildUps = fakeBuildUps(materials);
   const crs = [LAMBERT93, CC48];
   const rotationOf = () => value?.grid_rotation ?? 0;
   const origin = () => value?.base_point ?? [0, 0, 0];
@@ -71,6 +75,8 @@ export function fakeCore(options: { georeference?: Georeference | null } = {}) {
         };
 
   const builtIn: Record<string, Handler> = {
+    ...(materials.handlers as unknown as Record<string, Handler>),
+    ...(buildUps.handlers as unknown as Record<string, Handler>),
     "georef.list_crs": () => ({ crs }),
     "georef.get": info,
     "georef.set": (params) => {
@@ -116,7 +122,14 @@ export function fakeCore(options: { georeference?: Georeference | null } = {}) {
         const failure = failures[method]?.shift();
         if (failure) throw failure;
         const result = await (override[method] ?? builtIn[method])?.(params);
-        if (method === "georef.set" || method === "georef.clear") queueMicrotask(push);
+        if (
+          method === "georef.set" ||
+          method === "georef.clear" ||
+          materials.commands.includes(method) ||
+          buildUps.commands.includes(method)
+        ) {
+          queueMicrotask(push);
+        }
         return JSON.stringify({ jsonrpc: "2.0", id, result });
       } catch (error) {
         if (!(error instanceof ApiError)) return null;
@@ -132,6 +145,10 @@ export function fakeCore(options: { georeference?: Georeference | null } = {}) {
 
   return {
     client: new ApiClient(transport),
+    /** The project's materials: seed some, or make them used by build-ups. */
+    materials,
+    /** The project's build-ups: seed some. */
+    buildUps,
     calls,
     /** Answers `method` with `handler` from now on (it may throw an `ApiError`). */
     override: (method: string, handler: Handler) => {
