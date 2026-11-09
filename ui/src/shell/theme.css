@@ -6,6 +6,8 @@
   --bc-surface: #ffffff;
   --bc-raised: #f4f5f6;
   --bc-hover: #eceef0;
+  /* The selected row of a list: --bc-verdigris at about 17 % on --bc-surface. */
+  --bc-selected: #d6ece7;
   --bc-line: #d3d6da;
   --bc-ink: #1b1d21;
   --bc-ink-2: #474c55;
@@ -26,6 +28,7 @@
     --bc-surface: #26282c;
     --bc-raised: #2e3135;
     --bc-hover: #363a40;
+    --bc-selected: #1f3a36;
     --bc-line: #3a3e44;
     --bc-ink: #e6e7e9;
     --bc-ink-2: #b9bdc3;

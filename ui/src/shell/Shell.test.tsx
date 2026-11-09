@@ -112,6 +112,32 @@ describe("Shell", () => {
     expect(screen.getByRole("dialog", { name: "Project location" })).toBeInTheDocument();
   });
 
+  it("opens the Materials dialog from the title bar and with Ctrl+Shift+M, and returns focus", async () => {
+    const user = renderShell();
+    const button = screen.getByRole("button", { name: "Materials…" });
+    expect(button).toHaveAttribute("aria-keyshortcuts", "Control+Shift+M Meta+Shift+M");
+    await user.click(button);
+    expect(await screen.findByRole("dialog", { name: "Materials" })).toBeInTheDocument();
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(button).toHaveFocus();
+    await user.keyboard("{Meta>}{Shift>}M{/Shift}{/Meta}");
+    expect(await screen.findByRole("dialog", { name: "Materials" })).toBeInTheDocument();
+  });
+
+  it("lets no shortcut open a second dialog over the first", async () => {
+    const user = renderShell();
+    await user.click(screen.getByRole("button", { name: "Materials…" }));
+    await screen.findByRole("dialog", { name: "Materials" });
+    await user.keyboard("{Control>}{Shift>}L{/Shift}{/Control}");
+    expect(screen.getAllByRole("dialog")).toHaveLength(1);
+    await user.keyboard("{Escape}");
+    await user.click(screen.getByRole("button", { name: "Project location…" }));
+    await user.keyboard("{Control>}{Shift>}M{/Shift}{/Control}");
+    expect(screen.getAllByRole("dialog")).toHaveLength(1);
+    expect(screen.getByRole("dialog", { name: "Project location" })).toBeInTheDocument();
+  });
+
   it("keeps the keyboard in the Project location dialog: F6 and Ctrl+Shift+K do nothing", async () => {
     const user = renderShell();
     await user.click(screen.getByRole("button", { name: "Project location…" }));

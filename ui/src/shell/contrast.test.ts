@@ -16,6 +16,9 @@ const TEXT_PAIRS = [
   ["muted", "surface"],
   ["muted", "raised"],
   ["ink-2", "hover"],
+  ["ink", "selected"],
+  // Never muted on a selected row: it is only 4.3:1 there in dark mode.
+  ["ink-2", "selected"],
   ["on-verdigris", "verdigris"],
   ["danger", "surface"],
   ["danger", "raised"],
@@ -27,6 +30,7 @@ const TEXT_PAIRS = [
 const NON_TEXT_PAIRS = [
   ["verdigris", "surface"],
   ["verdigris", "paper"],
+  ["verdigris", "selected"],
   ["field-line", "surface"],
   ["field-line", "raised"],
 ] as const;
