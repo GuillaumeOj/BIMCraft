@@ -1152,7 +1152,7 @@
                 "type": "string"
               },
               "name": {
-                "maxLength": 480,
+                "maxLength": 120,
                 "type": "string"
               }
             },
@@ -1196,7 +1196,7 @@
                 "$ref": "#/$defs/EntityId"
               },
               "name": {
-                "maxLength": 480,
+                "maxLength": 120,
                 "type": "string"
               },
               "properties": {
@@ -1275,7 +1275,7 @@
                 "$ref": "#/$defs/EntityId"
               },
               "name": {
-                "maxLength": 480,
+                "maxLength": 120,
                 "type": "string"
               },
               "properties": {

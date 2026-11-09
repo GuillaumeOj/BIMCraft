@@ -46,6 +46,23 @@ pub struct Original {
     pub value: Sourced<f64>,
 }
 
+/// Every `MaterialOriginal` object of material `id`, well formed or not.
+///
+/// # Errors
+///
+/// Fails when the model rejects a read.
+pub fn original_ids(model: &Model, id: EntityId) -> Result<Vec<EntityId>, ModelError> {
+    let mut found = Vec::new();
+    for object in model.store().ids() {
+        if model.entity_of(object) == Some(ORIGINAL_ENTITY)
+            && model.get(object, "material")? == Some(AttributeValue::Ref(id))
+        {
+            found.push(object);
+        }
+    }
+    Ok(found)
+}
+
 /// The library values kept for the edited properties of material `id`, in [`Property`] order.
 ///
 /// # Errors
@@ -53,12 +70,7 @@ pub struct Original {
 /// Fails when the model rejects a read; objects that are not well formed are skipped.
 pub fn originals(model: &Model, id: EntityId) -> Result<Vec<Original>, ModelError> {
     let mut originals = Vec::new();
-    for object in model.store().ids() {
-        if model.entity_of(object) != Some(ORIGINAL_ENTITY)
-            || model.get(object, "material")? != Some(AttributeValue::Ref(id))
-        {
-            continue;
-        }
+    for object in original_ids(model, id)? {
         let key = model.get(object, "key")?;
         let property = key
             .as_ref()
@@ -195,10 +207,10 @@ pub fn delete(model: &Model, id: EntityId) -> Result<ModelCommand, EditError> {
     if model.entity_of(id) != Some(ENTITY) {
         return Err(ReadError::NotAMaterial.into());
     }
-    let commands = originals(model, id)?
+    let commands = original_ids(model, id)?
         .into_iter()
-        .map(|original| ModelCommand::Delete { id: original.id })
-        .chain([ModelCommand::Delete { id }])
+        .chain([id])
+        .map(|object| ModelCommand::Delete { id: object })
         .collect();
     Ok(ModelCommand::Batch { commands })
 }

@@ -384,3 +384,27 @@ fn an_edit_repeating_a_property_is_refused() {
         "the property fy is edited more than once"
     );
 }
+
+#[test]
+fn a_malformed_original_goes_with_its_material() {
+    let mut document = stored();
+    let broken = ModelCommand::Create {
+        id: ORIGINAL,
+        entity: ORIGINAL_ENTITY.into(),
+        values: vec![
+            ("material".into(), AttributeValue::Ref(ID)),
+            ("key".into(), AttributeValue::Text("not_a_property".into())),
+            (
+                "value".into(),
+                AttributeValue::sourced(AttributeValue::Real(1.0), Source::user()),
+            ),
+        ],
+    };
+    run(&mut document, broken);
+    assert_eq!(originals(document.model(), ID), Ok(Vec::new()));
+    assert_eq!(original_ids(document.model(), ID), Ok(vec![ORIGINAL]));
+    let command = delete(document.model(), ID).unwrap();
+    run(&mut document, command);
+    assert!(!document.model().contains(ID));
+    assert!(!document.model().contains(ORIGINAL));
+}

@@ -15,7 +15,8 @@ use crate::source::Sourced;
 mod edit;
 
 pub use edit::{
-    Edit, EditError, ORIGINAL_ENTITY, Original, delete, edit, originals, reset_value, set_value,
+    Edit, EditError, ORIGINAL_ENTITY, Original, delete, edit, original_ids, originals, reset_value,
+    set_value,
 };
 
 /// The core schema entity that stores materials.

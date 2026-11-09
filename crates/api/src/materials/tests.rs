@@ -718,3 +718,50 @@ fn errors_carry_a_reason_and_no_values() {
     );
     assert_eq!(in_use["error"]["data"]["used_by"], 2);
 }
+
+#[test]
+fn more_properties_than_the_schema_allows_are_refused() {
+    let mut session = session();
+    add(&mut session, 1, C30, None);
+    let inputs: Vec<Value> = (0..=MAX_PROPERTIES)
+        .map(|_| json!({ "key": "density", "value": 2400.0 }))
+        .collect();
+    let refused = call(
+        &mut session,
+        "materials.update",
+        json!({ "material": id(1), "properties": inputs }),
+    );
+    assert_eq!(fails(refused), MaterialsError::InvalidValue { key: None });
+}
+
+#[test]
+fn a_law_with_wrong_values_is_reported_not_replaced_by_another_law() {
+    let mut session = session();
+    // εc2 above εcu2 breaks the parabola-rectangle law; the modulus must not hide it.
+    let properties = json!([
+        { "key": "fck", "value": 30e6 }, { "key": "e_modulus", "value": 33e9 },
+        { "key": "eps_c2", "value": 0.004 }, { "key": "eps_cu2", "value": 0.0035 },
+        { "key": "n", "value": 2.0 },
+    ]);
+    assert_eq!(
+        create(&mut session, "Mix", "concrete", properties),
+        MaterialsError::InvalidValue { key: None }
+    );
+    assert!(!session.document().model().contains(EntityId::new(1)));
+}
+
+#[test]
+fn annexes_are_named_as_the_material_crate_names_them() {
+    assert_eq!(
+        annex_schema()["oneOf"],
+        json!([{ "const": "recommended" }, { "const": "fr" }])
+    );
+    for annex in NationalAnnex::ALL {
+        let input = PropertyInput {
+            key: "gamma_c".into(),
+            annex: Some(annex.name().into()),
+            value: Some(1.5),
+        };
+        assert_eq!(input.property().unwrap().annex(), Some(annex));
+    }
+}

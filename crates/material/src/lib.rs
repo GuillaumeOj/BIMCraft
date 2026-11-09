@@ -35,7 +35,7 @@ pub use library::{
 pub use material::{Category, Material, MaterialError};
 pub use model::{
     ENTITY, Edit, EditError, ORIGINAL_ENTITY, Original, ReadError, commands, delete, edit,
-    originals, read, reset_value, set_value,
+    original_ids, originals, read, reset_value, set_value,
 };
 pub use property::{Property, Quantity, Range};
 pub use source::{MAX_TEXT_LEN, Sourced};

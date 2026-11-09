@@ -118,20 +118,7 @@ fn category_schema() -> serde_json::Value {
 }
 
 fn annex_schema() -> serde_json::Value {
-    one_of_strings(&ANNEXES.map(|(wire, _)| wire))
-}
-
-/// The annexes on the wire, with the annex each names.
-const ANNEXES: [(&str, NationalAnnex); 2] = [
-    ("recommended", NationalAnnex::Recommended),
-    ("fr", NationalAnnex::France),
-];
-
-fn annex_name(annex: NationalAnnex) -> &'static str {
-    ANNEXES
-        .iter()
-        .find(|(_, found)| *found == annex)
-        .map_or("recommended", |(wire, _)| wire)
+    one_of_strings(&NationalAnnex::ALL.map(NationalAnnex::name))
 }
 
 /// The definitions the materials signatures share, for the protocol schema.
@@ -203,7 +190,7 @@ pub(crate) fn definitions() -> [(String, serde_json::Value); 5] {
 }
 
 fn name_schema() -> serde_json::Value {
-    json!({ "type": "string", "maxLength": 4 * MAX_NAME_LEN })
+    json!({ "type": "string", "maxLength": MAX_NAME_LEN })
 }
 
 fn search_schema() -> serde_json::Value {
@@ -621,7 +608,7 @@ fn property_views(
                     max_inclusive: range.max_inclusive,
                 },
                 required: category.required().contains(&property),
-                annex: property.annex().map(annex_name),
+                annex: property.annex().map(NationalAnnex::name),
             }
         })
         .collect()
@@ -645,7 +632,7 @@ fn read_material(model: &Model, id: EntityId) -> Result<Material, ApiError> {
 
 /// How many objects other than its own `MaterialOriginal`s refer to the material.
 fn used_by(model: &Model, id: EntityId) -> Result<usize, ApiError> {
-    let originals = material::originals(model, id).map_err(|_| ApiError::Internal)?;
+    let originals = material::original_ids(model, id).map_err(|_| ApiError::Internal)?;
     Ok(model.required_referrers(id).saturating_sub(originals.len()))
 }
 
@@ -773,10 +760,9 @@ fn material_error(error: &MaterialError) -> MaterialsError {
         MaterialError::PropertyNotForCategory { property, .. } => MaterialsError::UnknownProperty {
             key: property.key().to_owned(),
         },
-        MaterialError::Law(_) => MaterialsError::InvalidValue { key: None },
-        MaterialError::LawNotForCategory { .. } | MaterialError::MissingAnnexValue { .. } => {
-            MaterialsError::InvalidValue { key: None }
-        }
+        MaterialError::Law(_)
+        | MaterialError::LawNotForCategory { .. }
+        | MaterialError::MissingAnnexValue { .. } => MaterialsError::InvalidValue { key: None },
     }
 }
 
@@ -810,16 +796,11 @@ impl PropertyInput {
         let invalid = || MaterialsError::InvalidValue {
             key: Some(self.key.clone()),
         };
-        let annex = match self.annex.as_deref() {
-            None => None,
-            Some(wire) => Some(
-                ANNEXES
-                    .iter()
-                    .find(|(name, _)| *name == wire)
-                    .map(|(_, annex)| *annex)
-                    .ok_or_else(invalid)?,
-            ),
-        };
+        let annex = self
+            .annex
+            .as_deref()
+            .map(|wire| NationalAnnex::from_name(wire).ok_or_else(invalid))
+            .transpose()?;
         if let Some(property) = Property::from_key(&self.key, annex) {
             return Ok(property);
         }
@@ -837,6 +818,10 @@ impl PropertyInput {
 
 /// The property of each input, refusing a missing value where one is needed.
 fn properties_of(inputs: &[PropertyInput]) -> Result<Vec<(Property, Option<f64>)>, MaterialsError> {
+    // The schema promises this bound, so the server holds the caller to it.
+    if inputs.len() > MAX_PROPERTIES {
+        return Err(MaterialsError::InvalidValue { key: None });
+    }
     inputs
         .iter()
         .map(|input| Ok((input.property()?, input.value)))
@@ -939,7 +924,9 @@ fn create_material(
             .into());
         }
     }
-    let mut first_error = None;
+    // A law the values do not complete gives way to the next one; a law whose values are wrong
+    // does not, or the material would silently follow another law.
+    let mut first_missing = None;
     for &law in laws_for(category) {
         match Material::new(&name, category, law, None, properties.clone()) {
             Ok(created) => {
@@ -949,10 +936,13 @@ fn create_material(
                     event,
                 });
             }
-            Err(error) => first_error = first_error.or(Some(error)),
+            Err(error @ MaterialError::MissingProperty(_)) => {
+                first_missing = first_missing.or(Some(error));
+            }
+            Err(error) => return Err(material_error(&error).into()),
         }
     }
-    Err(first_error.map_or(ApiError::Internal, |error| material_error(&error).into()))
+    Err(first_missing.map_or(ApiError::Internal, |error| material_error(&error).into()))
 }
 
 #[derive(Deserialize)]

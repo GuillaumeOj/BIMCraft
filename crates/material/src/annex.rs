@@ -19,12 +19,12 @@ impl NationalAnnex {
     /// Every annex.
     pub const ALL: [Self; 2] = [Self::Recommended, Self::France];
 
-    /// The annex's name in the API.
+    /// The annex's name in the API: `recommended` or `fr`.
     #[must_use]
     pub const fn name(self) -> &'static str {
         match self {
             Self::Recommended => "recommended",
-            Self::France => "france",
+            Self::France => "fr",
         }
     }
 

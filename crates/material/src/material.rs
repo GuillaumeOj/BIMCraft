@@ -928,7 +928,7 @@ pub(crate) mod tests {
                 annex: France
             }
             .to_string(),
-            "the material gives no gamma_m0 for the france national annex"
+            "the material gives no gamma_m0 for the fr national annex"
         );
     }
 
