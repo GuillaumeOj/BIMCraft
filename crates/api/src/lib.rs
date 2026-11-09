@@ -15,6 +15,7 @@ mod descriptor;
 mod error;
 mod georeference;
 pub mod jsonrpc;
+mod materials;
 mod queries;
 mod registry;
 pub mod schema;
@@ -24,6 +25,7 @@ mod version;
 
 pub use descriptor::{Descriptor, Kind, Outcome};
 pub use error::{ApiError, GeorefError, RegistryError};
+pub use materials::MaterialsError;
 pub use queries::{DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE};
 pub use registry::Registry;
 pub use schema::{Signature, protocol_schema};

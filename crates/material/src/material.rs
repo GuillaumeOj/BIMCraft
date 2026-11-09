@@ -3,6 +3,7 @@
 use std::collections::BTreeMap;
 
 use core_model::units::Quantity;
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::SourceError;
@@ -15,7 +16,8 @@ use crate::property::Property;
 use crate::source::{MAX_TEXT_LEN, Sourced, bounded_text};
 
 /// What a material is, as the `category` attribute stores it.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum Category {
     /// Concrete (EN 1992-1-1).
     Concrete,
@@ -608,6 +610,16 @@ pub(crate) mod tests {
             None,
             properties,
         )
+    }
+
+    #[test]
+    fn categories_serialise_under_their_stored_names() {
+        for category in Category::ALL {
+            let json = serde_json::to_string(&category).unwrap();
+            assert_eq!(json, format!("\"{}\"", category.name()));
+            assert_eq!(serde_json::from_str::<Category>(&json).unwrap(), category);
+        }
+        assert!(serde_json::from_str::<Category>("\"wood\"").is_err());
     }
 
     #[test]

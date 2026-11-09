@@ -140,6 +140,7 @@ fn shared() -> Map<String, Value> {
         &[],
     );
     let mut defs = Map::from_iter(crate::georeference::definitions());
+    defs.extend(crate::materials::definitions());
     defs.extend([
         ("AttributeValue".to_owned(), value),
         ("ChangeEvent".to_owned(), event),

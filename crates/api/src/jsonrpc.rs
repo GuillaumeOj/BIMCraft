@@ -8,7 +8,7 @@ use core_model::ModelError;
 use core_txn::{ChangeEvent, CommandError, Origin};
 use serde_json::{Map, Value, json};
 
-use crate::{ApiError, GeorefError, Registry, RegistryError, Session};
+use crate::{ApiError, GeorefError, MaterialsError, Registry, RegistryError, Session};
 
 /// The method of the notification a server sends after each change to the model; its params are
 /// the [`ChangeEvent`].
@@ -229,7 +229,7 @@ fn failure(id: &Value, code: i64, message: &str) -> Value {
 
 /// The error response to `error`. Messages never hold model content (SEC-03); the decoder's
 /// detail, which may quote the params, goes back to the client that sent them as `data`.
-fn error_response(id: &Value, error: &ApiError) -> Value {
+pub(crate) fn error_response(id: &Value, error: &ApiError) -> Value {
     let code = match error {
         ApiError::UnknownName(_) | ApiError::UnknownVersion { .. } => codes::METHOD_NOT_FOUND,
         ApiError::InvalidParams { detail } => {
@@ -249,6 +249,17 @@ fn error_response(id: &Value, error: &ApiError) -> Value {
         ApiError::Rejected(CommandError::Model(ModelError::StillReferenced { count })) => {
             let mut response = failure(id, codes::REJECTED, &error.to_string());
             response["error"]["data"] = json!({ "reason": "in_use", "count": count });
+            return response;
+        }
+        ApiError::Materials(materials) => {
+            let mut response = failure(id, codes::REJECTED, &error.to_string());
+            response["error"]["data"] = json!({ "reason": materials.reason() });
+            if let Some(key) = materials.key() {
+                response["error"]["data"]["key"] = json!(key);
+            }
+            if let MaterialsError::InUse { used_by } = materials {
+                response["error"]["data"]["used_by"] = json!(used_by);
+            }
             return response;
         }
         ApiError::NotFound => codes::NOT_FOUND,

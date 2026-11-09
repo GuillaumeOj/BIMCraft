@@ -334,7 +334,8 @@ impl Model {
     /// How many other objects hold a required `ref` or `list:ref` attribute whose value
     /// includes `id`. Only the entities that have such an attribute for the entity of `id` are
     /// looked at, so removing most objects costs nothing.
-    fn required_referrers(&self, id: EntityId) -> usize {
+    #[must_use]
+    pub fn required_referrers(&self, id: EntityId) -> usize {
         let Some(target) = self.store.entity_of(id) else {
             return 0;
         };

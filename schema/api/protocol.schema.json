@@ -241,6 +241,247 @@
       ],
       "type": "object"
     },
+    "MaterialAnnex": {
+      "oneOf": [
+        {
+          "const": "recommended"
+        },
+        {
+          "const": "fr"
+        }
+      ]
+    },
+    "MaterialCategory": {
+      "oneOf": [
+        {
+          "const": "concrete"
+        },
+        {
+          "const": "reinforcement"
+        },
+        {
+          "const": "steel"
+        },
+        {
+          "const": "timber"
+        },
+        {
+          "const": "masonry"
+        },
+        {
+          "const": "insulation"
+        },
+        {
+          "const": "finish"
+        },
+        {
+          "const": "generic"
+        }
+      ]
+    },
+    "MaterialLaw": {
+      "additionalProperties": false,
+      "properties": {
+        "branch": {
+          "anyOf": [
+            {
+              "oneOf": [
+                {
+                  "const": "horizontal"
+                },
+                {
+                  "const": "inclined"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "kind": {
+          "oneOf": [
+            {
+              "const": "parabola_rectangle"
+            },
+            {
+              "const": "bilinear"
+            },
+            {
+              "const": "linear_elastic"
+            },
+            {
+              "const": "elastic_plastic"
+            },
+            {
+              "const": "elastic_brittle"
+            },
+            {
+              "const": "none"
+            }
+          ]
+        },
+        "source": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Source"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "source",
+        "branch"
+      ],
+      "type": "object"
+    },
+    "MaterialProperty": {
+      "additionalProperties": false,
+      "properties": {
+        "annex": {
+          "$ref": "#/$defs/MaterialAnnex"
+        },
+        "key": {
+          "type": "string"
+        },
+        "library_value": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "quantity": {
+          "oneOf": [
+            {
+              "const": "stress"
+            },
+            {
+              "const": "modulus"
+            },
+            {
+              "const": "density"
+            },
+            {
+              "const": "strain"
+            },
+            {
+              "const": "ratio"
+            },
+            {
+              "const": "thermal_conductivity"
+            },
+            {
+              "const": "specific_heat"
+            }
+          ]
+        },
+        "range": {
+          "additionalProperties": false,
+          "properties": {
+            "max": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "max_inclusive": {
+              "type": "boolean"
+            },
+            "min": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "min_inclusive": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "min",
+            "min_inclusive",
+            "max",
+            "max_inclusive"
+          ],
+          "type": "object"
+        },
+        "required": {
+          "type": "boolean"
+        },
+        "source": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Source"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "key",
+        "quantity",
+        "value",
+        "source",
+        "library_value",
+        "range",
+        "required"
+      ],
+      "type": "object"
+    },
+    "MaterialPropertyInput": {
+      "additionalProperties": false,
+      "properties": {
+        "annex": {
+          "$ref": "#/$defs/MaterialAnnex"
+        },
+        "key": {
+          "type": "string"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "key",
+        "value"
+      ],
+      "type": "object"
+    },
     "ModelCommand": {
       "description": "A model command, tagged with its kind.",
       "oneOf": [
@@ -888,6 +1129,173 @@
           },
           "result": {
             "type": "null"
+          },
+          "version": {
+            "const": "1.0.0"
+          }
+        },
+        "type": "object"
+      },
+      "materials.add_from_library": {
+        "description": "Adds a project material with the values of a library grade.",
+        "properties": {
+          "name": {
+            "const": "materials.add_from_library"
+          },
+          "params": {
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "$ref": "#/$defs/EntityId"
+              },
+              "key": {
+                "type": "string"
+              },
+              "name": {
+                "maxLength": 480,
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "key"
+            ],
+            "type": "object"
+          },
+          "result": {
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "$ref": "#/$defs/EntityId"
+              }
+            },
+            "required": [
+              "id"
+            ],
+            "type": "object"
+          },
+          "version": {
+            "const": "1.0.0"
+          }
+        },
+        "type": "object"
+      },
+      "materials.create": {
+        "description": "Creates a project material from scratch; every value is entered by the user.",
+        "properties": {
+          "name": {
+            "const": "materials.create"
+          },
+          "params": {
+            "additionalProperties": false,
+            "properties": {
+              "category": {
+                "$ref": "#/$defs/MaterialCategory"
+              },
+              "id": {
+                "$ref": "#/$defs/EntityId"
+              },
+              "name": {
+                "maxLength": 480,
+                "type": "string"
+              },
+              "properties": {
+                "items": {
+                  "$ref": "#/$defs/MaterialPropertyInput"
+                },
+                "maxItems": 64,
+                "type": "array"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "category"
+            ],
+            "type": "object"
+          },
+          "result": {
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "$ref": "#/$defs/EntityId"
+              }
+            },
+            "required": [
+              "id"
+            ],
+            "type": "object"
+          },
+          "version": {
+            "const": "1.0.0"
+          }
+        },
+        "type": "object"
+      },
+      "materials.delete": {
+        "description": "Deletes a material that nothing uses.",
+        "properties": {
+          "name": {
+            "const": "materials.delete"
+          },
+          "params": {
+            "additionalProperties": false,
+            "properties": {
+              "material": {
+                "$ref": "#/$defs/EntityId"
+              }
+            },
+            "required": [
+              "material"
+            ],
+            "type": "object"
+          },
+          "result": {
+            "additionalProperties": false,
+            "properties": {},
+            "required": [],
+            "type": "object"
+          },
+          "version": {
+            "const": "1.0.0"
+          }
+        },
+        "type": "object"
+      },
+      "materials.update": {
+        "description": "Renames a material and edits or resets its values.",
+        "properties": {
+          "name": {
+            "const": "materials.update"
+          },
+          "params": {
+            "additionalProperties": false,
+            "properties": {
+              "material": {
+                "$ref": "#/$defs/EntityId"
+              },
+              "name": {
+                "maxLength": 480,
+                "type": "string"
+              },
+              "properties": {
+                "items": {
+                  "$ref": "#/$defs/MaterialPropertyInput"
+                },
+                "maxItems": 64,
+                "type": "array"
+              }
+            },
+            "required": [
+              "material"
+            ],
+            "type": "object"
+          },
+          "result": {
+            "additionalProperties": false,
+            "properties": {},
+            "required": [],
+            "type": "object"
           },
           "version": {
             "const": "1.0.0"
@@ -3103,6 +3511,314 @@
               "can_redo",
               "entries",
               "next"
+            ],
+            "type": "object"
+          },
+          "version": {
+            "const": "1.0.0"
+          }
+        },
+        "type": "object"
+      },
+      "materials.get": {
+        "description": "Reads one project material with its law, its values and where they come from.",
+        "properties": {
+          "name": {
+            "const": "materials.get"
+          },
+          "params": {
+            "additionalProperties": false,
+            "properties": {
+              "material": {
+                "$ref": "#/$defs/EntityId"
+              }
+            },
+            "required": [
+              "material"
+            ],
+            "type": "object"
+          },
+          "result": {
+            "additionalProperties": false,
+            "properties": {
+              "category": {
+                "$ref": "#/$defs/MaterialCategory"
+              },
+              "design_code": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "edited": {
+                "type": "boolean"
+              },
+              "grade": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "id": {
+                "$ref": "#/$defs/EntityId"
+              },
+              "law": {
+                "$ref": "#/$defs/MaterialLaw"
+              },
+              "name": {
+                "type": "string"
+              },
+              "properties": {
+                "items": {
+                  "$ref": "#/$defs/MaterialProperty"
+                },
+                "type": "array"
+              },
+              "used_by": {
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "name",
+              "category",
+              "design_code",
+              "law",
+              "properties",
+              "id",
+              "grade",
+              "used_by",
+              "edited"
+            ],
+            "type": "object"
+          },
+          "version": {
+            "const": "1.0.0"
+          }
+        },
+        "type": "object"
+      },
+      "materials.grade": {
+        "description": "Reads one library grade with its law and its sourced values.",
+        "properties": {
+          "name": {
+            "const": "materials.grade"
+          },
+          "params": {
+            "additionalProperties": false,
+            "properties": {
+              "key": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "key"
+            ],
+            "type": "object"
+          },
+          "result": {
+            "additionalProperties": false,
+            "properties": {
+              "category": {
+                "$ref": "#/$defs/MaterialCategory"
+              },
+              "design_code": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "key": {
+                "type": "string"
+              },
+              "law": {
+                "$ref": "#/$defs/MaterialLaw"
+              },
+              "name": {
+                "type": "string"
+              },
+              "properties": {
+                "items": {
+                  "$ref": "#/$defs/MaterialProperty"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "name",
+              "category",
+              "design_code",
+              "law",
+              "properties",
+              "key"
+            ],
+            "type": "object"
+          },
+          "version": {
+            "const": "1.0.0"
+          }
+        },
+        "type": "object"
+      },
+      "materials.library": {
+        "description": "Lists the grades of the material library, with a search and a category filter.",
+        "properties": {
+          "name": {
+            "const": "materials.library"
+          },
+          "params": {
+            "additionalProperties": false,
+            "properties": {
+              "category": {
+                "$ref": "#/$defs/MaterialCategory"
+              },
+              "limit": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "offset": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "search": {
+                "maxLength": 200,
+                "type": "string"
+              }
+            },
+            "required": [],
+            "type": "object"
+          },
+          "result": {
+            "additionalProperties": false,
+            "properties": {
+              "items": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "category": {
+                      "$ref": "#/$defs/MaterialCategory"
+                    },
+                    "design_code": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "key": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "key",
+                    "name",
+                    "category",
+                    "design_code"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "total": {
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "items",
+              "total"
+            ],
+            "type": "object"
+          },
+          "version": {
+            "const": "1.0.0"
+          }
+        },
+        "type": "object"
+      },
+      "materials.list": {
+        "description": "Lists the materials of the project.",
+        "properties": {
+          "name": {
+            "const": "materials.list"
+          },
+          "params": {
+            "additionalProperties": false,
+            "properties": {
+              "category": {
+                "$ref": "#/$defs/MaterialCategory"
+              },
+              "search": {
+                "maxLength": 200,
+                "type": "string"
+              }
+            },
+            "required": [],
+            "type": "object"
+          },
+          "result": {
+            "additionalProperties": false,
+            "properties": {
+              "items": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "category": {
+                      "$ref": "#/$defs/MaterialCategory"
+                    },
+                    "grade": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "id": {
+                      "$ref": "#/$defs/EntityId"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "used_by": {
+                      "minimum": 0,
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "category",
+                    "grade",
+                    "used_by"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "items"
             ],
             "type": "object"
           },

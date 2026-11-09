@@ -96,6 +96,7 @@ dependencies = [
  "core-txn",
  "georef",
  "jsonschema",
+ "material",
  "proptest",
  "schema",
  "schema-gen",
