@@ -43,6 +43,7 @@ CI runs every check on every pull request, on Linux, macOS and Windows. Locally,
 - **Rust**: `cargo test -p <crate>`, `cargo clippy -p <crate> --all-targets --all-features -- -D warnings`, `cargo fmt --all --check`; for a critical crate you changed, `cargo llvm-cov -p <crate> --all-features --fail-under-lines 98`. `CHECK_CRATES="<crate> …" scripts/check-all.sh rust` runs the whole Rust section on those crates only.
 - **UI**, from `ui/`: `bunx vitest run <files>` (or `bunx vitest related --run <files>`), `bunx biome check <files>`, `bunx tsc --noEmit`.
 - **Before each commit**: `scripts/check-all.sh repo` (seconds).
+- **Renovate config**: when `.github/renovate.json5` changes, `scripts/check-all.sh renovate` (it downloads Renovate, so it is not in `repo`).
 - **A full section only when nothing narrower checks the change**: workspace manifests, the toolchain, `clippy.toml`, `deny.toml`, the critical or wasm crate lists or `scripts/check-all.sh` changed (run the sections they affect); a core crate's platform use changed (`wasm`); a fuzz target changed (`fuzz`); the STEP reader or writer, or the IFC corpus manifest changed (`corpus`); or a CI failure cannot be reproduced otherwise. Never run the whole `scripts/check-all.sh` by default.
 
 ## 3b. Keeping a branch up to date (Auto-fix included)
@@ -61,7 +62,7 @@ CI runs every check on every pull request, on Linux, macOS and Windows. Locally,
 - **Toolchains**: Rust in `rust-toolchain.toml`, Bun in `ui/package.json` (`packageManager`) and CI, every CLI tool version in CI and `scripts/setup.sh`.
 - **Release age**: only adopt versions published at least 14 days ago (supply-chain protection), unless a security fix requires otherwise.
 - **New dependency?** Prefer the standard library or existing dependencies. Justify a new one in the commit body: purpose, maintenance status, licence (must pass `deny.toml`), size, and whether it builds for `wasm32-unknown-unknown` when used by a core crate.
-- `scripts/check-pinned-deps.ts` enforces this locally and in CI. Renovate proposes version bumps (`.github/renovate.json5`), toolchains and the CLI tools in `scripts/tool-versions.env` included.
+- `scripts/check-pinned-deps.ts` enforces this locally and in CI. Renovate proposes version bumps (`.github/renovate.json5`), toolchains and the CLI tools in `scripts/tool-versions.env` included, in groups, plus a monthly lock-file refresh; majors come one per pull request. On a Renovate pull request that bumps a Rust dependency, run `cargo update -w` in `fuzz/` and commit `fuzz/Cargo.lock`. Each version in `scripts/tool-versions.env` sits under a `# renovate:` comment. Details: [quality.md](docs/dev/quality.md#renovate).
 
 ## 5. Tests and coverage
 
@@ -124,7 +125,7 @@ Users are architects and engineers, not developers. For every user-facing featur
 | Check | Command |
 | --- | --- |
 | One-time setup (hooks + tool check) | `scripts/setup.sh` |
-| Every required CI check that applies (rarely needed locally, section 3a) | `scripts/check-all.sh` (or one section: `repo rust coverage wasm fuzz fuzz-explore corpus ui e2e desktop docs`; `CHECK_CRATES="a b"` limits the Rust sections) |
+| Every required CI check that applies (rarely needed locally, section 3a) | `scripts/check-all.sh` (or one section: `repo rust coverage wasm fuzz fuzz-explore corpus ui e2e desktop docs renovate`; `CHECK_CRATES="a b"` limits the Rust sections) |
 | Commit messages + user-docs rule for a branch | `scripts/check-pr.sh main` |
 | Rust format | `cargo fmt --all --check` |
 | Rust lint | `cargo clippy --workspace --all-targets --all-features -- -D warnings` |
@@ -136,6 +137,7 @@ Users are architects and engineers, not developers. For every user-facing featur
 | TOML format | `taplo fmt --check` |
 | Spelling | `typos` |
 | Pinned versions | `bun scripts/check-pinned-deps.ts` |
+| Renovate config (downloads Renovate) | `scripts/check-all.sh renovate` |
 | Crate layering and core-crate lint scope | `bun scripts/check-architecture.ts` |
 | UI lint/format/imports | `cd ui && bunx biome ci .` |
 | UI types | `cd ui && bunx tsc --noEmit` |
