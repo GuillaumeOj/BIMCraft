@@ -321,6 +321,36 @@ impl Material {
         })
     }
 
+    /// A custom material `name` of `category` made of `properties`, entered by the user. It
+    /// follows the most specific law of its category that the values complete: the
+    /// parabola-rectangle or bi-linear law for concrete, the steel law for steel, the timber
+    /// law for timber, linear elasticity where there is a modulus, and none for the other
+    /// categories. A law with a missing property gives way to the next; one whose values are
+    /// wrong does not, or the material would silently follow another law.
+    ///
+    /// # Errors
+    ///
+    /// Fails as [`Material::new`] does, with the first missing property when no law is complete.
+    pub fn custom(
+        name: &str,
+        category: Category,
+        properties: &BTreeMap<Property, Sourced<f64>>,
+    ) -> Result<Self, MaterialError> {
+        let mut first_missing = None;
+        for &law in candidate_laws(category) {
+            match Self::new(name, category, law, None, properties.clone()) {
+                Err(error @ MaterialError::MissingProperty(_)) => {
+                    first_missing = first_missing.or(Some(error));
+                }
+                done => return done,
+            }
+        }
+        Err(first_missing.unwrap_or(MaterialError::LawNotForCategory {
+            category,
+            law: LawKind::None,
+        }))
+    }
+
     /// The same material, created from the library grade `key`; a blank key clears it.
     ///
     /// # Errors
@@ -470,6 +500,24 @@ impl Material {
         self.properties
             .iter()
             .map(|(property, value)| (*property, value))
+    }
+}
+
+/// The laws a custom material of `category` may follow, the most specific first.
+const fn candidate_laws(category: Category) -> &'static [LawKind] {
+    match category {
+        Category::Concrete => &[
+            LawKind::ConcreteParabolaRectangle,
+            LawKind::ConcreteBilinear,
+            LawKind::LinearElastic,
+        ],
+        Category::Reinforcement | Category::Steel => {
+            &[LawKind::SteelBilinear, LawKind::LinearElastic]
+        }
+        Category::Timber => &[LawKind::TimberElasticBrittle, LawKind::LinearElastic],
+        Category::Masonry | Category::Insulation | Category::Finish | Category::Generic => {
+            &[LawKind::LinearElastic, LawKind::None]
+        }
     }
 }
 
@@ -1144,5 +1192,76 @@ pub(crate) mod tests {
             MaterialError::TooLong("name").to_string(),
             "the material's name is longer than 200 characters"
         );
+    }
+
+    #[test]
+    fn a_custom_material_follows_the_most_specific_law_its_values_complete() {
+        let user = |value: f64| Sourced::new(value, Source::user());
+        let custom = |category, values: &[(Property, f64)]| {
+            let properties = values
+                .iter()
+                .map(|(property, value)| (*property, user(*value)))
+                .collect();
+            Material::custom("Mix", category, &properties)
+        };
+        let concrete = [
+            (Property::CharacteristicCompressiveStrength, 30e6),
+            (Property::StrainAtPeakStress, 0.002),
+            (Property::UltimateCompressiveStrain, 0.0035),
+            (Property::ParabolaExponent, 2.0),
+        ];
+        let kind = |material: Result<Material, MaterialError>| material.unwrap().law().kind();
+        assert_eq!(
+            kind(custom(Category::Concrete, &concrete)),
+            LawKind::ConcreteParabolaRectangle
+        );
+        let bilinear = [
+            (Property::CharacteristicCompressiveStrength, 30e6),
+            (Property::BilinearStrainAtPeakStress, 0.00175),
+            (Property::BilinearUltimateCompressiveStrain, 0.0035),
+        ];
+        assert_eq!(
+            kind(custom(Category::Concrete, &bilinear)),
+            LawKind::ConcreteBilinear
+        );
+        let elastic = [
+            (Property::CharacteristicCompressiveStrength, 30e6),
+            (Property::YoungModulus, 33e9),
+        ];
+        assert_eq!(
+            kind(custom(Category::Concrete, &elastic)),
+            LawKind::LinearElastic
+        );
+        assert_eq!(kind(custom(Category::Finish, &[])), LawKind::None);
+        // Wrong values are reported, not hidden by a fallback to elasticity.
+        let wrong = [
+            (Property::CharacteristicCompressiveStrength, 30e6),
+            (Property::YoungModulus, 33e9),
+            (Property::StrainAtPeakStress, 0.004),
+            (Property::UltimateCompressiveStrain, 0.0035),
+            (Property::ParabolaExponent, 2.0),
+        ];
+        assert_eq!(
+            custom(Category::Concrete, &wrong).map(|_| ()),
+            Err(MaterialError::Law(LawError::InvalidParameter(
+                "ultimate_strain"
+            )))
+        );
+        // Nothing complete: the first law's missing property is the one reported.
+        assert_eq!(
+            custom(Category::Steel, &[(Property::YieldStrength, 355e6)]).map(|_| ()),
+            Err(MaterialError::MissingProperty(Property::YoungModulus))
+        );
+        assert_eq!(
+            custom(Category::Concrete, &[]).map(|_| ()),
+            Err(MaterialError::MissingProperty(
+                Property::CharacteristicCompressiveStrength
+            ))
+        );
+        for category in Category::ALL {
+            for law in candidate_laws(category) {
+                assert!(category.allows(*law), "{category:?} {law:?}");
+            }
+        }
     }
 }

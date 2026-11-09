@@ -251,6 +251,14 @@ pub(crate) fn error_response(id: &Value, error: &ApiError) -> Value {
             response["error"]["data"] = json!({ "reason": "in_use", "count": count });
             return response;
         }
+        ApiError::BuildUps(build_up) => {
+            let mut response = failure(id, codes::REJECTED, &error.to_string());
+            response["error"]["data"] = json!({ "reason": build_up.reason });
+            if let Some(index) = build_up.index {
+                response["error"]["data"]["index"] = json!(index);
+            }
+            return response;
+        }
         ApiError::Materials(materials) => {
             let mut response = failure(id, codes::REJECTED, &error.to_string());
             response["error"]["data"] = json!({ "reason": materials.reason() });

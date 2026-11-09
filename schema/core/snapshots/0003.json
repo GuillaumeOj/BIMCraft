@@ -403,6 +403,106 @@
       "representations": []
     },
     {
+      "name": "MaterialLayer",
+      "kind": "resource",
+      "doc": "One layer of a wall or slab build-up (MAT-03): a material, a thickness and a function. Where layered elements meet, the layer with the higher join priority runs through (GEO-11). The layer's object id is its stable LayerId (ADR 0010): reordering, renaming or resizing never changes it.",
+      "property_sets": [],
+      "ifc": {
+        "entity": "IfcMaterialLayer"
+      },
+      "attributes": [
+        {
+          "name": "material",
+          "value": "ref:Material",
+          "presence": "required",
+          "placement": "instance",
+          "doc": "What the layer is made of."
+        },
+        {
+          "name": "thickness",
+          "value": "quantity:length",
+          "presence": "required",
+          "placement": "instance",
+          "doc": "Thickness of the layer. A membrane may have none."
+        },
+        {
+          "name": "function",
+          "value": "enum:LayerFunction",
+          "presence": "required",
+          "placement": "instance",
+          "doc": "What the layer does."
+        },
+        {
+          "name": "priority",
+          "value": "integer",
+          "presence": "required",
+          "placement": "instance",
+          "doc": "Join priority from 1 (highest) to 5 (lowest): where layered elements meet, a layer of higher priority runs through layers of lower priority, and equal priorities meet. An IFC export writes 0 to 100 (ADR 0019)."
+        },
+        {
+          "name": "is_core",
+          "value": "bool",
+          "presence": {
+            "default": {
+              "bool": false
+            }
+          },
+          "placement": "instance",
+          "doc": "Whether the layer belongs to the structural core, which the default location line follows."
+        },
+        {
+          "name": "name",
+          "value": "text",
+          "presence": "optional",
+          "placement": "instance",
+          "doc": "Name shown in plans and schedules, such as `Insulation`."
+        }
+      ],
+      "roles": [],
+      "representations": []
+    },
+    {
+      "name": "MaterialLayerSet",
+      "kind": "resource",
+      "doc": "A wall or slab build-up (MAT-03): layers in order from the exterior face to the interior face, or from the top face down for slabs.",
+      "property_sets": [],
+      "ifc": {
+        "entity": "IfcMaterialLayerSet"
+      },
+      "attributes": [
+        {
+          "name": "name",
+          "value": "text",
+          "presence": "required",
+          "placement": "instance",
+          "doc": "Name of the build-up, such as `Exterior wall 300`."
+        },
+        {
+          "name": "usage",
+          "value": "enum:BuildUpUsage",
+          "presence": "required",
+          "placement": "instance",
+          "doc": "Whether the build-up is for walls or for slabs."
+        },
+        {
+          "name": "description",
+          "value": "text",
+          "presence": "optional",
+          "placement": "instance",
+          "doc": "Free text about the build-up."
+        },
+        {
+          "name": "layers",
+          "value": "list:ref:MaterialLayer",
+          "presence": "required",
+          "placement": "instance",
+          "doc": "The layers, from the exterior face to the interior face (walls) or from the top face down (slabs)."
+        }
+      ],
+      "roles": [],
+      "representations": []
+    },
+    {
       "name": "MaterialOriginal",
       "kind": "resource",
       "doc": "The library value of a material property that the user has since edited, kept with its source so that resetting the property restores it (MAT-02, ADR 0019). A material has at most one per property.",
@@ -563,6 +663,50 @@
         {
           "name": "none",
           "doc": "No structural behaviour: the material carries no stress in design."
+        }
+      ]
+    },
+    {
+      "name": "BuildUpUsage",
+      "doc": "What a build-up is for: layers of a wall run from the exterior face in, layers of a slab from the top face down (ADR 0010).",
+      "items": [
+        {
+          "name": "wall",
+          "doc": "A wall build-up."
+        },
+        {
+          "name": "slab",
+          "doc": "A slab build-up."
+        }
+      ]
+    },
+    {
+      "name": "LayerFunction",
+      "doc": "What a layer of a build-up does; it decides the default join priority (MAT-03).",
+      "items": [
+        {
+          "name": "structure",
+          "doc": "The load-bearing layer."
+        },
+        {
+          "name": "substrate",
+          "doc": "A base for another layer, such as a screed or a backing wall."
+        },
+        {
+          "name": "insulation",
+          "doc": "Thermal or acoustic insulation."
+        },
+        {
+          "name": "air_gap",
+          "doc": "A ventilated or still air layer."
+        },
+        {
+          "name": "membrane",
+          "doc": "A thin sheet, such as a vapour barrier or a waterproofing layer; it may have no thickness."
+        },
+        {
+          "name": "finish",
+          "doc": "An exposed surface, such as plaster, render or cladding."
         }
       ]
     },

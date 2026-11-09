@@ -88,6 +88,40 @@ A substance that elements are made of, such as a concrete or steel grade (MAT-01
 | `gamma_m` | real, sourced | optional | instance | Partial factor γM for timber or masonry, to the recommended values. |
 | `gamma_m_fr` | real, sourced | optional | instance | Partial factor γM for timber or masonry, to the French national annex. |
 
+### <a id="MaterialLayer"></a>MaterialLayer
+
+One layer of a wall or slab build-up (MAT-03): a material, a thickness and a function. Where layered elements meet, the layer with the higher join priority runs through (GEO-11). The layer's object id is its stable LayerId (ADR 0010): reordering, renaming or resizing never changes it.
+
+- **Introduced in:** version 3
+- **IFC:** `IfcMaterialLayer`
+
+#### Attributes
+
+| Attribute | Value | Presence | Set on | Description |
+| --- | --- | --- | --- | --- |
+| `material` | reference to [Material](#Material) | required | instance | What the layer is made of. |
+| `thickness` | length (m) | required | instance | Thickness of the layer. A membrane may have none. |
+| `function` | enumeration [LayerFunction](enumerations.md#LayerFunction) | required | instance | What the layer does. |
+| `priority` | integer | required | instance | Join priority from 1 (highest) to 5 (lowest): where layered elements meet, a layer of higher priority runs through layers of lower priority, and equal priorities meet. An IFC export writes 0 to 100 (ADR 0019). |
+| `is_core` | boolean | default `false` | instance | Whether the layer belongs to the structural core, which the default location line follows. |
+| `name` | text | optional | instance | Name shown in plans and schedules, such as `Insulation`. |
+
+### <a id="MaterialLayerSet"></a>MaterialLayerSet
+
+A wall or slab build-up (MAT-03): layers in order from the exterior face to the interior face, or from the top face down for slabs.
+
+- **Introduced in:** version 3
+- **IFC:** `IfcMaterialLayerSet`
+
+#### Attributes
+
+| Attribute | Value | Presence | Set on | Description |
+| --- | --- | --- | --- | --- |
+| `name` | text | required | instance | Name of the build-up, such as `Exterior wall 300`. |
+| `usage` | enumeration [BuildUpUsage](enumerations.md#BuildUpUsage) | required | instance | Whether the build-up is for walls or for slabs. |
+| `description` | text | optional | instance | Free text about the build-up. |
+| `layers` | list of reference to [MaterialLayer](#MaterialLayer) | required | instance | The layers, from the exterior face to the interior face (walls) or from the top face down (slabs). |
+
 ### <a id="MaterialOriginal"></a>MaterialOriginal
 
 The library value of a material property that the user has since edited, kept with its source so that resetting the property restores it (MAT-02, ADR 0019). A material has at most one per property.

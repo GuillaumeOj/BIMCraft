@@ -5,6 +5,9 @@ use core_model::{Source, SourceError};
 /// The longest material name or design code accepted, in characters.
 pub const MAX_TEXT_LEN: usize = core_model::MAX_SOURCE_LEN;
 
+/// The longest name of a material or a build-up accepted, in characters.
+pub const MAX_NAME_LEN: usize = 120;
+
 /// `text` without surrounding spaces, or `None` when nothing is left.
 ///
 /// # Errors

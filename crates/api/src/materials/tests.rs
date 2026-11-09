@@ -13,7 +13,7 @@ fn model() -> Model {
     let mut layer = namespace.entities["MaterialOriginal"].clone();
     layer.name = "Layer".into();
     layer.kind = EntityKind::Resource;
-    layer.ifc.as_mut().unwrap().entity = "IfcMaterialLayer".into();
+    layer.ifc.as_mut().unwrap().entity = "IfcBuildingElementProxy".into();
     layer.attributes = vec![Attribute {
         name: "material".into(),
         value: ValueType::Ref("Material".into()),
@@ -23,6 +23,16 @@ fn model() -> Model {
         sourced: false,
     }];
     namespace.entities.insert("Layer".into(), layer);
+    // A category only a newer version knows, to store a material this version cannot read.
+    namespace
+        .enumerations
+        .get_mut("MaterialCategory")
+        .unwrap()
+        .items
+        .push(schema::EnumItem {
+            name: "wood".into(),
+            doc: None,
+        });
     Model::new(&namespace).unwrap()
 }
 
@@ -280,7 +290,7 @@ fn adding_checks_the_key_and_the_name() {
         attempt(&mut session, 2, S355, Some("A\nB")),
         MaterialsError::InvalidName
     );
-    let long = "x".repeat(MAX_NAME_LEN + 1);
+    let long = "x".repeat(material::MAX_NAME_LEN + 1);
     assert_eq!(
         attempt(&mut session, 2, S355, Some(&long)),
         MaterialsError::InvalidName
@@ -588,11 +598,7 @@ fn a_refused_update_changes_nothing() {
 }
 
 #[test]
-fn original_ids_derive_from_the_material_and_the_property() {
-    let a = original_id(EntityId::new(1), Property::YieldStrength);
-    assert_eq!(a, original_id(EntityId::new(1), Property::YieldStrength));
-    assert_ne!(a, original_id(EntityId::new(2), Property::YieldStrength));
-    assert_ne!(a, original_id(EntityId::new(1), Property::UltimateStrength));
+fn replaying_an_update_makes_the_same_objects() {
     // Replaying an update on another session gives the same objects.
     let run = || {
         let mut session = session();
@@ -767,11 +773,39 @@ fn annexes_are_named_as_the_material_crate_names_them() {
 }
 
 #[test]
-fn the_laws_a_custom_material_may_follow_are_those_its_category_allows() {
-    for category in Category::ALL {
-        assert!(!laws_for(category).is_empty(), "{category:?}");
-        for law in laws_for(category) {
-            assert!(category.allows(*law), "{category:?} {law:?}");
-        }
-    }
+fn a_material_this_version_cannot_read_does_not_break_the_list() {
+    let mut session = session();
+    add(&mut session, 1, S355, None);
+    let newer = ModelCommand::Create {
+        id: EntityId::new(2),
+        entity: "Material".into(),
+        values: vec![
+            ("name".into(), AttributeValue::Text("Newer".into())),
+            ("category".into(), AttributeValue::Text("wood".into())),
+            ("behaviour_law".into(), AttributeValue::Text("none".into())),
+        ],
+    };
+    session.document_mut().execute(newer, Origin::Ui).unwrap();
+    let list = ok(&mut session, "materials.list", json!({}));
+    let names: Vec<&str> = list["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|item| item["name"].as_str().unwrap())
+        .collect();
+    assert_eq!(names, ["S355"]);
+    // Its name is still taken, and the readable materials still work.
+    assert!(matches!(
+        call(&mut session, "materials.get", json!({ "material": id(2) })),
+        Err(ApiError::Internal)
+    ));
+    assert_eq!(
+        add_error(&mut session, 3, "en1992-1-1/C30/37", "newer"),
+        MaterialsError::DuplicateName
+    );
+}
+
+fn add_error(session: &mut Session, raw: u128, key: &str, name: &str) -> MaterialsError {
+    let params = json!({ "id": id(raw), "key": key, "name": name });
+    fails(call(session, "materials.add_from_library", params))
 }

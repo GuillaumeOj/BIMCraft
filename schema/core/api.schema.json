@@ -13,6 +13,26 @@
       ],
       "type": "string"
     },
+    "BuildUpUsage": {
+      "description": "What a build-up is for: layers of a wall run from the exterior face in, layers of a slab from the top face down (ADR 0010).",
+      "enum": [
+        "wall",
+        "slab"
+      ],
+      "type": "string"
+    },
+    "LayerFunction": {
+      "description": "What a layer of a build-up does; it decides the default join priority (MAT-03).",
+      "enum": [
+        "structure",
+        "substrate",
+        "insulation",
+        "air_gap",
+        "membrane",
+        "finish"
+      ],
+      "type": "string"
+    },
     "Material": {
       "additionalProperties": false,
       "description": "A substance that elements are made of, such as a concrete or steel grade (MAT-01). Its behaviour law says how it responds to strain. Each property value cites the document and clause it comes from (REP-05, ADR 0018); a material gives only the properties its category uses (ADR 0019).",
@@ -1128,6 +1148,91 @@
         "generic"
       ],
       "type": "string"
+    },
+    "MaterialLayer": {
+      "additionalProperties": false,
+      "description": "One layer of a wall or slab build-up (MAT-03): a material, a thickness and a function. Where layered elements meet, the layer with the higher join priority runs through (GEO-11). The layer's object id is its stable LayerId (ADR 0010): reordering, renaming or resizing never changes it.",
+      "properties": {
+        "function": {
+          "$ref": "#/$defs/LayerFunction",
+          "description": "What the layer does."
+        },
+        "is_core": {
+          "default": false,
+          "description": "Whether the layer belongs to the structural core, which the default location line follows.",
+          "type": "boolean"
+        },
+        "material": {
+          "$ref": "#/$defs/ObjectId",
+          "description": "What the layer is made of."
+        },
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Name shown in plans and schedules, such as `Insulation`."
+        },
+        "priority": {
+          "description": "Join priority from 1 (highest) to 5 (lowest): where layered elements meet, a layer of higher priority runs through layers of lower priority, and equal priorities meet. An IFC export writes 0 to 100 (ADR 0019).",
+          "maximum": 9223372036854775807,
+          "minimum": -9223372036854775808,
+          "type": "integer"
+        },
+        "thickness": {
+          "description": "Thickness of the layer. A membrane may have none.\n\nIn m.",
+          "type": "number"
+        }
+      },
+      "required": [
+        "material",
+        "thickness",
+        "function",
+        "priority"
+      ],
+      "type": "object"
+    },
+    "MaterialLayerSet": {
+      "additionalProperties": false,
+      "description": "A wall or slab build-up (MAT-03): layers in order from the exterior face to the interior face, or from the top face down for slabs.",
+      "properties": {
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Free text about the build-up."
+        },
+        "layers": {
+          "description": "The layers, from the exterior face to the interior face (walls) or from the top face down (slabs).",
+          "items": {
+            "$ref": "#/$defs/ObjectId"
+          },
+          "type": "array"
+        },
+        "name": {
+          "description": "Name of the build-up, such as `Exterior wall 300`.",
+          "type": "string"
+        },
+        "usage": {
+          "$ref": "#/$defs/BuildUpUsage",
+          "description": "Whether the build-up is for walls or for slabs."
+        }
+      },
+      "required": [
+        "name",
+        "usage",
+        "layers"
+      ],
+      "type": "object"
     },
     "MaterialOriginal": {
       "additionalProperties": false,
