@@ -3,11 +3,11 @@ type Option<V extends string> = { value: V; label: string };
 type SegmentedToggleProps<V extends string> = {
   label: string;
   value: V;
-  options: readonly [Option<V>, Option<V>];
+  options: readonly Option<V>[];
   onChange: (value: V) => void;
 };
 
-/** Two exclusive choices side by side (decimal degrees or DMS). */
+/** Exclusive choices side by side (decimal degrees or DMS; all, walls or slabs). */
 export function SegmentedToggle<V extends string>({
   label,
   value,

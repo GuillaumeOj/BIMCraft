@@ -24,6 +24,7 @@ type Props = {
   setRenaming: (renaming: boolean) => void;
   /** The number of objects using the material when the user tried to delete it, else null. */
   inUse: number | null;
+  onShowBuildUps?: (() => void) | undefined;
   onDelete: () => void;
   onFailure: (error: unknown) => void;
   announce: (message: string) => void;
@@ -35,6 +36,7 @@ export function MaterialDetail({
   renaming,
   setRenaming,
   inUse,
+  onShowBuildUps,
   onDelete,
   onFailure,
   announce,
@@ -146,12 +148,19 @@ export function MaterialDetail({
         </div>
       </div>
       {inUse !== null && (
-        <p className="banner banner-info" role="status">
-          {t(inUse === 1 ? "materials.delete.inUseOne" : "materials.delete.inUseOther", {
-            count: inUse,
-            name: material.name,
-          })}
-        </p>
+        <div className="banner banner-info" role="status">
+          <p>
+            {t(inUse === 1 ? "materials.delete.inUseOne" : "materials.delete.inUseOther", {
+              count: inUse,
+              name: material.name,
+            })}
+          </p>
+          {onShowBuildUps && (
+            <button type="button" className="button button-small" onClick={onShowBuildUps}>
+              {t("materials.delete.showBuildups")}
+            </button>
+          )}
+        </div>
       )}
       <div className="law-card">
         <p>{t("materials.law.line", { law: t(`materials.law.${law.kind}` as MessageKey) })}</p>

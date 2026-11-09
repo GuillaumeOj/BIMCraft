@@ -374,6 +374,10 @@ export function fakeMaterials() {
       snapshots = [];
       base = structuredClone(materials);
     },
+    /** Records a step of another module in the shared history, so that Undo has something to undo. */
+    record: (command: string) => commit(command),
+    /** The name and category of a material, or undefined. */
+    lookup: (id: unknown) => materials.find((entry) => entry.id === id),
     commands: [
       "materials.add_from_library",
       "materials.create",

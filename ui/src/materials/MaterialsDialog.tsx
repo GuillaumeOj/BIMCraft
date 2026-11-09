@@ -23,7 +23,14 @@ import "./materials.css";
 type View = "detail" | "library" | "new";
 
 /** The Materials dialog (F1): the project's materials, the library and the values of each. */
-export function MaterialsDialog({ onClose }: { onClose: () => void }) {
+export function MaterialsDialog({
+  onClose,
+  onShowBuildUps,
+}: {
+  onClose: () => void;
+  /** Shows the build-ups that use a material; absent where the dialog is stacked over them. */
+  onShowBuildUps?: () => void;
+}) {
   const { t } = useI18n();
   const api = useApi();
   const { notify } = useShellState();
@@ -194,6 +201,7 @@ export function MaterialsDialog({ onClose }: { onClose: () => void }) {
               renaming={renaming}
               setRenaming={setRenaming}
               inUse={inUse}
+              onShowBuildUps={onShowBuildUps}
               onDelete={startDelete}
               onFailure={fail}
               announce={setAnnouncement}

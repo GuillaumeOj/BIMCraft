@@ -138,6 +138,31 @@ describe("Shell", () => {
     expect(screen.getByRole("dialog", { name: "Project location" })).toBeInTheDocument();
   });
 
+  it("opens the Build-ups dialog from the title bar and with Ctrl+Shift+B", async () => {
+    const user = renderShell();
+    const button = screen.getByRole("button", { name: "Build-ups…" });
+    expect(button).toHaveAttribute("aria-keyshortcuts", "Control+Shift+B Meta+Shift+B");
+    await user.click(button);
+    expect(await screen.findByRole("dialog", { name: "Build-ups" })).toBeInTheDocument();
+    await user.keyboard("{Escape}");
+    expect(button).toHaveFocus();
+    await user.keyboard("{Control>}{Shift>}B{/Shift}{/Control}");
+    expect(await screen.findByRole("dialog", { name: "Build-ups" })).toBeInTheDocument();
+  });
+
+  it("goes from the in-use message of a material to the build-ups", async () => {
+    const core = fakeCore();
+    core.materials.seed("en1992-1-1/C25/30");
+    core.materials.setUsedBy("C25/30", 2);
+    const user = renderWithCore(<Shell />, core).user;
+    await user.click(screen.getByRole("button", { name: "Materials…" }));
+    await user.click(await screen.findByRole("button", { name: "Actions for C25/30" }));
+    await user.click(screen.getByRole("menuitem", { name: "Delete…" }));
+    await user.click(await screen.findByRole("button", { name: "Show build-ups…" }));
+    expect(await screen.findByRole("dialog", { name: "Build-ups" })).toBeInTheDocument();
+    expect(screen.queryByRole("dialog", { name: "Materials" })).not.toBeInTheDocument();
+  });
+
   it("keeps the keyboard in the Project location dialog: F6 and Ctrl+Shift+K do nothing", async () => {
     const user = renderShell();
     await user.click(screen.getByRole("button", { name: "Project location…" }));
