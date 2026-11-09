@@ -10,8 +10,8 @@ Chaque mur, dalle, poutre ou poteau est fait d'un matériau, par exemple une cla
 
 | Matériau | Classes | Valeurs selon |
 | --- | --- | --- |
-| Béton | C20/25, C25/30, C30/37, C35/45, C40/50, C45/55, C50/60 | EN 1992-1-1:2004 (Eurocode 2) |
-| Acier d'armature | B500B | EN 1992-1-1:2004, annexe C |
+| Béton | C12/15, C16/20, C20/25, C25/30, C30/37, C35/45, C40/50, C45/55, C50/60 | EN 1992-1-1:2004 (Eurocode 2) |
+| Acier d'armature | B500A, B500B, B500C | EN 1992-1-1:2004, annexe C |
 | Acier de construction | S235, S275, S355, S420, S460 | EN 1993-1-1:2005 (Eurocode 3), pour des éléments jusqu'à 40 mm d'épaisseur |
 
 Une classe de béton comme C30/37 donne sa résistance caractéristique sur cylindre, puis sur cube, en mégapascals (MPa).
@@ -31,19 +31,18 @@ Les valeurs de la bibliothèque sont des valeurs *caractéristiques*. Les coeffi
 
 ## Ajouter vos propres classes
 
-Vous pouvez ajouter des classes absentes de la bibliothèque, par exemple une classe de bois ou un produit issu de la fiche technique d'un fabricant. Un fichier de bibliothèque liste des matériaux sous la même forme que ceux fournis. Chaque valeur est en unités SI (pascals pour les résistances et modules, kilogrammes par mètre cube pour la masse volumique, nombres sans unité pour les déformations et rapports) et indique son document et son article :
+Vous pouvez ajouter des classes absentes de la bibliothèque, par exemple un produit issu de la fiche technique d'un fabricant. Un fichier de bibliothèque liste des matériaux sous la même forme que ceux fournis. Chaque valeur est en unités SI (pascals pour les résistances et modules, kilogrammes par mètre cube pour la masse volumique, nombres sans unité pour les déformations et rapports) et indique son document et son article :
 
 ```json
 {
   "format": 1,
   "materials": [
     {
-      "name": "GL24h",
-      "category": "other",
+      "name": "Panneau fournisseur",
+      "category": "generic",
       "behaviour_law": "linear_elastic",
-      "design_code": "EN 14080:2013",
       "properties": {
-        "YoungModulus": { "value": 11.5e9, "document": "EN 14080:2013", "clause": "Table 5" }
+        "e_modulus": { "value": 4.0e9, "document": "Fiche technique fournisseur 2025", "clause": "Tableau 2" }
       }
     }
   ]
@@ -59,11 +58,11 @@ Vous pouvez ajouter des classes absentes de la bibliothèque, par exemple une cl
 
 ## Dépannage
 
-**« material #… has the name of another material »**
+**« material #… has the key of another material »**
 Le fichier ajoute une classe qui existe déjà, ou en liste une deux fois. Renommez-la, par exemple « C30/37 (projet) ».
 
-**« material #… is not valid: the behaviour law needs the property … »**
-La loi de comportement lit une propriété que le matériau ne donne pas. Un matériau élastique linéaire a besoin de son module d'Young ; un béton de sa résistance, de ses déformations au pic et ultime et de l'exposant de la parabole ; un acier de sa limite d'élasticité et de son module d'Young.
+**« material #… is not valid: the material needs the property … »**
+La loi de comportement, ou la catégorie, a besoin d'une propriété que le matériau ne donne pas. Un matériau élastique linéaire a besoin de son module d'Young ; un béton de sa résistance, de ses déformations au pic et ultime et de l'exposant de la parabole ; un acier de sa limite d'élasticité et de son module d'Young.
 
 **« material #… is not valid: the property … is out of range »**
 Une valeur est négative, nulle ou non physique, par exemple un coefficient de Poisson de 0,5 ou plus. Vérifiez son unité : les résistances sont en pascals, 30 MPa s'écrit donc 30e6.
@@ -71,7 +70,7 @@ Une valeur est négative, nulle ou non physique, par exemple un coefficient de P
 **« material #…: the source of … is not valid »**
 Une valeur n'a pas de document ou pas d'article. Chaque valeur a besoin des deux.
 
-**« the library file is not valid at line …, column … »**
+**« the library source is not valid at line …, column … »**
 Le fichier n'est pas un JSON valide, ou utilise une clé que BIMCraft ne connaît pas. Vérifiez l'endroit indiqué par le message.
 
 ## Voir aussi

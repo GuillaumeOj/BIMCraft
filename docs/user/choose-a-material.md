@@ -10,8 +10,8 @@ Every wall, slab, beam or column is made of a material, such as a concrete or a 
 
 | Material | Grades | Values follow |
 | --- | --- | --- |
-| Concrete | C20/25, C25/30, C30/37, C35/45, C40/50, C45/55, C50/60 | EN 1992-1-1:2004 (Eurocode 2) |
-| Reinforcing steel | B500B | EN 1992-1-1:2004, Annex C |
+| Concrete | C12/15, C16/20, C20/25, C25/30, C30/37, C35/45, C40/50, C45/55, C50/60 | EN 1992-1-1:2004 (Eurocode 2) |
+| Reinforcing steel | B500A, B500B, B500C | EN 1992-1-1:2004, Annex C |
 | Structural steel | S235, S275, S355, S420, S460 | EN 1993-1-1:2005 (Eurocode 3), for elements up to 40 mm thick |
 
 A concrete grade such as C30/37 gives its characteristic cylinder strength, then its cube strength, in megapascals (MPa).
@@ -31,19 +31,18 @@ The library values are *characteristic* values. Partial safety factors are not p
 
 ## Add your own grades
 
-You can add grades that the library does not have, such as a timber grade or a product from a manufacturer's data sheet. A library file lists materials in the same form as the built-in ones. Each value is in SI units (pascals for strengths and moduli, kilograms per cubic metre for density, plain numbers for strains and ratios) and names its document and clause:
+You can add grades that the library does not have, such as a product from a manufacturer's data sheet. A library file lists materials in the same form as the built-in ones. Each value is in SI units (pascals for strengths and moduli, kilograms per cubic metre for density, plain numbers for strains and ratios) and names its document and clause:
 
 ```json
 {
   "format": 1,
   "materials": [
     {
-      "name": "GL24h",
-      "category": "other",
+      "name": "Supplier board",
+      "category": "generic",
       "behaviour_law": "linear_elastic",
-      "design_code": "EN 14080:2013",
       "properties": {
-        "YoungModulus": { "value": 11.5e9, "document": "EN 14080:2013", "clause": "Table 5" }
+        "e_modulus": { "value": 4.0e9, "document": "Supplier data sheet 2025", "clause": "Table 2" }
       }
     }
   ]
@@ -59,11 +58,11 @@ You can add grades that the library does not have, such as a timber grade or a p
 
 ## Troubleshooting
 
-**"material #… has the name of another material"**
+**"material #… has the key of another material"**
 The file adds a grade that already exists, or lists one twice. Rename it, for example "C30/37 (project)".
 
-**"material #… is not valid: the behaviour law needs the property …"**
-The behaviour law reads a property that the material does not give. A linear elastic material needs its Young's modulus; a concrete needs its strength, peak and ultimate strains and parabola exponent; a steel needs its yield strength and Young's modulus.
+**"material #… is not valid: the material needs the property …"**
+The behaviour law, or the category, needs a property that the material does not give. A linear elastic material needs its Young's modulus; a concrete needs its strength, peak and ultimate strains and parabola exponent; a steel needs its yield strength and Young's modulus.
 
 **"material #… is not valid: the property … is out of range"**
 A value is negative, zero or not physical, such as a Poisson's ratio of 0.5 or more. Check its unit: strengths are in pascals, so 30 MPa is written 30e6.
@@ -71,7 +70,7 @@ A value is negative, zero or not physical, such as a Poisson's ratio of 0.5 or m
 **"material #…: the source of … is not valid"**
 A value has no document or no clause. Every value needs both.
 
-**"the library file is not valid at line …, column …"**
+**"the library source is not valid at line …, column …"**
 The file is not valid JSON, or uses a key BIMCraft does not know. Check the place the message gives.
 
 ## See also
