@@ -121,3 +121,4 @@ The epic already has an implementation on local branches `claude/244-material-ob
 ## Stack boundaries (lead log)
 
 - PR 1 (#85, MAT-01): ends at `219f8bc` (merge of T1, task 273).
+- PR 2 gate (user decision): the user checks the library values written from memory (EN 338 C18/C22/C27/C35, EN 14080 GL28h/GL32h, the French annex partial factors, the EN ISO 10456 values of the 8 non-structural materials, and the cited law clauses) before the PR request. Lead reminds the user at PR time.
