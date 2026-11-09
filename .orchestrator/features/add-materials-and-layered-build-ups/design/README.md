@@ -1,8 +1,8 @@
-# Materials and build-ups — UI design (sub-issue #86, MAT-02)
+# Materials and build-ups — UI design (sub-issues #86 and #87, MAT-02, MAT-03)
 
 High-fidelity boards for the Materials dialog (flow F1 of `ux-notes.md`). They live in the shared project design file `/Users/guillaume/Library/CloudStorage/GoogleDrive-guillaume.ojardias@gmail.com/My Drive/BIMCraft.figcraft` (outside the repository), page **"4 · Structure modelling"**, after the concept board 4.6, which is unchanged. Each board is the full 1440 × 900 shell, in a light board (top row, y = 0) and a dark board (bottom row, y = 1100, `Mode` = Dark). `ux-notes.md` (from `ux`) is the text twin, with the English copy and the behaviour. The strings in the boards are French.
 
-The build-up boards (F2, page 3, 3.8+) are task T7 and will be added to this file.
+The build-up boards (F2, page 3, 3.8–3.20) are described in [Build-ups](#build-ups-sub-issue-87-mat-03) below.
 
 ## Boards → images
 
@@ -81,3 +81,86 @@ New components are in **Brand guide › 8 · Form and dialog components**. The b
 ## French strings
 
 The French strings are in the boards (and in the images). `front` receives the full French table for `fr.json` by message; it follows the keys of `ux-notes.md` › Copy — F1. French typography: a narrow no-break space before « ? » and « : » and inside « » quotes; numbers use a decimal comma and a narrow no-break space between thousands (2 500 kg/m³).
+
+---
+
+# Build-ups (sub-issue #87, MAT-03)
+
+High-fidelity boards for flow F2 of `ux-notes.md` (with its "Lead decisions" and `api-contract.md` amendments 6–8), in the same shared design file, page **"3 · Architecture modelling"**, boards **3.8–3.20** after the concept boards 3.1–3.7. Board 3.3 "Wall type — layers and location line" is unchanged. Light boards are on the top row (y = 0, from x = 10640, one every 1520), dark boards below them (y = 1100, `Mode` = Dark). The shell is the architecture shell of board 3.3 (plan view, wall selected, 18 % black scrim); its panels stay in English, the dialogs and the title-bar buttons are French.
+
+## Boards → images
+
+2× PNG exports of the light boards, plus three dark samples.
+
+| Board (page "3 · Architecture modelling", `… · light` / `… · dark`) | Image | Notes |
+| --- | --- | --- |
+| 3.8 Build-ups — empty project | `buildups-empty.png` | F2-A. "Aucune composition pour l'instant…" with **Nouvelle composition de mur** (focused, as UX step 1) and **Nouvelle composition de plancher** |
+| 3.9 Build-ups — list, filled, row menu | `buildups-list-row-menu.png`, `buildups-list-row-menu-dark.png` | F2-B. Usage filter (Toutes / Murs / Planchers), **Nouvelle composition…** menu button, five rows (name, "{n} couches · {total} mm", usage tag), first row selected, its row menu open with Modifier… (Entrée), Dupliquer…, Renommer… (F2), Supprimer… (Suppr) |
+| 3.10 Build-ups — duplicate inline | `buildups-duplicate.png` | F2-C. Inline form under the row: "Nom de la copie" focused, "Mur béton 200 + ITE (copie)", Dupliquer / Annuler |
+| 3.11 Build-ups — rename inline | `buildups-rename.png` | F2-D. The row turns into a field (Entrée : enregistrer · Échap : annuler) |
+| 3.12 Build-ups — delete confirmation | `buildups-delete-confirm.png` | F2-E. Inline in the row area, `role="alertdialog"`, default focus on **Conserver la composition**, other rows inert at 45 % |
+| 3.13 Build-up editor — new wall build-up | `buildup-editor-new-wall.png` | One starter layer (Structure, "Choisir un matériau", no thickness, 1 (par défaut), core checked); Name focused; every row action disabled with one layer; totals "0 mm" and "—" with the reason |
+| 3.14 Build-up editor — wall, filled, join priority help | `buildup-editor-wall.png`, `buildup-editor-wall-dark.png` | The reference editor: layer table, layer 3 selected, layer 5 priority overridden ("4" + badge **Modifiée**), air gap with R "—", section preview, totals with "1 couche sans données thermiques…", and the join priority help popover open from the column header |
+| 3.15 Build-up editor — slab, priority reset | `buildup-editor-slab.png` | Slab faces Dessus / Dessous, vertical section preview (top to bottom), membrane at 0 mm, all layers with λ so no partial note; the priority list of layer 3 is open with **Utiliser la valeur par défaut de la fonction (4)** |
+| 3.16 Build-up editor — errors | `buildup-editor-errors.png`, `buildup-editor-errors-dark.png` | Server banner (`role="alert"`); `invalid_thickness` under the thickness of layer 2; `core_not_contiguous` as a group message above the table plus a 3 px `err` rule on the core rows (3, 5) and the gap row (4), error checkboxes, row message "Cette couche est entre deux couches du noyau."; `invalid_material` on the air gap of layer 4 ("Ce matériau ne peut pas être utilisé pour une lame d'air…"); footer "3 problèmes à corriger." |
+| 3.17 Build-up editor — keyboard reordering | `buildup-editor-reorder.png` | After Alt+↑ on Laine de roche: the moved layer is selected, focus stays on its **Monter la couche** button with its visible label "Monter la couche 2 (Alt+↑)"; the dashed annotation under the dialog gives the live-region text (not drawn in the UI) |
+| 3.18 Build-up editor — discard confirmation | `buildup-editor-discard.png` | Cancel / Esc with changes: the footer becomes "Abandonner vos modifications ?", default focus on **Continuer la modification**, danger **Abandonner les modifications**; body inert at 45 % |
+| 3.19 Build-up editor — material picker | `buildup-editor-material-picker.png` | Searchable listbox over the project materials (name + category, selected one checked, active one highlighted), separator, **Gérer les matériaux…** (opens F1 stacked, Ctrl+Maj+M) |
+| 3.20 Build-ups — after Apply, toast with undo | `buildups-applied-toast.png` | Back to the list, applied row selected, `UI / Toast with undo` "Composition appliquée" + Annuler |
+| Brand guide › 8 · Form and dialog components | `ui-components-buildups.png` | The new components (1×) |
+
+## Layout
+
+- **List dialog**: 640 px at (400, 130), same header/footer metrics as the Materials dialog (title 15 semibold, padding 18/20/12/20, footer with **Fermer**).
+- **Editor**: the same dialog frame widened to 960 px at (240, 64) (3.16 at y = 16 to fit the banner and messages). Header (title, subtitle with the face order), **Body (editor component)**, footer owned by the host (note, Annuler, Appliquer). The body is the reusable editor of UX Part 2: Nom (320 px) and Description, an **empty, hidden `Slot / extra (ARC-30 location line)` frame** above the layers where the wall-type editor adds the location line, the **Couches** group (table, Ajouter une couche, Ctrl+Entrée hint), then the section preview and the totals side by side.
+- **Table columns** (918 px): # 64 (number + face label on the first and last rows), Fonction 136, Matériau 180, Épaisseur (mm) 84 (right-aligned), Priorité de jonction 150 (+ ⓘ help), Noyau 72 (+ ⓘ help), R (m²·K/W) 64 (right-aligned, tabular figures), actions 94 (Monter, Descendre, Supprimer). Rows 44 px; selected row = `acc-tint` + 3 px `acc` left rule.
+- **Join priority**: default shows "{n} (par défaut)"; overridden shows the number alone and the `UI / Badge` **Modifiée** (text, not only colour). The list offers 1–5 and, after a separator, **Utiliser la valeur par défaut de la fonction ({n})**.
+- **Section preview** (`aria-hidden`): wall = horizontal strip from Extérieur to Intérieur, slab = vertical stack from Dessus to Dessous. Widths (heights) follow the thickness with a 16 px (3 px for a 0 mm membrane) minimum; fills by function (finish `raised`, insulation `warn-tint`, structure `acc-tint`, air gap dashed outline, membrane `ink2`); core layers carry a hatch and a **Noyau** bracket; the selected layer has a 2 px `acc` outline and an `acc` number; caption "Schématique, pas à l'échelle.". An empty `Overlay / location line (ARC-30)` frame sits over the strip for the future location line.
+- **Totals** (`raised` card): "Épaisseur totale : {mm} mm", "Résistance thermique : {value} m²·K/W" (or "—"), then the partial note "{n} couche(s) sans données thermiques … n'est pas comptée." with an info icon (amendment 7). Values come from `buildups.preview` (amendment 6); the UI does no material maths.
+
+## Components
+
+New, in **Brand guide › 8 · Form and dialog components** (the section description lists them):
+
+| Component | Variants and properties | Use |
+| --- | --- | --- |
+| UI / Build-up row | State = Default, Selected; Name, Summary; exposed Usage tag (`UI / Tag`) and row menu (`UI / Icon button` with More) | List rows. Selected = `acc-tint` + 3 px `acc` rule, summary in `ink2` (never `muted` on a selected row) |
+| UI / Checkbox | State = Checked, Unchecked, Checked error, Unchecked error | Core flag; error variants for `core_not_contiguous` |
+| UI / Icon button | State = Default, Focus (Focus/Ring), Disabled (40 %); nested icon swappable | Row actions and the row menu. The label is in `aria-label` and shown as a `UI / Tooltip` on focus and hover (3.17) |
+| Icons / UI / Move up, Move down, Remove | 16 px, `ink2` stroke | Monter / Descendre / Supprimer la couche |
+
+Reused: `UI / Button primary`, `secondary`, `ghost`, `UI / Button danger`, `UI / Text field`, `UI / Select` (Default, Focus), `UI / Compact field` (Default, Error), `UI / Banner`, `UI / Badge`, `UI / Tag`, `UI / Tooltip`, `UI / Toast with undo`, Icons Info, Error, Check, More, Plus, Reset, Search.
+
+## Contrast
+
+Every colour is bound to the `Mode` / `Core` variables (no new variable). New pairs, computed with `ui/src/shell/contrast.ts`:
+
+| Pair | Light | Dark |
+| --- | --- | --- |
+| muted on surface (face labels, footer note, categories, hints) | 5.86 | 5.60 |
+| ink on hover (active menu and list item) | 14.51 | 9.24 |
+| ink2 on hover (shortcut and category in the active item) | 7.42 | 6.06 |
+| ink on acc-tint (selected layer row) | 13.88 | 9.31 |
+| on-acc on acc (checkbox tick) | 6.39 | 7.52 |
+| acc on surface (checked box, selected number, Gérer les matériaux…) | 6.39 | 6.00 |
+| field-line on surface (unchecked box, 3:1) | 3.43 | 3.71 |
+| err on surface (messages, error rule and checkboxes) | 6.57 | 6.18 |
+| ink2 on raised (table header, totals note) | 7.91 | 6.93 |
+| ink2 on warn-tint / acc-tint (preview outlines, 3:1) | 7.42 / 7.10 | 7.21 / 6.11 |
+
+`muted` on `hover` is only 4.34:1 in dark mode, so text in an active (hovered or keyboard-active) item uses `ink2`, never `muted`.
+
+## Deviations from the UX notes, and points for front
+
+1. **Board numbering** differs from the UX mapping because each list state got its own board: 3.8 empty, 3.9 filled, 3.10 duplicate, 3.11 rename, 3.12 delete, 3.13 new wall, 3.14 wall, 3.15 slab, 3.16 errors, 3.17 reordering, 3.18 discard, 3.19 picker, 3.20 after Apply.
+2. **Preview below the table**, not in a right column: at 960 px the eight columns need the full width, so preview and totals sit side by side under the table (UX allowed "below the table otherwise").
+3. **Slab preview is vertical** (top to bottom), which reads like a slab section; the wall preview stays horizontal.
+4. **The segmented filter has three options**, drawn with the `UI / Segmented toggle` tokens (that component has two); `role="radiogroup"` or a tablist in code.
+5. **"Nouvelle composition…"** is a menu button (`aria-haspopup="menu"`) with the items "Composition de mur" / "Composition de plancher"; the menu is not drawn, it is the row-menu style of 3.9.
+6. **Row messages** sit in a full-width message row under the layer (aligned under the field in error), not inside the cell, so the 44 px rows keep their height; `aria-describedby` points the field at it.
+7. **Material error look**: `UI / Select` has no error variant; 3.16 shows a 2 px `err` border on the select box. Add an Error variant to the select in code.
+8. **Core column header and priority column header** each carry an ⓘ button; the core help text is `buildups.core.help`.
+9. **Live R and totals** in the boards are illustrative values from `buildups.preview`; the material values are examples (the UI never stores them).
+10. **Live region** text is shown in a dashed annotation on 3.17; it is not part of the UI.
+11. **States not drawn**, built from the same parts: F2-F loading (skeleton rows) and `buildups.list` banner with **Réessayer**, filtered empty "Aucune composition de plancher.", `too_many_layers` (Ajouter une couche disabled with tooltip), `unknown_layer` / `not_found` banners, `duplicate_name` under the copy name, the stacked Materials dialog over the editor.
+12. French words chosen: build-up = **composition**, core = **noyau**, substrate = **support**, air gap = **lame d'air**, join priority = **priorité de jonction**; keyboard keys **Entrée**, **Échap**, **Suppr**, **Maj**.

@@ -117,3 +117,7 @@ The epic already has an implementation on local branches `claude/244-material-ob
   - T2: the library grows from 13 grades to about 40 (D4), and the `materials.*` API.
   - T6: `usage`, `function` and `description`; priority 1–5 with defaults by function, mapped to IFC 0–100 in ADR 0019; and the `buildups.*` API. The existing entity names `MaterialLayerSet` / `MaterialLayer` are kept instead of `BuildUp` / `BuildUpLayer` (IFC names); the API stays `buildups.*`.
 - **Commits:** ported commits keep their subject and body, with the references rewritten to this stack's issue (`Refs #85` for T1, `#86` for T2, `#87` for T6) and `#244`/`#245`/`#246` kept as `Refs`. Each ends with the sign-off. The user docs `choose-a-material.md` (EN/FR) from 3940bbe are merged into T5's page `manage-project-materials.md`, so that only one page remains.
+
+## Stack boundaries (lead log)
+
+- PR 1 (#85, MAT-01): ends at `219f8bc` (merge of T1, task 273).
