@@ -19,6 +19,14 @@
   minimumReleaseAge: "14 days",
   // Pins are exact, so a bump rewrites the requirement itself (`=1.0.228` -> `=1.0.229`).
   rangeStrategy: "bump",
+  // One monthly PR refreshes the transitive dependencies of Cargo.lock, fuzz/Cargo.lock and
+  // ui/bun.lock, which otherwise move only with a direct dependency. The 14-day age does not apply
+  // to it: bun still enforces it, from ui/bunfig.toml (Renovate runs `bun install` in ui/), but
+  // cargo has no such guard (docs/dev/quality.md#dependencies).
+  lockFileMaintenance: {
+    enabled: true,
+    schedule: ["before 6am on the first day of the month"],
+  },
   semanticCommits: "enabled",
   packageRules: [
     // One group for both workspaces: fuzz/ path-depends on the root crates and shares exact pins
