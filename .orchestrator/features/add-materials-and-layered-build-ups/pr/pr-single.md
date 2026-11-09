@@ -1,21 +1,24 @@
 ## What and why
 
-Epic #84: materials, a grade library and layered wall and slab build-ups. Everything is in one PR, at the user's choice; the three parts are in order in the history.
+Epic #84: materials, a grade library and layered wall and slab build-ups. It closes the epic, its three sub-issues (#85, #86, #87), and the three stack-step issues that refine them (#244 refines #85, #245 refines #86, #246 refines #87). Everything is in one PR, at the user's choice; the three parts come in order in the history.
 
+Closes #84
 Closes #85
 Closes #86
 Closes #87
-Refs #84, #244, #245, #246
+Closes #244
+Closes #245
+Closes #246
 Requirements: MAT-01, MAT-02, MAT-03, CORE-03, CORE-04, CORE-09, API-02, UI-01, UI-04, UI-06, ENG-02, ENG-03, ENG-04, REP-05, SEC-03
 
-### Material model (#85, MAT-01)
+### Material model (#85, #244; MAT-01)
 
 - Schema: a new `resource` kind, enumerations (`enum:`), and sourced values (`sourced = true`) stored with their document and clause, or "entered by the user". Material values therefore persist, and save then reopen is tested in `crates/host-desktop/tests/material_persistence.rs`.
 - New crate `material` (layer 3, critical, wasm). It has eight categories and these laws: linear elastic, concrete parabola-rectangle and bi-linear, steel bi-linear, timber elastic-brittle, and none. Each law reports its limit strains and initial modulus. Partial factors are given per annex (recommended, FR). A `MaterialOriginal` keeps the library value of an edited value, so it can be reset.
 - `core-model` refuses to delete an object a required reference still targets; the API reports it as `in_use`.
-- ADR 0018 (sourced values) and ADR 0019 (materials and layered build-ups).
+- ADR 0018 (sourced values) and ADR 0019 (materials and layered build-ups). The IFC mapping table declares `IfcMaterial` and its property sets; IFC read and write of materials come with the element export (INT-07).
 
-### Library and Materials dialog (#86, MAT-02)
+### Library and Materials dialog (#86, #245; MAT-02)
 
 - `crates/material/data/*.json`, with 38 grades:
   - concrete (EN 1992-1-1) and reinforcement;
@@ -28,10 +31,10 @@ Requirements: MAT-01, MAT-02, MAT-03, CORE-03, CORE-04, CORE-09, API-02, UI-01, 
 - The `materials.*` API: `library`, `grade`, `list`, `get`, `add_from_library`, `create`, `update` and `delete`. Errors never echo model values.
 - The Materials dialog (Ctrl/Cmd+Shift+M) lets the user add a grade from the library or create a custom material, see each value with its source, edit or reset values, rename, and delete with undo.
 
-### Layered build-ups (#87, MAT-03)
+### Layered build-ups (#87, #246; MAT-03)
 
 - A layer has a material, a thickness, a function (structure, substrate, insulation, air gap, membrane, finish), a priority from 1 to 5 and a core flag. The priority maps to IFC as (5 − p) × 25.
-- The rules report every problem at once. The thermal resistance is a partial sum, R = d/λ, and the layers without data are counted. A material that layers use cannot be deleted.
+- The rules report every problem at once. The thermal resistance is a partial sum, R = d/λ, and the layers without data are counted. A material that layers use cannot be deleted. The mapping table declares `IfcMaterialLayerSet` and `IfcMaterialLayer` (priority, category); the totals and the layer order are checked with typed errors.
 - The `buildups.*` API: `list`, `get`, `preview`, `create`, `update`, `duplicate` and `delete`. `preview` validates a draft without saving, so the UI computes no material maths (ENG-04).
 - The Build-ups dialog (Ctrl/Cmd+Shift+B) has a list and a layer editor, a section preview, inline errors, and keyboard reorder with a live region.
 
