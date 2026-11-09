@@ -34,10 +34,10 @@ pub use library::{
 };
 pub use material::{Category, Material, MaterialError};
 pub use model::{
-    ENTITY, EditError, ORIGINAL_ENTITY, Original, ReadError, commands, delete, originals, read,
-    reset_value, set_value,
+    ENTITY, Edit, EditError, ORIGINAL_ENTITY, Original, ReadError, commands, delete, edit,
+    originals, read, reset_value, set_value,
 };
-pub use property::Property;
+pub use property::{Property, Quantity, Range};
 pub use source::{MAX_TEXT_LEN, Sourced};
 
 /// Property-test settings shared by the crate. A fixed seed keeps runs reproducible; with no

@@ -475,6 +475,12 @@ impl SteelBilinear {
         })
     }
 
+    /// The inclined branch, or `None` for perfectly plastic steel.
+    #[must_use]
+    pub const fn hardening(&self) -> Option<Hardening> {
+        self.hardening
+    }
+
     /// The yield strength.
     #[must_use]
     pub const fn yield_strength(&self) -> Stress {

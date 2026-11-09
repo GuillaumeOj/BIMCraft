@@ -319,3 +319,68 @@ fn the_generic_delete_refuses_a_material_that_originals_still_refer_to() {
     assert!(!document.model().contains(ORIGINAL));
     assert_eq!(document.history().count(), history + 1);
 }
+
+#[test]
+fn several_values_are_checked_together_and_edited_in_one_batch() {
+    let mut document = stored();
+    let ids = |property: Property| match property {
+        Property::YieldStrength => ORIGINAL,
+        _ => OTHER_ORIGINAL,
+    };
+    // fy alone above fu would be refused; both raised together are valid.
+    let alone = edit(
+        document.model(),
+        ID,
+        &[(Property::YieldStrength, Edit::Set(600e6))],
+        ids,
+    );
+    assert!(alone.is_err());
+    let both = [
+        (Property::YieldStrength, Edit::Set(500e6)),
+        (Property::UltimateStrength, Edit::Set(650e6)),
+        (Property::ThermalConductivity, Edit::Set(50.0)),
+    ];
+    let command = edit(document.model(), ID, &both, ids).unwrap();
+    run(&mut document, command);
+    let edited = read(document.model(), ID).unwrap();
+    assert_eq!(
+        edited.property(Property::YieldStrength),
+        Some(&entered(500e6))
+    );
+    assert_eq!(
+        edited.property(Property::UltimateStrength),
+        Some(&entered(650e6))
+    );
+    // Two library values were kept; the conductivity the library never gave was not.
+    let kept = originals(document.model(), ID).unwrap();
+    assert_eq!(kept.len(), 2);
+
+    // Reset restores both library values, and clears the value the library never gave.
+    let all = [
+        (Property::YieldStrength, Edit::Reset),
+        (Property::UltimateStrength, Edit::Reset),
+        (Property::ThermalConductivity, Edit::Reset),
+        (Property::YoungModulus, Edit::Reset),
+    ];
+    let command = edit(document.model(), ID, &all, ids).unwrap();
+    run(&mut document, command);
+    assert_eq!(read(document.model(), ID), Ok(s355()));
+    assert_eq!(originals(document.model(), ID), Ok(Vec::new()));
+}
+
+#[test]
+fn an_edit_repeating_a_property_is_refused() {
+    let document = stored();
+    let twice = [
+        (Property::YieldStrength, Edit::Set(300e6)),
+        (Property::YieldStrength, Edit::Reset),
+    ];
+    assert_eq!(
+        edit(document.model(), ID, &twice, |_| ORIGINAL),
+        Err(EditError::Repeated(Property::YieldStrength))
+    );
+    assert_eq!(
+        EditError::Repeated(Property::YieldStrength).to_string(),
+        "the property fy is edited more than once"
+    );
+}

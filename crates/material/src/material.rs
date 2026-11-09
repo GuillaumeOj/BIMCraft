@@ -345,12 +345,44 @@ impl Material {
             Some(value) => properties.insert(property, value),
             None => properties.remove(&property),
         };
+        self.with_properties(properties)
+    }
+
+    /// The same material with exactly these `properties`, checked like [`Material::new`]: the
+    /// values change together, so one that is invalid alone may be valid with the others.
+    ///
+    /// # Errors
+    ///
+    /// Fails as [`Material::new`] does on the properties.
+    pub fn with_properties(
+        &self,
+        properties: BTreeMap<Property, Sourced<f64>>,
+    ) -> Result<Self, MaterialError> {
         let changed = Self::new(
             &self.name,
             self.category,
             self.law.kind(),
             self.design_code.as_deref(),
             properties,
+        )?;
+        Ok(Self {
+            library_key: self.library_key.clone(),
+            ..changed
+        })
+    }
+
+    /// The same material under another name, checked like [`Material::new`].
+    ///
+    /// # Errors
+    ///
+    /// Fails when the name is empty, too long or holds a control character.
+    pub fn with_name(&self, name: &str) -> Result<Self, MaterialError> {
+        let changed = Self::new(
+            name,
+            self.category,
+            self.law.kind(),
+            self.design_code.as_deref(),
+            self.properties.clone(),
         )?;
         Ok(Self {
             library_key: self.library_key.clone(),
