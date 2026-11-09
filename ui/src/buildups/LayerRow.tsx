@@ -8,8 +8,6 @@ import { ErrorIcon } from "../ui/ErrorIcon";
 import { DEFAULT_PRIORITY, type DraftLayer, defaultCore, effectiveCore, PRIORITIES } from "./draft";
 import type { RowErrors } from "./errors";
 
-/** The value of the material select that opens the Materials dialog. */
-export const MANAGE = "__manage__";
 const USE_DEFAULT = "default";
 
 export type LayerRowProps = {
@@ -89,12 +87,17 @@ export function LayerRow(props: LayerRowProps) {
             className="select"
             aria-label={t("buildups.function.label", { n })}
             value={layer.function}
-            onChange={(event) =>
-              props.onChange({
-                function:
-                  BUILDUP_FUNCTIONS.find((fn) => fn === event.target.value) ?? layer.function,
-              })
-            }
+            onChange={(event) => {
+              const next =
+                BUILDUP_FUNCTIONS.find((fn) => fn === event.target.value) ?? layer.function;
+              // The material select could not show a material the new function does not allow.
+              const dropped =
+                next === "air_gap" &&
+                props.materials.some(
+                  (material) => material.id === layer.material && material.category !== "generic",
+                );
+              props.onChange({ function: next, ...(dropped ? { material: null } : {}) });
+            }}
             {...control("function")}
           >
             {BUILDUP_FUNCTIONS.map((fn) => (
@@ -110,10 +113,7 @@ export function LayerRow(props: LayerRowProps) {
             aria-label={t("buildups.material.label", { n })}
             aria-invalid={errors.material !== undefined}
             value={layer.material ?? ""}
-            onChange={(event) => {
-              if (event.target.value === MANAGE) props.onManage();
-              else props.onChange({ material: event.target.value || null });
-            }}
+            onChange={(event) => props.onChange({ material: event.target.value || null })}
             {...control("material")}
             {...withMaterial("material")}
           >
@@ -123,8 +123,17 @@ export function LayerRow(props: LayerRowProps) {
                 {material.name}
               </option>
             ))}
-            <option value={MANAGE}>{t("buildups.material.manage")}</option>
           </select>
+          {/* A button, not a select option: arrow keys on a closed select pick an option at once,
+              and opening a dialog on input is a change of context (WCAG 3.2.2). */}
+          <button
+            type="button"
+            className="button button-small layer-manage"
+            onClick={props.onManage}
+            {...control("manage")}
+          >
+            {t("buildups.material.manage")}
+          </button>
         </td>
         <td>
           <div
@@ -189,9 +198,14 @@ export function LayerRow(props: LayerRowProps) {
           className="layer-resistance"
           title={props.resistance == null ? t("buildups.resistance.why") : undefined}
         >
-          {props.resistance == null
-            ? t("buildups.resistance.none")
-            : formatNumber(props.resistance, 2, language)}
+          {props.resistance == null ? (
+            <>
+              {t("buildups.resistance.none")}
+              <span className="visually-hidden">{t("buildups.resistance.why")}</span>
+            </>
+          ) : (
+            formatNumber(props.resistance, 2, language)
+          )}
         </td>
         <td className="layer-actions">
           <button

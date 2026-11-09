@@ -40,6 +40,10 @@ export function BuildUpsDialog({ onClose }: { onClose: () => void }) {
   const listRef = useRef<HTMLElement>(null);
   const focusRow = useRef<string | null>(null);
   const latest = useRef(0);
+  // The list that was read last, and a row just created or copied: it stays selected until a list
+  // read after its creation has arrived, which may not contain it (a filter hides it).
+  const answered = useRef(0);
+  const pendingSelection = useRef<{ id: string; after: number } | null>(null);
 
   const reload = useCallback(() => {
     latest.current += 1;
@@ -47,6 +51,7 @@ export function BuildUpsDialog({ onClose }: { onClose: () => void }) {
     listBuildUps(api, filter === "all" ? undefined : filter).then(
       (found) => {
         if (mine !== latest.current) return;
+        answered.current = mine;
         setItems(found);
         setLoadFailed(false);
       },
@@ -68,7 +73,13 @@ export function BuildUpsDialog({ onClose }: { onClose: () => void }) {
 
   // The first row is selected when the dialog opens; a row that has gone is replaced.
   useEffect(() => {
-    if (items === null || items.some((item) => item.id === selected)) return;
+    if (items === null) return;
+    const pending = pendingSelection.current;
+    if (pending !== null) {
+      if (!items.some((item) => item.id === pending.id) && answered.current < pending.after) return;
+      pendingSelection.current = null;
+    }
+    if (items.some((item) => item.id === selected)) return;
     setSelected(items[0]?.id ?? null);
   }, [items, selected]);
 
@@ -114,6 +125,7 @@ export function BuildUpsDialog({ onClose }: { onClose: () => void }) {
     setSelected(applied);
     focusRow.current = applied;
     reload();
+    pendingSelection.current = { id: applied, after: latest.current };
     notify(t("buildups.toast.applied"), { undoable: true });
   };
 
@@ -139,6 +151,7 @@ export function BuildUpsDialog({ onClose }: { onClose: () => void }) {
     setSelected(created);
     focusRow.current = created;
     reload();
+    pendingSelection.current = { id: created, after: latest.current };
   };
 
   const cancel = () => {

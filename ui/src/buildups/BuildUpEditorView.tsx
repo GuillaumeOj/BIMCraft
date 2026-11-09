@@ -13,6 +13,7 @@ import {
 import { useI18n } from "../i18n/I18nProvider";
 import { MaterialsDialog } from "../materials/MaterialsDialog";
 import { Banner } from "../ui/Banner";
+import { ErrorIcon } from "../ui/ErrorIcon";
 import { BuildUpEditor } from "./BuildUpEditor";
 import { type Draft, isDirty, layerInputs } from "./draft";
 import { buildErrors, type CoreError, noErrors } from "./errors";
@@ -192,12 +193,17 @@ export function BuildUpEditorView({ titleId, id, saved, title, onClose, cancelRe
           <DiscardConfirmation onKeep={keepEditing} onDiscard={() => onClose(null)} />
         ) : (
           <>
-            <p className="footer-note">
-              {submitted && errors.count > 0
-                ? t(pluralKey(language, errors.count, "buildups.error.summary"), {
+            <p className="footer-note" data-error={submitted && errors.count > 0}>
+              {submitted && errors.count > 0 ? (
+                <>
+                  <ErrorIcon />
+                  {t(pluralKey(language, errors.count, "buildups.error.summary"), {
                     count: errors.count,
-                  })
-                : t("buildups.footer.note")}
+                  })}
+                </>
+              ) : (
+                t("buildups.footer.note")
+              )}
             </p>
             <div className="dialog-actions">
               <button type="button" className="button" onClick={requestCancel}>

@@ -19,9 +19,20 @@ export function ActionMenu({ children, label, className = "button", items }: Pro
   const [open, setOpen] = useState(false);
   const button = useRef<HTMLButtonElement>(null);
   const menu = useRef<HTMLDivElement>(null);
+  const anchor = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (open) menu.current?.querySelector<HTMLElement>("[role=menuitem]")?.focus();
+  }, [open]);
+
+  // Two menus must not stay open together: a press outside this one closes it.
+  useEffect(() => {
+    if (!open) return;
+    const onPointerDown = (event: PointerEvent) => {
+      if (event.target instanceof Node && !anchor.current?.contains(event.target)) setOpen(false);
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => document.removeEventListener("pointerdown", onPointerDown);
   }, [open]);
 
   const close = () => {
@@ -46,7 +57,7 @@ export function ActionMenu({ children, label, className = "button", items }: Pro
 
   return (
     // biome-ignore lint/a11y/noStaticElementInteractions: Escape and arrows are handled for the menu inside.
-    <div className="menu-anchor" onKeyDown={onKeyDown}>
+    <div className="menu-anchor" ref={anchor} onKeyDown={onKeyDown}>
       <button
         type="button"
         ref={button}

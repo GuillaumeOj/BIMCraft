@@ -25,7 +25,8 @@ function keepTabInside(
   const [first, last] = [stops[0], stops.at(-1)];
   const [edge, other] = event.shiftKey ? [first, last] : [last, first];
   const active = document.activeElement;
-  const inside = active !== null && stops.includes(active as HTMLElement);
+  // A control outside the tab order (tabindex -1, as the rows of a list have) is still inside.
+  const inside = active !== null && (root.contains(active) || (toast?.contains(active) ?? false));
   if (!inside || active === edge) {
     event.preventDefault();
     (inside ? other : first)?.focus();

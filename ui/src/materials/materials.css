@@ -31,6 +31,19 @@
   overflow: auto;
 }
 
+.search-field {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.search-field svg {
+  position: absolute;
+  left: 8px;
+  color: var(--bc-muted);
+  pointer-events: none;
+}
+
 .search,
 .select {
   box-sizing: border-box;
@@ -41,6 +54,11 @@
   background: var(--bc-surface);
   border: 1px solid var(--bc-field-line);
   border-radius: 6px;
+}
+
+.search-field .search {
+  width: 100%;
+  padding-left: 30px;
 }
 
 .material-list {
@@ -354,4 +372,5 @@
 .banner-info {
   color: var(--bc-ink);
   border-color: var(--bc-line);
+  border-left: 4px solid var(--bc-verdigris);
 }

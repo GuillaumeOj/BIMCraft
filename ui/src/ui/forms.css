@@ -180,6 +180,7 @@
   outline-offset: 2px;
 }
 
+.select[aria-invalid="true"],
 .field-input[data-invalid="true"] {
   border-color: var(--bc-danger);
 }
