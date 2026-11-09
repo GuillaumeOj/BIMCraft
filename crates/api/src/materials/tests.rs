@@ -194,7 +194,7 @@ fn laws_are_named_for_the_wire() {
         (json!("elastic_brittle"), Value::Null)
     );
     assert_eq!(
-        kind(&mut session, "bimcraft/Mineral wool"),
+        kind(&mut session, "bimcraft/Rock wool"),
         (json!("none"), Value::Null)
     );
     assert_eq!(

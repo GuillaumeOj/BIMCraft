@@ -1107,7 +1107,7 @@ pub(crate) mod tests {
         let glulam = timber(&timber_properties).unwrap();
         assert_eq!(glulam.law().stress(-0.01), Ok(Quantity::from_si(-24e6)));
         let wool = Material::new(
-            "Mineral wool",
+            "Rock wool",
             Category::Insulation,
             LawKind::None,
             None,

@@ -9,7 +9,7 @@ The grades shipped with BIMCraft (MAT-02), one JSON file per family, loaded by
 | `en1993-1-1.json` | Structural steel S235, S275, S355, S420, S460 (t ≤ 40 mm; fu of S235, S275, S355 to EN 10025-2, of S420 and S460 to EN 10025-3) | EN 1993-1-1:2005, NF EN 1993-1-1/NA:2007, EN 1991-1-1:2002 |
 | `timber.json` | Solid C16 to C35, glulam GL24h, GL28h, GL32h | EN 338:2016, EN 14080:2013, EN 1995-1-1:2004, NF EN 1995-1-1/NA:2010 |
 | `en1996-1-1.json` | Clay and concrete block masonry | EN 1996-1-1:2005 |
-| `non-structural.json` | Plaster, render, EPS, mineral wool, clay brick, concrete block, softwood cladding | Règles Th-Bât, Fascicule Matériaux (2017) |
+| `non-structural.json` | Plaster, render, EPS, rock wool, glass wool, clay brick, concrete block, softwood cladding | Règles Th-Bât, Fascicule Matériaux (2017) |
 
 ## Rules
 
@@ -37,12 +37,12 @@ The grades shipped with BIMCraft (MAT-02), one JSON file per family, loaded by
 
 - The densities are values inside the density bands of Règles Th-Bât, not measured point values:
   the upper limit of the band for plaster, render, brick and block, and the density the band is
-  stated for (EPS 20, mineral wool 30, softwood 500) otherwise.
+  stated for (EPS 20, rock wool and glass wool 30, softwood 500) otherwise.
 - Concrete block takes the conductivity of its no-fines concrete band ("béton caverneux", 1600 to 1800
   kg/m³). It is a generic default: real masonry units are in another fascicule of the rules, which
   was not read.
-- Mineral wool is one entry with the conservative conductivity of rock wool (25 to 40 kg/m³, 0.044).
-  Glass wool (30 to 40 kg/m³) gives 0.039.
+- Mineral wool is two entries: rock wool (25 to 40 kg/m³, 0.044) and glass wool (30 to 40 kg/m³,
+  0.039). Each takes density 30, the lowest density the two bands share.
 - Softwood cladding reads 500 kg/m³ as the density at 15 % moisture; a dry density of 500 would give
   a conductivity of 0.15.
 - These are default values, for use when no declared product value exists. Wood-fibre board has no

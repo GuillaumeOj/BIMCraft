@@ -68,7 +68,7 @@
       }
     },
     {
-      "name": "Mineral wool",
+      "name": "Rock wool",
       "category": "insulation",
       "behaviour_law": "none",
       "properties": {
@@ -79,6 +79,28 @@
         },
         "thermal_conductivity": {
           "value": 0.044,
+          "document": "Règles Th-Bât, Fascicule Matériaux (2017)",
+          "clause": "2.6.2.1"
+        },
+        "specific_heat": {
+          "value": 1030.0,
+          "document": "Règles Th-Bât, Fascicule Matériaux (2017)",
+          "clause": "2.6.2.1"
+        }
+      }
+    },
+    {
+      "name": "Glass wool",
+      "category": "insulation",
+      "behaviour_law": "none",
+      "properties": {
+        "density": {
+          "value": 30.0,
+          "document": "Règles Th-Bât, Fascicule Matériaux (2017)",
+          "clause": "2.6.2.1"
+        },
+        "thermal_conductivity": {
+          "value": 0.039,
           "document": "Règles Th-Bât, Fascicule Matériaux (2017)",
           "clause": "2.6.2.1"
         },
