@@ -149,6 +149,23 @@ describe("duplicating, renaming and deleting", () => {
     expect(core.buildUps.names()).toEqual(["Wall A", "Wall A copy"]);
   });
 
+  it("keeps the copy selected while the list that contains it is still on its way", async () => {
+    const core = await withWall();
+    const { user } = open(core);
+    await row(/Wall A/);
+    const read = core.buildUps.handlers["buildups.list"];
+    core.override("buildups.list", async (params) => {
+      await new Promise((resolve) => setTimeout(resolve, 30));
+      return read?.(params as never);
+    });
+    await menu(user, "Duplicate…");
+    await user.click(screen.getByRole("button", { name: "Duplicate" }));
+    await waitFor(async () =>
+      expect(await row(/Wall A copy/)).toHaveAttribute("aria-current", "true"),
+    );
+    expect(await row(/Wall A(?! copy)/)).toHaveAttribute("aria-current", "false");
+  });
+
   it("refuses a name that is taken or empty, at the field", async () => {
     const { user } = open(await withWall());
     await menu(user, "Duplicate…");
@@ -504,6 +521,14 @@ describe("layers", () => {
     ).toBeInTheDocument();
   });
 
+  it("clears a material that an air gap cannot use, rather than showing a blank select over it", async () => {
+    const { user } = await edit();
+    await user.selectOptions(select("Function of layer 1"), "structure");
+    await user.selectOptions(select("Material of layer 1"), "C25/30");
+    await user.selectOptions(select("Function of layer 1"), "air_gap");
+    expect(select("Material of layer 1")).toHaveDisplayValue("Choose a material");
+  });
+
   it("keeps defaults while the function changes, and marks a chosen priority as modified", async () => {
     const { user } = await edit();
     expect(screen.getByRole("checkbox", { name: "Core, layer 1" })).not.toBeChecked();
@@ -635,10 +660,20 @@ describe("leaving the editor", () => {
 });
 
 describe("the materials of a layer", () => {
+  it("does not offer the Materials dialog as an option of the select", async () => {
+    const { user } = open();
+    await user.click(await screen.findByRole("button", { name: "New wall build-up" }));
+    expect(
+      within(select("Material of layer 1")).queryByRole("option", { name: "Manage materials…" }),
+    ).not.toBeInTheDocument();
+  });
+
   it("opens the Materials dialog over the editor and picks the material that was added", async () => {
     const { user } = open();
     await user.click(await screen.findByRole("button", { name: "New wall build-up" }));
-    await user.selectOptions(select("Material of layer 1"), "Manage materials…");
+    await user.click(
+      screen.getAllByRole("button", { name: "Manage materials…" })[0] as HTMLElement,
+    );
     const materials = await screen.findByRole("dialog", { name: "Materials" });
     await user.click(await within(materials).findByRole("button", { name: "New material…" }));
     await user.type(within(materials).getByRole("textbox", { name: "Name" }), "Brick");
@@ -655,7 +690,9 @@ describe("the materials of a layer", () => {
     const { user } = open();
     await user.click(await screen.findByRole("button", { name: "New wall build-up" }));
     await user.selectOptions(select("Material of layer 1"), "C25/30");
-    await user.selectOptions(select("Material of layer 1"), "Manage materials…");
+    await user.click(
+      screen.getAllByRole("button", { name: "Manage materials…" })[0] as HTMLElement,
+    );
     await user.click(await screen.findByRole("button", { name: "Done" }));
     await waitFor(() =>
       expect(screen.queryByRole("dialog", { name: "Materials" })).not.toBeInTheDocument(),

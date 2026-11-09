@@ -125,4 +125,5 @@ The epic already has an implementation on local branches `claude/244-material-ob
 - PR 2 (#86, MAT-02): ends at `dca3b3e` (merge of T5, task 277; T2 merged before it).
 - PR 3 (#87, MAT-03): ends at `186cee7` (merge of T8, task 280), plus the design review fixes if any.
 - Library value fixes (task 302, T10, after the user's engineer review in `library-review.md`) land at the top of PR 3, with commits marked Refs #86. The PR 3 body says so.
+- PR 3 also carries the design review (task 301, `design/review.md`) and its fixes (task 303, T11; commits marked Refs #87, the Materials ones Refs #86). Integration HEAD after both merges: `976536a`.
 - PR-time fix: commits 3b9df09, b6c0f19, 4c1debd, 13ead78, a942e0f, 10f8f1b (lead) and ba0d987, 81fcfca (ui) have no `Signed-off-by:`. They touch only `.orchestrator/`, which does not ship. Drop or sign them when the stack is cut, before CI's commit check.

@@ -15,6 +15,8 @@
   --bc-verdigris: #0f6b5e;
   --bc-on-verdigris: #ffffff;
   --bc-danger: #b42318;
+  /* The design variable color/warn-tint: the fill of insulation in the build-up preview. */
+  --bc-warn-tint: #fceadc;
   --bc-on-danger: #ffffff;
   /* Borders of form fields: --bc-line is only 1.46:1, below the 3:1 of WCAG 1.4.11. */
   --bc-field-line: #858b94;
@@ -36,6 +38,7 @@
     --bc-verdigris: #4db6a3;
     --bc-on-verdigris: #0e1513;
     --bc-danger: #f28b82;
+    --bc-warn-tint: #3d2a1a;
     --bc-on-danger: #1c1e21;
     --bc-field-line: #7a8089;
     --bc-shadow: 0 4px 16px rgb(0 0 0 / 40%);

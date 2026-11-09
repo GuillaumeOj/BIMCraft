@@ -62,4 +62,13 @@ describe("ActionMenu", () => {
     await user.click(button);
     expect(screen.queryByRole("menu")).not.toBeInTheDocument();
   });
+
+  it("closes when the pointer is pressed outside it, and not when pressed inside", async () => {
+    const { user, button } = setup();
+    await user.click(button);
+    await user.click(screen.getByRole("menu"));
+    expect(screen.getByRole("menu")).toBeInTheDocument();
+    await user.click(document.body);
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+  });
 });

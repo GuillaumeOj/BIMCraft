@@ -40,7 +40,7 @@ Si une couche a un matériau sans conductivité thermique, comme une lame d'air,
 
 ## Choisir ou ajouter un matériau
 
-Dans la liste **Matériau**, choisissez un matériau de votre projet. Le dernier élément, **Gérer les matériaux…**, ouvre la boîte de dialogue Matériaux par-dessus l'éditeur : ajoutez ou créez un matériau, appuyez sur **Terminé**, et le nouveau matériau est choisi pour la couche. Une couche de **lame d'air** ne peut utiliser que des matériaux génériques.
+Dans la liste **Matériau**, choisissez un matériau de votre projet. Le bouton **Gérer les matériaux…** à côté de la liste ouvre la boîte de dialogue Matériaux par-dessus l'éditeur : ajoutez ou créez un matériau, appuyez sur **Terminé**, et le nouveau matériau est choisi pour la couche. Une couche de **lame d'air** ne peut utiliser que des matériaux génériques.
 
 ## Modifier, dupliquer, renommer et supprimer une composition
 
