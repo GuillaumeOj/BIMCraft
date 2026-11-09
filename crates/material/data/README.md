@@ -35,8 +35,10 @@ The grades shipped with BIMCraft (MAT-02), one JSON file per family, loaded by
 
 ### How the non-structural values are read
 
-- The densities are the upper limits of the dry density bands of Règles Th-Bât, not point values.
-- Concrete block takes the conductivity of its lightweight-aggregate concrete band (1600 to 1800
+- The densities are values inside the density bands of Règles Th-Bât, not measured point values:
+  the upper limit of the band for plaster, render, brick and block, and the density the band is
+  stated for (EPS 20, mineral wool 30, softwood 500) otherwise.
+- Concrete block takes the conductivity of its no-fines concrete band ("béton caverneux", 1600 to 1800
   kg/m³). It is a generic default: real masonry units are in another fascicule of the rules, which
   was not read.
 - Mineral wool is one entry with the conservative conductivity of rock wool (25 to 40 kg/m³, 0.044).

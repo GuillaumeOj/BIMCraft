@@ -294,7 +294,7 @@ fn si(material: &Material, property: Property) -> f64 {
 }
 
 #[test]
-fn the_builtin_library_holds_about_forty_grades_of_every_family() {
+fn the_builtin_library_holds_thirty_seven_grades_in_every_family() {
     let library = builtin();
     assert_eq!(library.len(), 37);
     for (prefix, count) in [
@@ -515,7 +515,14 @@ fn the_engineer_review_corrections_are_in_the_library() {
     };
     // EN 338:2016, Table 1 (the engineer's reading, MPa converted to Pa).
     near("en1995-1-1/C16", Property::TimberTensileStrength, 8.5e6);
+    near("en1995-1-1/C18", Property::TimberTensileStrength, 10.0e6);
+    near("en1995-1-1/C27", Property::TimberTensileStrength, 16.5e6);
     near("en1995-1-1/C27", Property::MeanDensity, 430.0);
+    near("en1995-1-1/C27", Property::CharacteristicDensity, 360.0);
+    near("en1995-1-1/C35", Property::TimberTensileStrength, 22.5e6);
+    near("en1995-1-1/C35", Property::TimberShearStrength, 4.0e6);
+    near("en1995-1-1/C35", Property::CharacteristicDensity, 390.0);
+    near("en1995-1-1/C35", Property::MeanDensity, 470.0);
     // Règles Th-Bât, Fascicule Matériaux (2017): conductivities and the removed entry.
     near(
         "bimcraft/Mineral wool",

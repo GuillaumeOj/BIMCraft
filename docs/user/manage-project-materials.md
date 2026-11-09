@@ -81,6 +81,8 @@ A material that build-up layers use cannot be deleted. The dialog tells you how 
 | Masonry | Three common clay and concrete-block masonries | EN 1996-1-1:2005 |
 | Other | Insulation, finishes and generic materials | Règles Th-Bât, Fascicule Matériaux (2017) |
 
+The values of the "Other" materials are default values, for use when you have no declared value from the manufacturer. Replace them with your product's values, and treat the concrete block as a generic default, not a specific masonry unit.
+
 A concrete grade such as C30/37 gives its characteristic cylinder strength, then its cube strength, in megapascals (MPa). The library values are *characteristic* values. Partial safety factors come with the grade for each national annex, so check them, like every value, against your own copy of the standards and the national annex that applies to your project.
 
 ## Add grades from a library file
