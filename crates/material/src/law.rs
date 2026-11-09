@@ -1106,4 +1106,52 @@ mod tests {
             prop_assert!((plateau - 500.0 / divisor).abs() < 1e-9);
         }
     }
+
+    #[test]
+    fn laws_are_described_for_clients_by_category() {
+        let describe = |law: BehaviourLaw, category| law.describe(category);
+        let elastic = describe(elastic(), Category::Generic);
+        assert_eq!(
+            (elastic.kind, elastic.source, elastic.branch),
+            ("linear_elastic", None, None)
+        );
+        let parabola = describe(concrete(), Category::Concrete);
+        assert_eq!(parabola.kind, "parabola_rectangle");
+        assert_eq!(parabola.source, Some(("EN 1992-1-1:2004", "3.1.7(1)")));
+        let bilinear = describe(concrete_bilinear(), Category::Concrete);
+        assert_eq!(bilinear.kind, "bilinear");
+        assert_eq!(bilinear.source, Some(("EN 1992-1-1:2004", "3.1.7(2)")));
+        // The steel law is bi-linear for reinforcement and elastic-plastic for structural steel,
+        // with an inclined top branch when it hardens and a horizontal one when it does not.
+        let rebar = describe(steel(Some(B500B_HARDENING)), Category::Reinforcement);
+        assert_eq!((rebar.kind, rebar.branch), ("bilinear", Some("inclined")));
+        assert_eq!(rebar.source, Some(("EN 1992-1-1:2004", "3.2.7(2)")));
+        let plastic = describe(steel(None), Category::Steel);
+        assert_eq!(
+            (plastic.kind, plastic.branch),
+            ("elastic_plastic", Some("horizontal"))
+        );
+        assert_eq!(plastic.source, Some(("EN 1993-1-1:2005", "5.4.3")));
+        assert_eq!(describe(timber(), Category::Timber).kind, "elastic_brittle");
+        assert_eq!(describe(BehaviourLaw::None, Category::Finish).kind, "none");
+        for kind in [
+            elastic.kind,
+            parabola.kind,
+            bilinear.kind,
+            plastic.kind,
+            "elastic_brittle",
+            "none",
+        ] {
+            assert!(LawDescription::KINDS.contains(&kind), "{kind}");
+        }
+        assert_eq!(
+            steel(None).describe(Category::Steel).kind,
+            "elastic_plastic"
+        );
+        let hardening = match steel(Some(B500B_HARDENING)) {
+            BehaviourLaw::SteelBilinear(law) => law.hardening(),
+            other => panic!("{other:?}"),
+        };
+        assert_eq!(hardening, Some(B500B_HARDENING));
+    }
 }

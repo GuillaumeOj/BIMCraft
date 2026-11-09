@@ -16,12 +16,13 @@ mod edit;
 mod layer_sets;
 
 pub use edit::{
-    Edit, EditError, MAX_NAME_LEN, ORIGINAL_ENTITY, Original, check_name, delete, edit,
-    original_id, original_ids, originals, rename, reset_value, set_value, used_by,
+    Edit, EditError, ORIGINAL_ENTITY, Original, check_name, delete, edit, original_id,
+    original_ids, originals, rename, reset_value, set_value, used_by,
 };
 pub use layer_sets::{
-    LAYER_ENTITY, LAYER_SET_ENTITY, LayerSetReadError, delete_layer_set, layer_ids,
-    layer_set_commands, read_layer_set, replace_layer_set,
+    LAYER_ENTITY, LAYER_SET_ENTITY, LayerSetReadError, check_layers, conductivity,
+    delete_layer_set, fresh_layer_ids, layer_ids, layer_set_commands, read_layer_set,
+    replace_layer_set,
 };
 
 /// The core schema entity that stores materials.

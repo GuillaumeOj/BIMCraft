@@ -259,3 +259,39 @@ fn errors_give_positions_not_values() {
         "the material of air gap 3 is not a generic material"
     );
 }
+
+#[test]
+fn names_and_descriptions_are_bounded() {
+    let layers = wall();
+    let problems = |name: &str, description: Option<&str>| {
+        LayerSet::problems(name, description, &layers, |_| None)
+    };
+    assert_eq!(problems(&"x".repeat(MAX_NAME_LEN), None), []);
+    assert_eq!(
+        problems(&"x".repeat(MAX_NAME_LEN + 1), None),
+        [LayerSetError::TooLong]
+    );
+    assert_eq!(
+        problems("W", Some(&"x".repeat(MAX_TEXT_LEN + 1))),
+        [LayerSetError::TooLong]
+    );
+    assert_eq!(
+        problems("W", Some("a\nb")),
+        [LayerSetError::ControlCharacter]
+    );
+    assert_eq!(problems("W", Some(" ")), []);
+    assert_eq!(
+        LayerSet::new("W", Usage::Wall, Some("a\nb"), wall()),
+        Err(LayerSetError::ControlCharacter)
+    );
+    assert_eq!(
+        LayerSet::new("W", Usage::Wall, Some(" "), wall())
+            .unwrap()
+            .description(),
+        None
+    );
+    assert_eq!(
+        LayerSetError::DuplicateName.to_string(),
+        "another build-up has this name"
+    );
+}

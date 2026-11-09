@@ -208,3 +208,76 @@ fn errors_give_positions_not_values() {
         "the build-up holds a value this version does not know"
     );
 }
+
+#[test]
+fn a_draft_is_checked_against_the_materials_and_names_of_the_project() {
+    let document = stored();
+    let model = document.model();
+    let check =
+        |name: &str, layers: &[Layer], except| check_layers(model, name, None, layers, except);
+    let good = [
+        layer(21, INSULATION, LayerFunction::Insulation, 100.0),
+        layer(22, CONCRETE, LayerFunction::Structure, 200.0),
+    ];
+    assert_eq!(check("Other wall", &good, None), []);
+    // The existing build-up's own name does not clash with itself, another's would.
+    assert_eq!(
+        check("exterior WALL", &good, None),
+        [LayerSetError::DuplicateName]
+    );
+    assert_eq!(check("Exterior wall", &good, Some(SET)), []);
+    // An object that is not a material, and an air gap of a structural material.
+    let mut drafts = good.to_vec();
+    drafts[0].material = SET;
+    drafts[1].function = LayerFunction::AirGap;
+    drafts[1].core = false;
+    assert_eq!(
+        check("Other wall", &drafts, None),
+        [
+            LayerSetError::InvalidMaterial(2),
+            LayerSetError::UnknownMaterial(1)
+        ]
+    );
+}
+
+#[test]
+fn conductivity_comes_from_the_material() {
+    let library = Library::builtin().unwrap();
+    let mut document = stored();
+    let wool = library.get("bimcraft/Mineral wool").unwrap();
+    run(&mut document, commands(EntityId::new(3), wool));
+    assert_eq!(
+        conductivity(document.model(), EntityId::new(3)),
+        Some(0.035)
+    );
+    assert_eq!(conductivity(document.model(), CONCRETE), None);
+    assert_eq!(conductivity(document.model(), SET), None);
+}
+
+#[test]
+fn new_layer_ids_are_derived_free_and_distinct() {
+    let document = stored();
+    let model = document.model();
+    let ids = fresh_layer_ids(model, SET, 5);
+    assert_eq!(ids.len(), 5);
+    assert_eq!(ids, fresh_layer_ids(model, SET, 5));
+    assert_eq!(ids[..2], fresh_layer_ids(model, SET, 2)[..]);
+    let distinct: BTreeSet<_> = ids.iter().collect();
+    assert_eq!(distinct.len(), 5);
+    assert_ne!(ids, fresh_layer_ids(model, CONCRETE, 5));
+    assert!(ids.iter().all(|id| !model.contains(*id)));
+    // An id already in use is skipped, so the next free one is taken.
+    let mut taken = Document::new(crate::test_support::model());
+    let first = fresh_layer_ids(taken.model(), SET, 1)[0];
+    let squatter = ModelCommand::Create {
+        id: first,
+        entity: LAYER_SET_ENTITY.into(),
+        values: vec![
+            ("name".into(), AttributeValue::Text("X".into())),
+            ("usage".into(), AttributeValue::Text("wall".into())),
+            ("layers".into(), AttributeValue::List(Vec::new())),
+        ],
+    };
+    run(&mut taken, squatter);
+    assert_ne!(fresh_layer_ids(taken.model(), SET, 1)[0], first);
+}

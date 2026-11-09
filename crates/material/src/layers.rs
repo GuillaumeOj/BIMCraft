@@ -7,10 +7,11 @@
 use core_model::EntityId;
 use core_model::units::Length;
 use geom::{LINEAR_TOLERANCE, Layer as GeomLayer, LayerId, LocationError};
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::material::Category;
-use crate::source::{MAX_TEXT_LEN, bounded_text};
+use crate::source::{MAX_NAME_LEN, MAX_TEXT_LEN, bounded_text};
 
 /// The most layers a build-up may have.
 pub const MAX_LAYERS: usize = 32;
@@ -18,7 +19,8 @@ pub const MAX_LAYERS: usize = 32;
 pub const MAX_PRIORITY: u8 = 5;
 
 /// What a layer does, which decides its default priority and whether it starts in the core.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum LayerFunction {
     /// The load-bearing layer.
     Structure,
@@ -87,7 +89,8 @@ impl LayerFunction {
 }
 
 /// What a build-up is for.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum Usage {
     /// Layers run from the exterior face to the interior face.
     Wall,
@@ -166,6 +169,9 @@ pub enum LayerSetError {
     /// A name or description holds a control character, such as a line break.
     #[error("a text of the build-up contains a control character")]
     ControlCharacter,
+    /// Another build-up of the project has this name, ignoring case.
+    #[error("another build-up has this name")]
+    DuplicateName,
     /// The build-up has no layer.
     #[error("the build-up has no layers")]
     NoLayers,
@@ -240,12 +246,8 @@ impl LayerSet {
             .transpose()
             .map_err(text_error)?
             .flatten();
-        let geometry = geometry(&layers).map_err(|error| match error {
-            LocationError::EmptyLayerSet => LayerSetError::NoLayers,
-            LocationError::TooManyLayers => LayerSetError::TooManyLayers,
-            LocationError::InvalidThickness(index) => LayerSetError::InvalidThickness(index + 1),
-            _ => LayerSetError::TooThick,
-        })?;
+        // The layers were checked above, so only the total can still be refused.
+        let geometry = geometry(&layers).map_err(|_| LayerSetError::TooThick)?;
         Ok(Self {
             name: name.to_owned(),
             usage,
@@ -268,6 +270,9 @@ impl LayerSet {
     ) -> Vec<LayerSetError> {
         let mut problems = Vec::new();
         match bounded_text(name) {
+            Ok(Some(trimmed)) if trimmed.chars().count() > MAX_NAME_LEN => {
+                problems.push(LayerSetError::TooLong);
+            }
             Ok(Some(_)) => {}
             Ok(None) => problems.push(LayerSetError::EmptyName),
             Err(error) => problems.push(text_error(error)),

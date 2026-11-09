@@ -10,13 +10,10 @@ use thiserror::Error;
 use super::{ENTITY, ReadError, attribute, read, sourced_real, sourced_value};
 use crate::material::MaterialError;
 use crate::property::Property;
-use crate::source::{Sourced, bounded_text};
+use crate::source::{MAX_NAME_LEN, Sourced, bounded_text};
 
 /// The core schema entity that keeps the library value of an edited property.
 pub const ORIGINAL_ENTITY: &str = "MaterialOriginal";
-
-/// The longest material name accepted, in characters.
-pub const MAX_NAME_LEN: usize = 120;
 
 /// The `MaterialOriginal` that keeps `property` of `material`: its id derives from both, so a
 /// replayed command makes the same object (CORE-11) and callers never draw it. FNV-1a over
@@ -258,7 +255,7 @@ pub fn set_value(
     property: Property,
     value: f64,
 ) -> Result<ModelCommand, EditError> {
-    Ok(edit(model, id, &[(property, Edit::Set(value))])?.unwrap_or_else(no_change))
+    edit(model, id, &[(property, Edit::Set(value))])?.ok_or(EditError::NothingToReset(property))
 }
 
 /// The command that restores the library value and source of `property` of material `id`,
@@ -280,13 +277,7 @@ pub fn reset_value(
     {
         return Err(EditError::NothingToReset(property));
     }
-    Ok(edit(model, id, &[(property, Edit::Reset)])?.unwrap_or_else(no_change))
-}
-
-fn no_change() -> ModelCommand {
-    ModelCommand::Batch {
-        commands: Vec::new(),
-    }
+    edit(model, id, &[(property, Edit::Reset)])?.ok_or(EditError::NothingToReset(property))
 }
 
 /// The command that deletes material `id` with the library values kept for it.

@@ -4,6 +4,7 @@ use core_txn::{Document, ModelCommand, Origin};
 use super::super::tests::{ID, s355, stored};
 use super::*;
 use crate::Category;
+use crate::MAX_NAME_LEN;
 
 const ORIGINAL: EntityId = EntityId::new(70);
 const OTHER_ORIGINAL: EntityId = EntityId::new(71);

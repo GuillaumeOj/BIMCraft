@@ -11,8 +11,10 @@ use core_model::{AttributeValue, EntityId, Model, ModelError};
 use core_txn::ModelCommand;
 use thiserror::Error;
 
-use super::{ENTITY as MATERIAL, attribute};
+use super::{ENTITY as MATERIAL, attribute, sourced_real};
 use crate::layers::{Layer, LayerFunction, LayerSet, LayerSetError, Usage};
+use crate::material::Category;
+use crate::property::Property;
 
 /// The core schema entity that stores build-ups.
 pub const LAYER_SET_ENTITY: &str = "MaterialLayerSet";
@@ -40,6 +42,84 @@ pub enum LayerSetReadError {
     /// The model rejected a read.
     #[error(transparent)]
     Model(#[from] ModelError),
+}
+
+/// Every problem of a build-up draft, in the order they are found, with the materials and the
+/// other build-ups' names checked against the model: `except` is the build-up being edited, whose
+/// own name does not clash. An empty list means [`LayerSet::new`] succeeds.
+#[must_use]
+pub fn check_layers(
+    model: &Model,
+    name: &str,
+    description: Option<&str>,
+    layers: &[Layer],
+    except: Option<EntityId>,
+) -> Vec<LayerSetError> {
+    let category_of = |material: EntityId| -> Option<Category> {
+        if model.entity_of(material) != Some(MATERIAL) {
+            return None;
+        }
+        attribute(model, material, "category")
+            .ok()
+            .flatten()
+            .and_then(|stored| Category::from_name(&stored))
+    };
+    let mut problems = LayerSet::problems(name, description, layers, category_of);
+    problems.extend(
+        (1..)
+            .zip(layers)
+            .filter(|(_, layer)| model.entity_of(layer.material) != Some(MATERIAL))
+            .map(|(number, _)| LayerSetError::UnknownMaterial(number)),
+    );
+    if problems.is_empty() && name_taken(model, name, except) {
+        problems.push(LayerSetError::DuplicateName);
+    }
+    problems
+}
+
+/// Whether another build-up than `except` has `name`, ignoring case and surrounding spaces.
+fn name_taken(model: &Model, name: &str, except: Option<EntityId>) -> bool {
+    let lowered = name.trim().to_lowercase();
+    model.store().ids().any(|id| {
+        model.entity_of(id) == Some(LAYER_SET_ENTITY)
+            && Some(id) != except
+            && attribute(model, id, "name")
+                .ok()
+                .flatten()
+                .is_some_and(|other| other.to_lowercase() == lowered)
+    })
+}
+
+/// The conductivity of material `material` in W/(m·K), if it gives one.
+#[must_use]
+pub fn conductivity(model: &Model, material: EntityId) -> Option<f64> {
+    sourced_real(
+        model
+            .get(material, Property::ThermalConductivity.name())
+            .ok()?,
+    )
+    .map(|value| value.value)
+}
+
+/// `count` ids for new layers of build-up `build_up`: derived from it and a counter, so a
+/// replayed command makes the same objects (CORE-11), and none is in use in the model.
+#[must_use]
+pub fn fresh_layer_ids(model: &Model, build_up: EntityId, count: usize) -> Vec<EntityId> {
+    const PRIME: u128 = 0x0000_0000_0100_0000_0000_0000_0000_013B;
+    let mut ids = Vec::with_capacity(count);
+    let mut counter: u64 = 0;
+    while ids.len() < count {
+        let mut state = build_up.get() ^ 0x6C62_272E_07BB_0142_62B8_2175_6295_C58D;
+        for byte in b"layer:".iter().chain(counter.to_be_bytes().iter()) {
+            state = (state ^ u128::from(*byte)).wrapping_mul(PRIME);
+        }
+        let id = EntityId::from_random_bits(state);
+        if !model.contains(id) && !ids.contains(&id) {
+            ids.push(id);
+        }
+        counter += 1;
+    }
+    ids
 }
 
 /// The command that stores `set` as a new build-up object `id`, with a new layer object for each

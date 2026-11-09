@@ -41,16 +41,16 @@ pub use library::{
 };
 pub use material::{Category, Material, MaterialError};
 pub use model::{
-    ENTITY, Edit, EditError, MAX_NAME_LEN, ORIGINAL_ENTITY, Original, ReadError, check_name,
-    commands, delete, edit, original_id, original_ids, originals, read, rename, reset_value,
-    set_value, used_by,
+    ENTITY, Edit, EditError, ORIGINAL_ENTITY, Original, ReadError, check_name, commands, delete,
+    edit, original_id, original_ids, originals, read, rename, reset_value, set_value, used_by,
 };
 pub use model::{
-    LAYER_ENTITY, LAYER_SET_ENTITY, LayerSetReadError, delete_layer_set, layer_ids,
-    layer_set_commands, read_layer_set, replace_layer_set,
+    LAYER_ENTITY, LAYER_SET_ENTITY, LayerSetReadError, check_layers, conductivity,
+    delete_layer_set, fresh_layer_ids, layer_ids, layer_set_commands, read_layer_set,
+    replace_layer_set,
 };
 pub use property::{Property, Quantity, Range};
-pub use source::{MAX_TEXT_LEN, Sourced};
+pub use source::{MAX_NAME_LEN, MAX_TEXT_LEN, Sourced};
 
 /// Property-test settings shared by the crate. A fixed seed keeps runs reproducible; with no
 /// persistence, no regression files are written next to the sources.
