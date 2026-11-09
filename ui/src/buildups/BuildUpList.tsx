@@ -90,7 +90,6 @@ export function BuildUpList(props: Props) {
           onChange={props.onFilter}
         />
         <ActionMenu
-          className="button"
           items={[
             { label: t("buildups.action.newWall"), onSelect: () => props.onNew("wall") },
             { label: t("buildups.action.newSlab"), onSelect: () => props.onNew("slab") },
