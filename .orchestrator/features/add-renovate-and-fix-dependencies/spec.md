@@ -1,6 +1,6 @@
 # Add Renovate and fix dependencies — feature spec
 
-Related requirement: SEC-05 (dependency auditing) and AGENTS.md §4 (exact versions, 14-day release age, Renovate). Developer tooling only: "User docs: N/A (developer tooling, no user-facing change)".
+Related requirement: SEC-05 (dependency auditing) and AGENTS.md §4 (exact versions, 14-day release age, Renovate). Developer tooling only: "User docs: N/A (developer tooling, no user-facing change)". [ux-brief.md](ux-brief.md) and [api-contract.md](api-contract.md) are N/A for the same reason.
 
 ## Starting point (audit of `main` at 6e597ef)
 
