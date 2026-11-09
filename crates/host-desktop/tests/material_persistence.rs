@@ -149,17 +149,12 @@ fn materials_keep_every_value_and_source_after_reopening() {
     let concrete = EntityId::new(1);
     let steel = EntityId::new(2);
     let edits = [
-        (
-            concrete,
-            Property::CharacteristicCompressiveStrength,
-            28e6,
-            101,
-        ),
-        (steel, Property::UltimateStrength, 500e6, 102),
+        (concrete, Property::CharacteristicCompressiveStrength, 28e6),
+        (steel, Property::UltimateStrength, 500e6),
     ];
-    for (id, property, value, original) in edits {
+    for (id, property, value) in edits {
         let model = document.model();
-        let command = material::set_value(model, id, property, value, EntityId::new(original));
+        let command = material::set_value(model, id, property, value);
         document.execute(command.unwrap(), Origin::Ui).unwrap();
     }
     materials[0] = material::read(document.model(), concrete).unwrap();

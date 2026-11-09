@@ -41,8 +41,9 @@ pub use library::{
 };
 pub use material::{Category, Material, MaterialError};
 pub use model::{
-    ENTITY, Edit, EditError, ORIGINAL_ENTITY, Original, ReadError, commands, delete, edit,
-    original_ids, originals, read, reset_value, set_value,
+    ENTITY, Edit, EditError, MAX_NAME_LEN, ORIGINAL_ENTITY, Original, ReadError, check_name,
+    commands, delete, edit, original_id, original_ids, originals, read, rename, reset_value,
+    set_value, used_by,
 };
 pub use model::{
     LAYER_ENTITY, LAYER_SET_ENTITY, LayerSetReadError, delete_layer_set, layer_ids,

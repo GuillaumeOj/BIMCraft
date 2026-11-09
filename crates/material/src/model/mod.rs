@@ -16,8 +16,8 @@ mod edit;
 mod layer_sets;
 
 pub use edit::{
-    Edit, EditError, ORIGINAL_ENTITY, Original, delete, edit, original_ids, originals, reset_value,
-    set_value,
+    Edit, EditError, MAX_NAME_LEN, ORIGINAL_ENTITY, Original, check_name, delete, edit,
+    original_id, original_ids, originals, rename, reset_value, set_value, used_by,
 };
 pub use layer_sets::{
     LAYER_ENTITY, LAYER_SET_ENTITY, LayerSetReadError, delete_layer_set, layer_ids,

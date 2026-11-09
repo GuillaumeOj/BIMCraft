@@ -7,13 +7,84 @@ use core_model::{AttributeValue, EntityId, Model, ModelError, Source};
 use core_txn::ModelCommand;
 use thiserror::Error;
 
-use super::{ENTITY, ReadError, read, sourced_real, sourced_value};
+use super::{ENTITY, ReadError, attribute, read, sourced_real, sourced_value};
 use crate::material::MaterialError;
 use crate::property::Property;
-use crate::source::Sourced;
+use crate::source::{Sourced, bounded_text};
 
 /// The core schema entity that keeps the library value of an edited property.
 pub const ORIGINAL_ENTITY: &str = "MaterialOriginal";
+
+/// The longest material name accepted, in characters.
+pub const MAX_NAME_LEN: usize = 120;
+
+/// The `MaterialOriginal` that keeps `property` of `material`: its id derives from both, so a
+/// replayed command makes the same object (CORE-11) and callers never draw it. FNV-1a over
+/// 128 bits, no randomness.
+#[must_use]
+pub fn original_id(material: EntityId, property: Property) -> EntityId {
+    const PRIME: u128 = 0x0000_0000_0100_0000_0000_0000_0000_013B;
+    let mut state = material.get() ^ 0x6C62_272E_07BB_0142_62B8_2175_6295_C58D;
+    for byte in b"original:".iter().chain(property.name().as_bytes()) {
+        state = (state ^ u128::from(*byte)).wrapping_mul(PRIME);
+    }
+    EntityId::from_random_bits(state)
+}
+
+/// How many objects other than its own `MaterialOriginal`s refer to material `id`.
+///
+/// # Errors
+///
+/// Fails when the model rejects a read.
+pub fn used_by(model: &Model, id: EntityId) -> Result<usize, ModelError> {
+    let originals = original_ids(model, id)?.len();
+    Ok(model.required_referrers(id).saturating_sub(originals))
+}
+
+/// Whether `name` can name a material other than `except`: it is trimmed, 1 to
+/// [`MAX_NAME_LEN`] characters without a control character, and no other material has it,
+/// ignoring case.
+///
+/// # Errors
+///
+/// [`EditError::InvalidName`] or [`EditError::DuplicateName`], or a failed read.
+pub fn check_name(model: &Model, name: &str, except: Option<EntityId>) -> Result<(), EditError> {
+    let Ok(Some(trimmed)) = bounded_text(name) else {
+        return Err(EditError::InvalidName);
+    };
+    if trimmed.chars().count() > MAX_NAME_LEN {
+        return Err(EditError::InvalidName);
+    }
+    let lowered = trimmed.to_lowercase();
+    for id in model.store().ids() {
+        if model.entity_of(id) == Some(ENTITY)
+            && Some(id) != except
+            && attribute(model, id, "name")?.is_some_and(|other| other.to_lowercase() == lowered)
+        {
+            return Err(EditError::DuplicateName);
+        }
+    }
+    Ok(())
+}
+
+/// The command that renames material `id`, or `None` when it already has that name.
+///
+/// # Errors
+///
+/// Fails when `id` is not a valid material, or the name is not valid or taken.
+pub fn rename(model: &Model, id: EntityId, name: &str) -> Result<Option<ModelCommand>, EditError> {
+    let material = read(model, id)?;
+    if name.trim() == material.name() {
+        return Ok(None);
+    }
+    check_name(model, name, Some(id))?;
+    let renamed = material.with_name(name)?;
+    Ok(Some(ModelCommand::Set {
+        id,
+        attribute: "name".to_owned(),
+        value: Some(AttributeValue::Text(renamed.name().to_owned())),
+    }))
+}
 
 /// Why a material could not be edited. Messages never repeat values (SEC-03).
 #[derive(Clone, Debug, Error, PartialEq)]
@@ -27,6 +98,18 @@ pub enum EditError {
     /// The same property is edited twice in one change.
     #[error("the property {} is edited more than once", .0.name())]
     Repeated(Property),
+    /// The name is empty, longer than [`MAX_NAME_LEN`] characters or holds a control character.
+    #[error("the name is not valid")]
+    InvalidName,
+    /// Another material of the project has this name, ignoring case.
+    #[error("another material has this name")]
+    DuplicateName,
+    /// Other objects, such as the layers of build-ups, use the material.
+    #[error("the material is in use")]
+    InUse {
+        /// How many objects use it.
+        used_by: usize,
+    },
     /// The property keeps no library value to restore.
     #[error("the property {} has no library value to restore", .0.name())]
     NothingToReset(Property),
@@ -99,10 +182,11 @@ pub enum Edit {
     Reset,
 }
 
-/// The command that applies `edits` to material `id`, one change per property, as one batch.
+/// The command that applies `edits` to material `id`, one change per property, as one batch, or
+/// `None` when nothing changes.
 /// The values change together, so they are checked together: `fy` and `fu` can both be raised.
 /// The first time a value cited from a document is replaced, a new `MaterialOriginal` object
-/// `original_id(property)` keeps it.
+/// ([`original_id`]) keeps it.
 ///
 /// # Errors
 ///
@@ -112,8 +196,7 @@ pub fn edit(
     model: &Model,
     id: EntityId,
     edits: &[(Property, Edit)],
-    original_id: impl Fn(Property) -> EntityId,
-) -> Result<ModelCommand, EditError> {
+) -> Result<Option<ModelCommand>, EditError> {
     let material = read(model, id)?;
     let kept = originals(model, id)?;
     let mut properties: BTreeMap<Property, Sourced<f64>> = material
@@ -133,7 +216,12 @@ pub fn edit(
                 if let (Some(current), None) = (properties.get(&property), original)
                     && !current.source.is_user()
                 {
-                    commands.push(keep_original(id, property, current, original_id(property)));
+                    commands.push(keep_original(
+                        id,
+                        property,
+                        current,
+                        original_id(id, property),
+                    ));
                 }
                 commands.push(set(id, property, Some(&entered)));
                 properties.insert(property, entered);
@@ -155,12 +243,11 @@ pub fn edit(
         }
     }
     material.with_properties(properties)?;
-    Ok(ModelCommand::Batch { commands })
+    Ok((!commands.is_empty()).then_some(ModelCommand::Batch { commands }))
 }
 
 /// The command that sets `property` of material `id` to `value`, entered by the user. The first
-/// time a value cited from a document is replaced, a new `MaterialOriginal` object `original`
-/// keeps it; `original` is unused otherwise.
+/// time a value cited from a document is replaced, a new `MaterialOriginal` object keeps it.
 ///
 /// # Errors
 ///
@@ -170,9 +257,8 @@ pub fn set_value(
     id: EntityId,
     property: Property,
     value: f64,
-    original: EntityId,
 ) -> Result<ModelCommand, EditError> {
-    edit(model, id, &[(property, Edit::Set(value))], |_| original)
+    Ok(edit(model, id, &[(property, Edit::Set(value))])?.unwrap_or_else(no_change))
 }
 
 /// The command that restores the library value and source of `property` of material `id`,
@@ -194,18 +280,28 @@ pub fn reset_value(
     {
         return Err(EditError::NothingToReset(property));
     }
-    // A reset never keeps a new original, so no id is asked for.
-    edit(model, id, &[(property, Edit::Reset)], |_| id)
+    Ok(edit(model, id, &[(property, Edit::Reset)])?.unwrap_or_else(no_change))
+}
+
+fn no_change() -> ModelCommand {
+    ModelCommand::Batch {
+        commands: Vec::new(),
+    }
 }
 
 /// The command that deletes material `id` with the library values kept for it.
 ///
 /// # Errors
 ///
-/// Fails when `id` is not a material, or the model rejects a read.
+/// Fails when `id` is not a material, other objects use it ([`EditError::InUse`]), or the model
+/// rejects a read.
 pub fn delete(model: &Model, id: EntityId) -> Result<ModelCommand, EditError> {
     if model.entity_of(id) != Some(ENTITY) {
         return Err(ReadError::NotAMaterial.into());
+    }
+    let used_by = used_by(model, id)?;
+    if used_by > 0 {
+        return Err(EditError::InUse { used_by });
     }
     let commands = original_ids(model, id)?
         .into_iter()
