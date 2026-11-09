@@ -18,7 +18,7 @@ use core_model::{EntityId, Model, Source};
 use core_txn::{ModelCommand, Origin};
 use material::{
     BehaviourLaw, Category, ENTITY, Edit, EditError, Factor, LawKind, Library, Material,
-    MaterialError, NationalAnnex, Property, ReadError, Sourced,
+    MaterialError, NationalAnnex, Property, Quantity, Range, ReadError, Sourced,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -125,15 +125,7 @@ fn annex_schema() -> serde_json::Value {
 pub(crate) fn definitions() -> [(String, serde_json::Value); 5] {
     let number = || json!({ "type": "number" });
     let nullable_number = || nullable(number());
-    let quantities = [
-        "stress",
-        "modulus",
-        "density",
-        "strain",
-        "ratio",
-        "thermal_conductivity",
-        "specific_heat",
-    ];
+    let quantities = Quantity::ALL.map(Quantity::name);
     let range = object(
         &[
             ("min", nullable_number()),
@@ -555,21 +547,13 @@ fn law_view(category: Category, law: &BehaviourLaw) -> LawView {
 }
 
 #[derive(Serialize)]
-struct RangeView {
-    min: Option<f64>,
-    min_inclusive: bool,
-    max: Option<f64>,
-    max_inclusive: bool,
-}
-
-#[derive(Serialize)]
 struct PropertyView {
     key: &'static str,
     quantity: &'static str,
     value: Option<f64>,
     source: Option<Source>,
     library_value: Option<f64>,
-    range: RangeView,
+    range: Range,
     required: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     annex: Option<&'static str>,
@@ -594,19 +578,13 @@ fn property_views(
                     .filter(|value| from_library && !value.source.is_user())
                     .map(|value| value.value)
             });
-            let range = property.range();
             PropertyView {
                 key: property.key(),
                 quantity: property.quantity().name(),
                 value: given.map(|value| value.value),
                 source: given.map(|value| value.source.clone()),
                 library_value,
-                range: RangeView {
-                    min: range.min,
-                    min_inclusive: range.min_inclusive,
-                    max: range.max,
-                    max_inclusive: range.max_inclusive,
-                },
+                range: property.range(),
                 required: category.required().contains(&property),
                 annex: property.annex().map(NationalAnnex::name),
             }
@@ -666,17 +644,21 @@ fn list_materials(
     let model = session.document().model();
     let mut items = Vec::new();
     for id in material_ids(model) {
-        let found = read_material(model, id)?;
-        if category.is_some_and(|category| found.category() != category)
-            || !matches(search.as_deref(), &[found.name()])
+        // Only the three attributes the list shows, and the filters first.
+        let name = text_attribute(model, id, "name")?.unwrap_or_default();
+        let found = text_attribute(model, id, "category")?
+            .and_then(|stored| Category::from_name(&stored))
+            .ok_or(ApiError::Internal)?;
+        if category.is_some_and(|category| found != category)
+            || !matches(search.as_deref(), &[&name])
         {
             continue;
         }
         items.push(MaterialSummary {
             id,
-            name: found.name().to_owned(),
-            category: found.category(),
-            grade: found.library_key().map(str::to_owned),
+            name,
+            category: found,
+            grade: text_attribute(model, id, "library_key")?,
             used_by: used_by(model, id)?,
         });
     }
@@ -737,11 +719,24 @@ fn check_name(model: &Model, name: &str, except: Option<EntityId>) -> Result<(),
     }
     let lowered = trimmed.to_lowercase();
     for id in material_ids(model).filter(|&id| Some(id) != except) {
-        if read_material(model, id)?.name().to_lowercase() == lowered {
+        if text_attribute(model, id, "name")?.is_some_and(|name| name.to_lowercase() == lowered) {
             return Err(MaterialsError::DuplicateName.into());
         }
     }
     Ok(())
+}
+
+/// A text attribute of a stored object, read without decoding the whole material.
+fn text_attribute(
+    model: &Model,
+    id: EntityId,
+    attribute: &str,
+) -> Result<Option<String>, ApiError> {
+    match model.get(id, attribute) {
+        Ok(Some(core_model::AttributeValue::Text(text))) => Ok(Some(text)),
+        Ok(_) => Ok(None),
+        Err(_) => Err(ApiError::Internal),
+    }
 }
 
 /// The error a failed material check becomes.

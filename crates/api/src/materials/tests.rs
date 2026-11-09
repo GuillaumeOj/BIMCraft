@@ -765,3 +765,13 @@ fn annexes_are_named_as_the_material_crate_names_them() {
         assert_eq!(input.property().unwrap().annex(), Some(annex));
     }
 }
+
+#[test]
+fn the_laws_a_custom_material_may_follow_are_those_its_category_allows() {
+    for category in Category::ALL {
+        assert!(!laws_for(category).is_empty(), "{category:?}");
+        for law in laws_for(category) {
+            assert!(category.allows(*law), "{category:?} {law:?}");
+        }
+    }
+}

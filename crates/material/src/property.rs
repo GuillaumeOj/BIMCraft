@@ -22,6 +22,17 @@ pub enum Quantity {
 }
 
 impl Quantity {
+    /// Every quantity.
+    pub const ALL: [Self; 7] = [
+        Self::Stress,
+        Self::Modulus,
+        Self::Density,
+        Self::Strain,
+        Self::Ratio,
+        Self::ThermalConductivity,
+        Self::SpecificHeat,
+    ];
+
     /// The name on the wire.
     #[must_use]
     pub const fn name(self) -> &'static str {
@@ -38,7 +49,7 @@ impl Quantity {
 }
 
 /// The bounds of the values a property accepts; `None` is unbounded.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, serde::Serialize)]
 pub struct Range {
     /// The lower bound.
     pub min: Option<f64>,
@@ -346,17 +357,7 @@ impl Property {
     /// Whether `value` is physically meaningful for the property.
     #[must_use]
     pub fn accepts(self, value: f64) -> bool {
-        match self {
-            Self::PoissonRatio => (0.0..0.5).contains(&value),
-            Self::StrainAtPeakStress
-            | Self::UltimateCompressiveStrain
-            | Self::BilinearStrainAtPeakStress
-            | Self::BilinearUltimateCompressiveStrain
-            | Self::UltimateStrain => value > 0.0 && value < 1.0,
-            Self::HardeningRatio => value.is_finite() && value >= 1.0,
-            Self::PartialFactor(factor, _) => factor.accepts(value),
-            _ => value.is_finite() && value > 0.0,
-        }
+        self.range().contains(value)
     }
 }
 
