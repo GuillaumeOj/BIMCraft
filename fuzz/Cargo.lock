@@ -258,6 +258,7 @@ version = "0.0.0"
 dependencies = [
  "core-model",
  "core-txn",
+ "geom",
  "libm",
  "serde",
  "serde_json",
