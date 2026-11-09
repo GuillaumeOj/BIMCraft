@@ -149,6 +149,23 @@ describe("duplicating, renaming and deleting", () => {
     expect(core.buildUps.names()).toEqual(["Wall A", "Wall A copy"]);
   });
 
+  it("keeps the copy selected while the list that contains it is still on its way", async () => {
+    const core = await withWall();
+    const { user } = open(core);
+    await row(/Wall A/);
+    const read = core.buildUps.handlers["buildups.list"];
+    core.override("buildups.list", async (params) => {
+      await new Promise((resolve) => setTimeout(resolve, 30));
+      return read?.(params as never);
+    });
+    await menu(user, "Duplicate…");
+    await user.click(screen.getByRole("button", { name: "Duplicate" }));
+    await waitFor(async () =>
+      expect(await row(/Wall A copy/)).toHaveAttribute("aria-current", "true"),
+    );
+    expect(await row(/Wall A(?! copy)/)).toHaveAttribute("aria-current", "false");
+  });
+
   it("refuses a name that is taken or empty, at the field", async () => {
     const { user } = open(await withWall());
     await menu(user, "Duplicate…");
