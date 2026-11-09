@@ -1,4 +1,5 @@
 import { type KeyboardEvent, useCallback, useEffect, useId, useRef, useState } from "react";
+import { BuildUpsDialog } from "../buildups/BuildUpsDialog";
 import { CoordinatesPanel } from "../georef/CoordinatesPanel";
 import { useGeoref } from "../georef/GeorefContext";
 import { LocationDialog } from "../georef/LocationDialog";
@@ -27,25 +28,19 @@ function nextRegion(backwards: boolean): HTMLElement | undefined {
 const isConsoleShortcut = (event: globalThis.KeyboardEvent) =>
   event.ctrlKey && !event.altKey && !event.metaKey && !event.repeat && event.key === "`";
 
-// Ctrl+Shift+K (Cmd+Shift+K on macOS) shows the Coordinates panel.
-const isCoordinatesShortcut = (event: globalThis.KeyboardEvent) =>
+// Ctrl+Shift+<letter> (Cmd+Shift+<letter> on macOS). Ctrl+Alt is avoided: it is AltGr.
+const isChord = (event: globalThis.KeyboardEvent, letter: string) =>
   (event.ctrlKey || event.metaKey) &&
   event.shiftKey &&
   !event.altKey &&
-  event.key.toLowerCase() === "k";
-
-// Ctrl+Shift+M (Cmd+Shift+M on macOS) opens the Materials dialog.
-const isMaterialsShortcut = (event: globalThis.KeyboardEvent) =>
-  (event.ctrlKey || event.metaKey) &&
-  event.shiftKey &&
-  !event.altKey &&
-  event.key.toLowerCase() === "m";
+  event.key.toLowerCase() === letter;
 
 /**
  * The empty application shell (UI-02, UI-06): title bar, viewport and the panel slots, from the
  * "Workspace" boards of the FigCraft design. F6 and Shift+F6 move focus between the regions;
  * Ctrl+` opens and closes the console, Ctrl+Shift+K shows the Coordinates panel and
- * Ctrl+Shift+L opens the Project location dialog and Ctrl+Shift+M the Materials dialog.
+ * Ctrl+Shift+L opens the Project location dialog, Ctrl+Shift+M the Materials dialog and
+ * Ctrl+Shift+B the Build-ups dialog.
  */
 export function Shell() {
   const { t } = useI18n();
@@ -55,6 +50,7 @@ export function Shell() {
   const { modalOpen } = useShellState();
   const [consoleOpen, setConsoleOpen] = useState(false);
   const [materialsOpen, setMaterialsOpen] = useState(false);
+  const [buildUpsOpen, setBuildUpsOpen] = useState(false);
   const viewport = useRef<HTMLElement>(null);
   const tabs = useRef<Partial<Record<RightPanel, HTMLButtonElement | null>>>({});
 
@@ -70,22 +66,23 @@ export function Shell() {
   }, []);
 
   useEffect(() => {
+    const shortcuts: [
+      (event: globalThis.KeyboardEvent) => boolean,
+      (event: globalThis.KeyboardEvent) => void,
+    ][] = [
+      [isConsoleShortcut, () => setConsoleOpen((open) => !open)],
+      [(event) => isChord(event, "k"), () => selectTab("coordinates")],
+      [(event) => isChord(event, "m"), () => setMaterialsOpen(true)],
+      [(event) => isChord(event, "b"), () => setBuildUpsOpen(true)],
+      [(event) => event.key === "F6", (event) => nextRegion(event.shiftKey)?.focus()],
+    ];
     const onKeyDown = (event: globalThis.KeyboardEvent) => {
       // A modal dialog keeps the keyboard: these shortcuts would move focus behind it.
       if (modalOpen) return;
-      if (isConsoleShortcut(event)) {
-        event.preventDefault();
-        setConsoleOpen((open) => !open);
-      } else if (isCoordinatesShortcut(event)) {
-        event.preventDefault();
-        selectTab("coordinates");
-      } else if (isMaterialsShortcut(event)) {
-        event.preventDefault();
-        setMaterialsOpen(true);
-      } else if (event.key === "F6") {
-        event.preventDefault();
-        nextRegion(event.shiftKey)?.focus();
-      }
+      const action = shortcuts.find(([matches]) => matches(event))?.[1];
+      if (action === undefined) return;
+      event.preventDefault();
+      action(event);
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
@@ -138,6 +135,15 @@ export function Shell() {
           onClick={() => setMaterialsOpen(true)}
         >
           {t("materials.open")}
+        </button>
+        <button
+          type="button"
+          className="ghost-button"
+          aria-haspopup="dialog"
+          aria-keyshortcuts="Control+Shift+B Meta+Shift+B"
+          onClick={() => setBuildUpsOpen(true)}
+        >
+          {t("buildups.open")}
         </button>
         <button
           type="button"
@@ -241,7 +247,16 @@ export function Shell() {
         )}
       </div>
       {dialogOpen && <LocationDialog />}
-      {materialsOpen && <MaterialsDialog onClose={() => setMaterialsOpen(false)} />}
+      {materialsOpen && (
+        <MaterialsDialog
+          onClose={() => setMaterialsOpen(false)}
+          onShowBuildUps={() => {
+            setMaterialsOpen(false);
+            setBuildUpsOpen(true);
+          }}
+        />
+      )}
+      {buildUpsOpen && <BuildUpsDialog onClose={() => setBuildUpsOpen(false)} />}
     </div>
   );
 }

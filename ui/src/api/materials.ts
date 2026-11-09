@@ -38,14 +38,16 @@ export type MaterialRefusal = { reason: string; key: string | null; usedBy: numb
 const asString = (value: unknown): string | null => (typeof value === "string" ? value : null);
 const asNumber = (value: unknown): number | null => (typeof value === "number" ? value : null);
 
-const field = (data: object, name: string): unknown =>
+/** One field of a refusal's `data`, or undefined. */
+export const field = (data: object, name: string): unknown =>
   name in data ? Reflect.get(data, name) : undefined;
 
 /** What the core refused with, or null when `error` is not a refusal carrying a reason. */
 export function materialRefusal(error: unknown): MaterialRefusal | null {
   const reason = apiReason(error);
   if (reason === null || !(error instanceof ApiError)) return null;
-  const data = typeof error.data === "object" && error.data !== null ? error.data : {};
+  // `apiReason` found a reason, so the data is an object.
+  const data = error.data as object;
   // `model.delete` says `count` where `materials.delete` says `used_by`.
   return {
     reason,
