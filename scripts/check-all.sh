@@ -119,6 +119,11 @@ check_fuzz() {
   (
     # Inside fuzz/, rustup picks the nightly pinned in fuzz/rust-toolchain.toml.
     cd fuzz
+    # A Renovate PR that bumps the root workspace leaves this lockfile behind; say how to fix it.
+    cargo metadata --locked --format-version 1 >/dev/null || {
+      echo "check-all: fuzz/Cargo.lock is out of date: run 'cargo update -w' in fuzz/ and commit it (docs/dev/quality.md#fuzzing)" >&2
+      exit 1
+    }
     cargo fmt --check
     # --no-deps: the crates under test are linted on stable by the rust section.
     cargo clippy --all-targets --locked --no-deps -- -D warnings
