@@ -2,12 +2,14 @@ import { act, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ApiClient, ApiProvider, type Transport } from "../api";
 import { I18nProvider } from "../i18n/I18nProvider";
+import { ShellStateProvider, useShellState } from "../shell/ShellState";
 import { fakeCore } from "../test-support/fakeCore";
 import { renderWithCore } from "../test-support/render";
 import { GeorefProvider, useGeoref } from "./GeorefContext";
 
 function Probe() {
-  const { state, dialogOpen, notify } = useGeoref();
+  const { state, dialogOpen } = useGeoref();
+  const { notify } = useShellState();
   return (
     <>
       <p>{`${state.status}${state.status === "ready" ? (state.info === null ? ":none" : ":placed") : ""}${state.status === "ready" && state.reloadError ? ":reload-failed" : ""}`}</p>
@@ -62,9 +64,11 @@ describe("GeorefProvider", () => {
     render(
       <I18nProvider>
         <ApiProvider client={new ApiClient(transport)}>
-          <GeorefProvider>
-            <Probe />
-          </GeorefProvider>
+          <ShellStateProvider>
+            <GeorefProvider>
+              <Probe />
+            </GeorefProvider>
+          </ShellStateProvider>
         </ApiProvider>
       </I18nProvider>,
     );
@@ -121,7 +125,7 @@ describe("GeorefProvider", () => {
     expect(screen.getByRole("status")).toHaveTextContent("Hello");
     act(() => screen.getByRole("button", { name: "Notify second" }).click());
     expect(screen.getByRole("status")).toHaveTextContent("Second");
-    act(() => vi.advanceTimersByTime(5001));
+    act(() => vi.advanceTimersByTime(7001));
     expect(screen.getByRole("status")).toBeEmptyDOMElement();
   });
 
@@ -138,9 +142,11 @@ describe("GeorefProvider", () => {
     const { unmount } = render(
       <I18nProvider>
         <ApiProvider client={new ApiClient(transport)}>
-          <GeorefProvider>
-            <Probe />
-          </GeorefProvider>
+          <ShellStateProvider>
+            <GeorefProvider>
+              <Probe />
+            </GeorefProvider>
+          </ShellStateProvider>
         </ApiProvider>
       </I18nProvider>,
     );

@@ -9,6 +9,7 @@ import {
   useState,
 } from "react";
 import { apiReason, type Queries, useApi } from "../api";
+import { useShellState } from "../shell/ShellState";
 
 /** The project's georeference with its derived values (`georef.get`). */
 export type GeorefInfo = NonNullable<Queries["georef.get"]["result"]["georeference"]>;
@@ -24,11 +25,7 @@ export type Georef = {
   dialogOpen: boolean;
   openDialog: () => void;
   closeDialog: () => void;
-  /** Shows `message` for a few seconds and announces it. */
-  notify: (message: string) => void;
 };
-
-const TOAST_MS = 5000;
 
 const GeorefContext = createContext<Georef | null>(null);
 
@@ -48,9 +45,8 @@ export function GeorefProvider({ children }: { children: ReactNode }) {
   const api = useApi();
   const [state, setState] = useState<GeorefState>({ status: "loading" });
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [toast, setToast] = useState<string | null>(null);
+  const { modalOpen } = useShellState();
   const latest = useRef(0);
-  const toastTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   const load = useCallback(async () => {
     latest.current += 1;
@@ -91,21 +87,14 @@ export function GeorefProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (!isOpenShortcut(event)) return;
+      // A modal dialog keeps the keyboard.
+      if (!isOpenShortcut(event) || modalOpen) return;
       event.preventDefault();
       setDialogOpen(true);
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, []);
-
-  useEffect(() => () => clearTimeout(toastTimer.current), []);
-
-  const notify = useCallback((message: string) => {
-    clearTimeout(toastTimer.current);
-    setToast(message);
-    toastTimer.current = setTimeout(() => setToast(null), TOAST_MS);
-  }, []);
+  }, [modalOpen]);
 
   const value = useMemo<Georef>(
     () => ({
@@ -113,20 +102,11 @@ export function GeorefProvider({ children }: { children: ReactNode }) {
       dialogOpen,
       openDialog: () => setDialogOpen(true),
       closeDialog: () => setDialogOpen(false),
-      notify,
     }),
-    [state, dialogOpen, notify],
+    [state, dialogOpen],
   );
 
-  return (
-    <GeorefContext.Provider value={value}>
-      {children}
-      {/* A live region present from the start, so that the first message is announced. */}
-      <div className="toast-region" role="status">
-        {toast !== null && <p className="toast">{toast}</p>}
-      </div>
-    </GeorefContext.Provider>
-  );
+  return <GeorefContext.Provider value={value}>{children}</GeorefContext.Provider>;
 }
 
 /** The georeference state and the dialog controls. */

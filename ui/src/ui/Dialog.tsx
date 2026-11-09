@@ -1,4 +1,5 @@
 import { type KeyboardEvent, type ReactNode, useEffect, useRef, useState } from "react";
+import { useShellState } from "../shell/ShellState";
 import "./forms.css";
 
 const FOCUSABLE =
@@ -39,6 +40,9 @@ export function Dialog({ titleId, onCancel, children }: DialogProps) {
   const dialog = useRef<HTMLDivElement>(null);
   // Read while rendering: the content's effects move the focus before this component's.
   const [opener] = useState(() => document.activeElement);
+  const { registerModal } = useShellState();
+
+  useEffect(registerModal, [registerModal]);
 
   useEffect(() => {
     if (!dialog.current?.contains(document.activeElement)) dialog.current?.focus();

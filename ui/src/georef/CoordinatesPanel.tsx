@@ -2,6 +2,7 @@ import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { apiReason, useApi } from "../api";
 import { useI18n } from "../i18n/I18nProvider";
 import type { MessageKey } from "../i18n/i18n";
+import { useShellState } from "../shell/ShellState";
 import { Banner } from "../ui/Banner";
 import { CoordinateBlock } from "./CoordinateBlock";
 import { loadErrorMessage } from "./formModel";
@@ -32,7 +33,7 @@ const BLANK: Texts = ["", "", ""];
 function Converter({ info, pickedPoint }: { info: GeorefInfo; pickedPoint: PickedPoint | null }) {
   const api = useApi();
   const { t, language } = useI18n();
-  const { notify } = useGeoref();
+  const { notify } = useShellState();
   const tooltipId = useId();
   const [format, setFormat] = useState<GeographicFormat>("decimal");
   const [texts, setTexts] = useState<Blocks>({
