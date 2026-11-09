@@ -41,12 +41,12 @@ const STEEL: u128 = 4;
 const BRICK: u128 = 5;
 const WALL: u128 = 10;
 
-/// A project with concrete, mineral wool (which gives a conductivity), plaster and steel.
+/// A project with concrete, rock wool (which gives a conductivity), plaster and steel.
 fn project() -> Session {
     let mut session = session();
     for (raw, key) in [
         (CONCRETE, "en1992-1-1/C30/37"),
-        (WOOL, "bimcraft/Mineral wool"),
+        (WOOL, "bimcraft/Rock wool"),
         (PLASTER, "bimcraft/Gypsum plaster"),
         (STEEL, "en1993-1-1/S355"),
         (BRICK, "bimcraft/Clay brick"),
@@ -114,7 +114,7 @@ fn a_build_up_is_created_with_defaults_and_derived_layer_ids() {
         })
         .collect();
     assert_eq!(defaults, [(5, false), (3, false), (1, true)]);
-    assert_eq!(detail["layers"][1]["material_name"], "Mineral wool");
+    assert_eq!(detail["layers"][1]["material_name"], "Rock wool");
     assert!((detail["total_thickness"].as_f64().unwrap() - 0.30).abs() < 1e-12);
     // R: plaster 0.02 / 0.40 = 0.05, wool 0.12 / 0.044 = 2.7273, concrete has no λ in the library.
     let wool = detail["layers"][1]["thermal_resistance"].as_f64().unwrap();

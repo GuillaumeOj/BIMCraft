@@ -244,7 +244,7 @@ fn a_draft_is_checked_against_the_materials_and_names_of_the_project() {
 fn conductivity_comes_from_the_material() {
     let library = Library::builtin().unwrap();
     let mut document = stored();
-    let wool = library.get("bimcraft/Mineral wool").unwrap();
+    let wool = library.get("bimcraft/Rock wool").unwrap();
     run(&mut document, commands(EntityId::new(3), wool));
     assert_eq!(
         conductivity(document.model(), EntityId::new(3)),
