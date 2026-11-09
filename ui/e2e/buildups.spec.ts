@@ -71,9 +71,12 @@ async function start(page: Page) {
 test("a wall build-up is built, reordered from the keyboard and applied", async ({ page }) => {
   await start(page);
   await page.keyboard.press("Control+Shift+B");
-  const dialog = page.getByRole("dialog", { name: "Build-ups" });
+  // The dialog is named after its view: "Build-ups" for the list, the editor's title while editing.
+  const dialog = page.getByRole("dialog");
+  await expect(page.getByRole("dialog", { name: "Build-ups" })).toBeVisible();
   await expect(dialog.getByText(/No build-ups yet/)).toBeVisible();
   await dialog.getByRole("button", { name: "New wall build-up" }).click();
+  await expect(page.getByRole("dialog", { name: "New wall build-up" })).toBeVisible();
 
   const name = dialog.getByRole("textbox", { name: "Name" });
   await expect(name).toBeFocused();
@@ -105,6 +108,7 @@ test("a wall build-up is built, reordered from the keyboard and applied", async 
 
   await dialog.getByRole("button", { name: "Apply" }).click();
   await expect(page.getByRole("status").filter({ hasText: "Build-up applied" })).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "Build-ups" })).toBeVisible();
   const row = dialog.getByRole("button", { name: /^Wall 200 \+ insulation/ });
   await expect(row).toContainText("2 layers · 300.5 mm");
   await expect(row).toBeFocused();
