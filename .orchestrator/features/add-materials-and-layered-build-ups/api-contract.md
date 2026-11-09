@@ -58,31 +58,42 @@ Details:
 
 ## Build-ups (#87)
 
+Final shapes, as implemented in T6 (the generated types in `ui/src/api/protocol.gen.ts` are the reference). Commands take the **id of the build-up they create**; the ids of new layers derive from it, so the UI draws none. A layer that already exists keeps its id when `buildups.update` names it (ADR 0010).
+
 ```ts
-type Usage = "wall" | "slab";
-type LayerFunction = "structure" | "substrate" | "insulation" | "air_gap" | "membrane" | "finish";
-type LayerInput = {
-  id?: string;              // existing layer: keeps its LayerId (ADR 0010); absent = new layer
-  material: string;         // project material id
-  thickness: number;        // metres
-  function: LayerFunction;
-  priority?: 1 | 2 | 3 | 4 | 5;  // default from function: structure 1, substrate 2, insulation 3, air_gap 3, membrane 4, finish 5
+type BuildUpUsage = "wall" | "slab";
+type BuildUpFunction = "structure" | "substrate" | "insulation" | "air_gap" | "membrane" | "finish";
+type BuildUpLayerInput = {
+  id?: EntityId;            // update only: an existing layer of this build-up keeps its identity; absent = new layer
+  material: EntityId;       // project material id
+  thickness: number;        // metres; > 0, except a membrane, which may be 0
+  function: BuildUpFunction;
+  priority?: number;        // 1 (highest) … 5; default from the function: structure 1, substrate 2, insulation 3, air_gap 3, membrane 4, finish 5
   core?: boolean;           // default: function === "structure"
   name?: string;
 };
-type Layer = Required<Omit<LayerInput, "name">> & { name: string | null; material_name: string; thermal_resistance: number | null };
+type BuildUpLayer = {
+  id: EntityId; material: EntityId; material_name: string; thickness: number; function: BuildUpFunction;
+  priority: number; core: boolean; name: string | null; thermal_resistance: number | null; // d / λ, m²·K/W
+};
 ```
 
 | Method | Params | Result |
 | --- | --- | --- |
-| `buildups.list` (query) | `{ usage?: Usage }` | `{ items: { id, name, usage: Usage, layer_count: number, total_thickness: number }[] }` |
-| `buildups.get` (query) | `{ buildup: string }` | `{ id, name, usage, description: string \| null, layers: Layer[], total_thickness: number, thermal_resistance: number \| null }` (layers exterior → interior, or top → bottom) |
-| `buildups.create` (command) | `{ name: string, usage: Usage, description?: string, layers: LayerInput[] }` | `{ id: string, layers: string[] }` |
-| `buildups.update` (command) | `{ buildup: string, name?: string, description?: string \| null, layers?: LayerInput[] }` — `layers` replaces the whole list in order; layers left out are deleted | `{ layers: string[] }` |
-| `buildups.duplicate` (command) | `{ buildup: string, name: string }` | `{ id: string }` (new layer ids) |
-| `buildups.delete` (command) | `{ buildup: string }` | `{}` (its layers go with it) |
+| `buildups.list` (query) | `{ usage?: BuildUpUsage }` | `{ items: { id, name, usage, layer_count: number, total_thickness: number }[] }`, sorted by name |
+| `buildups.get` (query) | `{ buildup: EntityId }` | `{ id, name, usage, description: string \| null, layers: BuildUpLayer[], total_thickness, thermal_resistance: number \| null, layers_without_thermal_data: number }` (layers exterior → interior, or top → bottom) |
+| `buildups.preview` (query) | `{ usage: BuildUpUsage, layers: BuildUpLayerInput[] }` (at most 33) | `{ layers: { priority, core, thermal_resistance: number \| null }[], total_thickness, thermal_resistance: number \| null, layers_without_thermal_data: number, errors: { code: string, index?: number }[] }` — validates without saving and returns every error at once; `id`s in the draft only serve to spot a layer used twice |
+| `buildups.create` (command) | `{ id: EntityId, name: string, usage: BuildUpUsage, description?: string, layers: BuildUpLayerInput[] }` | `{ id, layers: EntityId[] }` |
+| `buildups.update` (command) | `{ buildup: EntityId, name?: string, usage?: BuildUpUsage, description?: string \| null, layers?: BuildUpLayerInput[] }` — `layers` replaces the whole list in order; layers left out are deleted; `description: null` clears it | `{ layers: EntityId[] }` |
+| `buildups.duplicate` (command) | `{ buildup: EntityId, id: EntityId, name: string }` | `{ id, layers: EntityId[] }` (new layer ids) |
+| `buildups.delete` (command) | `{ buildup: EntityId }` | `{}` (its layers go with it, in one undo step) |
 
-Errors (with `index` of the offending layer where it applies): `not_found`, `invalid_name`, `duplicate_name`, `no_layers`, `too_many_layers` (> 32), `invalid_thickness`, `core_not_contiguous`, `unknown_material`, `unknown_layer` (an `id` not in this build-up), `invalid_priority`.
+Details:
+
+- **Errors** are JSON-RPC errors with code `-32000` and `data: { reason, index? }`; `index` counts the layer at fault from 0. Reasons: `not_found`, `invalid_name` (1–120 characters, no control character), `duplicate_name` (among build-ups, ignoring case), `no_layers`, `too_many_layers` (> 32), `invalid_thickness`, `invalid_priority`, `duplicate_layer` (the same id twice), `core_not_contiguous`, `too_thick` (over the model extent), `unknown_material`, `invalid_material` (an `air_gap` whose material is not `generic`) and `unknown_layer` (an `id` not in this build-up). The `errors` of `preview` use the same codes. A refused call changes nothing.
+- **Thermal resistance** is the sum over the layers whose material has a conductivity λ; `layers_without_thermal_data` counts the others, air gaps included (conventional air-layer resistances belong to the thermal module). `thermal_resistance` is `null` only when no layer has λ.
+- A material that layers use cannot be deleted: `materials.delete` answers `in_use` with `used_by`.
+- `buildups.list` leaves out a build-up this version cannot read.
 
 ## Generated types
 

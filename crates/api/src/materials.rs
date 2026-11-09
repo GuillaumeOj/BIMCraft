@@ -17,21 +17,19 @@ use std::sync::OnceLock;
 use core_model::{EntityId, Model, Source};
 use core_txn::{ModelCommand, Origin};
 use material::{
-    BehaviourLaw, Category, ENTITY, Edit, EditError, Factor, LawKind, Library, Material,
-    MaterialError, NationalAnnex, Property, Quantity, Range, ReadError, Sourced,
+    BehaviourLaw, Category, ENTITY, Edit, EditError, Factor, Library, Material, MaterialError,
+    NationalAnnex, Property, Quantity, Range, ReadError, Sourced,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
 use crate::georeference::one_of_strings;
 use crate::queries::page_size;
-use crate::schema::{array_of, def, nullable, object};
+use crate::schema::{array_of, def, id, integer, nullable, object, text};
 use crate::{ApiError, Descriptor, Outcome, Session, Signature, Version};
 
 const V1: Version = Version::new(1, 0, 0);
 
-/// The longest material name accepted, in characters.
-const MAX_NAME_LEN: usize = 120;
 /// The most properties one `materials.create` or `materials.update` may carry.
 const MAX_PROPERTIES: usize = 64;
 /// The longest search text accepted, in characters.
@@ -109,10 +107,6 @@ impl MaterialsError {
 
 // --- shared shapes ---
 
-fn text() -> serde_json::Value {
-    json!({ "type": "string" })
-}
-
 fn category_schema() -> serde_json::Value {
     one_of_strings(&Category::ALL.map(Category::name))
 }
@@ -182,7 +176,7 @@ pub(crate) fn definitions() -> [(String, serde_json::Value); 5] {
 }
 
 fn name_schema() -> serde_json::Value {
-    json!({ "type": "string", "maxLength": MAX_NAME_LEN })
+    json!({ "type": "string", "maxLength": material::MAX_NAME_LEN })
 }
 
 fn search_schema() -> serde_json::Value {
@@ -201,14 +195,6 @@ pub(crate) fn descriptors() -> impl Iterator<Item = Descriptor<Session>> {
 }
 
 /// The shared shorthands of the signatures.
-fn id() -> serde_json::Value {
-    def("EntityId")
-}
-
-fn integer() -> serde_json::Value {
-    json!({ "type": "integer", "minimum": 0 })
-}
-
 /// The signature of a read of one material's detail, plus what each reader adds.
 fn detail(extra: &[(&'static str, serde_json::Value)]) -> Vec<(&'static str, serde_json::Value)> {
     let mut fields = vec![
@@ -504,45 +490,15 @@ struct LawView {
     branch: Option<&'static str>,
 }
 
-fn cited(document: &str, clause: &str) -> Option<Source> {
-    Source::new(document, clause).ok()
-}
-
 /// The law as the wire names it, with the clause that defines it where one is certain.
 fn law_view(category: Category, law: &BehaviourLaw) -> LawView {
-    let (kind, source, branch) = match law {
-        BehaviourLaw::LinearElastic(_) => ("linear_elastic", None, None),
-        BehaviourLaw::ConcreteParabolaRectangle(_) => (
-            "parabola_rectangle",
-            cited("EN 1992-1-1:2004", "3.1.7(1)"),
-            None,
-        ),
-        BehaviourLaw::ConcreteBilinear(_) => {
-            ("bilinear", cited("EN 1992-1-1:2004", "3.1.7(2)"), None)
-        }
-        BehaviourLaw::SteelBilinear(steel) => {
-            let branch = Some(if steel.hardening().is_some() {
-                "inclined"
-            } else {
-                "horizontal"
-            });
-            if category == Category::Reinforcement {
-                ("bilinear", cited("EN 1992-1-1:2004", "3.2.7(2)"), branch)
-            } else {
-                (
-                    "elastic_plastic",
-                    cited("EN 1993-1-1:2005", "5.4.3"),
-                    branch,
-                )
-            }
-        }
-        BehaviourLaw::TimberElasticBrittle(_) => ("elastic_brittle", None, None),
-        BehaviourLaw::None => ("none", None, None),
-    };
+    let described = law.describe(category);
     LawView {
-        kind,
-        source,
-        branch,
+        kind: described.kind,
+        source: described
+            .source
+            .and_then(|(document, clause)| Source::new(document, clause).ok()),
+        branch: described.branch,
     }
 }
 
@@ -608,10 +564,9 @@ fn read_material(model: &Model, id: EntityId) -> Result<Material, ApiError> {
     })
 }
 
-/// How many objects other than its own `MaterialOriginal`s refer to the material.
+/// How many objects use the material, its own library values excluded.
 fn used_by(model: &Model, id: EntityId) -> Result<usize, ApiError> {
-    let originals = material::original_ids(model, id).map_err(|_| ApiError::Internal)?;
-    Ok(model.required_referrers(id).saturating_sub(originals.len()))
+    material::used_by(model, id).map_err(|_| ApiError::Internal)
 }
 
 #[derive(Deserialize)]
@@ -646,9 +601,13 @@ fn list_materials(
     for id in material_ids(model) {
         // Only the three attributes the list shows, and the filters first.
         let name = text_attribute(model, id, "name")?.unwrap_or_default();
-        let found = text_attribute(model, id, "category")?
-            .and_then(|stored| Category::from_name(&stored))
-            .ok_or(ApiError::Internal)?;
+        // A material this version cannot read, such as one saved by a newer version, is left out
+        // of the list instead of failing it; the rest stays usable.
+        let Some(found) =
+            text_attribute(model, id, "category")?.and_then(|stored| Category::from_name(&stored))
+        else {
+            continue;
+        };
         if category.is_some_and(|category| found != category)
             || !matches(search.as_deref(), &[&name])
         {
@@ -712,22 +671,8 @@ fn get_material(
 
 // --- commands ---
 
-fn check_name(model: &Model, name: &str, except: Option<EntityId>) -> Result<(), ApiError> {
-    let trimmed = name.trim();
-    if trimmed.is_empty() || trimmed.chars().count() > MAX_NAME_LEN {
-        return Err(MaterialsError::InvalidName.into());
-    }
-    let lowered = trimmed.to_lowercase();
-    for id in material_ids(model).filter(|&id| Some(id) != except) {
-        if text_attribute(model, id, "name")?.is_some_and(|name| name.to_lowercase() == lowered) {
-            return Err(MaterialsError::DuplicateName.into());
-        }
-    }
-    Ok(())
-}
-
 /// A text attribute of a stored object, read without decoding the whole material.
-fn text_attribute(
+pub(crate) fn text_attribute(
     model: &Model,
     id: EntityId,
     attribute: &str,
@@ -769,6 +714,9 @@ fn edit_error(error: &EditError) -> ApiError {
             key: Some(property.key().to_owned()),
         }
         .into(),
+        EditError::InvalidName => MaterialsError::InvalidName.into(),
+        EditError::DuplicateName => MaterialsError::DuplicateName.into(),
+        EditError::InUse { used_by } => MaterialsError::InUse { used_by: *used_by }.into(),
         EditError::NothingToReset(_) | EditError::Read(_) | EditError::Model(_) => {
             ApiError::Internal
         }
@@ -828,7 +776,7 @@ struct Created {
     id: EntityId,
 }
 
-fn run(
+pub(crate) fn run(
     session: &mut Session,
     command: ModelCommand,
     origin: &Origin,
@@ -854,7 +802,8 @@ fn add_from_library(
 ) -> Result<Outcome<Created>, ApiError> {
     let grade = library()?.get(&key).ok_or(MaterialsError::UnknownGrade)?;
     let name = name.as_deref().unwrap_or_else(|| grade.name());
-    check_name(session.document().model(), name, None)?;
+    material::check_name(session.document().model(), name, None)
+        .map_err(|error| edit_error(&error))?;
     let copy = grade
         .with_name(name)
         .map_err(|error| ApiError::from(material_error(&error)))?;
@@ -875,24 +824,6 @@ struct CreateParams {
     properties: Vec<PropertyInput>,
 }
 
-/// The laws a custom material of `category` may follow, the most specific first.
-fn laws_for(category: Category) -> &'static [LawKind] {
-    match category {
-        Category::Concrete => &[
-            LawKind::ConcreteParabolaRectangle,
-            LawKind::ConcreteBilinear,
-            LawKind::LinearElastic,
-        ],
-        Category::Reinforcement | Category::Steel => {
-            &[LawKind::SteelBilinear, LawKind::LinearElastic]
-        }
-        Category::Timber => &[LawKind::TimberElasticBrittle, LawKind::LinearElastic],
-        Category::Masonry | Category::Insulation | Category::Finish | Category::Generic => {
-            &[LawKind::LinearElastic, LawKind::None]
-        }
-    }
-}
-
 fn create_material(
     session: &mut Session,
     CreateParams {
@@ -903,7 +834,8 @@ fn create_material(
     }: CreateParams,
     origin: &Origin,
 ) -> Result<Outcome<Created>, ApiError> {
-    check_name(session.document().model(), &name, None)?;
+    material::check_name(session.document().model(), &name, None)
+        .map_err(|error| edit_error(&error))?;
     let mut properties = BTreeMap::new();
     for (property, value) in properties_of(&inputs)? {
         let value = value.ok_or_else(|| MaterialsError::InvalidValue {
@@ -919,25 +851,13 @@ fn create_material(
             .into());
         }
     }
-    // A law the values do not complete gives way to the next one; a law whose values are wrong
-    // does not, or the material would silently follow another law.
-    let mut first_missing = None;
-    for &law in laws_for(category) {
-        match Material::new(&name, category, law, None, properties.clone()) {
-            Ok(created) => {
-                let event = run(session, material::commands(id, &created), origin)?;
-                return Ok(Outcome {
-                    result: Created { id },
-                    event,
-                });
-            }
-            Err(error @ MaterialError::MissingProperty(_)) => {
-                first_missing = first_missing.or(Some(error));
-            }
-            Err(error) => return Err(material_error(&error).into()),
-        }
-    }
-    Err(first_missing.map_or(ApiError::Internal, |error| material_error(&error).into()))
+    let created = Material::custom(&name, category, &properties)
+        .map_err(|error| ApiError::from(material_error(&error)))?;
+    let event = run(session, material::commands(id, &created), origin)?;
+    Ok(Outcome {
+        result: Created { id },
+        event,
+    })
 }
 
 #[derive(Deserialize)]
@@ -950,17 +870,6 @@ struct UpdateParams {
     properties: Vec<PropertyInput>,
 }
 
-/// The `MaterialOriginal` that keeps `property` of `material`: its id derives from both, so a
-/// replayed command makes the same object (CORE-11). FNV-1a over 128 bits, no randomness.
-fn original_id(material: EntityId, property: Property) -> EntityId {
-    const PRIME: u128 = 0x0000_0000_0100_0000_0000_0000_0000_013B;
-    let mut state = material.get() ^ 0x6C62_272E_07BB_0142_62B8_2175_6295_C58D;
-    for byte in b"original:".iter().chain(property.name().as_bytes()) {
-        state = (state ^ u128::from(*byte)).wrapping_mul(PRIME);
-    }
-    EntityId::from_random_bits(state)
-}
-
 fn update_material(
     session: &mut Session,
     UpdateParams {
@@ -971,29 +880,16 @@ fn update_material(
     origin: &Origin,
 ) -> Result<Outcome<serde_json::Map<String, serde_json::Value>>, ApiError> {
     let model = session.document().model();
-    let current = read_material(model, id)?;
     let mut commands = Vec::new();
-    if let Some(name) = name.as_deref().filter(|name| name.trim() != current.name()) {
-        check_name(model, name, Some(id))?;
-        let renamed = current
-            .with_name(name)
-            .map_err(|error| ApiError::from(material_error(&error)))?;
-        commands.push(ModelCommand::Set {
-            id,
-            attribute: "name".to_owned(),
-            value: Some(core_model::AttributeValue::Text(renamed.name().to_owned())),
-        });
+    if let Some(name) = &name {
+        commands.extend(material::rename(model, id, name).map_err(|error| edit_error(&error))?);
     }
     let edits: Vec<(Property, Edit)> = properties_of(&inputs)?
         .into_iter()
         .map(|(property, value)| (property, value.map_or(Edit::Reset, Edit::Set)))
         .collect();
-    let edit = material::edit(model, id, &edits, |property| original_id(id, property))
-        .map_err(|error| edit_error(&error))?;
+    commands.extend(material::edit(model, id, &edits).map_err(|error| edit_error(&error))?);
     // A change that changes nothing leaves no history entry.
-    if !matches!(&edit, ModelCommand::Batch { commands } if commands.is_empty()) {
-        commands.push(edit);
-    }
     if commands.is_empty() {
         return Ok(Outcome {
             result: serde_json::Map::new(),
@@ -1013,11 +909,6 @@ fn delete_material(
     origin: &Origin,
 ) -> Result<Outcome<serde_json::Map<String, serde_json::Value>>, ApiError> {
     let model = session.document().model();
-    read_material(model, id)?;
-    let used_by = used_by(model, id)?;
-    if used_by > 0 {
-        return Err(MaterialsError::InUse { used_by }.into());
-    }
     let command = material::delete(model, id).map_err(|error| edit_error(&error))?;
     let event = run(session, command, origin)?;
     Ok(Outcome {

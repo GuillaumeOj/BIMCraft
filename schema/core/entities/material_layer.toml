@@ -1,0 +1,48 @@
+format = 1
+
+[entity]
+name = "MaterialLayer"
+kind = "resource"
+doc = """
+One layer of a wall or slab build-up (MAT-03): a material, a thickness and a function. Where \
+layered elements meet, the layer with the higher join priority runs through (GEO-11). The layer's \
+object id is its stable LayerId (ADR 0010): reordering, renaming or resizing never changes it.\
+"""
+
+[ifc]
+entity = "IfcMaterialLayer"
+
+[[attribute]]
+name = "material"
+value = "ref:Material"
+required = true
+doc = "What the layer is made of."
+
+[[attribute]]
+name = "thickness"
+value = "quantity:length"
+required = true
+doc = "Thickness of the layer. A membrane may have none."
+
+[[attribute]]
+name = "function"
+value = "enum:LayerFunction"
+required = true
+doc = "What the layer does."
+
+[[attribute]]
+name = "priority"
+value = "integer"
+required = true
+doc = "Join priority from 1 (highest) to 5 (lowest): where layered elements meet, a layer of higher priority runs through layers of lower priority, and equal priorities meet. An IFC export writes 0 to 100 (ADR 0019)."
+
+[[attribute]]
+name = "is_core"
+value = "bool"
+default = false
+doc = "Whether the layer belongs to the structural core, which the default location line follows."
+
+[[attribute]]
+name = "name"
+value = "text"
+doc = "Name shown in plans and schedules, such as `Insulation`."

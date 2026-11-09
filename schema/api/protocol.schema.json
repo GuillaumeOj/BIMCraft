@@ -106,6 +106,128 @@
         }
       ]
     },
+    "BuildUpFunction": {
+      "oneOf": [
+        {
+          "const": "structure"
+        },
+        {
+          "const": "substrate"
+        },
+        {
+          "const": "insulation"
+        },
+        {
+          "const": "air_gap"
+        },
+        {
+          "const": "membrane"
+        },
+        {
+          "const": "finish"
+        }
+      ]
+    },
+    "BuildUpLayer": {
+      "additionalProperties": false,
+      "properties": {
+        "core": {
+          "type": "boolean"
+        },
+        "function": {
+          "$ref": "#/$defs/BuildUpFunction"
+        },
+        "id": {
+          "$ref": "#/$defs/EntityId"
+        },
+        "material": {
+          "$ref": "#/$defs/EntityId"
+        },
+        "material_name": {
+          "type": "string"
+        },
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "priority": {
+          "type": "integer"
+        },
+        "thermal_resistance": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "thickness": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "id",
+        "material",
+        "material_name",
+        "thickness",
+        "function",
+        "priority",
+        "core",
+        "name",
+        "thermal_resistance"
+      ],
+      "type": "object"
+    },
+    "BuildUpLayerInput": {
+      "additionalProperties": false,
+      "properties": {
+        "core": {
+          "type": "boolean"
+        },
+        "function": {
+          "$ref": "#/$defs/BuildUpFunction"
+        },
+        "id": {
+          "$ref": "#/$defs/EntityId"
+        },
+        "material": {
+          "$ref": "#/$defs/EntityId"
+        },
+        "name": {
+          "type": "string"
+        },
+        "priority": {
+          "type": "integer"
+        },
+        "thickness": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "material",
+        "thickness",
+        "function"
+      ],
+      "type": "object"
+    },
+    "BuildUpUsage": {
+      "oneOf": [
+        {
+          "const": "wall"
+        },
+        {
+          "const": "slab"
+        }
+      ]
+    },
     "ChangeEvent": {
       "additionalProperties": false,
       "properties": {
@@ -981,6 +1103,214 @@
       ]
     },
     "commands": {
+      "buildups.create": {
+        "description": "Creates a build-up with its layers.",
+        "properties": {
+          "name": {
+            "const": "buildups.create"
+          },
+          "params": {
+            "additionalProperties": false,
+            "properties": {
+              "description": {
+                "type": "string"
+              },
+              "id": {
+                "$ref": "#/$defs/EntityId"
+              },
+              "layers": {
+                "items": {
+                  "$ref": "#/$defs/BuildUpLayerInput"
+                },
+                "maxItems": 33,
+                "type": "array"
+              },
+              "name": {
+                "maxLength": 120,
+                "type": "string"
+              },
+              "usage": {
+                "$ref": "#/$defs/BuildUpUsage"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "usage",
+              "layers"
+            ],
+            "type": "object"
+          },
+          "result": {
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "$ref": "#/$defs/EntityId"
+              },
+              "layers": {
+                "items": {
+                  "$ref": "#/$defs/EntityId"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "id",
+              "layers"
+            ],
+            "type": "object"
+          },
+          "version": {
+            "const": "1.0.0"
+          }
+        },
+        "type": "object"
+      },
+      "buildups.delete": {
+        "description": "Deletes a build-up with its layers.",
+        "properties": {
+          "name": {
+            "const": "buildups.delete"
+          },
+          "params": {
+            "additionalProperties": false,
+            "properties": {
+              "buildup": {
+                "$ref": "#/$defs/EntityId"
+              }
+            },
+            "required": [
+              "buildup"
+            ],
+            "type": "object"
+          },
+          "result": {
+            "additionalProperties": false,
+            "properties": {},
+            "required": [],
+            "type": "object"
+          },
+          "version": {
+            "const": "1.0.0"
+          }
+        },
+        "type": "object"
+      },
+      "buildups.duplicate": {
+        "description": "Copies a build-up under a new name, with new layers.",
+        "properties": {
+          "name": {
+            "const": "buildups.duplicate"
+          },
+          "params": {
+            "additionalProperties": false,
+            "properties": {
+              "buildup": {
+                "$ref": "#/$defs/EntityId"
+              },
+              "id": {
+                "$ref": "#/$defs/EntityId"
+              },
+              "name": {
+                "maxLength": 120,
+                "type": "string"
+              }
+            },
+            "required": [
+              "buildup",
+              "id",
+              "name"
+            ],
+            "type": "object"
+          },
+          "result": {
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "$ref": "#/$defs/EntityId"
+              },
+              "layers": {
+                "items": {
+                  "$ref": "#/$defs/EntityId"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "id",
+              "layers"
+            ],
+            "type": "object"
+          },
+          "version": {
+            "const": "1.0.0"
+          }
+        },
+        "type": "object"
+      },
+      "buildups.update": {
+        "description": "Renames a build-up and replaces its layers; layers it names keep their identity.",
+        "properties": {
+          "name": {
+            "const": "buildups.update"
+          },
+          "params": {
+            "additionalProperties": false,
+            "properties": {
+              "buildup": {
+                "$ref": "#/$defs/EntityId"
+              },
+              "description": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "layers": {
+                "items": {
+                  "$ref": "#/$defs/BuildUpLayerInput"
+                },
+                "maxItems": 33,
+                "type": "array"
+              },
+              "name": {
+                "maxLength": 120,
+                "type": "string"
+              },
+              "usage": {
+                "$ref": "#/$defs/BuildUpUsage"
+              }
+            },
+            "required": [
+              "buildup"
+            ],
+            "type": "object"
+          },
+          "result": {
+            "additionalProperties": false,
+            "properties": {
+              "layers": {
+                "items": {
+                  "$ref": "#/$defs/EntityId"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "layers"
+            ],
+            "type": "object"
+          },
+          "version": {
+            "const": "1.0.0"
+          }
+        },
+        "type": "object"
+      },
       "georef.clear": {
         "description": "Removes the project's georeference.",
         "properties": {
@@ -1862,6 +2192,26 @@
             "steel_bilinear",
             "timber_elastic_brittle",
             "none"
+          ],
+          "type": "string"
+        },
+        "BuildUpUsage": {
+          "description": "What a build-up is for: layers of a wall run from the exterior face in, layers of a slab from the top face down (ADR 0010).",
+          "enum": [
+            "wall",
+            "slab"
+          ],
+          "type": "string"
+        },
+        "LayerFunction": {
+          "description": "What a layer of a build-up does; it decides the default join priority (MAT-03).",
+          "enum": [
+            "structure",
+            "substrate",
+            "insulation",
+            "air_gap",
+            "membrane",
+            "finish"
           ],
           "type": "string"
         },
@@ -2981,6 +3331,91 @@
           ],
           "type": "string"
         },
+        "MaterialLayer": {
+          "additionalProperties": false,
+          "description": "One layer of a wall or slab build-up (MAT-03): a material, a thickness and a function. Where layered elements meet, the layer with the higher join priority runs through (GEO-11). The layer's object id is its stable LayerId (ADR 0010): reordering, renaming or resizing never changes it.",
+          "properties": {
+            "function": {
+              "$ref": "#/$defs/LayerFunction",
+              "description": "What the layer does."
+            },
+            "is_core": {
+              "default": false,
+              "description": "Whether the layer belongs to the structural core, which the default location line follows.",
+              "type": "boolean"
+            },
+            "material": {
+              "$ref": "#/$defs/ObjectId",
+              "description": "What the layer is made of."
+            },
+            "name": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Name shown in plans and schedules, such as `Insulation`."
+            },
+            "priority": {
+              "description": "Join priority from 1 (highest) to 5 (lowest): where layered elements meet, a layer of higher priority runs through layers of lower priority, and equal priorities meet. An IFC export writes 0 to 100 (ADR 0019).",
+              "maximum": 9223372036854775807,
+              "minimum": -9223372036854775808,
+              "type": "integer"
+            },
+            "thickness": {
+              "description": "Thickness of the layer. A membrane may have none.\n\nIn m.",
+              "type": "number"
+            }
+          },
+          "required": [
+            "material",
+            "thickness",
+            "function",
+            "priority"
+          ],
+          "type": "object"
+        },
+        "MaterialLayerSet": {
+          "additionalProperties": false,
+          "description": "A wall or slab build-up (MAT-03): layers in order from the exterior face to the interior face, or from the top face down for slabs.",
+          "properties": {
+            "description": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Free text about the build-up."
+            },
+            "layers": {
+              "description": "The layers, from the exterior face to the interior face (walls) or from the top face down (slabs).",
+              "items": {
+                "$ref": "#/$defs/ObjectId"
+              },
+              "type": "array"
+            },
+            "name": {
+              "description": "Name of the build-up, such as `Exterior wall 300`.",
+              "type": "string"
+            },
+            "usage": {
+              "$ref": "#/$defs/BuildUpUsage",
+              "description": "Whether the build-up is for walls or for slabs."
+            }
+          },
+          "required": [
+            "name",
+            "usage",
+            "layers"
+          ],
+          "type": "object"
+        },
         "MaterialOriginal": {
           "additionalProperties": false,
           "description": "The library value of a material property that the user has since edited, kept with its source so that resetting the property restores it (MAT-02, ADR 0019). A material has at most one per property.",
@@ -3147,6 +3582,262 @@
       "title": "BIMCraft `core` schema"
     },
     "queries": {
+      "buildups.get": {
+        "description": "Reads one build-up with its layers and its thermal resistance.",
+        "properties": {
+          "name": {
+            "const": "buildups.get"
+          },
+          "params": {
+            "additionalProperties": false,
+            "properties": {
+              "buildup": {
+                "$ref": "#/$defs/EntityId"
+              }
+            },
+            "required": [
+              "buildup"
+            ],
+            "type": "object"
+          },
+          "result": {
+            "additionalProperties": false,
+            "properties": {
+              "description": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "id": {
+                "$ref": "#/$defs/EntityId"
+              },
+              "layers": {
+                "items": {
+                  "$ref": "#/$defs/BuildUpLayer"
+                },
+                "type": "array"
+              },
+              "layers_without_thermal_data": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "name": {
+                "type": "string"
+              },
+              "thermal_resistance": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "total_thickness": {
+                "type": "number"
+              },
+              "usage": {
+                "$ref": "#/$defs/BuildUpUsage"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "usage",
+              "description",
+              "layers",
+              "total_thickness",
+              "thermal_resistance",
+              "layers_without_thermal_data"
+            ],
+            "type": "object"
+          },
+          "version": {
+            "const": "1.0.0"
+          }
+        },
+        "type": "object"
+      },
+      "buildups.list": {
+        "description": "Lists the wall and slab build-ups of the project.",
+        "properties": {
+          "name": {
+            "const": "buildups.list"
+          },
+          "params": {
+            "additionalProperties": false,
+            "properties": {
+              "usage": {
+                "$ref": "#/$defs/BuildUpUsage"
+              }
+            },
+            "required": [],
+            "type": "object"
+          },
+          "result": {
+            "additionalProperties": false,
+            "properties": {
+              "items": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "id": {
+                      "$ref": "#/$defs/EntityId"
+                    },
+                    "layer_count": {
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "total_thickness": {
+                      "type": "number"
+                    },
+                    "usage": {
+                      "$ref": "#/$defs/BuildUpUsage"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "usage",
+                    "layer_count",
+                    "total_thickness"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "items"
+            ],
+            "type": "object"
+          },
+          "version": {
+            "const": "1.0.0"
+          }
+        },
+        "type": "object"
+      },
+      "buildups.preview": {
+        "description": "Checks a draft build-up without saving it and returns its totals and every error.",
+        "properties": {
+          "name": {
+            "const": "buildups.preview"
+          },
+          "params": {
+            "additionalProperties": false,
+            "properties": {
+              "layers": {
+                "items": {
+                  "$ref": "#/$defs/BuildUpLayerInput"
+                },
+                "maxItems": 33,
+                "type": "array"
+              },
+              "usage": {
+                "$ref": "#/$defs/BuildUpUsage"
+              }
+            },
+            "required": [
+              "usage",
+              "layers"
+            ],
+            "type": "object"
+          },
+          "result": {
+            "additionalProperties": false,
+            "properties": {
+              "errors": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "code": {
+                      "type": "string"
+                    },
+                    "index": {
+                      "minimum": 0,
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "code"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "layers": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "core": {
+                      "type": "boolean"
+                    },
+                    "priority": {
+                      "type": "integer"
+                    },
+                    "thermal_resistance": {
+                      "anyOf": [
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "priority",
+                    "core",
+                    "thermal_resistance"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "layers_without_thermal_data": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "thermal_resistance": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "total_thickness": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "layers",
+              "total_thickness",
+              "thermal_resistance",
+              "layers_without_thermal_data",
+              "errors"
+            ],
+            "type": "object"
+          },
+          "version": {
+            "const": "1.0.0"
+          }
+        },
+        "type": "object"
+      },
       "georef.convert": {
         "description": "Converts points between local, projected and geographic coordinates.",
         "properties": {

@@ -10,6 +10,7 @@ publish = false
 [dependencies]
 core-model = { workspace = true }
 core-txn = { workspace = true }
+geom = { workspace = true }
 libm = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

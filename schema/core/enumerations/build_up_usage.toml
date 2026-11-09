@@ -1,0 +1,13 @@
+format = 1
+
+[enumeration]
+name = "BuildUpUsage"
+doc = "What a build-up is for: layers of a wall run from the exterior face in, layers of a slab from the top face down (ADR 0010)."
+
+[[item]]
+name = "wall"
+doc = "A wall build-up."
+
+[[item]]
+name = "slab"
+doc = "A slab build-up."
