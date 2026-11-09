@@ -79,7 +79,9 @@ Un matériau utilisé par des couches de compositions ne peut pas être supprim�
 | Acier de construction | S235, S275, S355, S420, S460 | EN 1993-1-1:2005 (Eurocode 3), pour des éléments jusqu'à 40 mm d'épaisseur |
 | Bois | C16 à C35, GL24h, GL28h, GL32h | EN 338:2016 et EN 14080:2013 |
 | Maçonnerie | Trois maçonneries courantes, en terre cuite et en blocs de béton | EN 1996-1-1:2005 |
-| Autres | Isolants, finitions et matériaux génériques | EN ISO 10456:2007 |
+| Autres | Isolants, finitions et matériaux génériques | Règles Th-Bât, Fascicule Matériaux (2017) |
+
+Les valeurs des matériaux « Autres » sont des valeurs par défaut, à utiliser lorsque vous n'avez pas de valeur déclarée par le fabricant. Remplacez-les par celles de votre produit, et considérez le bloc béton comme une valeur générique, non comme un élément de maçonnerie précis.
 
 Une classe de béton comme C30/37 donne sa résistance caractéristique sur cylindre, puis sur cube, en mégapascals (MPa). Les valeurs de la bibliothèque sont des valeurs *caractéristiques*. Les coefficients partiels de sécurité viennent avec la classe pour chaque annexe nationale ; vérifiez-les, comme toutes les valeurs, avec votre exemplaire des normes et l'annexe nationale applicable à votre projet.
 

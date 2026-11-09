@@ -248,7 +248,7 @@ fn conductivity_comes_from_the_material() {
     run(&mut document, commands(EntityId::new(3), wool));
     assert_eq!(
         conductivity(document.model(), EntityId::new(3)),
-        Some(0.035)
+        Some(0.044)
     );
     assert_eq!(conductivity(document.model(), CONCRETE), None);
     assert_eq!(conductivity(document.model(), SET), None);

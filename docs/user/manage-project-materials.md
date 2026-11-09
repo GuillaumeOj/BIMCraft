@@ -79,7 +79,9 @@ A material that build-up layers use cannot be deleted. The dialog tells you how 
 | Structural steel | S235, S275, S355, S420, S460 | EN 1993-1-1:2005 (Eurocode 3), for elements up to 40 mm thick |
 | Timber | C16 to C35, GL24h, GL28h, GL32h | EN 338:2016 and EN 14080:2013 |
 | Masonry | Three common clay and concrete-block masonries | EN 1996-1-1:2005 |
-| Other | Insulation, finishes and generic materials | EN ISO 10456:2007 |
+| Other | Insulation, finishes and generic materials | Règles Th-Bât, Fascicule Matériaux (2017) |
+
+The values of the "Other" materials are default values, for use when you have no declared value from the manufacturer. Replace them with your product's values, and treat the concrete block as a generic default, not a specific masonry unit.
 
 A concrete grade such as C30/37 gives its characteristic cylinder strength, then its cube strength, in megapascals (MPa). The library values are *characteristic* values. Partial safety factors come with the grade for each national annex, so check them, like every value, against your own copy of the standards and the national annex that applies to your project.
 
