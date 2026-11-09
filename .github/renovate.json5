@@ -24,7 +24,7 @@
     // One group for both workspaces: fuzz/ path-depends on the root crates and shares exact pins
     // with them (libm, serde_json), so bumping one workspace alone leaves the other unresolvable.
     // Renovate refreshes only the lockfiles of the manifests it edits; fuzz/Cargo.lock needs a
-    // hand-made refresh (docs/dev/quality.md#fuzzing).
+    // hand-made refresh (the prBodyNotes rule at the end).
     {
       matchManagers: ["cargo"],
       matchUpdateTypes: ["minor", "patch"],
@@ -63,10 +63,27 @@
       extends: ["monorepo:tauri"],
       groupName: "tauri",
     },
-    // A new nightly ships every day; monthly is enough for the fuzz targets.
+    // The rust-toolchain manager reads both toolchain files; the root one is in `toolchains` above.
+    // A new nightly ships every day; monthly is enough for the fuzz targets. The nightly versioning
+    // only proposes newer dated nightlies, at least 14 days old like any release.
     {
       matchFileNames: ["fuzz/rust-toolchain.toml"],
+      groupName: "fuzz-nightly",
       schedule: ["before 6am on the first day of the month"],
+    },
+    // Majors are left out of the groups on purpose: each gets its own PR, as it often needs code
+    // changes, and one hard major must not hold the others back. config:recommended still keeps
+    // monorepos (React, Vitest, Testing Library…) together.
+    //
+    // fuzz/ is its own cargo workspace and locks the root crates' dependencies too. A Renovate PR
+    // that bumps the root workspace leaves fuzz/Cargo.lock stale, so the Fuzzing check fails until
+    // it is refreshed. Last, so it adds to the notes of the rules above.
+    {
+      matchManagers: ["cargo"],
+      matchUpdateTypes: ["major", "minor", "patch"],
+      prBodyNotes: [
+        "Run `cargo update -w` in `fuzz/` and commit `fuzz/Cargo.lock`, or the Fuzzing check fails (docs/dev/quality.md#fuzzing).",
+      ],
     },
   ],
   customManagers: [
