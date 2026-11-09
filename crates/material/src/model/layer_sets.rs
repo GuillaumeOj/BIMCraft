@@ -11,7 +11,7 @@ use core_model::{AttributeValue, EntityId, Model, ModelError};
 use core_txn::ModelCommand;
 use thiserror::Error;
 
-use super::{ENTITY as MATERIAL, attribute, derived_id, sourced_real};
+use super::{ENTITY as MATERIAL, attribute, derived_id, name_in_use, sourced_real};
 use crate::layers::{Layer, LayerFunction, LayerSet, LayerSetError, Usage};
 use crate::material::Category;
 use crate::property::Property;
@@ -71,23 +71,11 @@ pub fn check_layers(
             .filter(|(_, layer)| model.entity_of(layer.material) != Some(MATERIAL))
             .map(|(number, _)| LayerSetError::UnknownMaterial(number)),
     );
-    if problems.is_empty() && name_taken(model, name, except) {
+    // A name that cannot be read is not reported as taken: the read error surfaces elsewhere.
+    if problems.is_empty() && name_in_use(model, LAYER_SET_ENTITY, name, except).unwrap_or(false) {
         problems.push(LayerSetError::DuplicateName);
     }
     problems
-}
-
-/// Whether another build-up than `except` has `name`, ignoring case and surrounding spaces.
-fn name_taken(model: &Model, name: &str, except: Option<EntityId>) -> bool {
-    let lowered = name.trim().to_lowercase();
-    model.store().ids().any(|id| {
-        model.entity_of(id) == Some(LAYER_SET_ENTITY)
-            && Some(id) != except
-            && attribute(model, id, "name")
-                .ok()
-                .flatten()
-                .is_some_and(|other| other.to_lowercase() == lowered)
-    })
 }
 
 /// The conductivity of material `material` in W/(m·K), if it gives one.
@@ -123,23 +111,32 @@ pub fn fresh_layer_ids(model: &Model, build_up: EntityId, count: usize) -> Vec<E
 #[must_use]
 pub fn layer_set_commands(id: EntityId, set: &LayerSet) -> ModelCommand {
     let mut commands: Vec<ModelCommand> = set.layers().iter().map(create_layer).collect();
-    let mut values = vec![
-        value("name", AttributeValue::Text(set.name().to_owned())),
-        value("usage", AttributeValue::Text(set.usage().name().to_owned())),
-        value("layers", layer_refs(set)),
-    ];
-    if let Some(description) = set.description() {
-        values.push(value(
-            "description",
-            AttributeValue::Text(description.to_owned()),
-        ));
-    }
     commands.push(ModelCommand::Create {
         id,
         entity: LAYER_SET_ENTITY.to_owned(),
-        values,
+        values: set_values(set)
+            .into_iter()
+            .filter_map(|(attribute, value)| Some((attribute.to_owned(), value?)))
+            .collect(),
     });
     ModelCommand::Batch { commands }
+}
+
+/// The build-up attributes, each with the value to set (`None` clears it).
+fn set_values(set: &LayerSet) -> [(&'static str, Option<AttributeValue>); 4] {
+    [
+        ("name", Some(AttributeValue::Text(set.name().to_owned()))),
+        (
+            "usage",
+            Some(AttributeValue::Text(set.usage().name().to_owned())),
+        ),
+        (
+            "description",
+            set.description()
+                .map(|text| AttributeValue::Text(text.to_owned())),
+        ),
+        ("layers", Some(layer_refs(set))),
+    ]
 }
 
 /// The command that makes build-up `id` equal to `set`: layers whose id is already in the
@@ -164,22 +161,9 @@ pub fn replace_layer_set(
             create_layer(layer)
         });
     }
-    let mut values = vec![
-        ("name", Some(AttributeValue::Text(set.name().to_owned()))),
-        (
-            "usage",
-            Some(AttributeValue::Text(set.usage().name().to_owned())),
-        ),
-        (
-            "description",
-            set.description()
-                .map(|text| AttributeValue::Text(text.to_owned())),
-        ),
-        ("layers", Some(layer_refs(set))),
-    ];
     commands.extend(
-        values
-            .drain(..)
+        set_values(set)
+            .into_iter()
             .map(|(attribute, value)| ModelCommand::Set {
                 id,
                 attribute: attribute.to_owned(),
@@ -339,10 +323,6 @@ fn layer_refs(set: &LayerSet) -> AttributeValue {
             .map(|layer| AttributeValue::Ref(layer.id))
             .collect(),
     )
-}
-
-fn value(name: &str, value: AttributeValue) -> (String, AttributeValue) {
-    (name.to_owned(), value)
 }
 
 #[cfg(test)]

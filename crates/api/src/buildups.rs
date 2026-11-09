@@ -11,7 +11,7 @@
 
 use core_model::units::Length;
 use core_model::{EntityId, Model};
-use core_txn::{ModelCommand, Origin};
+use core_txn::Origin;
 use material::{
     Layer, LayerFunction, LayerSet, LayerSetError, LayerSetReadError, MAX_LAYERS, MAX_NAME_LEN,
     Usage,
@@ -20,7 +20,8 @@ use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::json;
 
 use crate::georeference::one_of_strings;
-use crate::schema::{array_of, def, nullable, object};
+use crate::materials::{run, text_attribute};
+use crate::schema::{array_of, def, id, integer, nullable, number, object, text};
 use crate::{ApiError, Descriptor, Outcome, Session, Signature, Version};
 
 const V1: Version = Version::new(1, 0, 0);
@@ -82,18 +83,6 @@ fn not_found() -> ApiError {
 
 // --- shared shapes ---
 
-fn text() -> serde_json::Value {
-    json!({ "type": "string" })
-}
-
-fn number() -> serde_json::Value {
-    json!({ "type": "number" })
-}
-
-fn id() -> serde_json::Value {
-    def("EntityId")
-}
-
 fn name_schema() -> serde_json::Value {
     json!({ "type": "string", "maxLength": MAX_NAME_LEN })
 }
@@ -149,7 +138,6 @@ pub(crate) fn descriptors() -> impl Iterator<Item = Descriptor<Session>> {
 }
 
 fn queries() -> [Descriptor<Session>; 3] {
-    let integer = || json!({ "type": "integer", "minimum": 0 });
     let list = Signature {
         params: object(&[], &[("usage", def("BuildUpUsage"))]),
         result: object(
@@ -310,11 +298,15 @@ fn commands() -> [Descriptor<Session>; 4] {
 
 // --- reading ---
 
-fn read_build_up(model: &Model, id: EntityId) -> Result<LayerSet, ApiError> {
-    material::read_layer_set(model, id).map_err(|error| match error {
+fn read_error(error: &LayerSetReadError) -> ApiError {
+    match error {
         LayerSetReadError::NotALayerSet => not_found(),
         _ => ApiError::Internal,
-    })
+    }
+}
+
+fn read_build_up(model: &Model, id: EntityId) -> Result<LayerSet, ApiError> {
+    material::read_layer_set(model, id).map_err(|error| read_error(&error))
 }
 
 fn build_up_ids(model: &Model) -> impl Iterator<Item = EntityId> + '_ {
@@ -412,18 +404,20 @@ fn get_build_up(
         .layers()
         .iter()
         .zip(&thermal.layers)
-        .map(|(layer, resistance)| LayerView {
-            id: layer.id,
-            material: layer.material,
-            material_name: material_name(model, layer.material),
-            thickness: layer.thickness.si(),
-            function: layer.function,
-            priority: layer.priority,
-            core: layer.core,
-            name: layer.name.clone(),
-            thermal_resistance: *resistance,
+        .map(|(layer, resistance)| {
+            Ok(LayerView {
+                id: layer.id,
+                material: layer.material,
+                material_name: text_attribute(model, layer.material, "name")?.unwrap_or_default(),
+                thickness: layer.thickness.si(),
+                function: layer.function,
+                priority: layer.priority,
+                core: layer.core,
+                name: layer.name.clone(),
+                thermal_resistance: *resistance,
+            })
         })
-        .collect();
+        .collect::<Result<_, ApiError>>()?;
     Ok(Detail {
         id,
         name: set.name().to_owned(),
@@ -434,13 +428,6 @@ fn get_build_up(
         thermal_resistance: thermal.total,
         layers_without_thermal_data: thermal.layers_without_data,
     })
-}
-
-fn material_name(model: &Model, id: EntityId) -> String {
-    match model.get(id, "name") {
-        Ok(Some(core_model::AttributeValue::Text(name))) => name,
-        _ => String::new(),
-    }
 }
 
 // --- drafts ---
@@ -509,18 +496,22 @@ fn layers_of(
         }
         .into());
     }
-    let new = inputs.iter().filter(|input| input.id.is_none()).count();
-    let mut fresh = material::fresh_layer_ids(model, build_up, new).into_iter();
-    Ok(inputs
+    let mut fresh = material::fresh_layer_ids(
+        model,
+        build_up,
+        inputs.iter().filter(|input| input.id.is_none()).count(),
+    )
+    .into_iter();
+    inputs
         .iter()
         .map(|input| {
-            let id = input
-                .id
-                .or_else(|| fresh.next())
-                .unwrap_or_else(|| EntityId::new(0));
-            input.layer(id)
+            let id = match input.id {
+                Some(id) => id,
+                None => fresh.next().ok_or(ApiError::Internal)?,
+            };
+            Ok(input.layer(id))
         })
-        .collect())
+        .collect()
 }
 
 /// The build-up of `layers`, or the first problem found in them.
@@ -658,16 +649,6 @@ fn preview_build_up(
 
 // --- commands ---
 
-fn run(
-    session: &mut Session,
-    command: ModelCommand,
-    origin: &Origin,
-) -> Result<Option<core_txn::ChangeEvent>, ApiError> {
-    Ok(Some(
-        session.document_mut().execute(command, origin.clone())?,
-    ))
-}
-
 #[derive(Serialize)]
 struct Created {
     id: EntityId,
@@ -757,7 +738,7 @@ fn update_build_up(
 ) -> Result<Outcome<Updated>, ApiError> {
     let model = session.document().model();
     let current = read_build_up(model, id)?;
-    let existing = material::layer_ids(model, id).map_err(|_| ApiError::Internal)?;
+    let existing = material::layer_ids(model, id).map_err(|error| read_error(&error))?;
     let layers = match layers {
         Some(inputs) => layers_of(model, id, &existing, &inputs)?,
         None => current.layers().to_vec(),

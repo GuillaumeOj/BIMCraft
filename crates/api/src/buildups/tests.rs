@@ -1,4 +1,4 @@
-use core_txn::Origin;
+use core_txn::{ModelCommand, Origin};
 use serde_json::{Value, json};
 
 use super::*;

@@ -25,7 +25,7 @@ use serde_json::json;
 
 use crate::georeference::one_of_strings;
 use crate::queries::page_size;
-use crate::schema::{array_of, def, nullable, object};
+use crate::schema::{array_of, def, id, integer, nullable, object, text};
 use crate::{ApiError, Descriptor, Outcome, Session, Signature, Version};
 
 const V1: Version = Version::new(1, 0, 0);
@@ -106,10 +106,6 @@ impl MaterialsError {
 }
 
 // --- shared shapes ---
-
-fn text() -> serde_json::Value {
-    json!({ "type": "string" })
-}
 
 fn category_schema() -> serde_json::Value {
     one_of_strings(&Category::ALL.map(Category::name))
@@ -199,14 +195,6 @@ pub(crate) fn descriptors() -> impl Iterator<Item = Descriptor<Session>> {
 }
 
 /// The shared shorthands of the signatures.
-fn id() -> serde_json::Value {
-    def("EntityId")
-}
-
-fn integer() -> serde_json::Value {
-    json!({ "type": "integer", "minimum": 0 })
-}
-
 /// The signature of a read of one material's detail, plus what each reader adds.
 fn detail(extra: &[(&'static str, serde_json::Value)]) -> Vec<(&'static str, serde_json::Value)> {
     let mut fields = vec![
@@ -684,7 +672,7 @@ fn get_material(
 // --- commands ---
 
 /// A text attribute of a stored object, read without decoding the whole material.
-fn text_attribute(
+pub(crate) fn text_attribute(
     model: &Model,
     id: EntityId,
     attribute: &str,
@@ -788,7 +776,7 @@ struct Created {
     id: EntityId,
 }
 
-fn run(
+pub(crate) fn run(
     session: &mut Session,
     command: ModelCommand,
     origin: &Origin,

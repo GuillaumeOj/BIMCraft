@@ -7,7 +7,7 @@ use core_model::{AttributeValue, EntityId, Model, ModelError, Source};
 use core_txn::ModelCommand;
 use thiserror::Error;
 
-use super::{ENTITY, ReadError, attribute, derived_id, read, sourced_real, sourced_value};
+use super::{ENTITY, ReadError, derived_id, name_in_use, read, sourced_real, sourced_value};
 use crate::material::MaterialError;
 use crate::property::Property;
 use crate::source::{MAX_NAME_LEN, Sourced, bounded_text};
@@ -46,14 +46,8 @@ pub fn check_name(model: &Model, name: &str, except: Option<EntityId>) -> Result
     if trimmed.chars().count() > MAX_NAME_LEN {
         return Err(EditError::InvalidName);
     }
-    let lowered = trimmed.to_lowercase();
-    for id in model.store().ids() {
-        if model.entity_of(id) == Some(ENTITY)
-            && Some(id) != except
-            && attribute(model, id, "name")?.is_some_and(|other| other.to_lowercase() == lowered)
-        {
-            return Err(EditError::DuplicateName);
-        }
+    if name_in_use(model, ENTITY, trimmed, except)? {
+        return Err(EditError::DuplicateName);
     }
     Ok(())
 }

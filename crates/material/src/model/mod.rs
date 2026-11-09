@@ -121,6 +121,26 @@ fn text(name: &str, value: &str) -> (String, AttributeValue) {
     (name.to_owned(), AttributeValue::Text(value.to_owned()))
 }
 
+/// Whether another object of `entity` than `except` already has `name`, ignoring case and
+/// surrounding spaces: materials and build-ups are unique by name within their entity.
+fn name_in_use(
+    model: &Model,
+    entity: &str,
+    name: &str,
+    except: Option<EntityId>,
+) -> Result<bool, ModelError> {
+    let lowered = name.trim().to_lowercase();
+    for id in model.store().ids() {
+        if model.entity_of(id) == Some(entity)
+            && Some(id) != except
+            && attribute(model, id, "name")?.is_some_and(|other| other.to_lowercase() == lowered)
+        {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
 fn attribute(model: &Model, id: EntityId, name: &str) -> Result<Option<String>, ModelError> {
     Ok(match model.get(id, name)? {
         Some(AttributeValue::Text(text)) => Some(text),

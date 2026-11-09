@@ -22,6 +22,30 @@ pub struct Signature {
     pub result: Value,
 }
 
+/// A string.
+#[must_use]
+pub fn text() -> Value {
+    json!({ "type": "string" })
+}
+
+/// A number.
+#[must_use]
+pub fn number() -> Value {
+    json!({ "type": "number" })
+}
+
+/// A non-negative integer.
+#[must_use]
+pub fn integer() -> Value {
+    json!({ "type": "integer", "minimum": 0 })
+}
+
+/// An object identifier.
+#[must_use]
+pub fn id() -> Value {
+    def("EntityId")
+}
+
 /// A reference to one of the shared definitions of the protocol schema, such as `EntityId`.
 #[must_use]
 pub fn def(name: &str) -> Value {
