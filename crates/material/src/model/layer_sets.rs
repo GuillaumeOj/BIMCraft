@@ -11,7 +11,7 @@ use core_model::{AttributeValue, EntityId, Model, ModelError};
 use core_txn::ModelCommand;
 use thiserror::Error;
 
-use super::{ENTITY as MATERIAL, attribute, sourced_real};
+use super::{ENTITY as MATERIAL, attribute, derived_id, sourced_real};
 use crate::layers::{Layer, LayerFunction, LayerSet, LayerSetError, Usage};
 use crate::material::Category;
 use crate::property::Property;
@@ -105,15 +105,10 @@ pub fn conductivity(model: &Model, material: EntityId) -> Option<f64> {
 /// replayed command makes the same objects (CORE-11), and none is in use in the model.
 #[must_use]
 pub fn fresh_layer_ids(model: &Model, build_up: EntityId, count: usize) -> Vec<EntityId> {
-    const PRIME: u128 = 0x0000_0000_0100_0000_0000_0000_0000_013B;
     let mut ids = Vec::with_capacity(count);
     let mut counter: u64 = 0;
     while ids.len() < count {
-        let mut state = build_up.get() ^ 0x6C62_272E_07BB_0142_62B8_2175_6295_C58D;
-        for byte in b"layer:".iter().chain(counter.to_be_bytes().iter()) {
-            state = (state ^ u128::from(*byte)).wrapping_mul(PRIME);
-        }
-        let id = EntityId::from_random_bits(state);
+        let id = derived_id(build_up, b"layer:", &counter.to_be_bytes());
         if !model.contains(id) && !ids.contains(&id) {
             ids.push(id);
         }

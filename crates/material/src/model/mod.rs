@@ -28,6 +28,17 @@ pub use layer_sets::{
 /// The core schema entity that stores materials.
 pub const ENTITY: &str = "Material";
 
+/// An id derived from `seed` and `tag`, so a replayed command makes the same object (CORE-11):
+/// FNV-1a over 128 bits, no randomness.
+pub(crate) fn derived_id(seed: EntityId, tag: &[u8], extra: &[u8]) -> EntityId {
+    const PRIME: u128 = 0x0000_0000_0100_0000_0000_0000_0000_013B;
+    let mut state = seed.get() ^ 0x6C62_272E_07BB_0142_62B8_2175_6295_C58D;
+    for byte in tag.iter().chain(extra) {
+        state = (state ^ u128::from(*byte)).wrapping_mul(PRIME);
+    }
+    EntityId::from_random_bits(state)
+}
+
 /// Why a material could not be read from the model. Messages never repeat values (SEC-03).
 #[derive(Clone, Debug, Error, PartialEq)]
 pub enum ReadError {

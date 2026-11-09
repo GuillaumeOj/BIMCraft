@@ -595,7 +595,6 @@ fn preview_build_up(
     // A draft layer without an id gets one of its own, so only a repeated given id is a clash.
     let drafts: Vec<Layer> = layers
         .iter()
-        .take(MAX_LAYERS + 1)
         .enumerate()
         .map(|(index, input)| {
             let synthetic = EntityId::new(u128::MAX - u128::try_from(index).unwrap_or(0));
@@ -617,11 +616,13 @@ fn preview_build_up(
             .iter()
             .map(|layer| (layer, material::conductivity(model, layer.material))),
     );
+    // A sum that overflows is not a number a client can read; the thickness error says why.
     let total: f64 = drafts
         .iter()
         .map(|layer| layer.thickness.si())
         .filter(|thickness| thickness.is_finite())
         .sum();
+    let total = if total.is_finite() { total } else { 0.0 };
     Ok(Preview {
         layers: drafts
             .iter()
@@ -636,6 +637,13 @@ fn preview_build_up(
         thermal_resistance: thermal.total,
         layers_without_thermal_data: thermal.layers_without_data,
         errors: errors
+            .into_iter()
+            .fold(Vec::new(), |mut unique, error| {
+                if !unique.contains(&error) {
+                    unique.push(error);
+                }
+                unique
+            })
             .into_iter()
             .map(|error| {
                 let error = BuildUpsError::from(error);

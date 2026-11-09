@@ -119,10 +119,11 @@ impl Usage {
 }
 
 /// The priority an IFC export writes for join priority `priority` (1 highest … 5 lowest):
-/// `IfcMaterialLayer.Priority` runs from 0 to 100, higher winning, so 1 is 100 and 5 is 0.
+/// `IfcMaterialLayer.Priority` runs from 0 to 100, higher winning, so 1 is 100 and 5 is 0. A
+/// priority below 1 gives 125 and one above 5 gives 0; [`LayerSet`] never holds either.
 #[must_use]
 pub const fn ifc_priority(priority: u8) -> u8 {
-    (MAX_PRIORITY - priority) * 25
+    MAX_PRIORITY.saturating_sub(priority) * 25
 }
 
 /// The join priority an IFC import gives `Priority`: the nearest of 1 to 5.
@@ -223,7 +224,7 @@ impl LayerSet {
         name: &str,
         usage: Usage,
         description: Option<&str>,
-        layers: Vec<Layer>,
+        mut layers: Vec<Layer>,
     ) -> Result<Self, LayerSetError> {
         if let Some(problem) = Self::problems(name, description, &layers, |_| None)
             .into_iter()
@@ -248,6 +249,14 @@ impl LayerSet {
             .flatten();
         // The layers were checked above, so only the total can still be refused.
         let geometry = geometry(&layers).map_err(|_| LayerSetError::TooThick)?;
+        // Layer names are trimmed like the build-up's; a blank one is no name.
+        for layer in &mut layers {
+            layer.name = layer
+                .name
+                .as_deref()
+                .and_then(|name| bounded_text(name).ok().flatten())
+                .map(str::to_owned);
+        }
         Ok(Self {
             name: name.to_owned(),
             usage,

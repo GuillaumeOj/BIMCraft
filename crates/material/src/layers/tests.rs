@@ -295,3 +295,20 @@ fn names_and_descriptions_are_bounded() {
         "another build-up has this name"
     );
 }
+
+#[test]
+fn layer_names_are_trimmed_and_a_blank_one_is_none() {
+    let mut layers = wall();
+    layers[0].name = Some("  Cladding ".into());
+    layers[1].name = Some("   ".into());
+    let set = build(layers).unwrap();
+    assert_eq!(set.layers()[0].name.as_deref(), Some("Cladding"));
+    assert_eq!(set.layers()[1].name, None);
+}
+
+#[test]
+fn an_out_of_range_priority_never_overflows_the_ifc_scale() {
+    assert_eq!(ifc_priority(0), 125);
+    assert_eq!(ifc_priority(6), 0);
+    assert_eq!(ifc_priority(u8::MAX), 0);
+}

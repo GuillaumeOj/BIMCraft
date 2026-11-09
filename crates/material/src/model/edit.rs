@@ -7,7 +7,7 @@ use core_model::{AttributeValue, EntityId, Model, ModelError, Source};
 use core_txn::ModelCommand;
 use thiserror::Error;
 
-use super::{ENTITY, ReadError, attribute, read, sourced_real, sourced_value};
+use super::{ENTITY, ReadError, attribute, derived_id, read, sourced_real, sourced_value};
 use crate::material::MaterialError;
 use crate::property::Property;
 use crate::source::{MAX_NAME_LEN, Sourced, bounded_text};
@@ -16,16 +16,10 @@ use crate::source::{MAX_NAME_LEN, Sourced, bounded_text};
 pub const ORIGINAL_ENTITY: &str = "MaterialOriginal";
 
 /// The `MaterialOriginal` that keeps `property` of `material`: its id derives from both, so a
-/// replayed command makes the same object (CORE-11) and callers never draw it. FNV-1a over
-/// 128 bits, no randomness.
+/// replayed command makes the same object (CORE-11) and callers never draw it.
 #[must_use]
 pub fn original_id(material: EntityId, property: Property) -> EntityId {
-    const PRIME: u128 = 0x0000_0000_0100_0000_0000_0000_0000_013B;
-    let mut state = material.get() ^ 0x6C62_272E_07BB_0142_62B8_2175_6295_C58D;
-    for byte in b"original:".iter().chain(property.name().as_bytes()) {
-        state = (state ^ u128::from(*byte)).wrapping_mul(PRIME);
-    }
-    EntityId::from_random_bits(state)
+    derived_id(material, b"original:", property.name().as_bytes())
 }
 
 /// How many objects other than its own `MaterialOriginal`s refer to material `id`.
