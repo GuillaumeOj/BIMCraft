@@ -1,7 +1,7 @@
 #!/bin/sh
 # Runs the project checks (AGENTS.md §9). CI calls the same sections, so local and remote never drift.
-# Usage: scripts/check-all.sh [section...]   sections: repo rust coverage wasm fuzz fuzz-explore corpus ui e2e desktop docs
-# (default: all but fuzz-explore, which CI runs on a schedule)
+# Usage: scripts/check-all.sh [section...]   sections: repo rust coverage wasm fuzz fuzz-explore corpus ui e2e desktop docs renovate
+# (default: all but fuzz-explore, which CI runs on a schedule, and renovate, which downloads Renovate)
 # A section is skipped only when the code it checks does not exist yet.
 # CHECK_CRATES="a b" limits the Rust sections to those crates, for a quick local run on the crates
 # you changed (AGENTS.md §3a); unset, they cover the whole workspace, as in CI.
@@ -35,6 +35,16 @@ check_repo() {
   bun scripts/generate-api-types.ts --check
   (cd scripts && bun test)
   if command -v actionlint >/dev/null 2>&1; then actionlint; fi
+}
+
+# Separate from `repo`, which stays fast and offline: this one downloads Renovate from npm.
+# --bun runs it on Bun, so it does not depend on the Node.js version installed. --no-global validates
+# the file as a repository config, as the Renovate app reads it, not as a self-hosted global config.
+check_renovate() {
+  step "Renovate: .github/renovate.json5 is valid, with no warning"
+  require bun
+  version=$(sed -n 's/^RENOVATE_VERSION=//p' scripts/tool-versions.env)
+  bunx --bun --package "renovate@$version" renovate-config-validator --strict --no-global .github/renovate.json5
 }
 
 check_rust() {
@@ -182,7 +192,7 @@ check_docs() {
 sections=${*:-repo rust coverage wasm fuzz corpus ui e2e desktop docs}
 for section in $sections; do
   case "$section" in
-    repo|rust|coverage|wasm|fuzz|corpus|ui|e2e|desktop|docs) "check_$section" ;;
+    repo|rust|coverage|wasm|fuzz|corpus|ui|e2e|desktop|docs|renovate) "check_$section" ;;
     fuzz-explore) check_fuzz_explore ;;
     *) echo "check-all: unknown section '$section'" >&2; exit 2 ;;
   esac
