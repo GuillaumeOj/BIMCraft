@@ -39,6 +39,8 @@ pub struct Field {
 pub enum FieldType {
     /// A value of an attribute or property.
     Value(ValueType),
+    /// A value of a sourced attribute or property, with its source (ADR 0018).
+    Sourced(ValueType),
     /// The objects playing a role of a relationship.
     Role(Cardinality),
 }
@@ -53,6 +55,14 @@ pub enum FieldKind {
     Optional,
     /// A list, absent when empty.
     OptionalList,
+}
+
+/// Whether any field of `structs` holds sourced values, so the emitters add the source types.
+pub fn has_sourced(structs: &[Struct]) -> bool {
+    structs
+        .iter()
+        .flat_map(|item| &item.fields)
+        .any(|field| matches!(field.ty, FieldType::Sourced(_)))
 }
 
 /// The records of a namespace: each entity followed by its type, then the property sets.
@@ -133,11 +143,16 @@ fn property_set_struct(property_set: &PropertySet, name_ref: fn(&str) -> String)
         name: property_set.name.clone(),
         property_set: true,
         deprecated: false,
-        doc: vec![
-            format!("The `{}` property set.", property_set.name),
-            String::new(),
-            format!("Applies to {}.", applies_to.join(", ")),
-        ],
+        doc: {
+            let mut doc = doc_lines(property_set.doc.as_deref(), || {
+                format!("The `{}` property set.", property_set.name)
+            });
+            doc.extend([
+                String::new(),
+                format!("Applies to {}.", applies_to.join(", ")),
+            ]);
+            doc
+        },
         fields: property_set
             .properties
             .iter()
@@ -158,8 +173,16 @@ fn attribute_field(attribute: &Attribute) -> Field {
     Field {
         name: attribute.name.clone(),
         doc: attribute_doc(attribute),
-        ty: FieldType::Value(attribute.value.clone()),
+        ty: value_field_type(attribute),
         kind,
+    }
+}
+
+fn value_field_type(attribute: &Attribute) -> FieldType {
+    if attribute.sourced {
+        FieldType::Sourced(attribute.value.clone())
+    } else {
+        FieldType::Value(attribute.value.clone())
     }
 }
 
@@ -171,7 +194,7 @@ fn override_field(attribute: &Attribute) -> Field {
     Field {
         name: attribute.name.clone(),
         doc,
-        ty: FieldType::Value(attribute.value.clone()),
+        ty: value_field_type(attribute),
         kind: FieldKind::Optional,
     }
 }
@@ -212,7 +235,7 @@ fn deprecation(version: u32) -> String {
 }
 
 /// The trimmed lines of a description, or the fallback when there is none.
-fn doc_lines(doc: Option<&str>, fallback: impl FnOnce() -> String) -> Vec<String> {
+pub(crate) fn doc_lines(doc: Option<&str>, fallback: impl FnOnce() -> String) -> Vec<String> {
     let Some(doc) = doc.map(str::trim).filter(|doc| !doc.is_empty()) else {
         return vec![fallback()];
     };

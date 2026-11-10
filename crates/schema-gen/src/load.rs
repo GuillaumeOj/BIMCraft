@@ -5,7 +5,7 @@ use crate::{Error, ErrorKind, MAX_FILE_SIZE, Source};
 
 /// Directories of a namespace that hold definitions. `migrations/` and `snapshots/` hold the
 /// version history, read by [`load_history`](crate::load_history).
-const DEFINITION_DIRS: [&str; 3] = ["entities", "relationships", "property-sets"];
+const DEFINITION_DIRS: [&str; 4] = ["entities", "relationships", "property-sets", "enumerations"];
 
 /// Reads `namespace.toml` and every `*.toml` file in the definition directories of `dir`,
 /// sorted by path. A definition directory may be absent.

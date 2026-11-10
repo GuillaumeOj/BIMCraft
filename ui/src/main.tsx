@@ -6,6 +6,7 @@ import { ApiClient, ApiProvider, tauriTransport } from "./api";
 import { GeorefProvider } from "./georef/GeorefContext";
 import { I18nProvider } from "./i18n/I18nProvider";
 import { Shell } from "./shell/Shell";
+import { ShellStateProvider } from "./shell/ShellState";
 
 const container = document.getElementById("root");
 if (container === null) {
@@ -16,9 +17,11 @@ createRoot(container).render(
   <StrictMode>
     <I18nProvider>
       <ApiProvider client={api}>
-        <GeorefProvider>
-          <Shell />
-        </GeorefProvider>
+        <ShellStateProvider>
+          <GeorefProvider>
+            <Shell />
+          </GeorefProvider>
+        </ShellStateProvider>
       </ApiProvider>
     </I18nProvider>
   </StrictMode>,

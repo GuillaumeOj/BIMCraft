@@ -1,0 +1,1 @@
+{"format": 1, "materials": [{"name": "A", "category": "generic", "behaviour_law": "linear_elastic", "properties": {"e_modulus": {"value": 1e9, "document": "D", "clause": "1"}}}]}

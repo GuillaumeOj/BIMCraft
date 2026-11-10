@@ -1,0 +1,181 @@
+{
+  "format": 1,
+  "materials": [
+    {
+      "name": "Gypsum plaster",
+      "category": "finish",
+      "behaviour_law": "none",
+      "properties": {
+        "density": {
+          "value": 1000.0,
+          "document": "Règles Th-Bât, Fascicule Matériaux (2017)",
+          "clause": "2.3.1"
+        },
+        "thermal_conductivity": {
+          "value": 0.4,
+          "document": "Règles Th-Bât, Fascicule Matériaux (2017)",
+          "clause": "2.3.1"
+        },
+        "specific_heat": {
+          "value": 1000.0,
+          "document": "Règles Th-Bât, Fascicule Matériaux (2017)",
+          "clause": "2.3.1"
+        }
+      }
+    },
+    {
+      "name": "Lime-cement render",
+      "category": "finish",
+      "behaviour_law": "none",
+      "properties": {
+        "density": {
+          "value": 1800.0,
+          "document": "Règles Th-Bât, Fascicule Matériaux (2017)",
+          "clause": "2.9.2"
+        },
+        "thermal_conductivity": {
+          "value": 1.0,
+          "document": "Règles Th-Bât, Fascicule Matériaux (2017)",
+          "clause": "2.9.2"
+        },
+        "specific_heat": {
+          "value": 1000.0,
+          "document": "Règles Th-Bât, Fascicule Matériaux (2017)",
+          "clause": "2.9.2"
+        }
+      }
+    },
+    {
+      "name": "Expanded polystyrene EPS",
+      "category": "insulation",
+      "behaviour_law": "none",
+      "properties": {
+        "density": {
+          "value": 20.0,
+          "document": "Règles Th-Bât, Fascicule Matériaux (2017)",
+          "clause": "2.6.4.1"
+        },
+        "thermal_conductivity": {
+          "value": 0.042,
+          "document": "Règles Th-Bât, Fascicule Matériaux (2017)",
+          "clause": "2.6.4.1"
+        },
+        "specific_heat": {
+          "value": 1450.0,
+          "document": "Règles Th-Bât, Fascicule Matériaux (2017)",
+          "clause": "2.6.4.1"
+        }
+      }
+    },
+    {
+      "name": "Rock wool",
+      "category": "insulation",
+      "behaviour_law": "none",
+      "properties": {
+        "density": {
+          "value": 30.0,
+          "document": "Règles Th-Bât, Fascicule Matériaux (2017)",
+          "clause": "2.6.2.1"
+        },
+        "thermal_conductivity": {
+          "value": 0.044,
+          "document": "Règles Th-Bât, Fascicule Matériaux (2017)",
+          "clause": "2.6.2.1"
+        },
+        "specific_heat": {
+          "value": 1030.0,
+          "document": "Règles Th-Bât, Fascicule Matériaux (2017)",
+          "clause": "2.6.2.1"
+        }
+      }
+    },
+    {
+      "name": "Glass wool",
+      "category": "insulation",
+      "behaviour_law": "none",
+      "properties": {
+        "density": {
+          "value": 30.0,
+          "document": "Règles Th-Bât, Fascicule Matériaux (2017)",
+          "clause": "2.6.2.1"
+        },
+        "thermal_conductivity": {
+          "value": 0.039,
+          "document": "Règles Th-Bât, Fascicule Matériaux (2017)",
+          "clause": "2.6.2.1"
+        },
+        "specific_heat": {
+          "value": 1030.0,
+          "document": "Règles Th-Bât, Fascicule Matériaux (2017)",
+          "clause": "2.6.2.1"
+        }
+      }
+    },
+    {
+      "name": "Clay brick",
+      "category": "generic",
+      "behaviour_law": "none",
+      "properties": {
+        "density": {
+          "value": 1800.0,
+          "document": "Règles Th-Bât, Fascicule Matériaux (2017)",
+          "clause": "2.4"
+        },
+        "thermal_conductivity": {
+          "value": 0.69,
+          "document": "Règles Th-Bât, Fascicule Matériaux (2017)",
+          "clause": "2.4"
+        },
+        "specific_heat": {
+          "value": 1000.0,
+          "document": "Règles Th-Bât, Fascicule Matériaux (2017)",
+          "clause": "2.4"
+        }
+      }
+    },
+    {
+      "name": "Concrete block",
+      "category": "generic",
+      "behaviour_law": "none",
+      "properties": {
+        "density": {
+          "value": 1800.0,
+          "document": "Règles Th-Bât, Fascicule Matériaux (2017)",
+          "clause": "2.2.1.2"
+        },
+        "thermal_conductivity": {
+          "value": 1.15,
+          "document": "Règles Th-Bât, Fascicule Matériaux (2017)",
+          "clause": "2.2.1.2"
+        },
+        "specific_heat": {
+          "value": 1000.0,
+          "document": "Règles Th-Bât, Fascicule Matériaux (2017)",
+          "clause": "2.2.1.2"
+        }
+      }
+    },
+    {
+      "name": "Softwood cladding",
+      "category": "finish",
+      "behaviour_law": "none",
+      "properties": {
+        "density": {
+          "value": 500.0,
+          "document": "Règles Th-Bât, Fascicule Matériaux (2017)",
+          "clause": "2.5.1.2"
+        },
+        "thermal_conductivity": {
+          "value": 0.13,
+          "document": "Règles Th-Bât, Fascicule Matériaux (2017)",
+          "clause": "2.5.1.2"
+        },
+        "specific_heat": {
+          "value": 1600.0,
+          "document": "Règles Th-Bât, Fascicule Matériaux (2017)",
+          "clause": "2.5.1.2"
+        }
+      }
+    }
+  ]
+}

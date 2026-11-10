@@ -34,6 +34,7 @@ schema/
     entities/beam.toml
     relationships/containment.toml   # a relationship entity (CORE-03)
     property-sets/Pset_WallCommon.toml
+    enumerations/wall_function.toml  # the items of an `enum:<Name>` value type
     migrations/0002.toml             # from version 1 to version 2
     snapshots/0001.json              # canonical model of each released version,
     snapshots/0002.json              #   generated and committed
@@ -59,10 +60,10 @@ Every definition file starts with `format`, the version of the definition file f
 
 | Key | Content |
 | --- | --- |
-| `[entity]` | `name`, `kind` (`element`, `spatial`, `relationship`, …), `doc`, optional `deprecated` (version), `property_sets` (CORE-04) |
+| `[entity]` | `name`, `kind` (`element`, `spatial`, `relationship`, `resource`, …; a `resource` such as a material has no type and no representation, [ADR 0019](0019-materials-and-layered-build-ups.md)), `doc`, optional `deprecated` (version), `property_sets` (CORE-04) |
 | `[type]` | For elements with types (CORE-02): `doc`. The type is named `<Entity>Type`, unless `name` overrides it |
 | `[ifc]` | `entity` and `predefined_type` (CORE-10); for `USERDEFINED`, `object_type`. The IFC type entity is `<entity>Type`, unless `type_entity` overrides it |
-| `[[attribute]]` | `name`, `value`, `required` or `default`, `on`, `doc` |
+| `[[attribute]]` | `name`, `value`, `required` or `default`, `on`, `doc`, and `sourced` when each value carries the document and clause it comes from ([ADR 0018](0018-sourced-values.md)) |
 | `[[role]]` | Relationship entities only: `name`, allowed `targets` (entity names, or `kind:<kind>` for every entity of a kind), `cardinality` in one relationship, and `exclusive` when an object can play that role in only one such relationship |
 | `[[representation]]` | `lod`, `context` (`body`, `axis`, `footprint`, `analytical`…), the `generator` function that computes it, and `depends_on`, the attributes it reads (GEO-06) |
 
@@ -70,7 +71,9 @@ Every definition file starts with `format`, the version of the definition file f
 - **Placement** (CORE-02): `on = "instance"` (the default), `"type"` (fixed by the type) or `"type_overridable"` (set by the type, overridable per instance).
 - `depends_on` is the dependency graph's input (CORE-08) and tells IFC export which parameters are geometric (INT-07).
 
-A property set file has `[property_set]` (`name`, `applies_to`) and `[[property]]` entries with the same keys as attributes, placement included. User-defined property sets (CORE-04) are model data with this same structure, but they live in the project file, not in `schema/`.
+A property set file has `[property_set]` (`name`, `applies_to`, optional `doc`) and `[[property]]` entries with the same keys as attributes, placement included. User-defined property sets (CORE-04) are model data with this same structure, but they live in the project file, not in `schema/`.
+
+An enumeration file has `[enumeration]` (`name` in PascalCase, optional `doc`) and one `[[item]]` per value (`name` in snake_case, optional `doc`), in order. Enumeration names share one namespace with entities, types and property sets, because the generated code and the API's JSON Schema give each a definition of that name. Values are stored as the item's name; the model rejects any other text (CORE-04), the JSON Schema lists the items, and the Rust types are enums. Changing an attribute from `text` to an enumeration needs no migration step when every stored value is an item.
 
 Allowed relationships are declared once, on the relationship entity, not on each participant. An element therefore takes part in containment, connections or voids through its `kind`, and a plugin element joins core relationships without changing any core file.
 

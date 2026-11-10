@@ -131,6 +131,10 @@ fn generate<O>(
 }
 
 /// Reads and parses the definitions of the namespace in `dir`.
-fn load_namespace(dir: &Path) -> Result<schema::Namespace, Vec<Error>> {
+///
+/// # Errors
+///
+/// Fails when a file cannot be read or a definition is invalid.
+pub fn load_namespace(dir: &Path) -> Result<schema::Namespace, Vec<Error>> {
     parse_sources(&load_dir(dir).map_err(|error| vec![error])?)
 }

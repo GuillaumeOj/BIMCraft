@@ -96,6 +96,7 @@ dependencies = [
  "core-txn",
  "georef",
  "jsonschema",
+ "material",
  "proptest",
  "schema",
  "schema-gen",
@@ -1552,8 +1553,12 @@ dependencies = [
  "api",
  "core-model",
  "core-txn",
+ "material",
+ "persist",
  "platform",
+ "proptest",
  "rayon",
+ "schema",
  "schema-gen",
  "serde_json",
  "tauri",
@@ -2149,6 +2154,22 @@ dependencies = [
  "log",
  "tendril",
  "web_atoms",
+]
+
+[[package]]
+name = "material"
+version = "0.0.0"
+dependencies = [
+ "core-model",
+ "core-txn",
+ "geom",
+ "libm",
+ "proptest",
+ "schema",
+ "schema-gen",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
 ]
 
 [[package]]

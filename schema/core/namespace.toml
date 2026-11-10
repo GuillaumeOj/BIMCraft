@@ -11,4 +11,4 @@ format = 1
 
 [namespace]
 name = "core"
-version = 2
+version = 3

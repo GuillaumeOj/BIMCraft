@@ -6,6 +6,7 @@ use api::jsonrpc::{Handled, Server};
 use api::{RegistryError, Session};
 use core_model::{Model, ModelError};
 use core_txn::Origin;
+use schema::Namespace;
 use schema_gen::{Source, parse_sources};
 
 /// The definition files of `schema/core`, embedded so that the program needs nothing beside it.
@@ -16,10 +17,59 @@ pub(crate) const CORE_SCHEMA: &[(&str, &str)] = &[
         include_str!("../../../schema/core/namespace.toml"),
     ),
     (
+        "entities/material.toml",
+        include_str!("../../../schema/core/entities/material.toml"),
+    ),
+    (
+        "entities/material_layer.toml",
+        include_str!("../../../schema/core/entities/material_layer.toml"),
+    ),
+    (
+        "entities/material_layer_set.toml",
+        include_str!("../../../schema/core/entities/material_layer_set.toml"),
+    ),
+    (
+        "entities/material_original.toml",
+        include_str!("../../../schema/core/entities/material_original.toml"),
+    ),
+    (
         "entities/site.toml",
         include_str!("../../../schema/core/entities/site.toml"),
     ),
+    (
+        "enumerations/behaviour_law.toml",
+        include_str!("../../../schema/core/enumerations/behaviour_law.toml"),
+    ),
+    (
+        "enumerations/build_up_usage.toml",
+        include_str!("../../../schema/core/enumerations/build_up_usage.toml"),
+    ),
+    (
+        "enumerations/layer_function.toml",
+        include_str!("../../../schema/core/enumerations/layer_function.toml"),
+    ),
+    (
+        "enumerations/material_category.toml",
+        include_str!("../../../schema/core/enumerations/material_category.toml"),
+    ),
 ];
+
+/// The core schema built into the application, the namespace every document's model and
+/// project file follow.
+///
+/// # Errors
+///
+/// [`OpenError::Schema`] when the embedded schema does not parse, which the tests rule out.
+pub fn core_namespace() -> Result<Namespace, OpenError> {
+    let sources: Vec<Source> = CORE_SCHEMA
+        .iter()
+        .map(|(path, contents)| Source {
+            path: (*path).to_owned(),
+            contents: (*contents).to_owned(),
+        })
+        .collect();
+    parse_sources(&sources).map_err(OpenError::Schema)
+}
 
 /// Why a document could not be opened.
 #[derive(Debug, thiserror::Error)]
@@ -56,15 +106,7 @@ impl DocumentHost {
     ///
     /// An [`OpenError`] when the built-in schema or registry is broken, which the tests rule out.
     pub fn open_new() -> Result<Self, OpenError> {
-        let sources: Vec<Source> = CORE_SCHEMA
-            .iter()
-            .map(|(path, contents)| Source {
-                path: (*path).to_owned(),
-                contents: (*contents).to_owned(),
-            })
-            .collect();
-        let namespace = parse_sources(&sources).map_err(OpenError::Schema)?;
-        let session = Session::new(Model::new(&namespace)?);
+        let session = Session::new(Model::new(&core_namespace()?)?);
         Ok(Self::new(Server::new(session)?))
     }
 

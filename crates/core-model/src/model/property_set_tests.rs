@@ -1,8 +1,8 @@
-use schema::{Placement, Presence, PropertySet, ValueType};
+use schema::{Attribute, Placement, Presence, PropertySet, ValueType};
 
 use super::tests::{STOREY, WALLS, bool, id, model, text, wall_common};
 use super::*;
-use crate::units::{Area, AreaUnit, Dimension, Length, LengthUnit};
+use crate::units::{Area, AreaUnit, Dimension, Length, LengthUnit, Stress, StressUnit};
 
 const BUILT_IN: &str = "Pset_WallCommon";
 const CUSTOM: &str = "Acme_WallChecks";
@@ -516,4 +516,73 @@ fn property_errors_name_sets_and_properties_but_never_values() {
     for (error, message) in messages {
         assert_eq!(error.to_string(), message);
     }
+}
+
+#[test]
+fn sourced_properties_keep_value_and_source_together() {
+    let mut model = model();
+    let mut set = PropertySet {
+        name: CUSTOM.into(),
+        ..wall_common()
+    };
+    set.properties.push(Attribute {
+        name: "Strength".into(),
+        value: ValueType::Quantity(schema::QuantityKind::Pressure),
+        presence: Presence::Optional,
+        placement: Placement::Instance,
+        doc: None,
+        sourced: true,
+    });
+    model.define_property_set(set).unwrap();
+    let wall = id(WALLS[0]);
+    let source = crate::Source::new("EN 1992-1-1:2004", "Table 3.1").unwrap();
+    let sourced = AttributeValue::sourced(AttributeValue::Real(30e6), source);
+    model
+        .attach_property_set(wall, CUSTOM, [reference(), ("Strength", sourced.clone())])
+        .unwrap();
+    assert_eq!(
+        model.property(wall, CUSTOM, "Strength"),
+        Ok(Some(sourced.clone()))
+    );
+    assert_eq!(sourced.plain(), &AttributeValue::Real(30e6));
+    assert_eq!(
+        model.set_property(wall, CUSTOM, "Strength", Some(AttributeValue::Real(1.0))),
+        Err(ModelError::PropertyValue {
+            set: CUSTOM.into(),
+            error: StoreError::MissingSource("Strength".into()),
+        })
+    );
+    assert_eq!(
+        model.set_property(wall, CUSTOM, "Reference", Some(sourced.clone())),
+        Err(ModelError::PropertyValue {
+            set: CUSTOM.into(),
+            error: StoreError::UnexpectedSource("Reference".into()),
+        })
+    );
+    // Quantities see through the source, when read and when replaced.
+    let strength = Stress::new(30.0, StressUnit::Megapascal);
+    assert_eq!(
+        model.quantity_property::<StressUnit>(wall, CUSTOM, "Strength"),
+        Ok(Some(strength))
+    );
+    assert_eq!(
+        model.set_quantity_property::<StressUnit>(wall, CUSTOM, "Strength", None),
+        Ok(Some(strength))
+    );
+    model
+        .set_property(wall, CUSTOM, "Strength", Some(sourced.clone()))
+        .unwrap();
+    assert_eq!(
+        model.set_property(wall, CUSTOM, "Strength", None),
+        Ok(Some(sourced))
+    );
+    assert_eq!(model.property(wall, CUSTOM, "Strength"), Ok(None));
+    assert_eq!(
+        StoreError::MissingSource("Strength".into()).to_string(),
+        "attribute \"Strength\" needs the source of its value"
+    );
+    assert_eq!(
+        StoreError::UnexpectedSource("Reference".into()).to_string(),
+        "attribute \"Reference\" does not hold sources"
+    );
 }

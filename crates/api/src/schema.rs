@@ -2,6 +2,7 @@
 //! and result are written with, and the document that gathers every registered command and query
 //! with the entity schema.
 
+use core_model::MAX_SOURCE_LEN;
 use serde_json::{Map, Value, json};
 
 use crate::{Descriptor, Kind, Registry};
@@ -19,6 +20,30 @@ pub struct Signature {
     pub params: Value,
     /// What the result looks like.
     pub result: Value,
+}
+
+/// A string.
+#[must_use]
+pub fn text() -> Value {
+    json!({ "type": "string" })
+}
+
+/// A number.
+#[must_use]
+pub fn number() -> Value {
+    json!({ "type": "number" })
+}
+
+/// A non-negative integer.
+#[must_use]
+pub fn integer() -> Value {
+    json!({ "type": "integer", "minimum": 0 })
+}
+
+/// An object identifier.
+#[must_use]
+pub fn id() -> Value {
+    def("EntityId")
 }
 
 /// A reference to one of the shared definitions of the protocol schema, such as `EntityId`.
@@ -106,6 +131,22 @@ fn shared() -> Map<String, Value> {
             variant("Text", &json!({ "type": "string" })),
             variant("Ref", &def("EntityId")),
             variant("List", &array_of(def("AttributeValue"))),
+            variant(
+                "Sourced",
+                &object(
+                    &[("value", def("AttributeValue")), ("source", def("Source"))],
+                    &[],
+                ),
+            ),
+        ],
+    });
+    // The server also trims the text and refuses control characters (ADR 0018).
+    let part = || json!({ "type": "string", "minLength": 1, "maxLength": MAX_SOURCE_LEN, "pattern": "\\S" });
+    let source = json!({
+        "description": "Where a sourced value comes from (ADR 0018): the document and clause it is taken from, or the user who entered it.",
+        "oneOf": [
+            object(&[("document", part()), ("clause", part())], &[]),
+            object(&[("entered_by_user", json!({ "const": true }))], &[]),
         ],
     });
     let text = || json!({ "type": "string" });
@@ -123,6 +164,8 @@ fn shared() -> Map<String, Value> {
         &[],
     );
     let mut defs = Map::from_iter(crate::georeference::definitions());
+    defs.extend(crate::materials::definitions());
+    defs.extend(crate::buildups::definitions());
     defs.extend([
         ("AttributeValue".to_owned(), value),
         ("ChangeEvent".to_owned(), event),
@@ -133,6 +176,7 @@ fn shared() -> Map<String, Value> {
             crate::commands::model_command_schema(),
         ),
         ("Origin".to_owned(), origin),
+        ("Source".to_owned(), source),
     ]);
     defs
 }

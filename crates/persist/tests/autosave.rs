@@ -35,6 +35,7 @@ fn namespace() -> Namespace {
             presence: Presence::Optional,
             placement: Placement::Instance,
             doc: None,
+            sourced: false,
         }],
         roles: Vec::new(),
         representations: Vec::new(),
@@ -44,6 +45,7 @@ fn namespace() -> Namespace {
         version: 1,
         entities: [("Space".to_owned(), space)].into(),
         property_sets: std::collections::BTreeMap::new(),
+        enumerations: std::collections::BTreeMap::new(),
     }
 }
 

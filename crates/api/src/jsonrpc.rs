@@ -4,10 +4,11 @@
 //! before it is parsed, and every malformed, oversized or too deeply nested one gets a JSON-RPC
 //! error, never a panic. Batches are supported, each request in them handled on its own.
 
-use core_txn::{ChangeEvent, Origin};
+use core_model::ModelError;
+use core_txn::{ChangeEvent, CommandError, Origin};
 use serde_json::{Map, Value, json};
 
-use crate::{ApiError, GeorefError, Registry, RegistryError, Session};
+use crate::{ApiError, GeorefError, MaterialsError, Registry, RegistryError, Session};
 
 /// The method of the notification a server sends after each change to the model; its params are
 /// the [`ChangeEvent`].
@@ -228,7 +229,7 @@ fn failure(id: &Value, code: i64, message: &str) -> Value {
 
 /// The error response to `error`. Messages never hold model content (SEC-03); the decoder's
 /// detail, which may quote the params, goes back to the client that sent them as `data`.
-fn error_response(id: &Value, error: &ApiError) -> Value {
+pub(crate) fn error_response(id: &Value, error: &ApiError) -> Value {
     let code = match error {
         ApiError::UnknownName(_) | ApiError::UnknownVersion { .. } => codes::METHOD_NOT_FOUND,
         ApiError::InvalidParams { detail } => {
@@ -241,6 +242,31 @@ fn error_response(id: &Value, error: &ApiError) -> Value {
             response["error"]["data"] = json!({ "reason": georef.reason() });
             if let GeorefError::OutsideDomain { index: Some(index) } = georef {
                 response["error"]["data"]["index"] = json!(index);
+            }
+            return response;
+        }
+        // Other objects still use it: a stable reason and how many, so the UI can say "in use".
+        ApiError::Rejected(CommandError::Model(ModelError::StillReferenced { count })) => {
+            let mut response = failure(id, codes::REJECTED, &error.to_string());
+            response["error"]["data"] = json!({ "reason": "in_use", "count": count });
+            return response;
+        }
+        ApiError::BuildUps(build_up) => {
+            let mut response = failure(id, codes::REJECTED, &error.to_string());
+            response["error"]["data"] = json!({ "reason": build_up.reason });
+            if let Some(index) = build_up.index {
+                response["error"]["data"]["index"] = json!(index);
+            }
+            return response;
+        }
+        ApiError::Materials(materials) => {
+            let mut response = failure(id, codes::REJECTED, &error.to_string());
+            response["error"]["data"] = json!({ "reason": materials.reason() });
+            if let Some(key) = materials.key() {
+                response["error"]["data"]["key"] = json!(key);
+            }
+            if let MaterialsError::InUse { used_by } = materials {
+                response["error"]["data"]["used_by"] = json!(used_by);
             }
             return response;
         }

@@ -16,17 +16,23 @@ const TEXT_PAIRS = [
   ["muted", "surface"],
   ["muted", "raised"],
   ["ink-2", "hover"],
+  ["ink", "selected"],
+  // Never muted on a selected row: it is only 4.3:1 there in dark mode.
+  ["ink-2", "selected"],
   ["on-verdigris", "verdigris"],
   ["danger", "surface"],
   ["danger", "raised"],
   ["danger", "paper"],
   ["on-danger", "danger"],
+  // The insulation band of the build-up preview carries its number.
+  ["ink", "warn-tint"],
 ] as const;
 
 // Interface parts against their surroundings (WCAG 2.2 AA: 3:1): the focus outline and the borders of form fields.
 const NON_TEXT_PAIRS = [
   ["verdigris", "surface"],
   ["verdigris", "paper"],
+  ["verdigris", "selected"],
   ["field-line", "surface"],
   ["field-line", "raised"],
 ] as const;

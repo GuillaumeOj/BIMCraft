@@ -2,7 +2,7 @@
 
 use core_txn::{CommandError, HistoryError};
 
-use crate::Version;
+use crate::{BuildUpsError, MaterialsError, Version};
 
 /// Why a descriptor could not be registered.
 #[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
@@ -52,6 +52,12 @@ pub enum ApiError {
     /// A georeference command or query failed; see [`GeorefError`].
     #[error(transparent)]
     Georef(#[from] GeorefError),
+    /// A build-up command or query failed; see [`BuildUpsError`].
+    #[error(transparent)]
+    BuildUps(BuildUpsError),
+    /// A materials command or query failed; see [`MaterialsError`].
+    #[error(transparent)]
+    Materials(#[from] MaterialsError),
     /// Undo was asked with nothing to undo.
     #[error("nothing to undo")]
     NothingToUndo,

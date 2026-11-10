@@ -2,8 +2,8 @@ use std::collections::BTreeMap;
 
 use proptest::prelude::*;
 use schema::{
-    Attribute, Entity, EntityKind, IfcMapping, Placement, Presence, QuantityKind, TypeDef, Value,
-    ValueType,
+    Attribute, Entity, EntityKind, EnumItem, Enumeration, IfcMapping, Placement, Presence,
+    QuantityKind, TypeDef, Value, ValueType,
 };
 
 use super::*;
@@ -16,6 +16,7 @@ fn attribute(name: &str, value: ValueType, presence: Presence, placement: Placem
         presence,
         placement,
         doc: None,
+        sourced: false,
     }
 }
 
@@ -86,6 +87,12 @@ fn namespace() -> Namespace {
                 Presence::Optional,
                 Instance,
             ),
+            attribute(
+                "sides",
+                ValueType::List(Box::new(ValueType::Enum("Side".into()))),
+                Presence::Optional,
+                Instance,
+            ),
         ],
     );
     wall.type_def = Some(TypeDef {
@@ -106,6 +113,19 @@ fn namespace() -> Namespace {
     Namespace {
         name: "core".into(),
         version: 1,
+        enumerations: BTreeMap::from([(
+            "Side".into(),
+            Enumeration {
+                name: "Side".into(),
+                doc: None,
+                items: ["exterior", "interior"]
+                    .map(|name| EnumItem {
+                        name: name.into(),
+                        doc: None,
+                    })
+                    .into(),
+            },
+        )]),
         entities: [wall, storey]
             .into_iter()
             .map(|entity| (entity.name.clone(), entity))
@@ -582,4 +602,34 @@ proptest! {
             }
         }
     }
+}
+
+#[test]
+fn enumeration_values_must_be_items() {
+    let mut store = store();
+    let sides = |items: &[&str]| {
+        Some(AttributeValue::List(
+            items.iter().map(|item| text(item)).collect(),
+        ))
+    };
+    store
+        .insert(
+            id(1),
+            "Wall",
+            [axis(), ("sides", sides(&["exterior"]).unwrap())],
+        )
+        .unwrap();
+    assert_eq!(
+        store.set(id(1), "sides", sides(&["interior", "top"])),
+        Err(StoreError::UnknownItem("sides".into()))
+    );
+    assert_eq!(
+        store.insert(id(2), "Wall", [axis(), ("sides", sides(&["top"]).unwrap())]),
+        Err(StoreError::UnknownItem("sides".into()))
+    );
+    assert_eq!(store.get(id(1), "sides"), Ok(sides(&["exterior"])));
+    assert_eq!(
+        StoreError::UnknownItem("sides".into()).to_string(),
+        "attribute \"sides\" does not accept this enumeration item"
+    );
 }

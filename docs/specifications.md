@@ -89,6 +89,7 @@ Arrows point from a caller to what it calls; the two hosts implement the platfor
 | `geom` | Geometry kernel, representations, tessellation | wasm32-compatible |
 | `persist` | Project files as SQLite databases: schema version, migrations (section 5.3) | wasm32-compatible |
 | `georef` | Coordinate systems, map conversion | wasm32-compatible |
+| `material` | Materials: behaviour laws, sourced design-code properties, grade library, layer sets | wasm32-compatible |
 | `disc-arch`, `disc-struct`, `disc-mep`, `disc-thermal` | Discipline entities, tools, rules | wasm32-compatible |
 | `analysis` | Analytical models, solver orchestration, results | wasm32-compatible |
 | `docgen` | Views, hidden lines, annotation, sheets | wasm32-compatible |

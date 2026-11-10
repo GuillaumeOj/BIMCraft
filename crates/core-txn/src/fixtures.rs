@@ -18,6 +18,7 @@ fn attribute(name: &str, value: ValueType, presence: Presence, placement: Placem
         presence,
         placement,
         doc: None,
+        sourced: false,
     }
 }
 
@@ -103,6 +104,7 @@ pub fn namespace() -> Namespace {
     let wall_common = PropertySet {
         name: PSET.into(),
         applies_to: vec!["Wall".into()],
+        doc: None,
         properties: vec![
             attribute("Reference", ValueType::Text, Presence::Optional, Instance),
             attribute(
@@ -121,6 +123,7 @@ pub fn namespace() -> Namespace {
             .map(|entity| (entity.name.clone(), entity))
             .collect(),
         property_sets: BTreeMap::from([(PSET.into(), wall_common)]),
+        enumerations: BTreeMap::new(),
     }
 }
 

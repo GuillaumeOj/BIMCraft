@@ -2,6 +2,7 @@ import { type FormEvent, type KeyboardEvent, useEffect, useId, useRef, useState 
 import { apiReason, setGeoreference, useApi } from "../api";
 import { useI18n } from "../i18n/I18nProvider";
 import type { MessageKey } from "../i18n/i18n";
+import { useShellState } from "../shell/ShellState";
 import { Banner } from "../ui/Banner";
 import { Disclosure } from "../ui/Disclosure";
 import { ErrorIcon } from "../ui/ErrorIcon";
@@ -108,7 +109,8 @@ export function LocationForm({
 }) {
   const api = useApi();
   const { t, language } = useI18n();
-  const { closeDialog, notify } = useGeoref();
+  const { closeDialog } = useGeoref();
+  const { notify } = useShellState();
   const prefix = useId();
   const fieldId = (key: FieldKey) => `${prefix}-${key}`;
   const baseErrorId = `${prefix}-base-error`;

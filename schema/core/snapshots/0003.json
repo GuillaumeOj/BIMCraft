@@ -1,0 +1,752 @@
+{
+  "name": "core",
+  "version": 3,
+  "entities": [
+    {
+      "name": "Material",
+      "kind": "resource",
+      "doc": "A substance that elements are made of, such as a concrete or steel grade (MAT-01). Its behaviour law says how it responds to strain. Each property value cites the document and clause it comes from (REP-05, ADR 0018); a material gives only the properties its category uses (ADR 0019).",
+      "property_sets": [],
+      "ifc": {
+        "entity": "IfcMaterial"
+      },
+      "attributes": [
+        {
+          "name": "name",
+          "value": "text",
+          "presence": "required",
+          "placement": "instance",
+          "doc": "The material's name, such as `C30/37` or `S355`."
+        },
+        {
+          "name": "category",
+          "value": "enum:MaterialCategory",
+          "presence": "required",
+          "placement": "instance",
+          "doc": "What the material is."
+        },
+        {
+          "name": "behaviour_law",
+          "value": "enum:BehaviourLaw",
+          "presence": "required",
+          "placement": "instance",
+          "doc": "How stress follows strain."
+        },
+        {
+          "name": "design_code",
+          "value": "text",
+          "presence": "optional",
+          "placement": "instance",
+          "doc": "The design code the properties follow, such as `EN 1992-1-1:2004`."
+        },
+        {
+          "name": "library_key",
+          "value": "text",
+          "presence": "optional",
+          "placement": "instance",
+          "doc": "The key of the library grade the material was created from, such as `concrete/C30-37`. Unset: the material was created from scratch."
+        },
+        {
+          "name": "density",
+          "value": "quantity:mass_density",
+          "presence": "optional",
+          "placement": "instance",
+          "doc": "Mass per unit volume, in kg/m³.",
+          "sourced": true
+        },
+        {
+          "name": "e_modulus",
+          "value": "quantity:pressure",
+          "presence": "optional",
+          "placement": "instance",
+          "doc": "Modulus of elasticity; for concrete, the secant modulus Ecm.",
+          "sourced": true
+        },
+        {
+          "name": "shear_modulus",
+          "value": "quantity:pressure",
+          "presence": "optional",
+          "placement": "instance",
+          "doc": "Shear modulus G.",
+          "sourced": true
+        },
+        {
+          "name": "poisson_ratio",
+          "value": "real",
+          "presence": "optional",
+          "placement": "instance",
+          "doc": "Ratio of lateral to axial strain under axial load.",
+          "sourced": true
+        },
+        {
+          "name": "thermal_expansion",
+          "value": "real",
+          "presence": "optional",
+          "placement": "instance",
+          "doc": "Linear thermal expansion coefficient, per kelvin.",
+          "sourced": true
+        },
+        {
+          "name": "thermal_conductivity",
+          "value": "quantity:thermal_conductivity",
+          "presence": "optional",
+          "placement": "instance",
+          "doc": "Thermal conductivity λ, in W/(m·K).",
+          "sourced": true
+        },
+        {
+          "name": "specific_heat",
+          "value": "real",
+          "presence": "optional",
+          "placement": "instance",
+          "doc": "Specific heat capacity, in J/(kg·K).",
+          "sourced": true
+        },
+        {
+          "name": "fck",
+          "value": "quantity:pressure",
+          "presence": "optional",
+          "placement": "instance",
+          "doc": "Concrete characteristic cylinder compressive strength at 28 days, fck.",
+          "sourced": true
+        },
+        {
+          "name": "fck_cube",
+          "value": "quantity:pressure",
+          "presence": "optional",
+          "placement": "instance",
+          "doc": "Concrete characteristic cube compressive strength at 28 days, fck,cube.",
+          "sourced": true
+        },
+        {
+          "name": "fcm",
+          "value": "quantity:pressure",
+          "presence": "optional",
+          "placement": "instance",
+          "doc": "Concrete mean cylinder compressive strength at 28 days, fcm.",
+          "sourced": true
+        },
+        {
+          "name": "fctm",
+          "value": "quantity:pressure",
+          "presence": "optional",
+          "placement": "instance",
+          "doc": "Concrete mean axial tensile strength, fctm.",
+          "sourced": true
+        },
+        {
+          "name": "eps_c2",
+          "value": "real",
+          "presence": "optional",
+          "placement": "instance",
+          "doc": "Concrete compressive strain at the peak of the parabola-rectangle diagram, εc2, as a ratio.",
+          "sourced": true
+        },
+        {
+          "name": "eps_cu2",
+          "value": "real",
+          "presence": "optional",
+          "placement": "instance",
+          "doc": "Concrete ultimate compressive strain of the parabola-rectangle diagram, εcu2, as a ratio.",
+          "sourced": true
+        },
+        {
+          "name": "n",
+          "value": "real",
+          "presence": "optional",
+          "placement": "instance",
+          "doc": "Exponent n of the parabola of the parabola-rectangle diagram.",
+          "sourced": true
+        },
+        {
+          "name": "eps_c3",
+          "value": "real",
+          "presence": "optional",
+          "placement": "instance",
+          "doc": "Concrete compressive strain at the end of the rising branch of the bilinear diagram, εc3, as a ratio.",
+          "sourced": true
+        },
+        {
+          "name": "eps_cu3",
+          "value": "real",
+          "presence": "optional",
+          "placement": "instance",
+          "doc": "Concrete ultimate compressive strain of the bilinear diagram, εcu3, as a ratio.",
+          "sourced": true
+        },
+        {
+          "name": "fy",
+          "value": "quantity:pressure",
+          "presence": "optional",
+          "placement": "instance",
+          "doc": "Steel yield strength: fy for structural steel, fyk for reinforcement.",
+          "sourced": true
+        },
+        {
+          "name": "fu",
+          "value": "quantity:pressure",
+          "presence": "optional",
+          "placement": "instance",
+          "doc": "Steel ultimate tensile strength: fu for structural steel, ftk for reinforcement.",
+          "sourced": true
+        },
+        {
+          "name": "k",
+          "value": "real",
+          "presence": "optional",
+          "placement": "instance",
+          "doc": "Ratio k of the tensile strength to the yield strength, at least 1.",
+          "sourced": true
+        },
+        {
+          "name": "eps_u",
+          "value": "real",
+          "presence": "optional",
+          "placement": "instance",
+          "doc": "Steel strain at maximum load: εu for structural steel, εuk for reinforcement, as a ratio.",
+          "sourced": true
+        },
+        {
+          "name": "fm_k",
+          "value": "quantity:pressure",
+          "presence": "optional",
+          "placement": "instance",
+          "doc": "Timber characteristic bending strength, fm,k.",
+          "sourced": true
+        },
+        {
+          "name": "ft0_k",
+          "value": "quantity:pressure",
+          "presence": "optional",
+          "placement": "instance",
+          "doc": "Timber characteristic tensile strength parallel to the grain, ft,0,k.",
+          "sourced": true
+        },
+        {
+          "name": "fc0_k",
+          "value": "quantity:pressure",
+          "presence": "optional",
+          "placement": "instance",
+          "doc": "Timber characteristic compressive strength parallel to the grain, fc,0,k.",
+          "sourced": true
+        },
+        {
+          "name": "fv_k",
+          "value": "quantity:pressure",
+          "presence": "optional",
+          "placement": "instance",
+          "doc": "Timber characteristic shear strength, fv,k.",
+          "sourced": true
+        },
+        {
+          "name": "e0_mean",
+          "value": "quantity:pressure",
+          "presence": "optional",
+          "placement": "instance",
+          "doc": "Timber mean modulus of elasticity parallel to the grain, E0,mean.",
+          "sourced": true
+        },
+        {
+          "name": "e0_05",
+          "value": "quantity:pressure",
+          "presence": "optional",
+          "placement": "instance",
+          "doc": "Timber fifth-percentile modulus of elasticity parallel to the grain, E0,05.",
+          "sourced": true
+        },
+        {
+          "name": "g_mean",
+          "value": "quantity:pressure",
+          "presence": "optional",
+          "placement": "instance",
+          "doc": "Timber mean shear modulus, Gmean.",
+          "sourced": true
+        },
+        {
+          "name": "rho_k",
+          "value": "quantity:mass_density",
+          "presence": "optional",
+          "placement": "instance",
+          "doc": "Timber characteristic density, ρk.",
+          "sourced": true
+        },
+        {
+          "name": "rho_mean",
+          "value": "quantity:mass_density",
+          "presence": "optional",
+          "placement": "instance",
+          "doc": "Timber mean density, ρmean.",
+          "sourced": true
+        },
+        {
+          "name": "fk",
+          "value": "quantity:pressure",
+          "presence": "optional",
+          "placement": "instance",
+          "doc": "Masonry characteristic compressive strength, fk.",
+          "sourced": true
+        },
+        {
+          "name": "gamma_c",
+          "value": "real",
+          "presence": "optional",
+          "placement": "instance",
+          "doc": "Partial factor γc for concrete, persistent and transient situations, to the recommended values.",
+          "sourced": true
+        },
+        {
+          "name": "gamma_c_fr",
+          "value": "real",
+          "presence": "optional",
+          "placement": "instance",
+          "doc": "Partial factor γc for concrete, persistent and transient situations, to the French national annex.",
+          "sourced": true
+        },
+        {
+          "name": "alpha_cc",
+          "value": "real",
+          "presence": "optional",
+          "placement": "instance",
+          "doc": "Coefficient αcc for long-term effects on the concrete compressive strength, to the recommended values.",
+          "sourced": true
+        },
+        {
+          "name": "alpha_cc_fr",
+          "value": "real",
+          "presence": "optional",
+          "placement": "instance",
+          "doc": "Coefficient αcc for long-term effects on the concrete compressive strength, to the French national annex.",
+          "sourced": true
+        },
+        {
+          "name": "gamma_s",
+          "value": "real",
+          "presence": "optional",
+          "placement": "instance",
+          "doc": "Partial factor γs for reinforcing steel, persistent and transient situations, to the recommended values.",
+          "sourced": true
+        },
+        {
+          "name": "gamma_s_fr",
+          "value": "real",
+          "presence": "optional",
+          "placement": "instance",
+          "doc": "Partial factor γs for reinforcing steel, persistent and transient situations, to the French national annex.",
+          "sourced": true
+        },
+        {
+          "name": "gamma_m0",
+          "value": "real",
+          "presence": "optional",
+          "placement": "instance",
+          "doc": "Partial factor γM0 for the resistance of steel cross-sections, to the recommended values.",
+          "sourced": true
+        },
+        {
+          "name": "gamma_m0_fr",
+          "value": "real",
+          "presence": "optional",
+          "placement": "instance",
+          "doc": "Partial factor γM0 for the resistance of steel cross-sections, to the French national annex.",
+          "sourced": true
+        },
+        {
+          "name": "gamma_m1",
+          "value": "real",
+          "presence": "optional",
+          "placement": "instance",
+          "doc": "Partial factor γM1 for the resistance of steel members to instability, to the recommended values.",
+          "sourced": true
+        },
+        {
+          "name": "gamma_m1_fr",
+          "value": "real",
+          "presence": "optional",
+          "placement": "instance",
+          "doc": "Partial factor γM1 for the resistance of steel members to instability, to the French national annex.",
+          "sourced": true
+        },
+        {
+          "name": "gamma_m2",
+          "value": "real",
+          "presence": "optional",
+          "placement": "instance",
+          "doc": "Partial factor γM2 for the resistance of steel cross-sections in tension to fracture, to the recommended values.",
+          "sourced": true
+        },
+        {
+          "name": "gamma_m2_fr",
+          "value": "real",
+          "presence": "optional",
+          "placement": "instance",
+          "doc": "Partial factor γM2 for the resistance of steel cross-sections in tension to fracture, to the French national annex.",
+          "sourced": true
+        },
+        {
+          "name": "gamma_m",
+          "value": "real",
+          "presence": "optional",
+          "placement": "instance",
+          "doc": "Partial factor γM for timber or masonry, to the recommended values.",
+          "sourced": true
+        },
+        {
+          "name": "gamma_m_fr",
+          "value": "real",
+          "presence": "optional",
+          "placement": "instance",
+          "doc": "Partial factor γM for timber or masonry, to the French national annex.",
+          "sourced": true
+        }
+      ],
+      "roles": [],
+      "representations": []
+    },
+    {
+      "name": "MaterialLayer",
+      "kind": "resource",
+      "doc": "One layer of a wall or slab build-up (MAT-03): a material, a thickness and a function. Where layered elements meet, the layer with the higher join priority runs through (GEO-11). The layer's object id is its stable LayerId (ADR 0010): reordering, renaming or resizing never changes it.",
+      "property_sets": [],
+      "ifc": {
+        "entity": "IfcMaterialLayer"
+      },
+      "attributes": [
+        {
+          "name": "material",
+          "value": "ref:Material",
+          "presence": "required",
+          "placement": "instance",
+          "doc": "What the layer is made of."
+        },
+        {
+          "name": "thickness",
+          "value": "quantity:length",
+          "presence": "required",
+          "placement": "instance",
+          "doc": "Thickness of the layer. A membrane may have none."
+        },
+        {
+          "name": "function",
+          "value": "enum:LayerFunction",
+          "presence": "required",
+          "placement": "instance",
+          "doc": "What the layer does."
+        },
+        {
+          "name": "priority",
+          "value": "integer",
+          "presence": "required",
+          "placement": "instance",
+          "doc": "Join priority from 1 (highest) to 5 (lowest): where layered elements meet, a layer of higher priority runs through layers of lower priority, and equal priorities meet. An IFC export writes 0 to 100 (ADR 0019)."
+        },
+        {
+          "name": "is_core",
+          "value": "bool",
+          "presence": {
+            "default": {
+              "bool": false
+            }
+          },
+          "placement": "instance",
+          "doc": "Whether the layer belongs to the structural core, which the default location line follows."
+        },
+        {
+          "name": "name",
+          "value": "text",
+          "presence": "optional",
+          "placement": "instance",
+          "doc": "Name shown in plans and schedules, such as `Insulation`."
+        }
+      ],
+      "roles": [],
+      "representations": []
+    },
+    {
+      "name": "MaterialLayerSet",
+      "kind": "resource",
+      "doc": "A wall or slab build-up (MAT-03): layers in order from the exterior face to the interior face, or from the top face down for slabs.",
+      "property_sets": [],
+      "ifc": {
+        "entity": "IfcMaterialLayerSet"
+      },
+      "attributes": [
+        {
+          "name": "name",
+          "value": "text",
+          "presence": "required",
+          "placement": "instance",
+          "doc": "Name of the build-up, such as `Exterior wall 300`."
+        },
+        {
+          "name": "usage",
+          "value": "enum:BuildUpUsage",
+          "presence": "required",
+          "placement": "instance",
+          "doc": "Whether the build-up is for walls or for slabs."
+        },
+        {
+          "name": "description",
+          "value": "text",
+          "presence": "optional",
+          "placement": "instance",
+          "doc": "Free text about the build-up."
+        },
+        {
+          "name": "layers",
+          "value": "list:ref:MaterialLayer",
+          "presence": "required",
+          "placement": "instance",
+          "doc": "The layers, from the exterior face to the interior face (walls) or from the top face down (slabs)."
+        }
+      ],
+      "roles": [],
+      "representations": []
+    },
+    {
+      "name": "MaterialOriginal",
+      "kind": "resource",
+      "doc": "The library value of a material property that the user has since edited, kept with its source so that resetting the property restores it (MAT-02, ADR 0019). A material has at most one per property.",
+      "property_sets": [],
+      "ifc": {
+        "entity": "IfcMaterialProperties"
+      },
+      "attributes": [
+        {
+          "name": "material",
+          "value": "ref:Material",
+          "presence": "required",
+          "placement": "instance",
+          "doc": "The material whose property was edited."
+        },
+        {
+          "name": "key",
+          "value": "text",
+          "presence": "required",
+          "placement": "instance",
+          "doc": "The name of the edited `Material` attribute, such as `fck`."
+        },
+        {
+          "name": "value",
+          "value": "real",
+          "presence": "required",
+          "placement": "instance",
+          "doc": "The library value, in the attribute's SI unit, with the document and clause it comes from.",
+          "sourced": true
+        }
+      ],
+      "roles": [],
+      "representations": []
+    },
+    {
+      "name": "Site",
+      "kind": "spatial",
+      "doc": "The piece of land the project stands on, and where it lies on Earth: the projected coordinate reference system, the base point, the grid rotation, the scale and an optional survey point (GEOREF-01, ADR 0017). A project has at most one site.",
+      "property_sets": [],
+      "ifc": {
+        "entity": "IfcSite"
+      },
+      "attributes": [
+        {
+          "name": "crs_epsg",
+          "value": "integer",
+          "presence": "optional",
+          "placement": "instance",
+          "doc": "EPSG code of the projected coordinate reference system, such as 2154 for Lambert-93. Unset: the project is not georeferenced."
+        },
+        {
+          "name": "base_point_eastings",
+          "value": "quantity:length",
+          "presence": {
+            "default": {
+              "real": "0"
+            }
+          },
+          "placement": "instance",
+          "doc": "Easting of the project base point, the origin of the local frame."
+        },
+        {
+          "name": "base_point_northings",
+          "value": "quantity:length",
+          "presence": {
+            "default": {
+              "real": "0"
+            }
+          },
+          "placement": "instance",
+          "doc": "Northing of the project base point."
+        },
+        {
+          "name": "base_point_height",
+          "value": "quantity:length",
+          "presence": {
+            "default": {
+              "real": "0"
+            }
+          },
+          "placement": "instance",
+          "doc": "Orthogonal height of the project base point."
+        },
+        {
+          "name": "grid_rotation",
+          "value": "quantity:plane_angle",
+          "presence": {
+            "default": {
+              "real": "0"
+            }
+          },
+          "placement": "instance",
+          "doc": "Angle from the grid easting axis of the coordinate reference system to the local x-axis, counter-clockwise."
+        },
+        {
+          "name": "scale",
+          "value": "real",
+          "presence": {
+            "default": {
+              "real": "1"
+            }
+          },
+          "placement": "instance",
+          "doc": "Map conversion scale from local lengths to map lengths, applied to all three axes. Finite and greater than zero."
+        },
+        {
+          "name": "survey_point_eastings",
+          "value": "quantity:length",
+          "presence": "optional",
+          "placement": "instance",
+          "doc": "Easting of the survey point, a known point such as a benchmark. Unset: no survey point."
+        },
+        {
+          "name": "survey_point_northings",
+          "value": "quantity:length",
+          "presence": "optional",
+          "placement": "instance",
+          "doc": "Northing of the survey point."
+        },
+        {
+          "name": "survey_point_height",
+          "value": "quantity:length",
+          "presence": "optional",
+          "placement": "instance",
+          "doc": "Orthogonal height of the survey point."
+        }
+      ],
+      "roles": [],
+      "representations": []
+    }
+  ],
+  "property_sets": [],
+  "enumerations": [
+    {
+      "name": "BehaviourLaw",
+      "doc": "How the stress in a material follows its strain.",
+      "items": [
+        {
+          "name": "linear_elastic",
+          "doc": "Stress proportional to strain, in tension and compression."
+        },
+        {
+          "name": "concrete_parabola_rectangle",
+          "doc": "The parabola-rectangle diagram for concrete in compression (EN 1992-1-1, 3.1.7)."
+        },
+        {
+          "name": "concrete_bilinear",
+          "doc": "The bi-linear diagram for concrete in compression (EN 1992-1-1, 3.1.7(2))."
+        },
+        {
+          "name": "steel_bilinear",
+          "doc": "Linear up to yield, then a hardening or horizontal branch (EN 1992-1-1, 3.2.7; EN 1993-1-1, 5.4.3)."
+        },
+        {
+          "name": "timber_elastic_brittle",
+          "doc": "Linear up to the strength, brittle in tension and plastic in compression, for timber parallel to the grain (EN 1995-1-1)."
+        },
+        {
+          "name": "none",
+          "doc": "No structural behaviour: the material carries no stress in design."
+        }
+      ]
+    },
+    {
+      "name": "BuildUpUsage",
+      "doc": "What a build-up is for: layers of a wall run from the exterior face in, layers of a slab from the top face down (ADR 0010).",
+      "items": [
+        {
+          "name": "wall",
+          "doc": "A wall build-up."
+        },
+        {
+          "name": "slab",
+          "doc": "A slab build-up."
+        }
+      ]
+    },
+    {
+      "name": "LayerFunction",
+      "doc": "What a layer of a build-up does; it decides the default join priority (MAT-03).",
+      "items": [
+        {
+          "name": "structure",
+          "doc": "The load-bearing layer."
+        },
+        {
+          "name": "substrate",
+          "doc": "A base for another layer, such as a screed or a backing wall."
+        },
+        {
+          "name": "insulation",
+          "doc": "Thermal or acoustic insulation."
+        },
+        {
+          "name": "air_gap",
+          "doc": "A ventilated or still air layer."
+        },
+        {
+          "name": "membrane",
+          "doc": "A thin sheet, such as a vapour barrier or a waterproofing layer; it may have no thickness."
+        },
+        {
+          "name": "finish",
+          "doc": "An exposed surface, such as plaster, render or cladding."
+        }
+      ]
+    },
+    {
+      "name": "MaterialCategory",
+      "doc": "What a material is; it decides which properties it gives and which behaviour laws suit it.",
+      "items": [
+        {
+          "name": "concrete",
+          "doc": "Concrete (EN 1992-1-1)."
+        },
+        {
+          "name": "reinforcement",
+          "doc": "Steel bars and meshes for reinforced concrete (EN 1992-1-1)."
+        },
+        {
+          "name": "steel",
+          "doc": "Structural steel for members and plates (EN 1993-1-1)."
+        },
+        {
+          "name": "timber",
+          "doc": "Solid timber and glued laminated timber (EN 1995-1-1, EN 338, EN 14080)."
+        },
+        {
+          "name": "masonry",
+          "doc": "Masonry units laid in mortar (EN 1996-1-1)."
+        },
+        {
+          "name": "insulation",
+          "doc": "Thermal and acoustic insulation, such as mineral wool or expanded polystyrene; no structural use."
+        },
+        {
+          "name": "finish",
+          "doc": "Linings, renders, plasters and claddings; no structural use."
+        },
+        {
+          "name": "generic",
+          "doc": "Any other material."
+        }
+      ]
+    }
+  ]
+}

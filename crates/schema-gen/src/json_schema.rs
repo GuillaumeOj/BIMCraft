@@ -1,9 +1,9 @@
-//! JSON Schema emitter (API-02): one definition per entity, per entity type and per property set,
-//! describing the JSON the generated Rust types read and write.
+//! JSON Schema emitter (API-02): one definition per entity, per entity type, per property set and
+//! per enumeration, describing the JSON the generated Rust types read and write.
 
 use std::collections::BTreeSet;
 
-use schema::{Cardinality, Namespace, Value, ValueType};
+use schema::{Cardinality, Enumeration, Namespace, Value, ValueType};
 use serde_json::{Map, Value as Json, json};
 
 use crate::layout::{self, FieldKind, FieldType};
@@ -15,6 +15,9 @@ pub const DRAFT: &str = "https://json-schema.org/draft/2020-12/schema";
 /// The definition object identifiers refer to; no schema record may take its name.
 const OBJECT_ID: &str = "ObjectId";
 const OBJECT_ID_REF: &str = "#/$defs/ObjectId";
+/// The definition of a source (ADR 0018), present when the namespace has sourced values.
+const SOURCE: &str = "Source";
+const SOURCE_REF: &str = "#/$defs/Source";
 
 /// Choices the emitted schema depends on.
 #[derive(Clone, Debug, PartialEq)]
@@ -40,12 +43,28 @@ pub fn emit_json_schema(
     options: &JsonSchemaOptions,
 ) -> Result<String, Vec<Error>> {
     let structs = layout::plan(namespace, |name| format!("`{name}`"))?;
-    check_names(&structs)?;
+    let sourced = layout::has_sourced(&structs);
+    check_names(
+        structs
+            .iter()
+            .map(|item| item.name.as_str())
+            .chain(namespace.enumerations.keys().map(String::as_str))
+            .chain(sourced.then_some(SOURCE)),
+    )?;
     let mut defs = Map::new();
     defs.insert(OBJECT_ID.to_owned(), options.object_id.clone());
+    if sourced {
+        defs.insert(SOURCE.to_owned(), source_definition());
+    }
     for item in structs {
         let definition = definition(&item);
         defs.insert(item.name, definition);
+    }
+    for enumeration in namespace.enumerations.values() {
+        defs.insert(
+            enumeration.name.clone(),
+            enumeration_definition(enumeration),
+        );
     }
     let document = json!({
         "$schema": DRAFT,
@@ -97,9 +116,29 @@ fn definition(item: &layout::Struct) -> Json {
     out
 }
 
+/// An enumeration is a string restricted to its item names.
+fn enumeration_definition(enumeration: &Enumeration) -> Json {
+    let description = enumeration
+        .doc
+        .clone()
+        .unwrap_or_else(|| format!("The `{}` enumeration.", enumeration.name));
+    let items: Vec<&str> = enumeration
+        .items
+        .iter()
+        .map(|item| item.name.as_str())
+        .collect();
+    json!({ "type": "string", "description": description, "enum": items })
+}
+
 fn value_schema(ty: &FieldType) -> Json {
     match ty {
         FieldType::Value(value) => value_type_schema(value),
+        FieldType::Sourced(value) => json!({
+            "type": "object",
+            "properties": { "value": value_type_schema(value), "source": { "$ref": SOURCE_REF } },
+            "required": ["value", "source"],
+            "additionalProperties": false,
+        }),
         FieldType::Role(Cardinality::One) => object_id(),
         FieldType::Role(Cardinality::Many) => json!({ "type": "array", "items": object_id() }),
     }
@@ -116,10 +155,33 @@ fn value_type_schema(value: &ValueType) -> Json {
         ValueType::Real | ValueType::Quantity(_) => json!({ "type": "number" }),
         ValueType::Text => json!({ "type": "string" }),
         ValueType::Ref(_) => object_id(),
-        // Rejected by validation for now; an enumeration will get a definition of its name.
         ValueType::Enum(name) => json!({ "$ref": format!("#/$defs/{name}") }),
         ValueType::List(inner) => json!({ "type": "array", "items": value_type_schema(inner) }),
     }
+}
+
+/// A source: a document and clause, each a non-blank text of at most 200 characters
+/// (`core_model::MAX_SOURCE_LEN`), or a value the user entered. Core also trims the texts and
+/// refuses control characters (ADR 0018).
+fn source_definition() -> Json {
+    let text = json!({ "type": "string", "minLength": 1, "maxLength": 200, "pattern": "\\S" });
+    json!({
+        "description": "Where a value comes from: the document and clause it is taken from, or the user who entered it.",
+        "oneOf": [
+            {
+                "type": "object",
+                "properties": { "document": text, "clause": text },
+                "required": ["document", "clause"],
+                "additionalProperties": false,
+            },
+            {
+                "type": "object",
+                "properties": { "entered_by_user": { "const": true } },
+                "required": ["entered_by_user"],
+                "additionalProperties": false,
+            },
+        ],
+    })
 }
 
 fn object_id() -> Json {
@@ -139,14 +201,14 @@ fn literal(value: &Value) -> Json {
 }
 
 /// Definition names must be distinct and leave [`OBJECT_ID`] free. Validation already keeps
-/// field names distinct, and entities apart from types, but not property sets from either.
-fn check_names(structs: &[layout::Struct]) -> Result<(), Vec<Error>> {
+/// field names distinct, and entities, types, property sets and enumerations apart, but a
+/// record may still take [`OBJECT_ID`].
+fn check_names<'a>(definitions: impl Iterator<Item = &'a str>) -> Result<(), Vec<Error>> {
     let mut names = BTreeSet::from([OBJECT_ID]);
-    let errors: Vec<Error> = structs
-        .iter()
-        .filter(|item| !names.insert(item.name.as_str()))
-        .map(|item| {
-            let message = format!("two JSON Schema definitions are named `{}`", item.name);
+    let errors: Vec<Error> = definitions
+        .filter(|name| !names.insert(name))
+        .map(|name| {
+            let message = format!("two JSON Schema definitions are named `{name}`");
             Error::new(ErrorKind::JsonSchema(message))
         })
         .collect();
@@ -160,24 +222,6 @@ fn check_names(structs: &[layout::Struct]) -> Result<(), Vec<Error>> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn record(name: &str, fields: &[&str]) -> layout::Struct {
-        layout::Struct {
-            name: name.into(),
-            property_set: false,
-            doc: Vec::new(),
-            deprecated: false,
-            fields: fields
-                .iter()
-                .map(|name| layout::Field {
-                    name: (*name).into(),
-                    doc: Vec::new(),
-                    ty: FieldType::Value(ValueType::Bool),
-                    kind: FieldKind::Optional,
-                })
-                .collect(),
-        }
-    }
 
     #[test]
     fn maps_value_types() {
@@ -205,12 +249,7 @@ mod tests {
 
     #[test]
     fn rejects_colliding_names() {
-        let structs = [
-            record(OBJECT_ID, &[]),
-            record("Wall", &["a"]),
-            record("Wall", &[]),
-        ];
-        let messages: Vec<String> = check_names(&structs)
+        let messages: Vec<String> = check_names([OBJECT_ID, "Wall", "Wall"].into_iter())
             .unwrap_err()
             .iter()
             .map(ToString::to_string)

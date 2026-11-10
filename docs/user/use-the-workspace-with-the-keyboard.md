@@ -18,7 +18,7 @@ Every area of the BIMCraft window can be reached without a mouse, which also let
 2. Press **Tab** to move between the buttons and lists inside an area.
 3. In the right-hand panel, press **Left** or **Right** on the tabs to switch between **Properties**, **History** and **Coordinates**. **Home** and **End** jump to the first and last tab. **Ctrl+Shift+K** (Cmd+Shift+K on macOS) shows the Coordinates tab from anywhere.
 4. Press **Ctrl+`** (the key left of 1 on most keyboards) to open or close the console. You can also click **Console** in the title bar.
-5. Press **Ctrl+Shift+L** (Cmd+Shift+L on macOS) to open the [project location](set-up-the-project-location.md) dialog.
+5. Press **Ctrl+Shift+L** (Cmd+Shift+L on macOS) to open the [project location](set-up-the-project-location.md) dialog, **Ctrl+Shift+M** (Cmd+Shift+M on macOS) to open the [Materials](manage-project-materials.md) dialog, or **Ctrl+Shift+B** (Cmd+Shift+B on macOS) to open the [Build-ups](create-a-wall-or-slab-build-up.md) dialog.
 
 **Result:** the area you move to gets a green outline and a screen reader reads its name.
 

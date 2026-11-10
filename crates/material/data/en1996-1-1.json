@@ -1,0 +1,59 @@
+{
+  "format": 1,
+  "materials": [
+    {
+      "name": "Clay masonry fb10 M10",
+      "category": "masonry",
+      "behaviour_law": "linear_elastic",
+      "design_code": "EN 1996-1-1:2005",
+      "properties": {
+        "fk": {
+          "value": 5500000.0,
+          "document": "EN 1996-1-1:2005",
+          "clause": "3.6.1.2(1)"
+        },
+        "e_modulus": {
+          "value": 5500000000.0,
+          "document": "EN 1996-1-1:2005",
+          "clause": "3.7.2(2)"
+        }
+      }
+    },
+    {
+      "name": "Clay masonry fb20 M10",
+      "category": "masonry",
+      "behaviour_law": "linear_elastic",
+      "design_code": "EN 1996-1-1:2005",
+      "properties": {
+        "fk": {
+          "value": 8900000.0,
+          "document": "EN 1996-1-1:2005",
+          "clause": "3.6.1.2(1)"
+        },
+        "e_modulus": {
+          "value": 8900000000.0,
+          "document": "EN 1996-1-1:2005",
+          "clause": "3.7.2(2)"
+        }
+      }
+    },
+    {
+      "name": "Concrete block masonry fb10 M10",
+      "category": "masonry",
+      "behaviour_law": "linear_elastic",
+      "design_code": "EN 1996-1-1:2005",
+      "properties": {
+        "fk": {
+          "value": 5500000.0,
+          "document": "EN 1996-1-1:2005",
+          "clause": "3.6.1.2(1)"
+        },
+        "e_modulus": {
+          "value": 5500000000.0,
+          "document": "EN 1996-1-1:2005",
+          "clause": "3.7.2(2)"
+        }
+      }
+    }
+  ]
+}

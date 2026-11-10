@@ -39,7 +39,7 @@ fn point_schema() -> Value {
 }
 
 /// One of these strings, written with `const` as the generated TypeScript types need.
-fn one_of_strings(values: &[&str]) -> Value {
+pub(crate) fn one_of_strings(values: &[&str]) -> Value {
     let variants: Vec<Value> = values
         .iter()
         .map(|value| json!({ "const": value }))

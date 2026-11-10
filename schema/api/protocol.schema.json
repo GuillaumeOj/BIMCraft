@@ -78,6 +78,153 @@
             "List"
           ],
           "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "Sourced": {
+              "additionalProperties": false,
+              "properties": {
+                "source": {
+                  "$ref": "#/$defs/Source"
+                },
+                "value": {
+                  "$ref": "#/$defs/AttributeValue"
+                }
+              },
+              "required": [
+                "value",
+                "source"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "Sourced"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "BuildUpFunction": {
+      "oneOf": [
+        {
+          "const": "structure"
+        },
+        {
+          "const": "substrate"
+        },
+        {
+          "const": "insulation"
+        },
+        {
+          "const": "air_gap"
+        },
+        {
+          "const": "membrane"
+        },
+        {
+          "const": "finish"
+        }
+      ]
+    },
+    "BuildUpLayer": {
+      "additionalProperties": false,
+      "properties": {
+        "core": {
+          "type": "boolean"
+        },
+        "function": {
+          "$ref": "#/$defs/BuildUpFunction"
+        },
+        "id": {
+          "$ref": "#/$defs/EntityId"
+        },
+        "material": {
+          "$ref": "#/$defs/EntityId"
+        },
+        "material_name": {
+          "type": "string"
+        },
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "priority": {
+          "type": "integer"
+        },
+        "thermal_resistance": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "thickness": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "id",
+        "material",
+        "material_name",
+        "thickness",
+        "function",
+        "priority",
+        "core",
+        "name",
+        "thermal_resistance"
+      ],
+      "type": "object"
+    },
+    "BuildUpLayerInput": {
+      "additionalProperties": false,
+      "properties": {
+        "core": {
+          "type": "boolean"
+        },
+        "function": {
+          "$ref": "#/$defs/BuildUpFunction"
+        },
+        "id": {
+          "$ref": "#/$defs/EntityId"
+        },
+        "material": {
+          "$ref": "#/$defs/EntityId"
+        },
+        "name": {
+          "type": "string"
+        },
+        "priority": {
+          "type": "integer"
+        },
+        "thickness": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "material",
+        "thickness",
+        "function"
+      ],
+      "type": "object"
+    },
+    "BuildUpUsage": {
+      "oneOf": [
+        {
+          "const": "wall"
+        },
+        {
+          "const": "slab"
         }
       ]
     },
@@ -213,6 +360,247 @@
         "grid_rotation",
         "scale",
         "survey_point"
+      ],
+      "type": "object"
+    },
+    "MaterialAnnex": {
+      "oneOf": [
+        {
+          "const": "recommended"
+        },
+        {
+          "const": "fr"
+        }
+      ]
+    },
+    "MaterialCategory": {
+      "oneOf": [
+        {
+          "const": "concrete"
+        },
+        {
+          "const": "reinforcement"
+        },
+        {
+          "const": "steel"
+        },
+        {
+          "const": "timber"
+        },
+        {
+          "const": "masonry"
+        },
+        {
+          "const": "insulation"
+        },
+        {
+          "const": "finish"
+        },
+        {
+          "const": "generic"
+        }
+      ]
+    },
+    "MaterialLaw": {
+      "additionalProperties": false,
+      "properties": {
+        "branch": {
+          "anyOf": [
+            {
+              "oneOf": [
+                {
+                  "const": "horizontal"
+                },
+                {
+                  "const": "inclined"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "kind": {
+          "oneOf": [
+            {
+              "const": "parabola_rectangle"
+            },
+            {
+              "const": "bilinear"
+            },
+            {
+              "const": "linear_elastic"
+            },
+            {
+              "const": "elastic_plastic"
+            },
+            {
+              "const": "elastic_brittle"
+            },
+            {
+              "const": "none"
+            }
+          ]
+        },
+        "source": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Source"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "source",
+        "branch"
+      ],
+      "type": "object"
+    },
+    "MaterialProperty": {
+      "additionalProperties": false,
+      "properties": {
+        "annex": {
+          "$ref": "#/$defs/MaterialAnnex"
+        },
+        "key": {
+          "type": "string"
+        },
+        "library_value": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "quantity": {
+          "oneOf": [
+            {
+              "const": "stress"
+            },
+            {
+              "const": "modulus"
+            },
+            {
+              "const": "density"
+            },
+            {
+              "const": "strain"
+            },
+            {
+              "const": "ratio"
+            },
+            {
+              "const": "thermal_conductivity"
+            },
+            {
+              "const": "specific_heat"
+            }
+          ]
+        },
+        "range": {
+          "additionalProperties": false,
+          "properties": {
+            "max": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "max_inclusive": {
+              "type": "boolean"
+            },
+            "min": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "min_inclusive": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "min",
+            "min_inclusive",
+            "max",
+            "max_inclusive"
+          ],
+          "type": "object"
+        },
+        "required": {
+          "type": "boolean"
+        },
+        "source": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Source"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "key",
+        "quantity",
+        "value",
+        "source",
+        "library_value",
+        "range",
+        "required"
+      ],
+      "type": "object"
+    },
+    "MaterialPropertyInput": {
+      "additionalProperties": false,
+      "properties": {
+        "annex": {
+          "$ref": "#/$defs/MaterialAnnex"
+        },
+        "key": {
+          "type": "string"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "key",
+        "value"
       ],
       "type": "object"
     },
@@ -675,7 +1063,254 @@
         }
       ]
     },
+    "Source": {
+      "description": "Where a sourced value comes from (ADR 0018): the document and clause it is taken from, or the user who entered it.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "clause": {
+              "maxLength": 200,
+              "minLength": 1,
+              "pattern": "\\S",
+              "type": "string"
+            },
+            "document": {
+              "maxLength": 200,
+              "minLength": 1,
+              "pattern": "\\S",
+              "type": "string"
+            }
+          },
+          "required": [
+            "document",
+            "clause"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "entered_by_user": {
+              "const": true
+            }
+          },
+          "required": [
+            "entered_by_user"
+          ],
+          "type": "object"
+        }
+      ]
+    },
     "commands": {
+      "buildups.create": {
+        "description": "Creates a build-up with its layers.",
+        "properties": {
+          "name": {
+            "const": "buildups.create"
+          },
+          "params": {
+            "additionalProperties": false,
+            "properties": {
+              "description": {
+                "type": "string"
+              },
+              "id": {
+                "$ref": "#/$defs/EntityId"
+              },
+              "layers": {
+                "items": {
+                  "$ref": "#/$defs/BuildUpLayerInput"
+                },
+                "maxItems": 33,
+                "type": "array"
+              },
+              "name": {
+                "maxLength": 120,
+                "type": "string"
+              },
+              "usage": {
+                "$ref": "#/$defs/BuildUpUsage"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "usage",
+              "layers"
+            ],
+            "type": "object"
+          },
+          "result": {
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "$ref": "#/$defs/EntityId"
+              },
+              "layers": {
+                "items": {
+                  "$ref": "#/$defs/EntityId"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "id",
+              "layers"
+            ],
+            "type": "object"
+          },
+          "version": {
+            "const": "1.0.0"
+          }
+        },
+        "type": "object"
+      },
+      "buildups.delete": {
+        "description": "Deletes a build-up with its layers.",
+        "properties": {
+          "name": {
+            "const": "buildups.delete"
+          },
+          "params": {
+            "additionalProperties": false,
+            "properties": {
+              "buildup": {
+                "$ref": "#/$defs/EntityId"
+              }
+            },
+            "required": [
+              "buildup"
+            ],
+            "type": "object"
+          },
+          "result": {
+            "additionalProperties": false,
+            "properties": {},
+            "required": [],
+            "type": "object"
+          },
+          "version": {
+            "const": "1.0.0"
+          }
+        },
+        "type": "object"
+      },
+      "buildups.duplicate": {
+        "description": "Copies a build-up under a new name, with new layers.",
+        "properties": {
+          "name": {
+            "const": "buildups.duplicate"
+          },
+          "params": {
+            "additionalProperties": false,
+            "properties": {
+              "buildup": {
+                "$ref": "#/$defs/EntityId"
+              },
+              "id": {
+                "$ref": "#/$defs/EntityId"
+              },
+              "name": {
+                "maxLength": 120,
+                "type": "string"
+              }
+            },
+            "required": [
+              "buildup",
+              "id",
+              "name"
+            ],
+            "type": "object"
+          },
+          "result": {
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "$ref": "#/$defs/EntityId"
+              },
+              "layers": {
+                "items": {
+                  "$ref": "#/$defs/EntityId"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "id",
+              "layers"
+            ],
+            "type": "object"
+          },
+          "version": {
+            "const": "1.0.0"
+          }
+        },
+        "type": "object"
+      },
+      "buildups.update": {
+        "description": "Renames a build-up and replaces its layers; layers it names keep their identity.",
+        "properties": {
+          "name": {
+            "const": "buildups.update"
+          },
+          "params": {
+            "additionalProperties": false,
+            "properties": {
+              "buildup": {
+                "$ref": "#/$defs/EntityId"
+              },
+              "description": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "layers": {
+                "items": {
+                  "$ref": "#/$defs/BuildUpLayerInput"
+                },
+                "maxItems": 33,
+                "type": "array"
+              },
+              "name": {
+                "maxLength": 120,
+                "type": "string"
+              },
+              "usage": {
+                "$ref": "#/$defs/BuildUpUsage"
+              }
+            },
+            "required": [
+              "buildup"
+            ],
+            "type": "object"
+          },
+          "result": {
+            "additionalProperties": false,
+            "properties": {
+              "layers": {
+                "items": {
+                  "$ref": "#/$defs/EntityId"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "layers"
+            ],
+            "type": "object"
+          },
+          "version": {
+            "const": "1.0.0"
+          }
+        },
+        "type": "object"
+      },
       "georef.clear": {
         "description": "Removes the project's georeference.",
         "properties": {
@@ -824,6 +1459,173 @@
           },
           "result": {
             "type": "null"
+          },
+          "version": {
+            "const": "1.0.0"
+          }
+        },
+        "type": "object"
+      },
+      "materials.add_from_library": {
+        "description": "Adds a project material with the values of a library grade.",
+        "properties": {
+          "name": {
+            "const": "materials.add_from_library"
+          },
+          "params": {
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "$ref": "#/$defs/EntityId"
+              },
+              "key": {
+                "type": "string"
+              },
+              "name": {
+                "maxLength": 120,
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "key"
+            ],
+            "type": "object"
+          },
+          "result": {
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "$ref": "#/$defs/EntityId"
+              }
+            },
+            "required": [
+              "id"
+            ],
+            "type": "object"
+          },
+          "version": {
+            "const": "1.0.0"
+          }
+        },
+        "type": "object"
+      },
+      "materials.create": {
+        "description": "Creates a project material from scratch; every value is entered by the user.",
+        "properties": {
+          "name": {
+            "const": "materials.create"
+          },
+          "params": {
+            "additionalProperties": false,
+            "properties": {
+              "category": {
+                "$ref": "#/$defs/MaterialCategory"
+              },
+              "id": {
+                "$ref": "#/$defs/EntityId"
+              },
+              "name": {
+                "maxLength": 120,
+                "type": "string"
+              },
+              "properties": {
+                "items": {
+                  "$ref": "#/$defs/MaterialPropertyInput"
+                },
+                "maxItems": 64,
+                "type": "array"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "category"
+            ],
+            "type": "object"
+          },
+          "result": {
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "$ref": "#/$defs/EntityId"
+              }
+            },
+            "required": [
+              "id"
+            ],
+            "type": "object"
+          },
+          "version": {
+            "const": "1.0.0"
+          }
+        },
+        "type": "object"
+      },
+      "materials.delete": {
+        "description": "Deletes a material that nothing uses.",
+        "properties": {
+          "name": {
+            "const": "materials.delete"
+          },
+          "params": {
+            "additionalProperties": false,
+            "properties": {
+              "material": {
+                "$ref": "#/$defs/EntityId"
+              }
+            },
+            "required": [
+              "material"
+            ],
+            "type": "object"
+          },
+          "result": {
+            "additionalProperties": false,
+            "properties": {},
+            "required": [],
+            "type": "object"
+          },
+          "version": {
+            "const": "1.0.0"
+          }
+        },
+        "type": "object"
+      },
+      "materials.update": {
+        "description": "Renames a material and edits or resets its values.",
+        "properties": {
+          "name": {
+            "const": "materials.update"
+          },
+          "params": {
+            "additionalProperties": false,
+            "properties": {
+              "material": {
+                "$ref": "#/$defs/EntityId"
+              },
+              "name": {
+                "maxLength": 120,
+                "type": "string"
+              },
+              "properties": {
+                "items": {
+                  "$ref": "#/$defs/MaterialPropertyInput"
+                },
+                "maxItems": 64,
+                "type": "array"
+              }
+            },
+            "required": [
+              "material"
+            ],
+            "type": "object"
+          },
+          "result": {
+            "additionalProperties": false,
+            "properties": {},
+            "required": [],
+            "type": "object"
           },
           "version": {
             "const": "1.0.0"
@@ -1381,6 +2183,1276 @@
     "entities": {
       "$comment": "@generated by schema-gen from the schema definitions. Do not edit.",
       "$defs": {
+        "BehaviourLaw": {
+          "description": "How the stress in a material follows its strain.",
+          "enum": [
+            "linear_elastic",
+            "concrete_parabola_rectangle",
+            "concrete_bilinear",
+            "steel_bilinear",
+            "timber_elastic_brittle",
+            "none"
+          ],
+          "type": "string"
+        },
+        "BuildUpUsage": {
+          "description": "What a build-up is for: layers of a wall run from the exterior face in, layers of a slab from the top face down (ADR 0010).",
+          "enum": [
+            "wall",
+            "slab"
+          ],
+          "type": "string"
+        },
+        "LayerFunction": {
+          "description": "What a layer of a build-up does; it decides the default join priority (MAT-03).",
+          "enum": [
+            "structure",
+            "substrate",
+            "insulation",
+            "air_gap",
+            "membrane",
+            "finish"
+          ],
+          "type": "string"
+        },
+        "Material": {
+          "additionalProperties": false,
+          "description": "A substance that elements are made of, such as a concrete or steel grade (MAT-01). Its behaviour law says how it responds to strain. Each property value cites the document and clause it comes from (REP-05, ADR 0018); a material gives only the properties its category uses (ADR 0019).",
+          "properties": {
+            "alpha_cc": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "source": {
+                      "$ref": "#/$defs/Source"
+                    },
+                    "value": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "value",
+                    "source"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Coefficient αcc for long-term effects on the concrete compressive strength, to the recommended values."
+            },
+            "alpha_cc_fr": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "source": {
+                      "$ref": "#/$defs/Source"
+                    },
+                    "value": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "value",
+                    "source"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Coefficient αcc for long-term effects on the concrete compressive strength, to the French national annex."
+            },
+            "behaviour_law": {
+              "$ref": "#/$defs/BehaviourLaw",
+              "description": "How stress follows strain."
+            },
+            "category": {
+              "$ref": "#/$defs/MaterialCategory",
+              "description": "What the material is."
+            },
+            "density": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "source": {
+                      "$ref": "#/$defs/Source"
+                    },
+                    "value": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "value",
+                    "source"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Mass per unit volume, in kg/m³.\n\nIn kg/m³."
+            },
+            "design_code": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The design code the properties follow, such as `EN 1992-1-1:2004`."
+            },
+            "e0_05": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "source": {
+                      "$ref": "#/$defs/Source"
+                    },
+                    "value": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "value",
+                    "source"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Timber fifth-percentile modulus of elasticity parallel to the grain, E0,05.\n\nIn Pa."
+            },
+            "e0_mean": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "source": {
+                      "$ref": "#/$defs/Source"
+                    },
+                    "value": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "value",
+                    "source"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Timber mean modulus of elasticity parallel to the grain, E0,mean.\n\nIn Pa."
+            },
+            "e_modulus": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "source": {
+                      "$ref": "#/$defs/Source"
+                    },
+                    "value": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "value",
+                    "source"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Modulus of elasticity; for concrete, the secant modulus Ecm.\n\nIn Pa."
+            },
+            "eps_c2": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "source": {
+                      "$ref": "#/$defs/Source"
+                    },
+                    "value": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "value",
+                    "source"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Concrete compressive strain at the peak of the parabola-rectangle diagram, εc2, as a ratio."
+            },
+            "eps_c3": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "source": {
+                      "$ref": "#/$defs/Source"
+                    },
+                    "value": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "value",
+                    "source"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Concrete compressive strain at the end of the rising branch of the bilinear diagram, εc3, as a ratio."
+            },
+            "eps_cu2": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "source": {
+                      "$ref": "#/$defs/Source"
+                    },
+                    "value": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "value",
+                    "source"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Concrete ultimate compressive strain of the parabola-rectangle diagram, εcu2, as a ratio."
+            },
+            "eps_cu3": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "source": {
+                      "$ref": "#/$defs/Source"
+                    },
+                    "value": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "value",
+                    "source"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Concrete ultimate compressive strain of the bilinear diagram, εcu3, as a ratio."
+            },
+            "eps_u": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "source": {
+                      "$ref": "#/$defs/Source"
+                    },
+                    "value": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "value",
+                    "source"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Steel strain at maximum load: εu for structural steel, εuk for reinforcement, as a ratio."
+            },
+            "fc0_k": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "source": {
+                      "$ref": "#/$defs/Source"
+                    },
+                    "value": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "value",
+                    "source"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Timber characteristic compressive strength parallel to the grain, fc,0,k.\n\nIn Pa."
+            },
+            "fck": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "source": {
+                      "$ref": "#/$defs/Source"
+                    },
+                    "value": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "value",
+                    "source"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Concrete characteristic cylinder compressive strength at 28 days, fck.\n\nIn Pa."
+            },
+            "fck_cube": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "source": {
+                      "$ref": "#/$defs/Source"
+                    },
+                    "value": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "value",
+                    "source"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Concrete characteristic cube compressive strength at 28 days, fck,cube.\n\nIn Pa."
+            },
+            "fcm": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "source": {
+                      "$ref": "#/$defs/Source"
+                    },
+                    "value": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "value",
+                    "source"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Concrete mean cylinder compressive strength at 28 days, fcm.\n\nIn Pa."
+            },
+            "fctm": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "source": {
+                      "$ref": "#/$defs/Source"
+                    },
+                    "value": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "value",
+                    "source"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Concrete mean axial tensile strength, fctm.\n\nIn Pa."
+            },
+            "fk": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "source": {
+                      "$ref": "#/$defs/Source"
+                    },
+                    "value": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "value",
+                    "source"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Masonry characteristic compressive strength, fk.\n\nIn Pa."
+            },
+            "fm_k": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "source": {
+                      "$ref": "#/$defs/Source"
+                    },
+                    "value": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "value",
+                    "source"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Timber characteristic bending strength, fm,k.\n\nIn Pa."
+            },
+            "ft0_k": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "source": {
+                      "$ref": "#/$defs/Source"
+                    },
+                    "value": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "value",
+                    "source"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Timber characteristic tensile strength parallel to the grain, ft,0,k.\n\nIn Pa."
+            },
+            "fu": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "source": {
+                      "$ref": "#/$defs/Source"
+                    },
+                    "value": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "value",
+                    "source"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Steel ultimate tensile strength: fu for structural steel, ftk for reinforcement.\n\nIn Pa."
+            },
+            "fv_k": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "source": {
+                      "$ref": "#/$defs/Source"
+                    },
+                    "value": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "value",
+                    "source"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Timber characteristic shear strength, fv,k.\n\nIn Pa."
+            },
+            "fy": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "source": {
+                      "$ref": "#/$defs/Source"
+                    },
+                    "value": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "value",
+                    "source"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Steel yield strength: fy for structural steel, fyk for reinforcement.\n\nIn Pa."
+            },
+            "g_mean": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "source": {
+                      "$ref": "#/$defs/Source"
+                    },
+                    "value": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "value",
+                    "source"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Timber mean shear modulus, Gmean.\n\nIn Pa."
+            },
+            "gamma_c": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "source": {
+                      "$ref": "#/$defs/Source"
+                    },
+                    "value": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "value",
+                    "source"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Partial factor γc for concrete, persistent and transient situations, to the recommended values."
+            },
+            "gamma_c_fr": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "source": {
+                      "$ref": "#/$defs/Source"
+                    },
+                    "value": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "value",
+                    "source"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Partial factor γc for concrete, persistent and transient situations, to the French national annex."
+            },
+            "gamma_m": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "source": {
+                      "$ref": "#/$defs/Source"
+                    },
+                    "value": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "value",
+                    "source"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Partial factor γM for timber or masonry, to the recommended values."
+            },
+            "gamma_m0": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "source": {
+                      "$ref": "#/$defs/Source"
+                    },
+                    "value": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "value",
+                    "source"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Partial factor γM0 for the resistance of steel cross-sections, to the recommended values."
+            },
+            "gamma_m0_fr": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "source": {
+                      "$ref": "#/$defs/Source"
+                    },
+                    "value": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "value",
+                    "source"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Partial factor γM0 for the resistance of steel cross-sections, to the French national annex."
+            },
+            "gamma_m1": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "source": {
+                      "$ref": "#/$defs/Source"
+                    },
+                    "value": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "value",
+                    "source"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Partial factor γM1 for the resistance of steel members to instability, to the recommended values."
+            },
+            "gamma_m1_fr": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "source": {
+                      "$ref": "#/$defs/Source"
+                    },
+                    "value": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "value",
+                    "source"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Partial factor γM1 for the resistance of steel members to instability, to the French national annex."
+            },
+            "gamma_m2": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "source": {
+                      "$ref": "#/$defs/Source"
+                    },
+                    "value": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "value",
+                    "source"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Partial factor γM2 for the resistance of steel cross-sections in tension to fracture, to the recommended values."
+            },
+            "gamma_m2_fr": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "source": {
+                      "$ref": "#/$defs/Source"
+                    },
+                    "value": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "value",
+                    "source"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Partial factor γM2 for the resistance of steel cross-sections in tension to fracture, to the French national annex."
+            },
+            "gamma_m_fr": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "source": {
+                      "$ref": "#/$defs/Source"
+                    },
+                    "value": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "value",
+                    "source"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Partial factor γM for timber or masonry, to the French national annex."
+            },
+            "gamma_s": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "source": {
+                      "$ref": "#/$defs/Source"
+                    },
+                    "value": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "value",
+                    "source"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Partial factor γs for reinforcing steel, persistent and transient situations, to the recommended values."
+            },
+            "gamma_s_fr": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "source": {
+                      "$ref": "#/$defs/Source"
+                    },
+                    "value": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "value",
+                    "source"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Partial factor γs for reinforcing steel, persistent and transient situations, to the French national annex."
+            },
+            "k": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "source": {
+                      "$ref": "#/$defs/Source"
+                    },
+                    "value": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "value",
+                    "source"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Ratio k of the tensile strength to the yield strength, at least 1."
+            },
+            "library_key": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The key of the library grade the material was created from, such as `concrete/C30-37`. Unset: the material was created from scratch."
+            },
+            "n": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "source": {
+                      "$ref": "#/$defs/Source"
+                    },
+                    "value": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "value",
+                    "source"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Exponent n of the parabola of the parabola-rectangle diagram."
+            },
+            "name": {
+              "description": "The material's name, such as `C30/37` or `S355`.",
+              "type": "string"
+            },
+            "poisson_ratio": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "source": {
+                      "$ref": "#/$defs/Source"
+                    },
+                    "value": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "value",
+                    "source"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Ratio of lateral to axial strain under axial load."
+            },
+            "rho_k": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "source": {
+                      "$ref": "#/$defs/Source"
+                    },
+                    "value": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "value",
+                    "source"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Timber characteristic density, ρk.\n\nIn kg/m³."
+            },
+            "rho_mean": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "source": {
+                      "$ref": "#/$defs/Source"
+                    },
+                    "value": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "value",
+                    "source"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Timber mean density, ρmean.\n\nIn kg/m³."
+            },
+            "shear_modulus": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "source": {
+                      "$ref": "#/$defs/Source"
+                    },
+                    "value": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "value",
+                    "source"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Shear modulus G.\n\nIn Pa."
+            },
+            "specific_heat": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "source": {
+                      "$ref": "#/$defs/Source"
+                    },
+                    "value": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "value",
+                    "source"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Specific heat capacity, in J/(kg·K)."
+            },
+            "thermal_conductivity": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "source": {
+                      "$ref": "#/$defs/Source"
+                    },
+                    "value": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "value",
+                    "source"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Thermal conductivity λ, in W/(m·K).\n\nIn W/(m·K)."
+            },
+            "thermal_expansion": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "source": {
+                      "$ref": "#/$defs/Source"
+                    },
+                    "value": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "value",
+                    "source"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Linear thermal expansion coefficient, per kelvin."
+            }
+          },
+          "required": [
+            "name",
+            "category",
+            "behaviour_law"
+          ],
+          "type": "object"
+        },
+        "MaterialCategory": {
+          "description": "What a material is; it decides which properties it gives and which behaviour laws suit it.",
+          "enum": [
+            "concrete",
+            "reinforcement",
+            "steel",
+            "timber",
+            "masonry",
+            "insulation",
+            "finish",
+            "generic"
+          ],
+          "type": "string"
+        },
+        "MaterialLayer": {
+          "additionalProperties": false,
+          "description": "One layer of a wall or slab build-up (MAT-03): a material, a thickness and a function. Where layered elements meet, the layer with the higher join priority runs through (GEO-11). The layer's object id is its stable LayerId (ADR 0010): reordering, renaming or resizing never changes it.",
+          "properties": {
+            "function": {
+              "$ref": "#/$defs/LayerFunction",
+              "description": "What the layer does."
+            },
+            "is_core": {
+              "default": false,
+              "description": "Whether the layer belongs to the structural core, which the default location line follows.",
+              "type": "boolean"
+            },
+            "material": {
+              "$ref": "#/$defs/ObjectId",
+              "description": "What the layer is made of."
+            },
+            "name": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Name shown in plans and schedules, such as `Insulation`."
+            },
+            "priority": {
+              "description": "Join priority from 1 (highest) to 5 (lowest): where layered elements meet, a layer of higher priority runs through layers of lower priority, and equal priorities meet. An IFC export writes 0 to 100 (ADR 0019).",
+              "maximum": 9223372036854775807,
+              "minimum": -9223372036854775808,
+              "type": "integer"
+            },
+            "thickness": {
+              "description": "Thickness of the layer. A membrane may have none.\n\nIn m.",
+              "type": "number"
+            }
+          },
+          "required": [
+            "material",
+            "thickness",
+            "function",
+            "priority"
+          ],
+          "type": "object"
+        },
+        "MaterialLayerSet": {
+          "additionalProperties": false,
+          "description": "A wall or slab build-up (MAT-03): layers in order from the exterior face to the interior face, or from the top face down for slabs.",
+          "properties": {
+            "description": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Free text about the build-up."
+            },
+            "layers": {
+              "description": "The layers, from the exterior face to the interior face (walls) or from the top face down (slabs).",
+              "items": {
+                "$ref": "#/$defs/ObjectId"
+              },
+              "type": "array"
+            },
+            "name": {
+              "description": "Name of the build-up, such as `Exterior wall 300`.",
+              "type": "string"
+            },
+            "usage": {
+              "$ref": "#/$defs/BuildUpUsage",
+              "description": "Whether the build-up is for walls or for slabs."
+            }
+          },
+          "required": [
+            "name",
+            "usage",
+            "layers"
+          ],
+          "type": "object"
+        },
+        "MaterialOriginal": {
+          "additionalProperties": false,
+          "description": "The library value of a material property that the user has since edited, kept with its source so that resetting the property restores it (MAT-02, ADR 0019). A material has at most one per property.",
+          "properties": {
+            "key": {
+              "description": "The name of the edited `Material` attribute, such as `fck`.",
+              "type": "string"
+            },
+            "material": {
+              "$ref": "#/$defs/ObjectId",
+              "description": "The material whose property was edited."
+            },
+            "value": {
+              "additionalProperties": false,
+              "description": "The library value, in the attribute's SI unit, with the document and clause it comes from.",
+              "properties": {
+                "source": {
+                  "$ref": "#/$defs/Source"
+                },
+                "value": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "value",
+                "source"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "material",
+            "key",
+            "value"
+          ],
+          "type": "object"
+        },
         "ObjectId": {
           "description": "The stable 128-bit identifier of an object, as an IFC GlobalId.",
           "pattern": "^[0-3][0-9A-Za-z_$]{21}$",
@@ -1463,14 +3535,309 @@
             }
           },
           "type": "object"
+        },
+        "Source": {
+          "description": "Where a value comes from: the document and clause it is taken from, or the user who entered it.",
+          "oneOf": [
+            {
+              "additionalProperties": false,
+              "properties": {
+                "clause": {
+                  "maxLength": 200,
+                  "minLength": 1,
+                  "pattern": "\\S",
+                  "type": "string"
+                },
+                "document": {
+                  "maxLength": 200,
+                  "minLength": 1,
+                  "pattern": "\\S",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "document",
+                "clause"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "entered_by_user": {
+                  "const": true
+                }
+              },
+              "required": [
+                "entered_by_user"
+              ],
+              "type": "object"
+            }
+          ]
         }
       },
       "$id": "urn:bimcraft:schema:core",
       "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "description": "Objects of the `core` schema, version 2.",
+      "description": "Objects of the `core` schema, version 3.",
       "title": "BIMCraft `core` schema"
     },
     "queries": {
+      "buildups.get": {
+        "description": "Reads one build-up with its layers and its thermal resistance.",
+        "properties": {
+          "name": {
+            "const": "buildups.get"
+          },
+          "params": {
+            "additionalProperties": false,
+            "properties": {
+              "buildup": {
+                "$ref": "#/$defs/EntityId"
+              }
+            },
+            "required": [
+              "buildup"
+            ],
+            "type": "object"
+          },
+          "result": {
+            "additionalProperties": false,
+            "properties": {
+              "description": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "id": {
+                "$ref": "#/$defs/EntityId"
+              },
+              "layers": {
+                "items": {
+                  "$ref": "#/$defs/BuildUpLayer"
+                },
+                "type": "array"
+              },
+              "layers_without_thermal_data": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "name": {
+                "type": "string"
+              },
+              "thermal_resistance": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "total_thickness": {
+                "type": "number"
+              },
+              "usage": {
+                "$ref": "#/$defs/BuildUpUsage"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "usage",
+              "description",
+              "layers",
+              "total_thickness",
+              "thermal_resistance",
+              "layers_without_thermal_data"
+            ],
+            "type": "object"
+          },
+          "version": {
+            "const": "1.0.0"
+          }
+        },
+        "type": "object"
+      },
+      "buildups.list": {
+        "description": "Lists the wall and slab build-ups of the project.",
+        "properties": {
+          "name": {
+            "const": "buildups.list"
+          },
+          "params": {
+            "additionalProperties": false,
+            "properties": {
+              "usage": {
+                "$ref": "#/$defs/BuildUpUsage"
+              }
+            },
+            "required": [],
+            "type": "object"
+          },
+          "result": {
+            "additionalProperties": false,
+            "properties": {
+              "items": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "id": {
+                      "$ref": "#/$defs/EntityId"
+                    },
+                    "layer_count": {
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "total_thickness": {
+                      "type": "number"
+                    },
+                    "usage": {
+                      "$ref": "#/$defs/BuildUpUsage"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "usage",
+                    "layer_count",
+                    "total_thickness"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "items"
+            ],
+            "type": "object"
+          },
+          "version": {
+            "const": "1.0.0"
+          }
+        },
+        "type": "object"
+      },
+      "buildups.preview": {
+        "description": "Checks a draft build-up without saving it and returns its totals and every error.",
+        "properties": {
+          "name": {
+            "const": "buildups.preview"
+          },
+          "params": {
+            "additionalProperties": false,
+            "properties": {
+              "layers": {
+                "items": {
+                  "$ref": "#/$defs/BuildUpLayerInput"
+                },
+                "maxItems": 33,
+                "type": "array"
+              },
+              "usage": {
+                "$ref": "#/$defs/BuildUpUsage"
+              }
+            },
+            "required": [
+              "usage",
+              "layers"
+            ],
+            "type": "object"
+          },
+          "result": {
+            "additionalProperties": false,
+            "properties": {
+              "errors": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "code": {
+                      "type": "string"
+                    },
+                    "index": {
+                      "minimum": 0,
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "code"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "layers": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "core": {
+                      "type": "boolean"
+                    },
+                    "priority": {
+                      "type": "integer"
+                    },
+                    "thermal_resistance": {
+                      "anyOf": [
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "priority",
+                    "core",
+                    "thermal_resistance"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "layers_without_thermal_data": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "thermal_resistance": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "total_thickness": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "layers",
+              "total_thickness",
+              "thermal_resistance",
+              "layers_without_thermal_data",
+              "errors"
+            ],
+            "type": "object"
+          },
+          "version": {
+            "const": "1.0.0"
+          }
+        },
+        "type": "object"
+      },
       "georef.convert": {
         "description": "Converts points between local, projected and geographic coordinates.",
         "properties": {
@@ -1835,6 +4202,314 @@
               "can_redo",
               "entries",
               "next"
+            ],
+            "type": "object"
+          },
+          "version": {
+            "const": "1.0.0"
+          }
+        },
+        "type": "object"
+      },
+      "materials.get": {
+        "description": "Reads one project material with its law, its values and where they come from.",
+        "properties": {
+          "name": {
+            "const": "materials.get"
+          },
+          "params": {
+            "additionalProperties": false,
+            "properties": {
+              "material": {
+                "$ref": "#/$defs/EntityId"
+              }
+            },
+            "required": [
+              "material"
+            ],
+            "type": "object"
+          },
+          "result": {
+            "additionalProperties": false,
+            "properties": {
+              "category": {
+                "$ref": "#/$defs/MaterialCategory"
+              },
+              "design_code": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "edited": {
+                "type": "boolean"
+              },
+              "grade": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "id": {
+                "$ref": "#/$defs/EntityId"
+              },
+              "law": {
+                "$ref": "#/$defs/MaterialLaw"
+              },
+              "name": {
+                "type": "string"
+              },
+              "properties": {
+                "items": {
+                  "$ref": "#/$defs/MaterialProperty"
+                },
+                "type": "array"
+              },
+              "used_by": {
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "name",
+              "category",
+              "design_code",
+              "law",
+              "properties",
+              "id",
+              "grade",
+              "used_by",
+              "edited"
+            ],
+            "type": "object"
+          },
+          "version": {
+            "const": "1.0.0"
+          }
+        },
+        "type": "object"
+      },
+      "materials.grade": {
+        "description": "Reads one library grade with its law and its sourced values.",
+        "properties": {
+          "name": {
+            "const": "materials.grade"
+          },
+          "params": {
+            "additionalProperties": false,
+            "properties": {
+              "key": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "key"
+            ],
+            "type": "object"
+          },
+          "result": {
+            "additionalProperties": false,
+            "properties": {
+              "category": {
+                "$ref": "#/$defs/MaterialCategory"
+              },
+              "design_code": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "key": {
+                "type": "string"
+              },
+              "law": {
+                "$ref": "#/$defs/MaterialLaw"
+              },
+              "name": {
+                "type": "string"
+              },
+              "properties": {
+                "items": {
+                  "$ref": "#/$defs/MaterialProperty"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "name",
+              "category",
+              "design_code",
+              "law",
+              "properties",
+              "key"
+            ],
+            "type": "object"
+          },
+          "version": {
+            "const": "1.0.0"
+          }
+        },
+        "type": "object"
+      },
+      "materials.library": {
+        "description": "Lists the grades of the material library, with a search and a category filter.",
+        "properties": {
+          "name": {
+            "const": "materials.library"
+          },
+          "params": {
+            "additionalProperties": false,
+            "properties": {
+              "category": {
+                "$ref": "#/$defs/MaterialCategory"
+              },
+              "limit": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "offset": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "search": {
+                "maxLength": 200,
+                "type": "string"
+              }
+            },
+            "required": [],
+            "type": "object"
+          },
+          "result": {
+            "additionalProperties": false,
+            "properties": {
+              "items": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "category": {
+                      "$ref": "#/$defs/MaterialCategory"
+                    },
+                    "design_code": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "key": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "key",
+                    "name",
+                    "category",
+                    "design_code"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "total": {
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "items",
+              "total"
+            ],
+            "type": "object"
+          },
+          "version": {
+            "const": "1.0.0"
+          }
+        },
+        "type": "object"
+      },
+      "materials.list": {
+        "description": "Lists the materials of the project.",
+        "properties": {
+          "name": {
+            "const": "materials.list"
+          },
+          "params": {
+            "additionalProperties": false,
+            "properties": {
+              "category": {
+                "$ref": "#/$defs/MaterialCategory"
+              },
+              "search": {
+                "maxLength": 200,
+                "type": "string"
+              }
+            },
+            "required": [],
+            "type": "object"
+          },
+          "result": {
+            "additionalProperties": false,
+            "properties": {
+              "items": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "category": {
+                      "$ref": "#/$defs/MaterialCategory"
+                    },
+                    "grade": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "id": {
+                      "$ref": "#/$defs/EntityId"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "used_by": {
+                      "minimum": 0,
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "category",
+                    "grade",
+                    "used_by"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "items"
             ],
             "type": "object"
           },

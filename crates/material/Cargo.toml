@@ -1,0 +1,25 @@
+[package]
+name = "material"
+version = "0.0.0"
+description = "Materials: behaviour laws and design-code properties with their sources."
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+core-model = { workspace = true }
+core-txn = { workspace = true }
+geom = { workspace = true }
+libm = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+proptest = { workspace = true }
+schema = { workspace = true }
+schema-gen = { workspace = true }
+
+[lints]
+workspace = true

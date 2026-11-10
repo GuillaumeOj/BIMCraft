@@ -1,0 +1,32 @@
+format = 1
+
+[entity]
+name = "MaterialOriginal"
+kind = "resource"
+doc = """
+The library value of a material property that the user has since edited, kept with its source so \
+that resetting the property restores it (MAT-02, ADR 0019). A material has at most one per \
+property.\
+"""
+
+[ifc]
+entity = "IfcMaterialProperties"
+
+[[attribute]]
+name = "material"
+value = "ref:Material"
+required = true
+doc = "The material whose property was edited."
+
+[[attribute]]
+name = "key"
+value = "text"
+required = true
+doc = "The name of the edited `Material` attribute, such as `fck`."
+
+[[attribute]]
+name = "value"
+value = "real"
+required = true
+sourced = true
+doc = "The library value, in the attribute's SI unit, with the document and clause it comes from."

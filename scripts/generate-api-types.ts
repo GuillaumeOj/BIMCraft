@@ -12,11 +12,23 @@ export const SCHEMA_FILE = "schema/api/protocol.schema.json";
 export const OUTPUT_FILE = "ui/src/api/protocol.gen.ts";
 
 // Keywords that decide the TypeScript type. A $ref, a const or a union decides it alone, so it
-// cannot be combined with another of them: the generator would have to drop one.
-const SHAPING = ["type", "properties", "required", "additionalProperties", "items", "prefixItems", "$ref", "const", "anyOf", "oneOf"];
+// cannot be combined with another of them: the generator would have to drop one. An enum may only
+// come with the `type` its items share.
+const SHAPING = ["type", "properties", "required", "additionalProperties", "items", "prefixItems", "$ref", "const", "anyOf", "oneOf", "enum"];
 const ALONE = ["$ref", "const", "anyOf", "oneOf"];
 // Keywords that narrow values without changing their TypeScript type: the server checks them.
-const NARROWING = new Set(["description", "pattern", "minimum", "maximum", "uniqueItems", "minItems", "maxItems"]);
+const NARROWING = new Set([
+  "description",
+  "pattern",
+  "minimum",
+  "maximum",
+  "minLength",
+  "maxLength",
+  "default",
+  "uniqueItems",
+  "minItems",
+  "maxItems",
+]);
 const SUPPORTED = new Set([...NARROWING, ...SHAPING]);
 const REF = /^#\/\$defs\/([A-Za-z]\w*)$/;
 // The $defs that are not shared types: the commands, the queries and the entity schema. Shared
@@ -61,6 +73,42 @@ function arrayType(schema: Table, where: string): string {
   return `Array<${typeOf(schema.items, `${where}.items`)}>`;
 }
 
+// The JSON Schema `type` each kind of enum item belongs to.
+const ITEM_TYPES: Record<string, string[]> = {
+  string: ["string"],
+  number: ["number", "integer"],
+  boolean: ["boolean"],
+  null: ["null"],
+};
+
+const itemKind = (item: unknown): string | undefined => {
+  if (item === null) return "null";
+  const kind = typeof item;
+  return kind === "string" || kind === "boolean" || (kind === "number" && Number.isFinite(item)) ? kind : undefined;
+};
+
+/** A union of the literals of an `enum` of primitives that all share one type. */
+function enumType(schema: Table, where: string): string {
+  const others = SHAPING.filter((keyword) => keyword in schema && keyword !== "enum" && keyword !== "type");
+  if (others.length > 0) throw new Error(`${where}: cannot combine enum, ${others.join(", ")}`);
+  const items = schema.enum;
+  if (!Array.isArray(items) || items.length === 0) {
+    throw new Error(`${where}: enum must be a non-empty array`);
+  }
+  const kinds = new Set(items.map(itemKind));
+  const [kind] = kinds;
+  if (kind === undefined || kinds.size > 1) {
+    throw new Error(`${where}: enum items must all be strings, numbers, booleans or null`);
+  }
+  if ("type" in schema) {
+    const integers = schema.type !== "integer" || items.every((item) => Number.isInteger(item));
+    if (!ITEM_TYPES[kind]?.includes(String(schema.type)) || !integers) {
+      throw new Error(`${where}: enum items contradict type ${JSON.stringify(schema.type)}`);
+    }
+  }
+  return [...new Set(items.map((item) => JSON.stringify(item)))].join(" | ");
+}
+
 /** The TypeScript type of `schema`; `where` names it in errors. */
 export function typeOf(value: unknown, where: string): string {
   const schema = asSchema(value, where);
@@ -78,6 +126,7 @@ export function typeOf(value: unknown, where: string): string {
     return match[1];
   }
   if ("const" in schema) return JSON.stringify(schema.const);
+  if ("enum" in schema) return enumType(schema, where);
   const variants = schema.anyOf ?? schema.oneOf;
   if (Array.isArray(variants)) {
     return variants.map((variant, index) => typeOf(variant, `${where}|${index}`)).join(" | ");

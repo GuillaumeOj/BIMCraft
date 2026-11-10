@@ -1,20 +1,23 @@
-//! Reference documentation emitter (COM-04): Markdown pages describing every entity and property
-//! set of a namespace, from their `doc` fields and the version history (ADR 0002).
+//! Reference documentation emitter (COM-04): Markdown pages describing every entity, property
+//! set and enumeration of a namespace, from their `doc` fields and the version history
+//! (ADR 0002).
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write as _;
 
 use schema::{
-    Attribute, Cardinality, Entity, EntityKind, IfcMapping, Namespace, Placement, Presence,
-    PropertySet, RoleTarget, Value, ValueType,
+    Attribute, Cardinality, Entity, EntityKind, Enumeration, IfcMapping, Namespace, Placement,
+    Presence, PropertySet, RoleTarget, Value, ValueType,
 };
 
 use crate::Error;
 
 const ENTITIES_PAGE: &str = "entities.md";
 const PROPERTY_SETS_PAGE: &str = "property-sets.md";
+const ENUMERATIONS_PAGE: &str = "enumerations.md";
 const NO_ENTITIES: &str = "The schema defines no entities yet.\n";
 const NO_PROPERTY_SETS: &str = "The schema defines no property sets yet.\n";
+const NO_ENUMERATIONS: &str = "The schema defines no enumerations yet.\n";
 
 /// The reference pages of a namespace, as Markdown ending with a newline.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -25,16 +28,19 @@ pub struct ReferencePages {
     pub entities: String,
     /// `property-sets.md`: every property set, each under an anchor named after it.
     pub property_sets: String,
+    /// `enumerations.md`: every enumeration and its items, each under an anchor named after it.
+    pub enumerations: String,
 }
 
 impl ReferencePages {
     /// Each page with its file name; the pages link to each other by these names.
     #[must_use]
-    pub fn files(&self) -> [(&'static str, &str); 3] {
+    pub fn files(&self) -> [(&'static str, &str); 4] {
         [
             ("index.md", &self.index),
             (ENTITIES_PAGE, &self.entities),
             (PROPERTY_SETS_PAGE, &self.property_sets),
+            (ENUMERATIONS_PAGE, &self.enumerations),
         ]
     }
 }
@@ -59,10 +65,14 @@ pub fn emit_reference(
     let property_sets = introduced(snapshots, namespace, |version| {
         version.property_sets.keys().map(String::as_str).collect()
     });
+    let enumerations = introduced(snapshots, namespace, |version| {
+        version.enumerations.keys().map(String::as_str).collect()
+    });
     Ok(ReferencePages {
         index: index_page(namespace),
         entities: entities_page(namespace, &entities),
         property_sets: property_sets_page(namespace, &property_sets),
+        enumerations: enumerations_page(namespace, &enumerations),
     })
 }
 
@@ -96,8 +106,9 @@ fn index_page(namespace: &Namespace) -> String {
     let mut out = header(namespace, &format!("The `{}` schema", namespace.name));
     let _ = write!(
         out,
-        "\nVersion {} of the `{}` schema: its [entities]({ENTITIES_PAGE}) and \
-         [property sets]({PROPERTY_SETS_PAGE}).\n\n## Entities\n\n",
+        "\nVersion {} of the `{}` schema: its [entities]({ENTITIES_PAGE}), \
+         [property sets]({PROPERTY_SETS_PAGE}) and [enumerations]({ENUMERATIONS_PAGE}).\n\n\
+         ## Entities\n\n",
         namespace.version, namespace.name
     );
     if namespace.entities.is_empty() {
@@ -126,7 +137,52 @@ fn index_page(namespace: &Namespace) -> String {
             row(&mut out, &[&name, &applies_to]);
         }
     }
+    out.push_str("\n## Enumerations\n\n");
+    if namespace.enumerations.is_empty() {
+        out.push_str(NO_ENUMERATIONS);
+    } else {
+        header_row(&mut out, &["Enumeration", "Items"]);
+        for enumeration in namespace.enumerations.values() {
+            let items: Vec<String> = enumeration
+                .items
+                .iter()
+                .map(|item| code(&item.name))
+                .collect();
+            row(
+                &mut out,
+                &[
+                    &link(&enumeration.name, ENUMERATIONS_PAGE),
+                    &items.join(", "),
+                ],
+            );
+        }
+    }
     out
+}
+
+fn enumerations_page(namespace: &Namespace, introduced: &BTreeMap<&str, u32>) -> String {
+    let mut out = header(namespace, "Enumerations");
+    if namespace.enumerations.is_empty() {
+        out.push('\n');
+        out.push_str(NO_ENUMERATIONS);
+    }
+    for enumeration in namespace.enumerations.values() {
+        write_enumeration(&mut out, enumeration, since(introduced, &enumeration.name));
+    }
+    out
+}
+
+fn write_enumeration(out: &mut String, enumeration: &Enumeration, introduced: u32) {
+    let _ = writeln!(out, "\n## {}\n", anchored(&enumeration.name));
+    if let Some(doc) = &enumeration.doc {
+        let _ = writeln!(out, "{}\n", prose(doc));
+    }
+    let _ = writeln!(out, "- **Introduced in:** version {introduced}\n");
+    header_row(out, &["Item", "Description"]);
+    for item in &enumeration.items {
+        let doc = item.doc.as_deref().map(prose).unwrap_or_default();
+        row(out, &[&code(&item.name), &doc]);
+    }
 }
 
 fn entities_page(namespace: &Namespace, introduced: &BTreeMap<&str, u32>) -> String {
@@ -162,6 +218,7 @@ const fn kind_title(kind: EntityKind) -> &'static str {
         EntityKind::Element => "Elements",
         EntityKind::Spatial => "Spatial elements",
         EntityKind::Relationship => "Relationships",
+        EntityKind::Resource => "Resources",
     }
 }
 
@@ -281,6 +338,9 @@ fn property_sets_page(namespace: &Namespace, introduced: &BTreeMap<&str, u32>) -
 
 fn write_property_set(out: &mut String, property_set: &PropertySet, introduced: u32) {
     let _ = writeln!(out, "\n## {}\n", anchored(&property_set.name));
+    if let Some(doc) = &property_set.doc {
+        let _ = writeln!(out, "{}\n", prose(doc));
+    }
     let _ = writeln!(out, "- **Introduced in:** version {introduced}");
     let _ = writeln!(
         out,
@@ -313,12 +373,22 @@ fn attribute_table(out: &mut String, label: &str, attributes: &[Attribute], page
             out,
             &[
                 &code(&attribute.name),
-                &value_type(&attribute.value, page),
+                &sourced_value_type(attribute, page),
                 &presence,
                 placement,
                 &attribute.doc.as_deref().map(prose).unwrap_or_default(),
             ],
         );
+    }
+}
+
+/// The value type of an attribute, marked when each value carries its source (ADR 0018).
+fn sourced_value_type(attribute: &Attribute, page: &str) -> String {
+    let value = value_type(&attribute.value, page);
+    if attribute.sourced {
+        format!("{value}, sourced")
+    } else {
+        value
     }
 }
 
@@ -328,7 +398,7 @@ fn value_type(value: &ValueType, page: &str) -> String {
         ValueType::Integer => "integer".to_owned(),
         ValueType::Real => "real".to_owned(),
         ValueType::Text => "text".to_owned(),
-        ValueType::Enum(name) => format!("enumeration {}", code(name)),
+        ValueType::Enum(name) => format!("enumeration {}", link(name, ENUMERATIONS_PAGE)),
         ValueType::Quantity(kind) => {
             format!("{} ({})", kind.name().replace('_', " "), kind.si_unit())
         }
@@ -566,7 +636,7 @@ mod tests {
         );
         assert_eq!(
             value_type(&ValueType::Enum("Side".into()), ""),
-            "enumeration `Side`"
+            "enumeration [Side](enumerations.md#Side)"
         );
         assert_eq!(
             value_type(

@@ -21,12 +21,12 @@ pub use migration::{
     DeclaredStep, MAX_STEPS, Migration, MigrationError, Step, StoredAttribute, converts, resolve,
 };
 pub use model::{
-    Attribute, Cardinality, Entity, EntityKind, IfcMapping, Namespace, Placement, Presence,
-    PropertySet, Representation, Role, RoleTarget, TypeDef, Value,
+    Attribute, Cardinality, Entity, EntityKind, EnumItem, Enumeration, IfcMapping, Namespace,
+    Placement, Presence, PropertySet, Representation, Role, RoleTarget, TypeDef, Value,
 };
 pub use tables::{Side, StoredTable, stored_tables};
 pub use validate::{
-    Item, Location, MAX_DOC_LEN, MAX_ENTITIES, MAX_ITEMS, MAX_NAME_LEN, MAX_PROPERTY_SETS, Owner,
-    ValidationError, ValidationErrorKind, validate,
+    Item, Location, MAX_DOC_LEN, MAX_ENTITIES, MAX_ENUMERATIONS, MAX_ITEMS, MAX_NAME_LEN,
+    MAX_PROPERTY_SETS, Owner, ValidationError, ValidationErrorKind, validate,
 };
 pub use value_type::{MAX_LIST_DEPTH, QuantityKind, ValueType, ValueTypeError};

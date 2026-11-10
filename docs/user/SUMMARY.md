@@ -18,9 +18,16 @@
 - [Set up the project location](set-up-the-project-location.md)
 - [Read and enter coordinates](read-and-enter-coordinates.md)
 
+# Materials
+
+- [Manage the project's materials](manage-project-materials.md)
+- [Create a wall or slab build-up](create-a-wall-or-slab-build-up.md)
+
 # Français
 
 - [Définir la localisation du projet](set-up-the-project-location.fr.md)
 - [Lire et saisir des coordonnées](read-and-enter-coordinates.fr.md)
+- [Gérer les matériaux du projet](manage-project-materials.fr.md)
+- [Créer une composition de mur ou de plancher](create-a-wall-or-slab-build-up.fr.md)
 
 <!-- Add one entry per task page, grouped by discipline or activity. Copy _template.md to start. -->

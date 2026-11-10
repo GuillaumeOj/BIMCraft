@@ -14,7 +14,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::validate::{is_finite, value_matches};
+use crate::validate::{is_finite, items_known, value_matches};
 use crate::{Attribute, Namespace, Presence, Side, StoredTable, Value, ValueType, stored_tables};
 
 /// Most declared steps one migration may hold, so a hostile plugin bundle stays cheap to check.
@@ -84,6 +84,8 @@ pub struct StoredAttribute {
     pub name: String,
     /// Its value type.
     pub value: ValueType,
+    /// Whether each value is stored with its source (ADR 0018).
+    pub sourced: bool,
 }
 
 /// One explicit change to stored objects.
@@ -241,6 +243,26 @@ pub enum MigrationError {
         /// Value type in the newer version.
         expected: ValueType,
     },
+    /// A `set_value` step targets a sourced attribute, whose values need a source a step cannot
+    /// give (ADR 0018).
+    #[error(
+        "step {step}: a sourced attribute cannot be set by a set_value step: add a custom step"
+    )]
+    SourcedValue {
+        /// 1-based declared step.
+        step: usize,
+    },
+    /// After the steps, an attribute is sourced where the new version says it is not, or the
+    /// other way round.
+    #[error(
+        "attribute \"{attribute}\" of \"{entity}\" changes whether its values carry a source: add a custom step"
+    )]
+    SourcedChanged {
+        /// The entity.
+        entity: String,
+        /// The attribute.
+        attribute: String,
+    },
     /// A required attribute may be left without a value.
     #[error(
         "attribute \"{attribute}\" of \"{entity}\" is required but objects may have no value: add a set_value or custom step"
@@ -257,6 +279,7 @@ pub enum MigrationError {
 #[derive(Clone, Debug)]
 struct Column {
     value: ValueType,
+    sourced: bool,
     /// Every object has a value.
     filled: bool,
     /// Every object must have a value.
@@ -306,7 +329,7 @@ pub fn resolve(
     let target = layout(&after_tables);
     resolver.add(&after_tables);
     for (step, declared) in numbered {
-        resolver.change(step, declared);
+        resolver.change(step, declared, after);
     }
     resolver.remove(&target);
     resolver.check(&target);
@@ -370,6 +393,7 @@ fn layout(tables: &[StoredTable<'_>]) -> Layout {
 fn column(side: Side, attribute: &Attribute) -> Column {
     Column {
         value: attribute.value.clone(),
+        sourced: attribute.sourced,
         filled: side.always_set(attribute),
         required: side.applies_presence(attribute) && attribute.presence == Presence::Required,
     }
@@ -388,6 +412,7 @@ impl From<&Attribute> for StoredAttribute {
         Self {
             name: attribute.name.clone(),
             value: attribute.value.clone(),
+            sourced: attribute.sourced,
         }
     }
 }
@@ -520,7 +545,9 @@ impl Resolver {
         }
     }
 
-    fn change(&mut self, step: usize, declared: &DeclaredStep) {
+    /// Applies a declared step other than a rename; `after` gives the enumerations a
+    /// `set_value` must pick its items from.
+    fn change(&mut self, step: usize, declared: &DeclaredStep, after: &Namespace) {
         match declared {
             DeclaredStep::ChangeValue {
                 entity,
@@ -558,7 +585,14 @@ impl Resolver {
                 let Some(column) = self.column(step, entity, attribute) else {
                     return;
                 };
-                if !value_matches(value, &column.value) || !is_finite(value) {
+                if column.sourced {
+                    self.errors.push(MigrationError::SourcedValue { step });
+                    return;
+                }
+                if !value_matches(value, &column.value)
+                    || !items_known(after, value, &column.value)
+                    || !is_finite(value)
+                {
                     let expected = column.value.clone();
                     self.errors
                         .push(MigrationError::ValueMismatch { step, expected });
@@ -630,6 +664,11 @@ impl Resolver {
                         attribute: attribute.clone(),
                         found: found.value.clone(),
                         expected: expected.value.clone(),
+                    });
+                } else if found.sourced != expected.sourced {
+                    self.errors.push(MigrationError::SourcedChanged {
+                        entity: entity.clone(),
+                        attribute: attribute.clone(),
                     });
                 } else if expected.required && !found.filled {
                     self.errors.push(MigrationError::Unfilled {

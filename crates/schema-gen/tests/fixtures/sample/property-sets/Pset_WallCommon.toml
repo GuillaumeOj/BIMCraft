@@ -3,6 +3,7 @@ format = 1
 [property_set]
 name = "Pset_WallCommon"
 applies_to = ["Wall"]
+doc = "Properties common to every wall."
 
 [[property]]
 name = "IsExternal"
@@ -23,3 +24,5 @@ doc = "Fire resistance class as written in the project's regulation."
 [[property]]
 name = "UValue"
 value = "quantity:thermal_transmittance"
+sourced = true
+doc = "Thermal transmittance, with the test report or standard it comes from."

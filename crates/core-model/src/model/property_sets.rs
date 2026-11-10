@@ -1,8 +1,8 @@
 //! Property sets: named groups of typed properties carried by objects (CORE-04, ADR 0013).
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
-use schema::{Attribute, PropertySet, ValueType};
+use schema::{Attribute, Enumeration, PropertySet, ValueType};
 
 use super::types::Object;
 use super::{Model, ModelError, find_attribute};
@@ -26,9 +26,9 @@ pub(super) struct Rows {
 }
 
 impl PropertyTable {
-    pub(super) fn new(set: &PropertySet) -> Self {
+    pub(super) fn new(set: &PropertySet, enumerations: &BTreeMap<String, Enumeration>) -> Self {
         let rows = |side| Rows {
-            table: Table::new(&set.name, &set.properties, side),
+            table: Table::new(&set.name, &set.properties, side, enumerations),
             rows: HashMap::new(),
         };
         Self {
@@ -150,7 +150,10 @@ impl Model {
             self.namespace.property_sets.remove(&name);
             return Err(ModelError::InvalidPropertySet(errors));
         }
-        let table = PropertyTable::new(&self.namespace.property_sets[&name]);
+        let table = PropertyTable::new(
+            &self.namespace.property_sets[&name],
+            &self.namespace.enumerations,
+        );
         self.property_sets.insert(name, table);
         Ok(())
     }
@@ -263,7 +266,8 @@ impl Model {
             .set(id, property, value)
     }
 
-    /// A quantity property, in the dimension of `U` (CORE-09).
+    /// A quantity property, in the dimension of `U` (CORE-09); for a sourced property, its value
+    /// without the source.
     ///
     /// # Errors
     ///
@@ -276,10 +280,16 @@ impl Model {
         property: &str,
     ) -> Result<Option<Quantity<U>>, ModelError> {
         self.check_quantity::<U>(set, property)?;
-        Ok(match self.property(id, set, property)? {
-            Some(AttributeValue::Real(si)) => Some(Quantity::from_si(si)),
-            _ => None,
-        })
+        Ok(
+            match self
+                .property(id, set, property)?
+                .as_ref()
+                .map(AttributeValue::plain)
+            {
+                Some(AttributeValue::Real(si)) => Some(Quantity::from_si(*si)),
+                _ => None,
+            },
+        )
     }
 
     /// Sets or clears a quantity property and returns its previous stored value; see
@@ -298,10 +308,11 @@ impl Model {
     ) -> Result<Option<Quantity<U>>, ModelError> {
         self.check_quantity::<U>(set, property)?;
         let value = value.map(|quantity| AttributeValue::Real(quantity.si()));
-        Ok(match self.set_property(id, set, property, value)? {
-            Some(AttributeValue::Real(si)) => Some(Quantity::from_si(si)),
-            _ => None,
-        })
+        Ok(self
+            .set_property(id, set, property, value)?
+            .as_ref()
+            .and_then(AttributeValue::as_real)
+            .map(Quantity::from_si))
     }
 
     /// The definition of `set`, which must apply to the entity of the object with this id, and

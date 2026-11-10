@@ -2,7 +2,15 @@
 // `bun scripts/generate-api-types.ts` after changing the API.
 
 /** An attribute or property value; reals are in SI units. */
-export type AttributeValue = { Bool: boolean } | { Integer: number } | { Real: number } | { Text: string } | { Ref: EntityId } | { List: Array<AttributeValue> };
+export type AttributeValue = { Bool: boolean } | { Integer: number } | { Real: number } | { Text: string } | { Ref: EntityId } | { List: Array<AttributeValue> } | { Sourced: { source: Source; value: AttributeValue } };
+
+export type BuildUpFunction = "structure" | "substrate" | "insulation" | "air_gap" | "membrane" | "finish";
+
+export type BuildUpLayer = { core: boolean; function: BuildUpFunction; id: EntityId; material: EntityId; material_name: string; name: string | null; priority: number; thermal_resistance: number | null; thickness: number };
+
+export type BuildUpLayerInput = { core?: boolean; function: BuildUpFunction; id?: EntityId; material: EntityId; name?: string; priority?: number; thickness: number };
+
+export type BuildUpUsage = "wall" | "slab";
 
 export type ChangeEvent = { created: Array<EntityId>; deleted: Array<EntityId>; modified: Array<EntityId> };
 
@@ -13,6 +21,16 @@ export type EntityId = string;
 
 export type Georeference = { base_point: [number, number, number]; crs_epsg: number; grid_rotation: number; scale: number; survey_point: [number, number, number] | null };
 
+export type MaterialAnnex = "recommended" | "fr";
+
+export type MaterialCategory = "concrete" | "reinforcement" | "steel" | "timber" | "masonry" | "insulation" | "finish" | "generic";
+
+export type MaterialLaw = { branch: "horizontal" | "inclined" | null; kind: "parabola_rectangle" | "bilinear" | "linear_elastic" | "elastic_plastic" | "elastic_brittle" | "none"; source: Source | null };
+
+export type MaterialProperty = { annex?: MaterialAnnex; key: string; library_value: number | null; quantity: "stress" | "modulus" | "density" | "strain" | "ratio" | "thermal_conductivity" | "specific_heat"; range: { max: number | null; max_inclusive: boolean; min: number | null; min_inclusive: boolean }; required: boolean; source: Source | null; value: number | null };
+
+export type MaterialPropertyInput = { annex?: MaterialAnnex; key: string; value: number | null };
+
 /** A model command, tagged with its kind. */
 export type ModelCommand = { command: "create"; entity: string; id: EntityId; values: Array<NameValue> } | { attribute: string; command: "set"; id: EntityId; value?: AttributeValue | null } | { command: "delete"; id: EntityId } | { command: "relate"; entity: string; id: EntityId; roles: Array<[string, Array<EntityId>]>; values: Array<NameValue> } | { command: "add_participant"; participant: EntityId; relationship: EntityId; role: string } | { command: "remove_participant"; participant: EntityId; relationship: EntityId; role: string } | { command: "set_property"; id: EntityId; property: string; set: string; value?: AttributeValue | null } | { command: "attach_property_set"; id: EntityId; set: string; values: Array<NameValue> } | { command: "detach_property_set"; id: EntityId; set: string } | { command: "create_component"; component: { defaults: Array<NameValue>; entity: string; library: { id: string; version: number } }; id: EntityId } | { command: "remove_component"; id: EntityId } | { command: "create_type"; component: EntityId; id: EntityId; values: Array<NameValue> } | { command: "assign_type"; instance: EntityId; type_id?: EntityId | null } | { command: "batch"; commands: Array<ModelCommand> };
 
@@ -21,8 +39,19 @@ export type NameValue = [string, AttributeValue];
 /** Who issued a command. */
 export type Origin = { kind: "ui" } | { kind: "plugin"; name: string } | { id: string; kind: "ai_session" };
 
+/** Where a sourced value comes from (ADR 0018): the document and clause it is taken from, or the user who entered it. */
+export type Source = { clause: string; document: string } | { entered_by_user: true };
+
 /** Every command: its parameters and its result. */
 export interface Commands {
+  /** Creates a build-up with its layers. */
+  "buildups.create": { params: { description?: string; id: EntityId; layers: Array<BuildUpLayerInput>; name: string; usage: BuildUpUsage }; result: { id: EntityId; layers: Array<EntityId> } };
+  /** Deletes a build-up with its layers. */
+  "buildups.delete": { params: { buildup: EntityId }; result: Record<string, never> };
+  /** Copies a build-up under a new name, with new layers. */
+  "buildups.duplicate": { params: { buildup: EntityId; id: EntityId; name: string }; result: { id: EntityId; layers: Array<EntityId> } };
+  /** Renames a build-up and replaces its layers; layers it names keep their identity. */
+  "buildups.update": { params: { buildup: EntityId; description?: string | null; layers?: Array<BuildUpLayerInput>; name?: string; usage?: BuildUpUsage }; result: { layers: Array<EntityId> } };
   /** Removes the project's georeference. */
   "georef.clear": { params: Record<string, never>; result: Record<string, never> };
   /** Sets the project's georeference. */
@@ -31,6 +60,14 @@ export interface Commands {
   "history.redo": { params: Record<string, never>; result: null };
   /** Undoes the last command. */
   "history.undo": { params: Record<string, never>; result: null };
+  /** Adds a project material with the values of a library grade. */
+  "materials.add_from_library": { params: { id: EntityId; key: string; name?: string }; result: { id: EntityId } };
+  /** Creates a project material from scratch; every value is entered by the user. */
+  "materials.create": { params: { category: MaterialCategory; id: EntityId; name: string; properties?: Array<MaterialPropertyInput> }; result: { id: EntityId } };
+  /** Deletes a material that nothing uses. */
+  "materials.delete": { params: { material: EntityId }; result: Record<string, never> };
+  /** Renames a material and edits or resets its values. */
+  "materials.update": { params: { material: EntityId; name?: string; properties?: Array<MaterialPropertyInput> }; result: Record<string, never> };
   /** Adds an object to a role of a relationship. */
   "model.add_participant": { params: { participant: EntityId; relationship: EntityId; role: string }; result: null };
   /** Assigns a type to an object, or removes it. */
@@ -63,6 +100,12 @@ export interface Commands {
 
 /** Every query: its parameters and its result. */
 export interface Queries {
+  /** Reads one build-up with its layers and its thermal resistance. */
+  "buildups.get": { params: { buildup: EntityId }; result: { description: string | null; id: EntityId; layers: Array<BuildUpLayer>; layers_without_thermal_data: number; name: string; thermal_resistance: number | null; total_thickness: number; usage: BuildUpUsage } };
+  /** Lists the wall and slab build-ups of the project. */
+  "buildups.list": { params: { usage?: BuildUpUsage }; result: { items: Array<{ id: EntityId; layer_count: number; name: string; total_thickness: number; usage: BuildUpUsage }> } };
+  /** Checks a draft build-up without saving it and returns its totals and every error. */
+  "buildups.preview": { params: { layers: Array<BuildUpLayerInput>; usage: BuildUpUsage }; result: { errors: Array<{ code: string; index?: number }>; layers: Array<{ core: boolean; priority: number; thermal_resistance: number | null }>; layers_without_thermal_data: number; thermal_resistance: number | null; total_thickness: number } };
   /** Converts points between local, projected and geographic coordinates. */
   "georef.convert": { params: { from: "local" | "projected" | "geographic"; points: Array<[number, number, number]> }; result: { points: Array<{ geographic: [number, number, number]; local: [number, number, number]; projected: [number, number, number] }> } };
   /** Reads the project's georeference and the values derived from it. */
@@ -71,6 +114,14 @@ export interface Queries {
   "georef.list_crs": { params: { include_geographic?: boolean }; result: { crs: Array<CrsSummary> } };
   /** Reads what undo and redo would do. */
   "history.state": { params: { limit?: number | null; start?: number | null }; result: { can_redo: boolean; can_undo: boolean; entries: Array<{ command: string; origin: Origin; undone: boolean }>; next: number | null } };
+  /** Reads one project material with its law, its values and where they come from. */
+  "materials.get": { params: { material: EntityId }; result: { category: MaterialCategory; design_code: string | null; edited: boolean; grade: string | null; id: EntityId; law: MaterialLaw; name: string; properties: Array<MaterialProperty>; used_by: number } };
+  /** Reads one library grade with its law and its sourced values. */
+  "materials.grade": { params: { key: string }; result: { category: MaterialCategory; design_code: string | null; key: string; law: MaterialLaw; name: string; properties: Array<MaterialProperty> } };
+  /** Lists the grades of the material library, with a search and a category filter. */
+  "materials.library": { params: { category?: MaterialCategory; limit?: number; offset?: number; search?: string }; result: { items: Array<{ category: MaterialCategory; design_code: string | null; key: string; name: string }>; total: number } };
+  /** Lists the materials of the project. */
+  "materials.list": { params: { category?: MaterialCategory; search?: string }; result: { items: Array<{ category: MaterialCategory; grade: string | null; id: EntityId; name: string; used_by: number }> } };
   /** Reads an object and its attributes. */
   "model.get_object": { params: { id: EntityId }; result: { attributes: Array<NameValue>; component: EntityId | null; entity: string; id: EntityId; type_of: EntityId | null } };
   /** Lists the objects of an entity. */

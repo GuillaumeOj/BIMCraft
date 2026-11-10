@@ -91,6 +91,7 @@ mod tests {
             presence,
             placement,
             doc: None,
+            sourced: false,
         }
     }
 
@@ -127,6 +128,7 @@ mod tests {
             version: 1,
             entities: BTreeMap::from([("Slab".into(), slab), ("Wall".into(), wall)]),
             property_sets: BTreeMap::new(),
+            enumerations: BTreeMap::new(),
         };
         let tables: Vec<_> = stored_tables(&namespace)
             .iter()

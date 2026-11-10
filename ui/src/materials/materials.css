@@ -1,0 +1,376 @@
+/* The Materials dialog (boards 4.7–4.14): 880 px wide, a 320 px list pane and the detail pane. */
+.dialog:has(.materials-body) {
+  width: min(880px, calc(100vw - 32px));
+  height: min(640px, calc(100vh - 64px));
+}
+
+.materials-body {
+  display: grid;
+  flex: 1;
+  grid-template-columns: 320px minmax(0, 1fr);
+  min-height: 0;
+  border-top: 1px solid var(--bc-line);
+}
+
+.materials-body[inert] {
+  opacity: 0.45;
+}
+
+.materials-left {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  padding: 12px 16px;
+  border-right: 1px solid var(--bc-line);
+}
+
+.materials-right {
+  min-width: 0;
+  padding: 12px 20px;
+  overflow: auto;
+}
+
+.search-field {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.search-field svg {
+  position: absolute;
+  left: 8px;
+  color: var(--bc-muted);
+  pointer-events: none;
+}
+
+.search,
+.select {
+  box-sizing: border-box;
+  min-height: 32px;
+  padding: 4px 8px;
+  font: inherit;
+  color: var(--bc-ink);
+  background: var(--bc-surface);
+  border: 1px solid var(--bc-field-line);
+  border-radius: 6px;
+}
+
+.search-field .search {
+  width: 100%;
+  padding-left: 30px;
+}
+
+.material-list {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  border-radius: 6px;
+}
+
+.material-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  border-left: 3px solid transparent;
+  cursor: pointer;
+}
+
+.material-row:hover {
+  background: var(--bc-hover);
+}
+
+.material-row[aria-selected="true"] {
+  background: var(--bc-selected);
+  border-left-color: var(--bc-verdigris);
+}
+
+.row-text {
+  display: grid;
+  min-width: 0;
+}
+
+.row-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.row-meta,
+.row-used {
+  color: var(--bc-muted);
+}
+
+/* muted on the selected row is only 4.3:1 in dark mode (contrast.test.ts). */
+.material-row[aria-selected="true"] .row-meta,
+.material-row[aria-selected="true"] .row-used {
+  color: var(--bc-ink-2);
+}
+
+.empty-note {
+  margin: 0;
+  color: var(--bc-ink-2);
+}
+
+.materials-actions {
+  display: grid;
+  gap: 6px;
+}
+
+.detail-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.detail-name {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.detail-sub {
+  margin: 2px 0 0;
+  color: var(--bc-muted);
+}
+
+.menu-anchor {
+  position: relative;
+}
+
+.icon-button {
+  width: 32px;
+  height: 32px;
+  font: inherit;
+  color: var(--bc-ink);
+  background: var(--bc-surface);
+  border: 1px solid var(--bc-line);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.menu {
+  position: absolute;
+  right: 0;
+  z-index: 5;
+  display: grid;
+  min-width: 160px;
+  margin: 4px 0 0;
+  padding: 4px;
+  background: var(--bc-surface);
+  border: 1px solid var(--bc-line);
+  border-radius: 8px;
+  box-shadow: var(--bc-shadow);
+}
+
+.menu button {
+  padding: 6px 10px;
+  font: inherit;
+  color: var(--bc-ink);
+  text-align: left;
+  background: none;
+  border: 0;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.menu button:hover {
+  background: var(--bc-hover);
+}
+
+.law-card {
+  margin: 12px 0;
+  padding: 8px 12px;
+  background: var(--bc-raised);
+  border-radius: 8px;
+}
+
+.law-card p {
+  margin: 0;
+}
+
+.law-note {
+  color: var(--bc-ink-2);
+}
+
+.tab-list {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  background: var(--bc-raised);
+  border-radius: 8px;
+}
+
+.tab {
+  padding: 4px 12px;
+  font: inherit;
+  color: var(--bc-ink-2);
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.tab[aria-selected="true"] {
+  color: var(--bc-ink);
+  background: var(--bc-surface);
+  border-color: var(--bc-line);
+}
+
+.tab[aria-disabled="true"] {
+  color: var(--bc-muted);
+  cursor: default;
+}
+
+.property-table {
+  width: 100%;
+  margin-top: 8px;
+  border-collapse: collapse;
+}
+
+.property-table th,
+.property-table td {
+  padding: 8px 10px;
+  vertical-align: top;
+  text-align: left;
+  border-bottom: 1px solid var(--bc-line);
+}
+
+.property-table thead th {
+  color: var(--bc-muted);
+  font-weight: 400;
+}
+
+.property-table .property-value-head,
+.property-values {
+  text-align: right;
+}
+
+.property-name {
+  max-width: 200px;
+  font-weight: 400;
+}
+
+.property-row[data-user="true"] {
+  box-shadow: inset 2px 0 0 var(--bc-verdigris);
+}
+
+.property-line {
+  margin: 0;
+}
+
+.property-source {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+  color: var(--bc-ink-2);
+}
+
+.value-button,
+.link-button {
+  padding: 0;
+  font: inherit;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+.value-button {
+  color: var(--bc-ink);
+}
+
+.value-button:hover {
+  text-decoration: underline;
+}
+
+.link-button {
+  color: var(--bc-verdigris);
+  text-decoration: underline;
+}
+
+.value-editor {
+  min-width: 120px;
+}
+
+.subview {
+  display: grid;
+  gap: 8px;
+  align-content: start;
+}
+
+.back-link {
+  justify-self: start;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 8px;
+  padding: 0;
+  border: 0;
+}
+
+.chip {
+  padding: 3px 10px;
+  font: inherit;
+  color: var(--bc-ink-2);
+  background: var(--bc-surface);
+  border: 1px solid var(--bc-field-line);
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.chip[aria-pressed="true"] {
+  color: var(--bc-ink);
+  background: var(--bc-selected);
+  border-color: var(--bc-verdigris);
+}
+
+.library-panes {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: 16px;
+}
+
+.library-results {
+  max-height: 360px;
+}
+
+.preview-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.library-preview {
+  display: grid;
+  gap: 8px;
+  align-content: start;
+}
+
+@media (max-width: 720px) {
+  .materials-body {
+    grid-template-columns: minmax(0, 1fr);
+    overflow: auto;
+  }
+
+  .materials-left {
+    border-right: 0;
+    border-bottom: 1px solid var(--bc-line);
+  }
+
+  .library-panes {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.banner-info {
+  color: var(--bc-ink);
+  border-color: var(--bc-line);
+  border-left: 4px solid var(--bc-verdigris);
+}

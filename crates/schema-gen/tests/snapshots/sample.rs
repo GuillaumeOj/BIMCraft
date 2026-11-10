@@ -70,6 +70,20 @@ pub struct Containment {
     pub elements: Vec<crate::EntityId>,
 }
 
+/// A substance that elements are made of.
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+#[allow(
+    clippy::doc_markdown,
+    clippy::struct_excessive_bools,
+    clippy::struct_field_names,
+    reason = "docs and names come from the schema definitions, not from Rust authors"
+)]
+pub struct Material {
+    /// The `name` value.
+    pub name: String,
+}
+
 /// A void through a wall or a slab.
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -172,6 +186,11 @@ pub struct Wall {
     /// Short label shown on drawings.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub mark: Option<String>,
+    /// Overrides the type's value for this object when set.
+    ///
+    /// The `function` value.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub function: Option<WallFunction>,
 }
 
 impl Wall {
@@ -202,15 +221,22 @@ pub struct WallType {
     /// In m.
     #[serde(default = "WallType::default_height")]
     pub height: f64,
+    /// The `function` value.
+    #[serde(default = "WallType::default_function")]
+    pub function: WallFunction,
 }
 
 impl WallType {
     fn default_height() -> f64 {
         2.5
     }
+
+    fn default_function() -> WallFunction {
+        WallFunction::Partition
+    }
 }
 
-/// The `Pset_WallCommon` property set.
+/// Properties common to every wall.
 ///
 /// Applies to [`Wall`].
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -234,16 +260,56 @@ pub struct PsetWallCommon {
     #[serde(rename = "FireRating")]
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub fire_rating: Option<String>,
-    /// The `UValue` value.
+    /// Thermal transmittance, with the test report or standard it comes from.
     ///
     /// In W/(m²·K).
     #[serde(rename = "UValue")]
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub u_value: Option<f64>,
+    pub u_value: Option<Sourced<f64>>,
 }
 
 impl PsetWallCommon {
     fn default_load_bearing() -> bool {
         false
     }
+}
+
+/// What a wall does in the building.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[allow(clippy::doc_markdown, reason = "docs come from the schema definitions")]
+pub enum WallFunction {
+    /// Carries loads from above.
+    #[serde(rename = "load_bearing")]
+    LoadBearing,
+    /// `partition`.
+    #[serde(rename = "partition")]
+    Partition,
+}
+
+/// A value with the document and clause it comes from.
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Sourced<T> {
+    /// The value.
+    pub value: T,
+    /// Where the value comes from.
+    pub source: Source,
+}
+
+/// Where a value comes from: the document and clause it is taken from, or the user.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(untagged)]
+pub enum Source {
+    /// A clause of a document.
+    Cited {
+        /// The document, with its edition, such as `EN 1992-1-1:2004`.
+        document: String,
+        /// The clause, table or annex number within the document.
+        clause: String,
+    },
+    /// A value the user entered.
+    EnteredByUser {
+        /// Always `true`.
+        entered_by_user: bool,
+    },
 }

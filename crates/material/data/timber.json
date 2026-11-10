@@ -1,0 +1,635 @@
+{
+  "format": 1,
+  "materials": [
+    {
+      "name": "C16",
+      "category": "timber",
+      "behaviour_law": "timber_elastic_brittle",
+      "design_code": "EN 1995-1-1:2004",
+      "properties": {
+        "fm_k": {
+          "value": 16000000.0,
+          "document": "EN 338:2016",
+          "clause": "Table 1"
+        },
+        "ft0_k": {
+          "value": 8500000.0,
+          "document": "EN 338:2016",
+          "clause": "Table 1"
+        },
+        "fc0_k": {
+          "value": 17000000.0,
+          "document": "EN 338:2016",
+          "clause": "Table 1"
+        },
+        "fv_k": {
+          "value": 3200000.0,
+          "document": "EN 338:2016",
+          "clause": "Table 1"
+        },
+        "e0_mean": {
+          "value": 8000000000.0,
+          "document": "EN 338:2016",
+          "clause": "Table 1"
+        },
+        "e0_05": {
+          "value": 5400000000.0,
+          "document": "EN 338:2016",
+          "clause": "Table 1"
+        },
+        "g_mean": {
+          "value": 500000000.0,
+          "document": "EN 338:2016",
+          "clause": "Table 1"
+        },
+        "rho_k": {
+          "value": 310.0,
+          "document": "EN 338:2016",
+          "clause": "Table 1"
+        },
+        "rho_mean": {
+          "value": 370.0,
+          "document": "EN 338:2016",
+          "clause": "Table 1"
+        },
+        "gamma_m": {
+          "value": 1.3,
+          "document": "EN 1995-1-1:2004",
+          "clause": "Table 2.3"
+        },
+        "gamma_m_fr": {
+          "value": 1.3,
+          "document": "NF EN 1995-1-1/NA:2010",
+          "clause": "Table 2.3"
+        }
+      }
+    },
+    {
+      "name": "C18",
+      "category": "timber",
+      "behaviour_law": "timber_elastic_brittle",
+      "design_code": "EN 1995-1-1:2004",
+      "properties": {
+        "fm_k": {
+          "value": 18000000.0,
+          "document": "EN 338:2016",
+          "clause": "Table 1"
+        },
+        "ft0_k": {
+          "value": 10000000.0,
+          "document": "EN 338:2016",
+          "clause": "Table 1"
+        },
+        "fc0_k": {
+          "value": 18000000.0,
+          "document": "EN 338:2016",
+          "clause": "Table 1"
+        },
+        "fv_k": {
+          "value": 3400000.0,
+          "document": "EN 338:2016",
+          "clause": "Table 1"
+        },
+        "e0_mean": {
+          "value": 9000000000.0,
+          "document": "EN 338:2016",
+          "clause": "Table 1"
+        },
+        "e0_05": {
+          "value": 6000000000.0,
+          "document": "EN 338:2016",
+          "clause": "Table 1"
+        },
+        "g_mean": {
+          "value": 560000000.0,
+          "document": "EN 338:2016",
+          "clause": "Table 1"
+        },
+        "rho_k": {
+          "value": 320.0,
+          "document": "EN 338:2016",
+          "clause": "Table 1"
+        },
+        "rho_mean": {
+          "value": 380.0,
+          "document": "EN 338:2016",
+          "clause": "Table 1"
+        },
+        "gamma_m": {
+          "value": 1.3,
+          "document": "EN 1995-1-1:2004",
+          "clause": "Table 2.3"
+        },
+        "gamma_m_fr": {
+          "value": 1.3,
+          "document": "NF EN 1995-1-1/NA:2010",
+          "clause": "Table 2.3"
+        }
+      }
+    },
+    {
+      "name": "C22",
+      "category": "timber",
+      "behaviour_law": "timber_elastic_brittle",
+      "design_code": "EN 1995-1-1:2004",
+      "properties": {
+        "fm_k": {
+          "value": 22000000.0,
+          "document": "EN 338:2016",
+          "clause": "Table 1"
+        },
+        "ft0_k": {
+          "value": 13000000.0,
+          "document": "EN 338:2016",
+          "clause": "Table 1"
+        },
+        "fc0_k": {
+          "value": 20000000.0,
+          "document": "EN 338:2016",
+          "clause": "Table 1"
+        },
+        "fv_k": {
+          "value": 3800000.0,
+          "document": "EN 338:2016",
+          "clause": "Table 1"
+        },
+        "e0_mean": {
+          "value": 10000000000.0,
+          "document": "EN 338:2016",
+          "clause": "Table 1"
+        },
+        "e0_05": {
+          "value": 6700000000.0,
+          "document": "EN 338:2016",
+          "clause": "Table 1"
+        },
+        "g_mean": {
+          "value": 630000000.0,
+          "document": "EN 338:2016",
+          "clause": "Table 1"
+        },
+        "rho_k": {
+          "value": 340.0,
+          "document": "EN 338:2016",
+          "clause": "Table 1"
+        },
+        "rho_mean": {
+          "value": 410.0,
+          "document": "EN 338:2016",
+          "clause": "Table 1"
+        },
+        "gamma_m": {
+          "value": 1.3,
+          "document": "EN 1995-1-1:2004",
+          "clause": "Table 2.3"
+        },
+        "gamma_m_fr": {
+          "value": 1.3,
+          "document": "NF EN 1995-1-1/NA:2010",
+          "clause": "Table 2.3"
+        }
+      }
+    },
+    {
+      "name": "C24",
+      "category": "timber",
+      "behaviour_law": "timber_elastic_brittle",
+      "design_code": "EN 1995-1-1:2004",
+      "properties": {
+        "fm_k": {
+          "value": 24000000.0,
+          "document": "EN 338:2016",
+          "clause": "Table 1"
+        },
+        "ft0_k": {
+          "value": 14500000.0,
+          "document": "EN 338:2016",
+          "clause": "Table 1"
+        },
+        "fc0_k": {
+          "value": 21000000.0,
+          "document": "EN 338:2016",
+          "clause": "Table 1"
+        },
+        "fv_k": {
+          "value": 4000000.0,
+          "document": "EN 338:2016",
+          "clause": "Table 1"
+        },
+        "e0_mean": {
+          "value": 11000000000.0,
+          "document": "EN 338:2016",
+          "clause": "Table 1"
+        },
+        "e0_05": {
+          "value": 7400000000.0,
+          "document": "EN 338:2016",
+          "clause": "Table 1"
+        },
+        "g_mean": {
+          "value": 690000000.0,
+          "document": "EN 338:2016",
+          "clause": "Table 1"
+        },
+        "rho_k": {
+          "value": 350.0,
+          "document": "EN 338:2016",
+          "clause": "Table 1"
+        },
+        "rho_mean": {
+          "value": 420.0,
+          "document": "EN 338:2016",
+          "clause": "Table 1"
+        },
+        "gamma_m": {
+          "value": 1.3,
+          "document": "EN 1995-1-1:2004",
+          "clause": "Table 2.3"
+        },
+        "gamma_m_fr": {
+          "value": 1.3,
+          "document": "NF EN 1995-1-1/NA:2010",
+          "clause": "Table 2.3"
+        }
+      }
+    },
+    {
+      "name": "C27",
+      "category": "timber",
+      "behaviour_law": "timber_elastic_brittle",
+      "design_code": "EN 1995-1-1:2004",
+      "properties": {
+        "fm_k": {
+          "value": 27000000.0,
+          "document": "EN 338:2016",
+          "clause": "Table 1"
+        },
+        "ft0_k": {
+          "value": 16500000.0,
+          "document": "EN 338:2016",
+          "clause": "Table 1"
+        },
+        "fc0_k": {
+          "value": 22000000.0,
+          "document": "EN 338:2016",
+          "clause": "Table 1"
+        },
+        "fv_k": {
+          "value": 4000000.0,
+          "document": "EN 338:2016",
+          "clause": "Table 1"
+        },
+        "e0_mean": {
+          "value": 11500000000.0,
+          "document": "EN 338:2016",
+          "clause": "Table 1"
+        },
+        "e0_05": {
+          "value": 7700000000.0,
+          "document": "EN 338:2016",
+          "clause": "Table 1"
+        },
+        "g_mean": {
+          "value": 720000000.0,
+          "document": "EN 338:2016",
+          "clause": "Table 1"
+        },
+        "rho_k": {
+          "value": 360.0,
+          "document": "EN 338:2016",
+          "clause": "Table 1"
+        },
+        "rho_mean": {
+          "value": 430.0,
+          "document": "EN 338:2016",
+          "clause": "Table 1"
+        },
+        "gamma_m": {
+          "value": 1.3,
+          "document": "EN 1995-1-1:2004",
+          "clause": "Table 2.3"
+        },
+        "gamma_m_fr": {
+          "value": 1.3,
+          "document": "NF EN 1995-1-1/NA:2010",
+          "clause": "Table 2.3"
+        }
+      }
+    },
+    {
+      "name": "C30",
+      "category": "timber",
+      "behaviour_law": "timber_elastic_brittle",
+      "design_code": "EN 1995-1-1:2004",
+      "properties": {
+        "fm_k": {
+          "value": 30000000.0,
+          "document": "EN 338:2016",
+          "clause": "Table 1"
+        },
+        "ft0_k": {
+          "value": 19000000.0,
+          "document": "EN 338:2016",
+          "clause": "Table 1"
+        },
+        "fc0_k": {
+          "value": 24000000.0,
+          "document": "EN 338:2016",
+          "clause": "Table 1"
+        },
+        "fv_k": {
+          "value": 4000000.0,
+          "document": "EN 338:2016",
+          "clause": "Table 1"
+        },
+        "e0_mean": {
+          "value": 12000000000.0,
+          "document": "EN 338:2016",
+          "clause": "Table 1"
+        },
+        "e0_05": {
+          "value": 8000000000.0,
+          "document": "EN 338:2016",
+          "clause": "Table 1"
+        },
+        "g_mean": {
+          "value": 750000000.0,
+          "document": "EN 338:2016",
+          "clause": "Table 1"
+        },
+        "rho_k": {
+          "value": 380.0,
+          "document": "EN 338:2016",
+          "clause": "Table 1"
+        },
+        "rho_mean": {
+          "value": 460.0,
+          "document": "EN 338:2016",
+          "clause": "Table 1"
+        },
+        "gamma_m": {
+          "value": 1.3,
+          "document": "EN 1995-1-1:2004",
+          "clause": "Table 2.3"
+        },
+        "gamma_m_fr": {
+          "value": 1.3,
+          "document": "NF EN 1995-1-1/NA:2010",
+          "clause": "Table 2.3"
+        }
+      }
+    },
+    {
+      "name": "C35",
+      "category": "timber",
+      "behaviour_law": "timber_elastic_brittle",
+      "design_code": "EN 1995-1-1:2004",
+      "properties": {
+        "fm_k": {
+          "value": 35000000.0,
+          "document": "EN 338:2016",
+          "clause": "Table 1"
+        },
+        "ft0_k": {
+          "value": 22500000.0,
+          "document": "EN 338:2016",
+          "clause": "Table 1"
+        },
+        "fc0_k": {
+          "value": 25000000.0,
+          "document": "EN 338:2016",
+          "clause": "Table 1"
+        },
+        "fv_k": {
+          "value": 4000000.0,
+          "document": "EN 338:2016",
+          "clause": "Table 1"
+        },
+        "e0_mean": {
+          "value": 13000000000.0,
+          "document": "EN 338:2016",
+          "clause": "Table 1"
+        },
+        "e0_05": {
+          "value": 8700000000.0,
+          "document": "EN 338:2016",
+          "clause": "Table 1"
+        },
+        "g_mean": {
+          "value": 810000000.0,
+          "document": "EN 338:2016",
+          "clause": "Table 1"
+        },
+        "rho_k": {
+          "value": 390.0,
+          "document": "EN 338:2016",
+          "clause": "Table 1"
+        },
+        "rho_mean": {
+          "value": 470.0,
+          "document": "EN 338:2016",
+          "clause": "Table 1"
+        },
+        "gamma_m": {
+          "value": 1.3,
+          "document": "EN 1995-1-1:2004",
+          "clause": "Table 2.3"
+        },
+        "gamma_m_fr": {
+          "value": 1.3,
+          "document": "NF EN 1995-1-1/NA:2010",
+          "clause": "Table 2.3"
+        }
+      }
+    },
+    {
+      "name": "GL24h",
+      "category": "timber",
+      "behaviour_law": "timber_elastic_brittle",
+      "design_code": "EN 1995-1-1:2004",
+      "properties": {
+        "fm_k": {
+          "value": 24000000.0,
+          "document": "EN 14080:2013",
+          "clause": "Table 5"
+        },
+        "ft0_k": {
+          "value": 19200000.0,
+          "document": "EN 14080:2013",
+          "clause": "Table 5"
+        },
+        "fc0_k": {
+          "value": 24000000.0,
+          "document": "EN 14080:2013",
+          "clause": "Table 5"
+        },
+        "fv_k": {
+          "value": 3500000.0,
+          "document": "EN 14080:2013",
+          "clause": "Table 5"
+        },
+        "e0_mean": {
+          "value": 11500000000.0,
+          "document": "EN 14080:2013",
+          "clause": "Table 5"
+        },
+        "e0_05": {
+          "value": 9600000000.0,
+          "document": "EN 14080:2013",
+          "clause": "Table 5"
+        },
+        "g_mean": {
+          "value": 650000000.0,
+          "document": "EN 14080:2013",
+          "clause": "Table 5"
+        },
+        "rho_k": {
+          "value": 385.0,
+          "document": "EN 14080:2013",
+          "clause": "Table 5"
+        },
+        "rho_mean": {
+          "value": 420.0,
+          "document": "EN 14080:2013",
+          "clause": "Table 5"
+        },
+        "gamma_m": {
+          "value": 1.25,
+          "document": "EN 1995-1-1:2004",
+          "clause": "Table 2.3"
+        },
+        "gamma_m_fr": {
+          "value": 1.25,
+          "document": "NF EN 1995-1-1/NA:2010",
+          "clause": "Table 2.3"
+        }
+      }
+    },
+    {
+      "name": "GL28h",
+      "category": "timber",
+      "behaviour_law": "timber_elastic_brittle",
+      "design_code": "EN 1995-1-1:2004",
+      "properties": {
+        "fm_k": {
+          "value": 28000000.0,
+          "document": "EN 14080:2013",
+          "clause": "Table 5"
+        },
+        "ft0_k": {
+          "value": 22300000.0,
+          "document": "EN 14080:2013",
+          "clause": "Table 5"
+        },
+        "fc0_k": {
+          "value": 28000000.0,
+          "document": "EN 14080:2013",
+          "clause": "Table 5"
+        },
+        "fv_k": {
+          "value": 3500000.0,
+          "document": "EN 14080:2013",
+          "clause": "Table 5"
+        },
+        "e0_mean": {
+          "value": 12600000000.0,
+          "document": "EN 14080:2013",
+          "clause": "Table 5"
+        },
+        "e0_05": {
+          "value": 10500000000.0,
+          "document": "EN 14080:2013",
+          "clause": "Table 5"
+        },
+        "g_mean": {
+          "value": 650000000.0,
+          "document": "EN 14080:2013",
+          "clause": "Table 5"
+        },
+        "rho_k": {
+          "value": 425.0,
+          "document": "EN 14080:2013",
+          "clause": "Table 5"
+        },
+        "rho_mean": {
+          "value": 460.0,
+          "document": "EN 14080:2013",
+          "clause": "Table 5"
+        },
+        "gamma_m": {
+          "value": 1.25,
+          "document": "EN 1995-1-1:2004",
+          "clause": "Table 2.3"
+        },
+        "gamma_m_fr": {
+          "value": 1.25,
+          "document": "NF EN 1995-1-1/NA:2010",
+          "clause": "Table 2.3"
+        }
+      }
+    },
+    {
+      "name": "GL32h",
+      "category": "timber",
+      "behaviour_law": "timber_elastic_brittle",
+      "design_code": "EN 1995-1-1:2004",
+      "properties": {
+        "fm_k": {
+          "value": 32000000.0,
+          "document": "EN 14080:2013",
+          "clause": "Table 5"
+        },
+        "ft0_k": {
+          "value": 25600000.0,
+          "document": "EN 14080:2013",
+          "clause": "Table 5"
+        },
+        "fc0_k": {
+          "value": 32000000.0,
+          "document": "EN 14080:2013",
+          "clause": "Table 5"
+        },
+        "fv_k": {
+          "value": 3500000.0,
+          "document": "EN 14080:2013",
+          "clause": "Table 5"
+        },
+        "e0_mean": {
+          "value": 14200000000.0,
+          "document": "EN 14080:2013",
+          "clause": "Table 5"
+        },
+        "e0_05": {
+          "value": 11800000000.0,
+          "document": "EN 14080:2013",
+          "clause": "Table 5"
+        },
+        "g_mean": {
+          "value": 650000000.0,
+          "document": "EN 14080:2013",
+          "clause": "Table 5"
+        },
+        "rho_k": {
+          "value": 440.0,
+          "document": "EN 14080:2013",
+          "clause": "Table 5"
+        },
+        "rho_mean": {
+          "value": 490.0,
+          "document": "EN 14080:2013",
+          "clause": "Table 5"
+        },
+        "gamma_m": {
+          "value": 1.25,
+          "document": "EN 1995-1-1:2004",
+          "clause": "Table 2.3"
+        },
+        "gamma_m_fr": {
+          "value": 1.25,
+          "document": "NF EN 1995-1-1/NA:2010",
+          "clause": "Table 2.3"
+        }
+      }
+    }
+  ]
+}

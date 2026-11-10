@@ -197,7 +197,7 @@ fn sets(session: &Session, ById { id }: ById) -> Result<Vec<PropertySet>, ApiErr
 }
 
 /// The page size asked for, or the default.
-fn page_size(limit: Option<usize>) -> Result<usize, ApiError> {
+pub(crate) fn page_size(limit: Option<usize>) -> Result<usize, ApiError> {
     let limit = limit.unwrap_or(DEFAULT_PAGE_SIZE);
     if (1..=MAX_PAGE_SIZE).contains(&limit) {
         Ok(limit)

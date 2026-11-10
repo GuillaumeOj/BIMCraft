@@ -70,7 +70,8 @@ fn write_model(
         row.push(Value::Blob(codec::id_to_sql(id)));
         for column in &table.columns {
             let value = values.next_if(|(name, _)| *name == column.name);
-            row.push(value.map_or(Value::Null, |(_, value)| codec::to_sql(&value)));
+            let value = value.as_ref().map(|(_, value)| value);
+            codec::push_row_values(&mut row, value, column.sourced);
         }
         if let Some((attribute, _)) = values.next() {
             return Err(StoreError::UnknownAttribute {
@@ -108,8 +109,17 @@ pub fn open_model(conn: &mut Connection, schema: &Schema<'_>) -> Result<Store, P
         let mut rows = select.query([])?;
         while let Some(row) = rows.next()? {
             let id = codec::id_from_sql(row.get_ref(0)?)?;
-            for (index, column) in (1..).zip(&table.columns) {
-                if let Some(value) = codec::from_sql(row.get_ref(index)?, column.value_type)? {
+            let mut index = 1;
+            for column in &table.columns {
+                let cell = |offset| row.get_ref(index + offset);
+                let value = if column.sourced {
+                    let cells = [cell(0)?, cell(1)?, cell(2)?];
+                    codec::sourced_from_sql(cells, column.value_type)?
+                } else {
+                    codec::from_sql(cell(0)?, column.value_type)?
+                };
+                index += column.width();
+                if let Some(value) = value {
                     values.push((column.name, value));
                 }
             }
@@ -190,7 +200,7 @@ fn check_columns(info: &mut Statement<'_>, table: &EntityTable<'_>) -> Result<()
 
 #[cfg(test)]
 mod tests {
-    use core_model::{AttributeValue, EntityId};
+    use core_model::{AttributeValue, EntityId, Source};
     use proptest::prelude::*;
 
     use super::*;
@@ -308,6 +318,20 @@ mod tests {
             format!("UPDATE {table} SET id = x'00'"),
             format!("UPDATE {table} SET is_external = 7"),
             format!("UPDATE {table} SET tags = x'FFFFFFFF'"),
+            format!("UPDATE {table} SET \"strength@clause\" = '3.1'"),
+            format!(
+                "UPDATE {table} SET strength = 1.0, \"strength@document\" = '', \
+                 \"strength@clause\" = '3.1'"
+            ),
+            format!(
+                "UPDATE {table} SET strength = 1.0, \"strength@document\" = 'EN 1990', \
+                 \"strength@clause\" = ''"
+            ),
+            format!("UPDATE {table} SET strength = 1.0"),
+            format!(
+                "UPDATE {table} SET strength = 1.0, \"strength@document\" = ' ', \
+                 \"strength@clause\" = '3.1'"
+            ),
         ];
         let namespace = namespace();
         let mut store = Store::new(&namespace).unwrap();
@@ -402,6 +426,31 @@ mod tests {
         let mut conn = saved(&store);
         let reopened = open_model(&mut conn, &Schema::new(&namespace)).unwrap();
         assert_eq!(sorted_objects(&reopened), sorted_objects(&store));
+    }
+
+    #[test]
+    fn a_value_entered_by_the_user_is_saved_with_an_empty_source() {
+        let namespace = namespace();
+        let mut store = Store::new(&namespace).unwrap();
+        wall(&mut store, 10);
+        let entered = AttributeValue::sourced(AttributeValue::Real(25e6), Source::user());
+        store
+            .set(EntityId::new(10), "strength", Some(entered.clone()))
+            .unwrap();
+        let mut conn = saved(&store);
+        let parts: (String, String) = conn
+            .query_row(
+                "SELECT \"strength@document\", \"strength@clause\" FROM \"core/Wall\"",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(parts, (String::new(), String::new()));
+        let reopened = open_model(&mut conn, &Schema::new(&namespace)).unwrap();
+        assert_eq!(
+            reopened.get(EntityId::new(10), "strength"),
+            Ok(Some(entered))
+        );
     }
 
     proptest! {

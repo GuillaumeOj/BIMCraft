@@ -21,6 +21,6 @@ mod storage;
 
 pub use clock::SystemClock;
 pub use compute::ProcessCompute;
-pub use document::{DocumentHost, OpenError};
+pub use document::{DocumentHost, OpenError, core_namespace};
 pub use executor::{ExecutorError, RayonExecutor};
 pub use storage::FileStorage;

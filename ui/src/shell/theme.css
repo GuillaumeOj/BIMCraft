@@ -6,6 +6,8 @@
   --bc-surface: #ffffff;
   --bc-raised: #f4f5f6;
   --bc-hover: #eceef0;
+  /* The selected row of a list: --bc-verdigris at about 17 % on --bc-surface. */
+  --bc-selected: #d6ece7;
   --bc-line: #d3d6da;
   --bc-ink: #1b1d21;
   --bc-ink-2: #474c55;
@@ -13,6 +15,8 @@
   --bc-verdigris: #0f6b5e;
   --bc-on-verdigris: #ffffff;
   --bc-danger: #b42318;
+  /* The design variable color/warn-tint: the fill of insulation in the build-up preview. */
+  --bc-warn-tint: #fceadc;
   --bc-on-danger: #ffffff;
   /* Borders of form fields: --bc-line is only 1.46:1, below the 3:1 of WCAG 1.4.11. */
   --bc-field-line: #858b94;
@@ -26,6 +30,7 @@
     --bc-surface: #26282c;
     --bc-raised: #2e3135;
     --bc-hover: #363a40;
+    --bc-selected: #1f3a36;
     --bc-line: #3a3e44;
     --bc-ink: #e6e7e9;
     --bc-ink-2: #b9bdc3;
@@ -33,6 +38,7 @@
     --bc-verdigris: #4db6a3;
     --bc-on-verdigris: #0e1513;
     --bc-danger: #f28b82;
+    --bc-warn-tint: #3d2a1a;
     --bc-on-danger: #1c1e21;
     --bc-field-line: #7a8089;
     --bc-shadow: 0 4px 16px rgb(0 0 0 / 40%);
