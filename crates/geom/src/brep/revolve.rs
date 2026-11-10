@@ -224,11 +224,14 @@ fn side_of_axis(vertices: &[Vertex]) -> Result<bool, RevolutionError> {
     Ok(right == Some(true))
 }
 
-/// The vertex before and after `v` in its ring.
-fn neighbours(ring: &Range<usize>, v: usize) -> (usize, usize) {
-    let before = if v == ring.start { ring.end - 1 } else { v - 1 };
-    let after = if v + 1 == ring.end { ring.start } else { v + 1 };
-    (before, after)
+/// The vertex before `v` in its ring.
+const fn before(ring: &Range<usize>, v: usize) -> usize {
+    if v == ring.start { ring.end - 1 } else { v - 1 }
+}
+
+/// The vertex after `v` in its ring: the end of the profile edge that starts at `v`.
+const fn after(ring: &Range<usize>, v: usize) -> usize {
+    if v + 1 == ring.end { ring.start } else { v + 1 }
 }
 
 /// In a full turn, a vertex on the axis needs an edge along the axis next to it: with two edges
@@ -236,8 +239,7 @@ fn neighbours(ring: &Range<usize>, v: usize) -> (usize, usize) {
 fn check_not_pinched(vertices: &[Vertex], rings: &[Range<usize>]) -> Result<(), RevolutionError> {
     for ring in rings {
         for v in ring.clone().filter(|&v| vertices[v].on_axis()) {
-            let (before, after) = neighbours(ring, v);
-            if !vertices[before].on_axis() && !vertices[after].on_axis() {
+            if !vertices[before(ring, v)].on_axis() && !vertices[after(ring, v)].on_axis() {
                 return Err(RevolutionError::PinchedOnAxis);
             }
         }
@@ -254,7 +256,7 @@ fn bounded_steps(
 ) -> Result<usize, RevolutionError> {
     let side_edges = rings
         .iter()
-        .flat_map(|ring| ring.clone().map(|v| (v, neighbours(ring, v).1)))
+        .flat_map(|ring| ring.clone().map(|v| (v, after(ring, v))))
         .filter(|&(a, b)| !(vertices[a].on_axis() && vertices[b].on_axis()))
         .count();
     let caps = if full { 0 } else { 2 };
@@ -294,9 +296,12 @@ impl Layout {
         let mut count = 0;
         for ring in rings {
             for v in ring.clone() {
-                let (before, after) = neighbours(ring, v);
                 let on_axis = vertices[v].on_axis();
-                if full && on_axis && vertices[before].on_axis() && vertices[after].on_axis() {
+                if full
+                    && on_axis
+                    && vertices[before(ring, v)].on_axis()
+                    && vertices[after(ring, v)].on_axis()
+                {
                     continue;
                 }
                 first[v] = Some(count);
@@ -313,6 +318,8 @@ impl Layout {
     /// The index of profile vertex `v` in section `k`; the last section of a full turn is the
     /// first.
     fn index(&self, vertices: &[Vertex], v: usize, k: usize) -> usize {
+        // Every vertex a face uses has a place: `Layout::new` skips only vertices that no face
+        // reaches, and `from_faces` rejects a wrong index anyway.
         let first = self.first[v].unwrap_or_default();
         if vertices[v].on_axis() {
             first
@@ -366,7 +373,7 @@ impl Layout {
         let mut faces = Vec::new();
         for ring in rings {
             for a in ring.clone() {
-                let b = neighbours(ring, a).1;
+                let b = after(ring, a);
                 let (a_axis, b_axis) = (vertices[a].on_axis(), vertices[b].on_axis());
                 if a_axis && b_axis {
                     continue;
