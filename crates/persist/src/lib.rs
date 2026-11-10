@@ -468,7 +468,7 @@ mod tests {
     /// connection inside a transaction and every later save failing.
     #[test]
     fn an_interrupted_begin_leaves_the_connection_usable() {
-        let conn = new_project();
+        let mut conn = new_project();
         let mut interrupted = 0;
         for steps in 1..=8 {
             let mut fired = false;
