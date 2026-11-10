@@ -43,3 +43,9 @@ blob-report/
 .claude/settings.local.json
 # Agent worktrees, one checkout per branch
 .claude/worktrees/
+
+# Git LFS hooks that `git lfs install` writes into core.hooksPath; BIMCraft no longer uses LFS
+.githooks/post-checkout
+.githooks/post-commit
+.githooks/post-merge
+.githooks/pre-push
