@@ -12,8 +12,8 @@ use std::f64::consts::PI;
 use std::fmt::Write as _;
 
 use geom::{
-    ArcDirection, Edge, Orientation, Point2, Point3, Profile, Solid, Vector3, incircle, insphere,
-    orient2d, orient3d,
+    ArcDirection, Edge, Orientation, Point2, Point3, Profile, RevolutionAxis, Solid, Vector2,
+    Vector3, incircle, insphere, orient2d, orient3d,
 };
 
 const GOLDEN: &str = include_str!("golden.txt");
@@ -279,6 +279,53 @@ fn extrusions(out: &mut Output) {
     }
 }
 
+/// Revolutions of random circles around random axes, partial and full: the section's chords, the
+/// steps around the axis and the turned vertices all come from `libm`, so the vertices and the
+/// volume depend on it being identical everywhere.
+fn revolutions(out: &mut Output) {
+    let mut rng = Rng::for_case("revolve");
+    for i in 0..SAMPLES {
+        let radius = rng.uniform(1e-2, 3.0);
+        // The circle's centre lies beyond its radius from the axis, which passes through the
+        // origin, so the profile never touches it.
+        let heading = rng.uniform(-PI, PI);
+        let distance = radius + rng.uniform(1e-2, 5.0);
+        let centre = Point2::new(
+            distance * -libm::sin(heading),
+            distance * libm::cos(heading),
+        );
+        let start = Point2::new(centre.x + radius, centre.y);
+        let circle = Edge::Arc {
+            start,
+            end: start,
+            centre,
+            direction: ArcDirection::CounterClockwise,
+        };
+        let axis = RevolutionAxis {
+            origin: Point2::new(0.0, 0.0),
+            direction: Vector2::new(libm::cos(heading), libm::sin(heading)),
+        };
+        // Every fourth is a full turn.
+        let angle = if i % 4 == 0 {
+            2.0 * PI
+        } else {
+            rng.uniform(0.1, 6.0)
+        };
+        let solid = Profile::new(vec![circle], vec![])
+            .ok()
+            .and_then(|profile| Solid::revolve(&profile, axis, angle).ok());
+        let Some(solid) = solid else {
+            let _ = writeln!(out.0, "revolve[{i}] error");
+            continue;
+        };
+        let middle = solid.vertices()[solid.vertices().len() / 3];
+        out.value("revolve.x", i, middle.x);
+        out.value("revolve.y", i, middle.y);
+        out.value("revolve.z", i, middle.z);
+        out.value("revolve.volume", i, solid.volume());
+    }
+}
+
 /// Unions, differences and intersections of overlapping extruded circles: the vertices where the faceted sides
 /// cross come from the kernel's arithmetic, so the volumes depend on it being identical
 /// everywhere.
@@ -384,6 +431,7 @@ fn compute() -> String {
     extrusions(&mut out);
     booleans(&mut out);
     shear_centres(&mut out);
+    revolutions(&mut out);
     out.0
 }
 

@@ -71,10 +71,8 @@ fn facet_loop(edges: &[Edge], budget: &mut usize) -> Result<Vec<Edge>, ProfileEr
 /// The fewest chords of equal angle whose sagitta is within [`ARC_CHORD_TOLERANCE`]: at least
 /// one, and three for a full circle. `None` when more than `budget` are needed.
 fn chord_count(arc: &Arc, budget: usize) -> Option<usize> {
-    // Half the largest angle a chord may span; the clamp covers radii below half the tolerance.
-    let half_angle = libm::acos((1.0 - ARC_CHORD_TOLERANCE / arc.radius).max(-1.0));
     let minimum = if arc.is_full_circle() { 3.0 } else { 1.0 };
-    let count = (arc.sweep.abs() / (2.0 * half_angle)).ceil().max(minimum);
+    let count = step_count(arc.radius, arc.sweep, f64::INFINITY, minimum);
     #[expect(
         clippy::cast_precision_loss,
         reason = "the budget is at most MAX_PROFILE_EDGES"
@@ -86,6 +84,17 @@ fn chord_count(arc: &Arc, budget: usize) -> Option<usize> {
         reason = "a whole number between 1 and the budget"
     )]
     fits.then_some(count as usize)
+}
+
+/// The fewest steps of equal angle that cover `sweep` radians of a circle of `radius` metres
+/// with chords whose sagitta is within [`ARC_CHORD_TOLERANCE`] (ADR 0008), each step at most
+/// `max_step` radians and the count at least `minimum`. Returned as a whole-valued float so that
+/// callers compare it with their budget before converting it: hostile input may give a huge one.
+pub(crate) fn step_count(radius: f64, sweep: f64, max_step: f64, minimum: f64) -> f64 {
+    // Half the largest angle a chord may span; the clamp covers radii below half the tolerance.
+    let half_angle = libm::acos((1.0 - ARC_CHORD_TOLERANCE / radius).max(-1.0));
+    let step = (2.0 * half_angle).min(max_step);
+    (sweep.abs() / step).ceil().max(minimum)
 }
 
 #[cfg(test)]
@@ -142,6 +151,25 @@ mod tests {
             p(0.0, 0.0),
         ));
         assert_eq!(chord_count(&short, MAX_PROFILE_EDGES), Some(1));
+    }
+
+    #[test]
+    #[expect(clippy::float_cmp, reason = "whole numbers")]
+    fn step_count_follows_the_sagitta_formula_and_its_limits() {
+        // r = 2 m: half angle acos(1 − 1e-3 / 2) = 0.03162, so a full turn needs
+        // ⌈2π / 0.06325⌉ = 100 steps, whichever the sign of the sweep.
+        assert_eq!(step_count(2.0, 2.0 * PI, f64::INFINITY, 1.0), 100.0);
+        assert_eq!(step_count(2.0, -2.0 * PI, f64::INFINITY, 1.0), 100.0);
+        // A small sweep still takes the minimum.
+        assert_eq!(step_count(2.0, 1e-3, f64::INFINITY, 1.0), 1.0);
+        assert_eq!(step_count(2.0, 1e-3, f64::INFINITY, 3.0), 3.0);
+        // Below half the tolerance one chord could span a half turn; the step limit takes over.
+        assert_eq!(step_count(4e-4, 2.0 * PI, PI / 2.0, 1.0), 4.0);
+        assert_eq!(step_count(4e-4, PI, PI / 2.0, 1.0), 2.0);
+        // A limit above the sagitta's own changes nothing.
+        assert_eq!(step_count(2.0, 2.0 * PI, PI / 2.0, 1.0), 100.0);
+        // Radius 0 does not give NaN: the clamp lets a chord span half a turn.
+        assert_eq!(step_count(0.0, PI, f64::INFINITY, 1.0), 1.0);
     }
 
     #[test]

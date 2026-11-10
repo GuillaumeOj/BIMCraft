@@ -25,6 +25,11 @@
 //! Arcs become chords within [`ARC_CHORD_TOLERANCE`], since faces are planar; failures are an
 //! [`ExtrusionError`].
 //!
+//! [`Solid::revolve`] turns a profile around an axis of its plane by a partial or full turn
+//! (GEO-02): cones, domes, rings and turned members. Arcs, and the circles points travel on, become
+//! chords within [`ARC_CHORD_TOLERANCE`]; a solid has at most [`MAX_SOLID_FACES`] faces; failures
+//! are a [`RevolutionError`]. Rationale: `docs/dev/adr/0020-sweeps-and-revolutions.md`.
+//!
 //! [`Solid::union`] combines two solids, [`Solid::difference`] cuts one out of another, for
 //! openings and voids, and [`Solid::intersection`] keeps what they share (GEO-03). Where they meet is decided with the exact
 //! predicates; vertices, faces and gaps within [`LINEAR_TOLERANCE`] merge, as the tolerance
@@ -52,13 +57,16 @@ mod tolerance;
 mod vector;
 
 pub use boolean::BooleanError;
-pub use brep::{BrepError, Containment, ExtrusionError, FaceInput, Shell, Solid};
+pub use brep::{
+    BrepError, Containment, ExtrusionError, FaceInput, MAX_SOLID_FACES, RevolutionAxis,
+    RevolutionError, Shell, Solid,
+};
 pub use location::{
     CardinalPoint, DirectionSense, Face, IfcCardinalPoint, Layer, LayerId, LayerPlacement,
     LayerSet, LocationError, LocationLine, LocationPoint, MAX_LAYERS, Resolved, SnapInfo,
     SnapPoint, SnapPosition,
 };
-pub use point::{Point2, Point3, Vector3};
+pub use point::{Point2, Point3, Vector2, Vector3};
 pub use predicates::{
     MAX_COORDINATE, MIN_COORDINATE, Orientation, PredicateError, incircle, insphere, orient2d,
     orient3d,
