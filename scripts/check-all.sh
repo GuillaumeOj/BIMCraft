@@ -50,6 +50,8 @@ check_renovate() {
   . scripts/tool-versions.env
   : "${RENOVATE_VERSION:?is missing from scripts/tool-versions.env}"
   scratch=$(mktemp -d "${TMPDIR:-/tmp}/check-renovate.XXXXXX")
+  # Under set -e a failed install or validation exits here, so clean up on every way out.
+  trap 'rm -rf "$scratch"' EXIT
   printf '{"private":true,"dependencies":{"renovate":"%s"},"trustedDependencies":[]}\n' "$RENOVATE_VERSION" \
     >"$scratch/package.json"
   (cd "$scratch" && bun install --silent --minimum-release-age=1209600)
@@ -59,7 +61,6 @@ check_renovate() {
     RENOVATE_X_IGNORE_RE2=true bun --bun --no-env-file "$scratch/node_modules/.bin/renovate-config-validator" \
       --strict --no-global .github/renovate.json5
   )
-  rm -rf "$scratch"
 }
 
 check_rust() {
