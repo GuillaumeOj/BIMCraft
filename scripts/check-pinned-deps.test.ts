@@ -195,6 +195,9 @@ MDBOOK_VERSION=0.5.4
       'line 2: BUN_VERSION needs a "# renovate: datasource=… depName=…" comment on the line above',
       'line 5: MDBOOK_VERSION needs a "# renovate: datasource=… depName=…" comment on the line above',
     ]);
+  });
+
+  test("rejects a version on the first line, with no line above it", () => {
     expect(messages("CARGO_DENY_VERSION=0.20.2")).toHaveLength(1);
   });
 

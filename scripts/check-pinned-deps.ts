@@ -11,12 +11,13 @@ const SEMVER = String.raw`\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?
 const EXACT_CARGO = new RegExp(`^=${SEMVER}$`);
 const EXACT_NPM = new RegExp(`^${SEMVER}$`);
 const EXACT_BUN = new RegExp(`^bun@${SEMVER}$`);
-const EXACT_TOOLCHAIN = /^\d+\.\d+\.\d+$/;
+const EXACT_VERSION = /^\d+\.\d+\.\d+$/;
 // Tools that need nightly (the cargo-fuzz targets in fuzz/) pin a dated one; the main
 // workspace's root toolchain stays a stable release.
 const DATED_NIGHTLY = /^nightly-\d{4}-\d{2}-\d{2}$/;
 const COMMIT_SHA = /^[0-9a-f]{40}$/;
-// The shape the Renovate regex manager of .github/renovate.json5 reads: a comment, then the line it bumps.
+// The shape the regex manager in .github/renovate.json5 (customManagers) reads: a comment, then the
+// line it bumps. Keep both in sync; the names here are stricter (`_VERSION`), on purpose.
 const RENOVATE_COMMENT = /^# renovate: datasource=\S+ depName=\S+( extractVersion=\S+)?$/;
 const TOOL_VERSION = /^([A-Z_]+_VERSION)=(.*)$/;
 const CARGO_DEP_SECTIONS = ["dependencies", "dev-dependencies", "build-dependencies"];
@@ -116,7 +117,7 @@ export function checkRustToolchain(file: string, content: string): Issue[] {
   const toolchain = (Bun.TOML.parse(content) as Table).toolchain;
   const channel = isTable(toolchain) ? toolchain.channel : undefined;
   const isRoot = file === "rust-toolchain.toml";
-  if (typeof channel === "string" && (EXACT_TOOLCHAIN.test(channel) || (!isRoot && DATED_NIGHTLY.test(channel)))) {
+  if (typeof channel === "string" && (EXACT_VERSION.test(channel) || (!isRoot && DATED_NIGHTLY.test(channel)))) {
     return [];
   }
   const expected = isRoot ? `an exact version "x.y.z"` : `an exact version "x.y.z" or "nightly-YYYY-MM-DD"`;
@@ -134,7 +135,7 @@ export function checkToolVersions(file: string, content: string): Issue[] {
       return [{ file, message: `${at}: expected "NAME_VERSION=x.y.z", got "${line}"` }];
     }
     const issues: Issue[] = [];
-    if (!EXACT_TOOLCHAIN.test(value)) {
+    if (!EXACT_VERSION.test(value)) {
       issues.push({ file, message: `${at}: ${name} must be an exact version "x.y.z", got "${value}"` });
     }
     if (!RENOVATE_COMMENT.test(lines[index - 1] ?? "")) {

@@ -40,21 +40,22 @@ check_repo() {
 # Separate from `repo`, which stays fast and offline: this one downloads Renovate from npm.
 # Installed in a scratch project rather than with bunx, which runs the install scripts of Bun's
 # default trusted packages (re2's) and ignores the release age: an empty trustedDependencies blocks
-# every script (AGENTS.md §4), and the 14-day age applies to Renovate's dependencies too. Without
-# re2, Renovate checks regexes with JavaScript's engine, so RENOVATE_X_IGNORE_RE2 silences its warning.
-# --bun runs it on Bun, so it does not depend on the Node.js version installed. --no-global validates
+# every script (AGENTS.md §4), and ui/bunfig.toml applies the 14-day age to Renovate's dependencies
+# too. Without re2, Renovate checks regexes with JavaScript's engine, so RENOVATE_X_IGNORE_RE2
+# silences its warning. --bun runs it on Bun, whatever Node.js is installed. --no-global validates
 # the file as a repository config, as the Renovate app reads it, not as a self-hosted global config.
 check_renovate() {
   step "Renovate: .github/renovate.json5 is valid, with no warning"
   require bun
-  version=$(sed -n 's/^RENOVATE_VERSION=//p' scripts/tool-versions.env)
-  # An empty version would install whatever npm tags latest.
-  [ -n "$version" ] || { echo "check-all: no RENOVATE_VERSION in scripts/tool-versions.env" >&2; exit 1; }
+  # shellcheck source=scripts/tool-versions.env
+  . scripts/tool-versions.env
+  : "${RENOVATE_VERSION:?is missing from scripts/tool-versions.env}"
   scratch=$(mktemp -d "${TMPDIR:-/tmp}/check-renovate.XXXXXX")
-  printf '{"private":true,"dependencies":{"renovate":"%s"},"trustedDependencies":[]}\n' "$version" \
+  printf '{"private":true,"dependencies":{"renovate":"%s"},"trustedDependencies":[]}\n' "$RENOVATE_VERSION" \
     >"$scratch/package.json"
+  cp ui/bunfig.toml "$scratch/"
   status=0
-  { (cd "$scratch" && bun install --silent --minimum-release-age=1209600) &&
+  { (cd "$scratch" && bun install --silent) &&
     RENOVATE_X_IGNORE_RE2=true bun --bun "$scratch/node_modules/.bin/renovate-config-validator" \
       --strict --no-global .github/renovate.json5; } || status=$?
   rm -rf "$scratch"
