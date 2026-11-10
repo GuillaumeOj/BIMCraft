@@ -201,6 +201,15 @@ MDBOOK_VERSION=0.5.4
     expect(messages("CARGO_DENY_VERSION=0.20.2")).toHaveLength(1);
   });
 
+  test("rejects a tool set twice", () => {
+    const env = `# renovate: datasource=npm depName=bun
+BUN_VERSION=1.4.2
+# renovate: datasource=npm depName=bun
+BUN_VERSION=1.4.3
+`;
+    expect(messages(env)).toEqual(["line 4: BUN_VERSION is set more than once"]);
+  });
+
   test("rejects lines Renovate and CI would not read", () => {
     expect(messages("export BUN_VERSION=1.4.2\nbun_version=1.4.2\nTOOL2=1.0.0\n")).toHaveLength(3);
   });

@@ -127,6 +127,7 @@ export function checkRustToolchain(file: string, content: string): Issue[] {
 /** Each tool version is exact and carries the `# renovate:` comment that keeps Renovate bumping it. */
 export function checkToolVersions(file: string, content: string): Issue[] {
   const lines = content.split("\n");
+  const seen = new Set<string>();
   return lines.flatMap((line, index): Issue[] => {
     if (line === "" || line.startsWith("#")) return [];
     const at = `line ${index + 1}`;
@@ -135,6 +136,9 @@ export function checkToolVersions(file: string, content: string): Issue[] {
       return [{ file, message: `${at}: expected "NAME_VERSION=x.y.z", got "${line}"` }];
     }
     const issues: Issue[] = [];
+    // The shell and CI keep the last value, while Renovate bumps each line on its own.
+    if (seen.has(name)) issues.push({ file, message: `${at}: ${name} is set more than once` });
+    seen.add(name);
     if (!EXACT_VERSION.test(value)) {
       issues.push({ file, message: `${at}: ${name} must be an exact version "x.y.z", got "${value}"` });
     }

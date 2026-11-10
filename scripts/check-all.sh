@@ -42,8 +42,10 @@ check_repo() {
 # default trusted packages (re2's) and ignores the release age: an empty trustedDependencies blocks
 # every script (AGENTS.md §4), and ui/bunfig.toml applies the 14-day age to Renovate's dependencies
 # too. Without re2, Renovate checks regexes with JavaScript's engine, so RENOVATE_X_IGNORE_RE2
-# silences its warning. --bun runs it on Bun, whatever Node.js is installed. --no-global validates
-# the file as a repository config, as the Renovate app reads it, not as a self-hosted global config.
+# silences its warning. --bun runs it on Bun, whatever Node.js is installed; --no-env-file keeps
+# Bun from loading a local .env, whose RENOVATE_* variables Renovate would read as global config.
+# --no-global validates the file as a repository config, as the Renovate app reads it, not as a
+# self-hosted global config.
 check_renovate() {
   step "Renovate: .github/renovate.json5 is valid, with no warning"
   require bun
@@ -56,7 +58,7 @@ check_renovate() {
   cp ui/bunfig.toml "$scratch/"
   status=0
   { (cd "$scratch" && bun install --silent) &&
-    RENOVATE_X_IGNORE_RE2=true bun --bun "$scratch/node_modules/.bin/renovate-config-validator" \
+    RENOVATE_X_IGNORE_RE2=true bun --bun --no-env-file "$scratch/node_modules/.bin/renovate-config-validator" \
       --strict --no-global .github/renovate.json5; } || status=$?
   rm -rf "$scratch"
   return "$status"
