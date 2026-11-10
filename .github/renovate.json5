@@ -22,7 +22,7 @@
   // One monthly PR refreshes the transitive dependencies of Cargo.lock, fuzz/Cargo.lock and
   // ui/bun.lock, which otherwise move only with a direct dependency. The 14-day age does not apply
   // to it: bun still enforces it, from ui/bunfig.toml (Renovate runs `bun install` in ui/), but
-  // cargo has no such guard (docs/dev/quality.md#dependencies).
+  // cargo has no such guard (docs/dev/quality.md#renovate).
   lockFileMaintenance: {
     enabled: true,
     schedule: ["before 6am on the first day of the month"],
@@ -79,9 +79,10 @@
       groupName: "fuzz-nightly",
       schedule: ["before 6am on the first day of the month"],
     },
-    // Majors are left out of the groups on purpose: each gets its own PR, as it often needs code
-    // changes, and one hard major must not hold the others back. config:recommended still keeps
-    // monorepos (React, Vitest, Testing Library…) together.
+    // Majors are left out of the rust and ui groups on purpose: each gets its own PR, as it often
+    // needs code changes, and one hard major must not hold the others back. config:recommended still
+    // keeps monorepos (React, Vitest, Testing Library…) together. The actions, toolchains and tauri
+    // groups match every update type, so their majors share one separate major PR per group.
     //
     // fuzz/ is its own cargo workspace and locks the root crates' dependencies too. A Renovate PR
     // that bumps the root workspace leaves fuzz/Cargo.lock stale, so the Fuzzing check fails until

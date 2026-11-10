@@ -62,7 +62,7 @@ CI runs every check on every pull request, on Linux, macOS and Windows. Locally,
 - **Toolchains**: Rust in `rust-toolchain.toml`, Bun in `ui/package.json` (`packageManager`) and CI, every CLI tool version in CI and `scripts/setup.sh`.
 - **Release age**: only adopt versions published at least 14 days ago (supply-chain protection), unless a security fix requires otherwise.
 - **New dependency?** Prefer the standard library or existing dependencies. Justify a new one in the commit body: purpose, maintenance status, licence (must pass `deny.toml`), size, and whether it builds for `wasm32-unknown-unknown` when used by a core crate.
-- `scripts/check-pinned-deps.ts` enforces this locally and in CI. Renovate proposes version bumps (`.github/renovate.json5`), toolchains and the CLI tools in `scripts/tool-versions.env` included, in groups, plus a monthly lock-file refresh; majors come one per pull request. On a Renovate pull request that bumps a Rust dependency, run `cargo update -w` in `fuzz/` and commit `fuzz/Cargo.lock`. Each version in `scripts/tool-versions.env` sits under a `# renovate:` comment. Details: [quality.md](docs/dev/quality.md#renovate).
+- `scripts/check-pinned-deps.ts` enforces this locally and in CI. Renovate proposes version bumps (`.github/renovate.json5`), toolchains and the CLI tools in `scripts/tool-versions.env` included, in groups, plus a monthly lock-file refresh; cargo and bun majors come one per pull request. On a Renovate pull request that bumps a Rust dependency, run `cargo update -w` in `fuzz/` and commit `fuzz/Cargo.lock`. Each version in `scripts/tool-versions.env` sits under a `# renovate:` comment. Details: [quality.md](docs/dev/quality.md#renovate).
 
 ## 5. Tests and coverage
 
