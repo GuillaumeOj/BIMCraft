@@ -146,8 +146,8 @@ impl Frame {
 
 impl Solid {
     /// Revolves a profile lying in the plane z = 0 around `axis`, also in that plane, by `angle`
-    /// radians, 0 < `angle` ≤ 2π, turning by the right-hand rule around the axis direction. At
-    /// angle 0 the solid's start face is the profile itself.
+    /// radians, 0 < `angle` ≤ 2π, turning by the right-hand rule around the axis direction. The
+    /// start section, before any turn, is the profile itself.
     ///
     /// The profile must lie on one side of the axis, touching it allowed: a vertex within
     /// [`LINEAR_TOLERANCE`](crate::LINEAR_TOLERANCE) of the axis is one vertex of the solid, and
