@@ -19,12 +19,17 @@
   minimumReleaseAge: "14 days",
   // Pins are exact, so a bump rewrites the requirement itself (`=1.0.228` -> `=1.0.229`).
   rangeStrategy: "bump",
+  // Refreshes the transitive dependencies of the three lockfiles. Renovate skips the 14-day age
+  // here; only bun enforces it (docs/dev/quality.md#renovate).
+  lockFileMaintenance: {
+    enabled: true,
+    schedule: ["before 6am on the first day of the month"],
+  },
   semanticCommits: "enabled",
   packageRules: [
     // One group for both workspaces: fuzz/ path-depends on the root crates and shares exact pins
     // with them (libm, serde_json), so bumping one workspace alone leaves the other unresolvable.
-    // Renovate refreshes only the lockfiles of the manifests it edits; fuzz/Cargo.lock needs a
-    // hand-made refresh (docs/dev/quality.md#fuzzing).
+    // fuzz/Cargo.lock still needs a hand-made refresh: the prBodyNotes rule at the end.
     {
       matchManagers: ["cargo"],
       matchUpdateTypes: ["minor", "patch"],
@@ -63,13 +68,28 @@
       extends: ["monorepo:tauri"],
       groupName: "tauri",
     },
-    // A new nightly ships every day; monthly is enough for the fuzz targets.
+    // The rust-toolchain manager reads both toolchain files; the root one is in `toolchains` above.
+    // A new nightly ships every day; monthly is enough for the fuzz targets. The nightly versioning
+    // only proposes newer dated nightlies, at least 14 days old like any release.
     {
       matchFileNames: ["fuzz/rust-toolchain.toml"],
+      groupName: "fuzz-nightly",
       schedule: ["before 6am on the first day of the month"],
+    },
+    // Cargo and bun majors stay out of the groups above: one PR each (docs/dev/quality.md#renovate).
+    //
+    // Renovate refreshes only the lockfiles of the manifests it edits, so a root bump leaves
+    // fuzz/Cargo.lock stale (docs/dev/quality.md#fuzzing). Last, so it adds to the rules above.
+    {
+      matchManagers: ["cargo"],
+      matchUpdateTypes: ["major", "minor", "patch"],
+      prBodyNotes: [
+        "Run `cargo update -w` in `fuzz/` and commit `fuzz/Cargo.lock`, or the Fuzzing check fails (docs/dev/quality.md#fuzzing).",
+      ],
     },
   ],
   customManagers: [
+    // scripts/check-pinned-deps.ts checks that every line of the file has this shape.
     {
       customType: "regex",
       managerFilePatterns: ["scripts/tool-versions.env"],

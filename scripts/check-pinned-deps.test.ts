@@ -8,6 +8,7 @@ import {
   checkPackageJson,
   checkRepo,
   checkRustToolchain,
+  checkToolVersions,
   checkWorkflow,
   gitEnv,
   main,
@@ -156,6 +157,64 @@ describe("checkRustToolchain", () => {
   });
 });
 
+describe("checkToolVersions", () => {
+  const messages = (env: string): string[] =>
+    checkToolVersions("scripts/tool-versions.env", env).map((i) => i.message);
+
+  test("accepts exact versions, each under its renovate comment", () => {
+    const env = `# Tool versions.
+
+# renovate: datasource=crate depName=taplo-cli
+TAPLO_VERSION=0.10.0
+# renovate: datasource=github-releases depName=rhysd/actionlint extractVersion=^v(?<version>.+)$
+ACTIONLINT_VERSION=1.7.12
+`;
+    expect(messages(env)).toEqual([]);
+  });
+
+  test("rejects a range and a tag", () => {
+    const env = `# renovate: datasource=crate depName=typos-cli
+TYPOS_VERSION=^1.50
+# renovate: datasource=npm depName=renovate
+RENOVATE_VERSION=latest
+`;
+    expect(messages(env)).toEqual([
+      'line 2: TYPOS_VERSION must be an exact version "x.y.z", got "^1.50"',
+      'line 4: RENOVATE_VERSION must be an exact version "x.y.z", got "latest"',
+    ]);
+  });
+
+  test("rejects a version without a renovate comment right above it", () => {
+    const env = `# A plain comment
+BUN_VERSION=1.4.2
+# renovate: datasource=crate depName=mdbook
+
+MDBOOK_VERSION=0.5.4
+`;
+    expect(messages(env)).toEqual([
+      'line 2: BUN_VERSION needs a "# renovate: datasource=… depName=…" comment on the line above',
+      'line 5: MDBOOK_VERSION needs a "# renovate: datasource=… depName=…" comment on the line above',
+    ]);
+  });
+
+  test("rejects a version on the first line, with no line above it", () => {
+    expect(messages("CARGO_DENY_VERSION=0.20.2")).toHaveLength(1);
+  });
+
+  test("rejects a tool set twice", () => {
+    const env = `# renovate: datasource=npm depName=bun
+BUN_VERSION=1.4.2
+# renovate: datasource=npm depName=bun
+BUN_VERSION=1.4.3
+`;
+    expect(messages(env)).toEqual(["line 4: BUN_VERSION is set more than once"]);
+  });
+
+  test("rejects lines Renovate and CI would not read", () => {
+    expect(messages("export BUN_VERSION=1.4.2\nbun_version=1.4.2\nTOOL2=1.0.0\n")).toHaveLength(3);
+  });
+});
+
 describe("checkFile", () => {
   test("dispatches by file name and ignores other files", () => {
     expect(checkFile("crates/x/Cargo.toml", '[dependencies]\na = "1"\n')).toHaveLength(1);
@@ -163,6 +222,8 @@ describe("checkFile", () => {
     expect(checkFile("rust-toolchain.toml", "")).toHaveLength(1);
     expect(checkFile(".github/workflows/ci.yaml", "- uses: a/b@v1")).toHaveLength(1);
     expect(checkFile(".github/actions/setup/action.yml", "- uses: a/b@v1")).toHaveLength(1);
+    expect(checkFile("scripts/tool-versions.env", "BUN_VERSION=latest")).toHaveLength(2);
+    expect(checkFile("other/tool-versions.env", "BUN_VERSION=latest")).toEqual([]);
     expect(checkFile(".github/renovate.json5", "- uses: a/b@v1")).toEqual([]);
     expect(checkFile("README.md", "anything")).toEqual([]);
   });

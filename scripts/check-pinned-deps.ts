@@ -11,11 +11,15 @@ const SEMVER = String.raw`\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?
 const EXACT_CARGO = new RegExp(`^=${SEMVER}$`);
 const EXACT_NPM = new RegExp(`^${SEMVER}$`);
 const EXACT_BUN = new RegExp(`^bun@${SEMVER}$`);
-const EXACT_TOOLCHAIN = /^\d+\.\d+\.\d+$/;
+const EXACT_VERSION = /^\d+\.\d+\.\d+$/;
 // Tools that need nightly (the cargo-fuzz targets in fuzz/) pin a dated one; the main
 // workspace's root toolchain stays a stable release.
 const DATED_NIGHTLY = /^nightly-\d{4}-\d{2}-\d{2}$/;
 const COMMIT_SHA = /^[0-9a-f]{40}$/;
+// The shape the regex manager in .github/renovate.json5 (customManagers) reads: a comment, then the
+// line it bumps. Keep both in sync; the names here are stricter (`_VERSION`), on purpose.
+const RENOVATE_COMMENT = /^# renovate: datasource=\S+ depName=\S+( extractVersion=\S+)?$/;
+const TOOL_VERSION = /^([A-Z_]+_VERSION)=(.*)$/;
 const CARGO_DEP_SECTIONS = ["dependencies", "dev-dependencies", "build-dependencies"];
 const NPM_DEP_SECTIONS = ["dependencies", "devDependencies", "optionalDependencies", "overrides"];
 
@@ -113,11 +117,39 @@ export function checkRustToolchain(file: string, content: string): Issue[] {
   const toolchain = (Bun.TOML.parse(content) as Table).toolchain;
   const channel = isTable(toolchain) ? toolchain.channel : undefined;
   const isRoot = file === "rust-toolchain.toml";
-  if (typeof channel === "string" && (EXACT_TOOLCHAIN.test(channel) || (!isRoot && DATED_NIGHTLY.test(channel)))) {
+  if (typeof channel === "string" && (EXACT_VERSION.test(channel) || (!isRoot && DATED_NIGHTLY.test(channel)))) {
     return [];
   }
   const expected = isRoot ? `an exact version "x.y.z"` : `an exact version "x.y.z" or "nightly-YYYY-MM-DD"`;
   return [{ file, message: `toolchain channel must be ${expected}, got "${String(channel)}"` }];
+}
+
+/** Each tool version is exact and carries the `# renovate:` comment that keeps Renovate bumping it. */
+export function checkToolVersions(file: string, content: string): Issue[] {
+  const lines = content.split("\n");
+  const seen = new Set<string>();
+  return lines.flatMap((line, index): Issue[] => {
+    if (line === "" || line.startsWith("#")) return [];
+    const at = `line ${index + 1}`;
+    const [, name, value] = TOOL_VERSION.exec(line) ?? [];
+    if (name === undefined || value === undefined) {
+      return [{ file, message: `${at}: expected "NAME_VERSION=x.y.z", got "${line}"` }];
+    }
+    const issues: Issue[] = [];
+    // The shell and CI keep the last value, while Renovate bumps each line on its own.
+    if (seen.has(name)) issues.push({ file, message: `${at}: ${name} is set more than once` });
+    seen.add(name);
+    if (!EXACT_VERSION.test(value)) {
+      issues.push({ file, message: `${at}: ${name} must be an exact version "x.y.z", got "${value}"` });
+    }
+    if (!RENOVATE_COMMENT.test(lines[index - 1] ?? "")) {
+      issues.push({
+        file,
+        message: `${at}: ${name} needs a "# renovate: datasource=… depName=…" comment on the line above`,
+      });
+    }
+    return issues;
+  });
 }
 
 type Checker = (file: string, content: string) => Issue[];
@@ -127,6 +159,7 @@ function checkerFor(file: string): Checker | undefined {
   if (name === "Cargo.toml") return checkCargoToml;
   if (name === "package.json") return checkPackageJson;
   if (name === "rust-toolchain.toml") return checkRustToolchain;
+  if (file === "scripts/tool-versions.env") return checkToolVersions;
   if (/^\.github\/(workflows\/[^/]+|actions\/[^/]+\/action)\.ya?ml$/.test(file)) return checkWorkflow;
   return undefined;
 }

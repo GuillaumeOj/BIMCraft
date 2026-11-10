@@ -1,7 +1,7 @@
 #!/bin/sh
 # Runs the project checks (AGENTS.md §9). CI calls the same sections, so local and remote never drift.
-# Usage: scripts/check-all.sh [section...]   sections: repo rust coverage wasm fuzz fuzz-explore corpus ui e2e desktop docs
-# (default: all but fuzz-explore, which CI runs on a schedule)
+# Usage: scripts/check-all.sh [section...]   sections: repo rust coverage wasm fuzz fuzz-explore corpus ui e2e desktop docs renovate
+# (default: all but fuzz-explore, which CI runs on a schedule, and renovate, which downloads Renovate)
 # A section is skipped only when the code it checks does not exist yet.
 # CHECK_CRATES="a b" limits the Rust sections to those crates, for a quick local run on the crates
 # you changed (AGENTS.md §3a); unset, they cover the whole workspace, as in CI.
@@ -35,6 +35,32 @@ check_repo() {
   bun scripts/generate-api-types.ts --check
   (cd scripts && bun test)
   if command -v actionlint >/dev/null 2>&1; then actionlint; fi
+}
+
+# A scratch project, not bunx: bunx runs the install scripts of Bun's default trusted packages
+# (re2's) and ignores the release age, while an empty trustedDependencies blocks every script
+# (AGENTS.md §4) and --minimum-release-age gives Renovate's dependencies the 14 days too. Without
+# re2, Renovate checks regexes with JavaScript's engine; RENOVATE_X_IGNORE_RE2 silences its warning.
+# Renovate reads RENOVATE_* variables as global config, so the validator runs without the exported
+# ones and, with --no-env-file, without a local .env: a local run then gives CI's answer.
+check_renovate() {
+  step "Renovate: .github/renovate.json5 is valid, with no warning"
+  require bun
+  # shellcheck source=scripts/tool-versions.env
+  . scripts/tool-versions.env
+  : "${RENOVATE_VERSION:?is missing from scripts/tool-versions.env}"
+  scratch=$(mktemp -d "${TMPDIR:-/tmp}/check-renovate.XXXXXX")
+  # Under set -e a failed install or validation exits here, so clean up on every way out.
+  trap 'rm -rf "$scratch"' EXIT
+  printf '{"private":true,"dependencies":{"renovate":"%s"},"trustedDependencies":[]}\n' "$RENOVATE_VERSION" \
+    >"$scratch/package.json"
+  (cd "$scratch" && bun install --silent --minimum-release-age=1209600)
+  (
+    # shellcheck disable=SC2046 # one variable name per word
+    unset $(env | sed -n 's/^\(RENOVATE_[A-Za-z0-9_]*\)=.*/\1/p')
+    RENOVATE_X_IGNORE_RE2=true bun --bun --no-env-file "$scratch/node_modules/.bin/renovate-config-validator" \
+      --strict --no-global .github/renovate.json5
+  )
 }
 
 check_rust() {
@@ -104,10 +130,15 @@ check_fuzz() {
   has_fuzz || { step "Fuzzing: no fuzz targets yet, skipped"; return; }
   step "Fuzzing: every seed of the parsers and the geometry kernel still passes (ENG-02)"
   require cargo-fuzz; require cargo-deny; require cargo-audit
+  # Fail on a stale fuzz/Cargo.lock before the audit reads it. Inside fuzz/, rustup picks the nightly
+  # pinned in fuzz/rust-toolchain.toml.
+  (cd fuzz && cargo metadata --locked --format-version 1 >/dev/null) || {
+    echo "check-all: cargo cannot use fuzz/Cargo.lock as is (error above); if it is out of date, run 'cargo update -w' in fuzz/ and commit it (docs/dev/quality.md#fuzzing)" >&2
+    exit 1
+  }
   # From the root, where .cargo/audit.toml lives.
   cargo audit --deny warnings --file fuzz/Cargo.lock
   (
-    # Inside fuzz/, rustup picks the nightly pinned in fuzz/rust-toolchain.toml.
     cd fuzz
     cargo fmt --check
     # --no-deps: the crates under test are linted on stable by the rust section.
@@ -182,7 +213,7 @@ check_docs() {
 sections=${*:-repo rust coverage wasm fuzz corpus ui e2e desktop docs}
 for section in $sections; do
   case "$section" in
-    repo|rust|coverage|wasm|fuzz|corpus|ui|e2e|desktop|docs) "check_$section" ;;
+    repo|rust|coverage|wasm|fuzz|corpus|ui|e2e|desktop|docs|renovate) "check_$section" ;;
     fuzz-explore) check_fuzz_explore ;;
     *) echo "check-all: unknown section '$section'" >&2; exit 2 ;;
   esac

@@ -31,13 +31,43 @@ While working, agents and contributors run the narrowest check that covers their
 
 Ranges let a build change without a commit, which breaks reproducibility and opens the door to supply-chain attacks (a compromised patch release is pulled automatically). Exact versions plus committed lockfiles mean every change of dependency is a reviewed diff. The 14-day minimum release age gives the ecosystem time to detect malicious releases. Actions are pinned by commit SHA because tags can be moved. Renovate keeps pins current.
 
+### Renovate
+
+The Renovate app (`.github/renovate.json5`) proposes every bump; each pinned file has a Renovate manager that reads it:
+
+| Files | Renovate manager |
+| --- | --- |
+| `Cargo.toml`, `fuzz/Cargo.toml`, `crates/*/Cargo.toml`, both `Cargo.lock` | `cargo` |
+| `ui/package.json` (dependencies, devDependencies, overrides, `packageManager`), `ui/bun.lock` | `bun` |
+| `.github/workflows/*.yml`, `.github/actions/*/action.yml` | `github-actions` |
+| `rust-toolchain.toml`, `fuzz/rust-toolchain.toml` | `rust-toolchain` |
+| `scripts/tool-versions.env` | a regex manager, from the `# renovate:` comment above each version |
+
+A new pinned file needs a manager too; `bun scripts/check-pinned-deps.ts` rejects a version in `scripts/tool-versions.env` without its `# renovate:` comment. The MSRV (`rust-version` in `Cargo.toml`) is a policy, not a pin: no manager reads it.
+
+Updates come in groups, so that versions that must agree move together and CI runs once for many bumps:
+
+| Group | Contents | Schedule |
+| --- | --- | --- |
+| `rust-minor-patch` | cargo minor and patch updates, both workspaces | Monday before 6am |
+| `ui-minor-patch` | bun minor and patch updates | Monday before 6am |
+| `actions` | every GitHub Action | Monday before 6am |
+| `toolchains` | `scripts/tool-versions.env` but gitleaks and actionlint (one pull request each, as CI pins their tarball checksums), the stable Rust toolchain, Bun | Monday before 6am |
+| `tauri` | the tauri crates and `@tauri-apps/api` | Monday before 6am |
+| `fuzz-nightly` | `fuzz/rust-toolchain.toml` | first day of the month |
+| lock-file maintenance | the transitive dependencies of `Cargo.lock`, `fuzz/Cargo.lock` and `ui/bun.lock` | first day of the month |
+
+A cargo or bun major update gets a pull request of its own, as it often needs code changes and one hard major must not hold the others back; Renovate's monorepo presets still keep families such as React or Vitest together. The `actions`, `toolchains` and `tauri` groups take every update type, so their majors come together in one separate major pull request per group (the tauri crates, and the two Bun pins, must move together anyway). Every update waits the 14 days, except security fixes; the Dependency Dashboard lists the waiting ones under Pending Status Checks, whose checkbox creates the pull request at once, so tick it only for a security fix. Lock-file maintenance is the exception: Renovate does not apply the age to it. Bun still enforces it, from `ui/bunfig.toml` (`install.minimumReleaseAge`; a security fix younger than 14 days needs a temporary `minimumReleaseAgeExcludes` entry there, removed once the version is old enough), since Renovate refreshes `ui/bun.lock` with `bun install` in `ui/`; cargo has no such option, so the monthly pull request can give the cargo lockfiles transitive versions younger than 14 days. `cargo deny`, `cargo audit` and the review of that pull request are the guard there.
+
+`scripts/check-all.sh renovate` validates `.github/renovate.json5` with `renovate-config-validator --strict`, as a repository config, so a typo fails the pull request rather than stopping Renovate after the merge. It downloads Renovate (its version is in `scripts/tool-versions.env`), so it is not part of the offline `repo` section; CI runs it in the Repository checks job.
+
 ## Coverage thresholds
 
 90 % lines globally catches untested features without forcing tests of trivial glue. Critical areas — the schema and its generators, the model, transactions, project files, geometry, georeferencing, analysis, the API and file parsers — corrupt user data or produce wrong engineering results when they fail, so they need 98 % (aim for 100 %). Rust branch coverage needs a nightly compiler, so on the Rust side the gate is lines; UI critical code is gated on lines and branches. Coverage measures what was executed, not what was verified: reviews check that tests assert meaningful behaviour.
 
 ## Fuzzing
 
-Parsers read hostile input (AGENTS.md §8), so each one has a property test in its crate and a [cargo-fuzz](https://rust-fuzz.github.io/book/cargo-fuzz.html) target in `fuzz/` (ENG-02). So does the geometry kernel, whose degenerate cases are where tolerance bugs hide: `profile`, `extrusion`, `boolean` (boxes) and `extruded_boolean` (prisms over any profile) check that nothing panics and that every accepted result holds its invariants. `extruded_boolean` holds the booleans to ADR 0001: each operation gives a valid solid or the one typed refusal `FeaturesTooClose`; its volume lies within its bounds give or take the tolerance times the operands' area, what the merge pass may move; and its vertices lie where the operation puts them (operand vertices inside or on a union, vertices of an intersection inside or on both operands, vertices of a difference inside or on the first and not inside the second), within the reach of a vertex merge, so a wrong solid of about the right volume fails too. The kernel targets' inputs come from the generators of `fuzz/src/lib.rs`, which put vertices on a quarter-metre grid so that edges and faces coincide often, and scale whole profiles down to the tolerance or out past the model extent. `fuzz/` is a workspace of its own because libFuzzer needs a nightly compiler, pinned by date in `fuzz/rust-toolchain.toml`; the main workspace stays on stable. Its lockfile also locks the root crates' dependencies, which Renovate cannot refresh: on a Renovate pull request that bumps a Rust dependency, run `cargo update -w` in `fuzz/` and commit the lockfile, or the Fuzzing check fails. Starting inputs live in `fuzz/seeds/<target>/`, a link to the test fixtures when a crate already has suitable ones, so seeds never go stale.
+Parsers read hostile input (AGENTS.md §8), so each one has a property test in its crate and a [cargo-fuzz](https://rust-fuzz.github.io/book/cargo-fuzz.html) target in `fuzz/` (ENG-02). So does the geometry kernel, whose degenerate cases are where tolerance bugs hide: `profile`, `extrusion`, `boolean` (boxes) and `extruded_boolean` (prisms over any profile) check that nothing panics and that every accepted result holds its invariants. `extruded_boolean` holds the booleans to ADR 0001: each operation gives a valid solid or the one typed refusal `FeaturesTooClose`; its volume lies within its bounds give or take the tolerance times the operands' area, what the merge pass may move; and its vertices lie where the operation puts them (operand vertices inside or on a union, vertices of an intersection inside or on both operands, vertices of a difference inside or on the first and not inside the second), within the reach of a vertex merge, so a wrong solid of about the right volume fails too. The kernel targets' inputs come from the generators of `fuzz/src/lib.rs`, which put vertices on a quarter-metre grid so that edges and faces coincide often, and scale whole profiles down to the tolerance or out past the model extent. `fuzz/` is a workspace of its own because libFuzzer needs a nightly compiler, pinned by date in `fuzz/rust-toolchain.toml`; the main workspace stays on stable. Renovate bumps that nightly once a month (the `fuzz-nightly` group above). The fuzz lockfile also locks the root crates' dependencies, and Renovate refreshes only the lockfiles of the manifests it edits: on a Renovate pull request that bumps a Rust dependency, run `cargo update -w` in `fuzz/` and commit `fuzz/Cargo.lock`, or the Fuzzing check fails. The pull request says so, and so does the check, which looks for a stale lockfile first. The monthly lock-file maintenance pull request refreshes `fuzz/Cargo.lock` itself. Starting inputs live in `fuzz/seeds/<target>/`, a link to the test fixtures when a crate already has suitable ones, so seeds never go stale.
 
 `scripts/check-all.sh fuzz` lints the targets and replays every seed once; it is the blocking Fuzzing check on every pull request. A replay gives the same answer on every machine, so a red check can be reproduced and fixed. A fuzzing run cannot: libFuzzer explores along the binary's coverage map, so the same seeded run finds different inputs on Linux and macOS, or after any change to the code under test.
 
