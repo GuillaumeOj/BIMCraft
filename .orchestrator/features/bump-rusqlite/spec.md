@@ -1,5 +1,7 @@
 # Bump rusqlite — feature spec
 
+Status: approved by the user (2026-11-10).
+
 Security fix. No issue, no requirement ID of its own; it keeps `persist` (PERS-*) building on a patched SQLite and unblocks every Rust CI job.
 
 ## Problem
