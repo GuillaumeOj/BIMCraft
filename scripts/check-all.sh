@@ -37,15 +37,12 @@ check_repo() {
   if command -v actionlint >/dev/null 2>&1; then actionlint; fi
 }
 
-# Separate from `repo`, which stays fast and offline: this one downloads Renovate from npm.
-# Installed in a scratch project rather than with bunx, which runs the install scripts of Bun's
-# default trusted packages (re2's) and ignores the release age: an empty trustedDependencies blocks
-# every script (AGENTS.md §4), and ui/bunfig.toml applies the 14-day age to Renovate's dependencies
-# too. Without re2, Renovate checks regexes with JavaScript's engine, so RENOVATE_X_IGNORE_RE2
-# silences its warning. --bun runs it on Bun, whatever Node.js is installed; --no-env-file keeps
-# Bun from loading a local .env, whose RENOVATE_* variables Renovate would read as global config.
-# --no-global validates the file as a repository config, as the Renovate app reads it, not as a
-# self-hosted global config.
+# A scratch project, not bunx: bunx runs the install scripts of Bun's default trusted packages
+# (re2's) and ignores the release age, while an empty trustedDependencies blocks every script
+# (AGENTS.md §4) and --minimum-release-age gives Renovate's dependencies the 14 days too. Without
+# re2, Renovate checks regexes with JavaScript's engine; RENOVATE_X_IGNORE_RE2 silences its warning.
+# Renovate reads RENOVATE_* variables as global config, so the validator runs without the exported
+# ones and, with --no-env-file, without a local .env: a local run then gives CI's answer.
 check_renovate() {
   step "Renovate: .github/renovate.json5 is valid, with no warning"
   require bun
@@ -55,13 +52,14 @@ check_renovate() {
   scratch=$(mktemp -d "${TMPDIR:-/tmp}/check-renovate.XXXXXX")
   printf '{"private":true,"dependencies":{"renovate":"%s"},"trustedDependencies":[]}\n' "$RENOVATE_VERSION" \
     >"$scratch/package.json"
-  cp ui/bunfig.toml "$scratch/"
-  status=0
-  { (cd "$scratch" && bun install --silent) &&
+  (cd "$scratch" && bun install --silent --minimum-release-age=1209600)
+  (
+    # shellcheck disable=SC2046 # one variable name per word
+    unset $(env | sed -n 's/^\(RENOVATE_[A-Za-z0-9_]*\)=.*/\1/p')
     RENOVATE_X_IGNORE_RE2=true bun --bun --no-env-file "$scratch/node_modules/.bin/renovate-config-validator" \
-      --strict --no-global .github/renovate.json5; } || status=$?
+      --strict --no-global .github/renovate.json5
+  )
   rm -rf "$scratch"
-  return "$status"
 }
 
 check_rust() {
@@ -131,9 +129,8 @@ check_fuzz() {
   has_fuzz || { step "Fuzzing: no fuzz targets yet, skipped"; return; }
   step "Fuzzing: every seed of the parsers and the geometry kernel still passes (ENG-02)"
   require cargo-fuzz; require cargo-deny; require cargo-audit
-  # A Renovate PR that bumps the root workspace leaves fuzz/Cargo.lock behind; say how to fix it
-  # before the audit reads the stale lockfile. Inside fuzz/, rustup picks the nightly pinned in
-  # fuzz/rust-toolchain.toml.
+  # Fail on a stale fuzz/Cargo.lock before the audit reads it. Inside fuzz/, rustup picks the nightly
+  # pinned in fuzz/rust-toolchain.toml.
   (cd fuzz && cargo metadata --locked --format-version 1 >/dev/null) || {
     echo "check-all: cargo cannot use fuzz/Cargo.lock as is (error above); if it is out of date, run 'cargo update -w' in fuzz/ and commit it (docs/dev/quality.md#fuzzing)" >&2
     exit 1
