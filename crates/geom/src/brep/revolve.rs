@@ -13,7 +13,7 @@ use crate::{Edge, MODEL_EXTENT, Point2, Point3, Profile, ProfileError, Vector2};
 /// Largest number of faces a revolved solid may have.
 ///
 /// Counting happens before any face is built, so hostile input cannot make a revolution allocate
-/// millions of faces. A profile of at most 64 edges still turns a full circle of radius 10 km.
+/// millions of faces. A profile of at most 9 edges still turns a full circle of radius 10 km.
 pub const MAX_SOLID_FACES: usize = 65_536;
 
 /// The axis of a revolution: a line of the profile plane z = 0.
@@ -794,6 +794,29 @@ mod tests {
         // A sliver of a turn is too thin to be a solid.
         let thin = run(Y_AXIS, 1e-9);
         assert!(matches!(thin, Err(RevolutionError::Solid(_))), "{thin:?}");
+    }
+
+    #[test]
+    fn a_profile_touching_the_axis_twice_encloses_a_cavity_in_a_full_turn() {
+        // A C shape whose two arms end on the axis: the full turn is a cylinder of radius 2 m
+        // with a closed cylindrical cavity of radius 1 m, so a void shell without a profile hole.
+        let outer = polygon(&[
+            (0.0, 0.0),
+            (2.0, 0.0),
+            (2.0, 3.0),
+            (0.0, 3.0),
+            (0.0, 2.0),
+            (1.0, 2.0),
+            (1.0, 1.0),
+            (0.0, 1.0),
+        ]);
+        let full = revolve(outer.clone(), vec![], Y_AXIS, TAU).unwrap();
+        let shells = full.shells();
+        assert_eq!(shells.len(), 2);
+        assert_eq!(shells.iter().filter(|s| s.is_void()).count(), 1);
+        assert!(shells.iter().all(|s| s.genus() == 0));
+        // A partial turn closes the cavity into the end faces: one shell.
+        one_shell(&revolve(outer, vec![], Y_AXIS, 1.0).unwrap(), 0);
     }
 
     #[test]
