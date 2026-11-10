@@ -48,6 +48,8 @@ check_renovate() {
   step "Renovate: .github/renovate.json5 is valid, with no warning"
   require bun
   version=$(sed -n 's/^RENOVATE_VERSION=//p' scripts/tool-versions.env)
+  # An empty version would install whatever npm tags latest.
+  [ -n "$version" ] || { echo "check-all: no RENOVATE_VERSION in scripts/tool-versions.env" >&2; exit 1; }
   scratch=$(mktemp -d "${TMPDIR:-/tmp}/check-renovate.XXXXXX")
   printf '{"private":true,"dependencies":{"renovate":"%s"},"trustedDependencies":[]}\n' "$version" \
     >"$scratch/package.json"
@@ -126,16 +128,17 @@ check_fuzz() {
   has_fuzz || { step "Fuzzing: no fuzz targets yet, skipped"; return; }
   step "Fuzzing: every seed of the parsers and the geometry kernel still passes (ENG-02)"
   require cargo-fuzz; require cargo-deny; require cargo-audit
+  # A Renovate PR that bumps the root workspace leaves fuzz/Cargo.lock behind; say how to fix it
+  # before the audit reads the stale lockfile. Inside fuzz/, rustup picks the nightly pinned in
+  # fuzz/rust-toolchain.toml.
+  (cd fuzz && cargo metadata --locked --format-version 1 >/dev/null) || {
+    echo "check-all: cargo cannot use fuzz/Cargo.lock as is (error above); if it is out of date, run 'cargo update -w' in fuzz/ and commit it (docs/dev/quality.md#fuzzing)" >&2
+    exit 1
+  }
   # From the root, where .cargo/audit.toml lives.
   cargo audit --deny warnings --file fuzz/Cargo.lock
   (
-    # Inside fuzz/, rustup picks the nightly pinned in fuzz/rust-toolchain.toml.
     cd fuzz
-    # A Renovate PR that bumps the root workspace leaves this lockfile behind; say how to fix it.
-    cargo metadata --locked --format-version 1 >/dev/null || {
-      echo "check-all: fuzz/Cargo.lock is out of date: run 'cargo update -w' in fuzz/ and commit it (docs/dev/quality.md#fuzzing)" >&2
-      exit 1
-    }
     cargo fmt --check
     # --no-deps: the crates under test are linted on stable by the rust section.
     cargo clippy --all-targets --locked --no-deps -- -D warnings
