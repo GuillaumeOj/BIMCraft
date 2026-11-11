@@ -140,4 +140,27 @@ impl Boxes {
     pub fn mesh(self) -> MeshData {
         MeshData::from_world(&self.positions, self.normals, self.indices).unwrap()
     }
+
+    /// The mesh of a classic pipeline: world positions each rounded to `f32`, with the mesh origin
+    /// at the world origin, so far from the origin they snap to the grid of `f32`.
+    #[allow(
+        dead_code,
+        reason = "shared by two test binaries; only the jitter test builds this mesh"
+    )]
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "rounding to f32 is the point"
+    )]
+    pub fn world_f32_mesh(self) -> MeshData {
+        MeshData {
+            origin: [0.0; 3],
+            positions: self
+                .positions
+                .iter()
+                .map(|p| [p.x as f32, p.y as f32, p.z as f32])
+                .collect(),
+            normals: self.normals,
+            indices: self.indices,
+        }
+    }
 }

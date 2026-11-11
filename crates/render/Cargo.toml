@@ -7,11 +7,6 @@ rust-version.workspace = true
 license.workspace = true
 publish = false
 
-[features]
-# The negative control of the jitter test (tests/jitter.rs): lets a renderer measure coordinates
-# from the world origin, as a classic pipeline does. Hidden, not part of the API.
-jitter-control = []
-
 [dependencies]
 bytemuck = { workspace = true }
 geom = { workspace = true }
@@ -22,8 +17,6 @@ wgpu = { workspace = true }
 [dev-dependencies]
 pollster = { workspace = true }
 proptest = { workspace = true }
-# The crate itself, with the negative control of its jitter test.
-render = { workspace = true, features = ["jitter-control"] }
 
 [lints]
 workspace = true

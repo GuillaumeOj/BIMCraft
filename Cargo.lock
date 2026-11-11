@@ -3299,7 +3299,6 @@ dependencies = [
  "libm",
  "pollster",
  "proptest",
- "render",
  "thiserror 2.0.21",
  "wgpu",
 ]

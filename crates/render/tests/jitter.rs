@@ -5,9 +5,9 @@
 //! A scene with fine detail (a comb of 5 mm slats 5 mm apart, and a turned cube) is seen from
 //! about 3 m while the camera moves by 0.1 mm per frame. The sweep is rendered with the scene and
 //! the camera at the origin, then translated far away; every translated frame must match the
-//! frame of the same step at the origin. A negative control renders the sweep at 10⁶ m with the
-//! coordinates measured from the world origin, as a classic pipeline does: it must fail, which
-//! proves the comparison sees jitter.
+//! frame of the same step at the origin. A negative control renders the sweep at 10⁶ m as a classic
+//! pipeline would, with every world coordinate rounded to `f32` in the inputs: it must fail,
+//! which proves the comparison sees jitter.
 //!
 //! The first frame of each sweep, and every frame that should match and does not (with its
 //! reference), are written as PPM images to
@@ -66,14 +66,40 @@ impl Comparison {
     }
 }
 
+/// How the scene reaches the renderer.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Pipeline {
+    /// World coordinates are given to the renderer as they are, in `f64`.
+    Exact,
+    /// A classic pipeline, emulated through the inputs: every world coordinate that reaches the
+    /// GPU in a classic pipeline (vertex positions, the placement of the cube, the eye and the
+    /// target) is rounded to `f32` first, which snaps it to a 6.25 cm grid at 10⁶ m.
+    WorldF32,
+}
+
+/// Rounds a world coordinate to the nearest `f32`, as a classic pipeline stores it.
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "rounding to f32 is the point"
+)]
+fn through_f32(value: f64) -> f64 {
+    f64::from(value as f32)
+}
+
 /// The scene and the camera sweep, translated by `shift`.
 struct Scene {
     renderer: Renderer,
     shift: [f64; 3],
+    pipeline: Pipeline,
 }
 
 impl Scene {
-    fn new(device: &wgpu::Device, queue: &wgpu::Queue, shift: [f64; 3]) -> Self {
+    fn new(
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        shift: [f64; 3],
+        pipeline: Pipeline,
+    ) -> Self {
         let mut renderer = Renderer::new(device, queue, FORMAT).unwrap();
         // The comb, built from world coordinates: its mesh origin is far away with the scene.
         let mut comb = Boxes::default();
@@ -84,7 +110,11 @@ impl Scene {
                 add(shift, [x + SLAT, 0.01, 0.6]),
             );
         }
-        let comb = renderer.add_mesh(&comb.mesh()).unwrap();
+        let comb = match pipeline {
+            Pipeline::Exact => comb.mesh(),
+            Pipeline::WorldF32 => comb.world_f32_mesh(),
+        };
+        let comb = renderer.add_mesh(&comb).unwrap();
         renderer
             .add_object(comb, Placement::IDENTITY, [0.9, 0.75, 0.4, 1.0])
             .unwrap();
@@ -93,20 +123,32 @@ impl Scene {
         cube.add([-0.075; 3], [0.075; 3]);
         let cube = renderer.add_mesh(&cube.mesh()).unwrap();
         let (sin, cos) = libm::sincos(core::f64::consts::FRAC_PI_6);
+        let mut translation = add(shift, [0.32, 0.05, 0.3]);
+        if pipeline == Pipeline::WorldF32 {
+            translation = translation.map(through_f32);
+        }
         let placement = Placement {
             rotation: [[cos, -sin, 0.0], [sin, cos, 0.0], [0.0, 0.0, 1.0]],
-            translation: add(shift, [0.32, 0.05, 0.3]),
+            translation,
         };
         renderer
             .add_object(cube, placement, [0.3, 0.6, 0.9, 1.0])
             .unwrap();
-        Self { renderer, shift }
+        Self {
+            renderer,
+            shift,
+            pipeline,
+        }
     }
 
     fn camera(&self, frame: u32) -> Camera {
         let offset = STEP.map(|step| step * f64::from(frame));
-        let eye = add(add(self.shift, [0.1, -3.0, 0.8]), offset);
-        let target = add(add(self.shift, [0.05, 0.0, 0.3]), offset);
+        let mut eye = add(add(self.shift, [0.1, -3.0, 0.8]), offset);
+        let mut target = add(add(self.shift, [0.05, 0.0, 0.3]), offset);
+        if self.pipeline == Pipeline::WorldF32 {
+            eye = eye.map(through_f32);
+            target = target.map(through_f32);
+        }
         Camera {
             eye: Point3::new(eye[0], eye[1], eye[2]),
             target: Point3::new(target[0], target[1], target[2]),
@@ -223,7 +265,7 @@ fn report(label: &str, comparison: &Comparison) {
 #[test]
 fn far_from_the_origin_the_frames_match_the_frames_at_the_origin() {
     let (device, queue) = support::device();
-    let reference = Scene::new(&device, &queue, [0.0; 3]).sweep(&device, &queue);
+    let reference = Scene::new(&device, &queue, [0.0; 3], Pipeline::Exact).sweep(&device, &queue);
     write_frame("origin-00", &reference[0]);
 
     // The scene is visible, and the sweep moves it on the screen: the test can see a shift.
@@ -237,7 +279,7 @@ fn far_from_the_origin_the_frames_match_the_frames_at_the_origin() {
 
     let mut failures = Vec::new();
     for (label, shift) in [("1e6", [1e6, 1e6, 1e2]), ("1e7", [1e7, 1e7, 1e2])] {
-        let frames = Scene::new(&device, &queue, shift).sweep(&device, &queue);
+        let frames = Scene::new(&device, &queue, shift, Pipeline::Exact).sweep(&device, &queue);
         let comparison = compare(label, &reference, &frames, true);
         if !comparison.passes() {
             failures.push(format!(
@@ -255,10 +297,9 @@ fn far_from_the_origin_the_frames_match_the_frames_at_the_origin() {
         failures.join("\n")
     );
 
-    // Negative control: measuring coordinates from the world origin rounds the vertices to the
-    // 6.25 cm grid of f32 at 10⁶ m, which the comparison must see.
-    let mut naive = Scene::new(&device, &queue, [1e6, 1e6, 1e2]);
-    naive.renderer.measure_from_world_origin();
+    // Negative control: the same sweep through a classic pipeline, whose world coordinates are
+    // rounded to the 6.25 cm grid of f32 at 10⁶ m, which the comparison must see.
+    let mut naive = Scene::new(&device, &queue, [1e6, 1e6, 1e2], Pipeline::WorldF32);
     let frames = naive.sweep(&device, &queue);
     let comparison = compare("1e6-naive", &reference, &frames, false);
     assert!(

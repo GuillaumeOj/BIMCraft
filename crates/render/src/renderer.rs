@@ -10,7 +10,7 @@ use std::collections::BTreeMap;
 
 use wgpu::util::DeviceExt as _;
 
-use crate::transform::{Matrix, RenderOrigin, ViewFrame, projection_matrix};
+use crate::transform::{Matrix, ViewFrame, camera_relative_model_view, projection_matrix};
 use crate::{Camera, CameraError, MeshData, MeshError, Placement, PlacementError};
 
 /// The format of the depth buffer: reverse-Z needs floating-point depth to keep its resolution.
@@ -169,7 +169,6 @@ pub struct Renderer {
     /// Ordered by id, so frames draw in a deterministic order.
     objects: BTreeMap<ObjectId, Object>,
     next_id: u64,
-    origin: RenderOrigin,
 }
 
 impl Renderer {
@@ -240,7 +239,6 @@ impl Renderer {
             meshes: BTreeMap::new(),
             objects: BTreeMap::new(),
             next_id: 0,
-            origin: RenderOrigin::Eye,
         })
     }
 
@@ -436,15 +434,6 @@ impl Renderer {
         Ok(())
     }
 
-    /// Measures the coordinates sent to the GPU from the world origin instead of the eye, as a
-    /// classic pipeline does: the negative control of `tests/jitter.rs`, which must then see
-    /// jitter far from the origin. Not part of the API.
-    #[cfg(feature = "jitter-control")]
-    #[doc(hidden)]
-    pub fn measure_from_world_origin(&mut self) {
-        self.origin = RenderOrigin::World;
-    }
-
     fn new_id(&mut self) -> u64 {
         let id = self.next_id;
         self.next_id += 1;
@@ -494,7 +483,7 @@ impl Renderer {
         let mut bytes = core::mem::take(&mut self.object_bytes);
         bytes.resize(stride * self.objects.len(), 0);
         for ((object, mesh), slot) in self.placed_meshes().zip(bytes.chunks_exact_mut(stride)) {
-            let model_view = self.origin.model_view(view, mesh.origin, &object.placement);
+            let model_view = camera_relative_model_view(view, mesh.origin, &object.placement);
             let uniform = object_uniform(&model_view, object.color);
             slot[..UNIFORM_SIZE as usize].copy_from_slice(bytemuck::cast_slice(&uniform));
         }
