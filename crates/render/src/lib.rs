@@ -1,4 +1,4 @@
-//! The `BIMCraft` renderer of the 3D viewport (spec §13.2, VP-04).
+//! The `BIMCraft` renderer of the 3D viewport (spec §13, VP-04).
 //!
 //! Model coordinates are double precision (GEO-07), but GPUs compute in single precision, whose
 //! grid is 6.25 cm wide at 10⁶ m from the origin. The renderer therefore never sends world
