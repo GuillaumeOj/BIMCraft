@@ -66,7 +66,7 @@ pub async fn headless_device() -> Result<(wgpu::Device, wgpu::Queue), RenderErro
 
 - `camera_relative_model_view(camera: &Camera, mesh_origin: [f64; 3], placement: &Placement) -> [[f32; 4]; 4]`: D1 of the spec, all work in f64, one conversion to f32 at the end.
 - `projection_matrix(projection: &Projection, aspect: f64) -> [[f32; 4]; 4]`: reverse-Z.
-- A crate-private variant that uses a fixed render origin at the world origin (negative control, D4).
+- A `#[cfg(test)]` naive variant (world matrices rounded to f32, multiplied in f32) for the CPU precision tests only. The GPU negative control of D4 uses the public API.
 
 ## Invariants tested
 

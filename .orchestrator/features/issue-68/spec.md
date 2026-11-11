@@ -31,7 +31,7 @@ Out of scope (later issues of the epic):
 - Each frame, for each object, the renderer computes in `f64` the model-view matrix of the object **with the camera at the origin**: `V_rot · [R_obj | R_obj·o_mesh + t_obj − eye]`. Only this product is converted to `f32` and uploaded. The view matrix sent to the GPU never contains the camera's world position. The large terms cancel in `f64`, where the cancellation error at 10⁷ m is about 2·10⁻⁹ m.
 - The vertex shader computes `clip = P · MV · v_local` in `f32`, with values whose magnitude is the camera distance, not the world coordinate.
 - Why not a floating origin snapped to a grid and re-based when the camera moves away: it needs a threshold, re-uploads on re-base and still loses precision between re-bases. Why not "high/low" split vertices emulating double precision in the shader: twice the vertex memory and shader cost for no gain here. Per-object matrices are recomputed each frame, which costs O(objects) on the CPU; issue #70 (instancing) may move them to an instance buffer, behind the same public API.
-- Internally the renderer has a **render origin** (equal to the camera eye). A crate-private/test-only switch pins it to the world origin, which is the naive pipeline used as the negative control of D4. It is not public API.
+- The renderer has no switch to a world-origin pipeline. The naive f32 model-view exists only as a `#[cfg(test)]` function, for the CPU precision tests. The GPU negative control of D4 goes through the public API.
 
 ### D2. Depth precision: reverse-Z
 
@@ -46,12 +46,12 @@ Depth uses `Depth32Float` with reverse-Z (near → 1, far → 0, compare `Greate
 
 ### D4. The visual test (acceptance: “no jitter at 10⁶ m”)
 
-A `#[cfg(test)]` module inside the crate (e.g. `crates/render/src/jitter_tests.rs`), so it reaches the crate-private naive path without any public hook or cargo feature, rendering offscreen (e.g. 256×256, `Rgba8Unorm`, read back to the CPU):
+Integration test `crates/render/tests/jitter.rs`, on the public API only (no hook, no cargo feature; `tests/` may use `std::fs`, ARCH-02), rendering offscreen (e.g. 256×256, `Rgba8Unorm`, read back to the CPU):
 
 1. A test scene with fine detail: e.g. a comb of slats 5 mm wide, 5 mm apart, a few metres long, plus a cube, seen from about 3 m, so a 1-pixel shift is visible.
 2. A **camera sweep**: N frames (≥ 16) where the eye moves by sub-millimetre steps (e.g. 0.1 mm) along a path. The sweep is rendered three times: scene and camera at the origin (reference), translated by (10⁶, 10⁶, 10²) m, and by (10⁷, 10⁷, 10²) m.
 3. **Pass**: every translated frame matches the reference frame of the same step: max channel difference ≤ 1/255 and at most 0.01 % of pixels differing. (Bit-identical output is expected when translations are exactly representable; the tolerance only absorbs a rounding of the `f64` cancellation.)
-4. **Negative control**: the same sweep at 10⁶ m with the render origin pinned to the world origin (D1) must **fail** the criterion of step 3 (vertices snap to the 6.25 cm `f32` grid). This proves the test detects jitter.
+4. **Negative control**: the same sweep at 10⁶ m, fed as a classic f32 pipeline would see it, must **fail** the criterion of step 3. The mesh has origin 0 and its world positions rounded to `f32`, which is a world-space f32 vertex buffer. The eye and target of each frame are rounded through `f32`. Vertices and camera snap to the 6.25 cm `f32` grid. This proves the test detects f32 world-coordinate error on the same scene and pipeline.
 5. On failure, the test writes the differing frames as images under the target directory (e.g. `target/render-jitter/`) so a human can look at them. CI uploads that folder as an artefact on failure.
 
 CPU unit tests in the crate complement it: project sample points through the exact `f32` operations of the shader and compare with an `f64` reference; at 10⁶ and 10⁷ m the screen error stays below 0.01 px, while the naive path exceeds 1 px.
@@ -81,6 +81,6 @@ One pull request on `orch/issue-68/integration`, closing #68, with `VP-04`/`GEO-
 | # | Owner | Task | Depends on |
 | --- | --- | --- | --- |
 | T1 | back | `render` crate skeleton (manifest, lints, layers, `wasm-crates.txt`), camera, placements, mesh data and validation, camera-relative matrix maths and the CPU precision tests (D1, D2, D3 validation, D4 CPU part); ADR 0020 | — |
-| T2 | back | wgpu pipeline: WGSL shader, GPU mesh and object storage, render pass into a texture view, headless device helper, readback; the in-crate visual test (`#[cfg(test)]` module) with its negative control; CI GPU adapter (lavapipe) and failure artefact; wasm32 build; `cargo deny` | T1 |
+| T2 | back | wgpu pipeline: WGSL shader, GPU mesh and object storage, render pass into a texture view, headless device helper, readback; the visual test `tests/jitter.rs` with its negative control; CI GPU adapter (lavapipe) and failure artefact; wasm32 build; `cargo deny` | T1 |
 
 T1 runs with a plan first. Both tasks use Opus (new crate, numerical subtlety, GPU in CI).
