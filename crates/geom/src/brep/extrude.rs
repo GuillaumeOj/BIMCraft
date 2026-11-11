@@ -60,13 +60,21 @@ impl Solid {
         vertices.extend(
             starts().map(|p| Point3::new(p.x + direction.x, p.y + direction.y, direction.z)),
         );
-        let mut rings: Vec<Range<usize>> = Vec::with_capacity(loops.len());
-        for edges in &loops {
-            let first = rings.last().map_or(0, |ring| ring.end);
-            rings.push(first..first + edges.len());
-        }
-        Ok(Self::from_faces(vertices, &swept_faces(&rings, 2, top))?)
+        Ok(Self::from_faces(
+            vertices,
+            &swept_faces(&rings(&loops), 2, top),
+        )?)
     }
+}
+
+/// Where each loop's vertices lie in a list of all the loops' vertices, one per edge, in order.
+pub(super) fn rings(loops: &[&[Edge]]) -> Vec<Range<usize>> {
+    let mut rings: Vec<Range<usize>> = Vec::with_capacity(loops.len());
+    for edges in loops {
+        let first = rings.last().map_or(0, |ring| ring.end);
+        rings.push(first..first + edges.len());
+    }
+    rings
 }
 
 /// The faces of a solid swept over `rings` (the outer ring counterclockwise in the profile's

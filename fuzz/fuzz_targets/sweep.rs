@@ -30,7 +30,8 @@ fuzz_target!(|input: Input| {
     let Ok(profile) = Profile::new(outer, holes) else {
         return;
     };
-    // Each segment starts where the previous one ends, so most paths are continuous.
+    // Each segment starts where the previous one ends, so every path is continuous; gaps are
+    // left to the unit tests of `Path`.
     let mut at = point(start);
     let segments = raw_segments
         .iter()

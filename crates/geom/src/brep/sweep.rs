@@ -5,18 +5,18 @@
 use core::f64::consts::{FRAC_PI_2, PI, TAU};
 use core::ops::Range;
 
-use super::extrude::swept_faces;
+use super::extrude::{rings, swept_faces};
 use super::{BrepError, MAX_SOLID_FACES, Solid};
 use crate::path::{Arc3, Curve3};
 use crate::profile::step_count;
 use crate::tolerance::WITHIN_TOLERANCE;
-use crate::vector::{Vector, add, coords, cross, dot, length, scale, sub};
+use crate::vector::{Vector, across, add, coords, cross, dot, length, scale, sub};
 use crate::{ARC_CHORD_TOLERANCE, Edge, Path, Point3, Profile, ProfileError, Vector3};
 
 /// Largest number of straight pieces a sweep cuts its path into.
 ///
-/// The self-intersection test compares pieces pairwise; the bound keeps it to about a million
-/// pairs. A path arc of 100 m radius still takes a full turn's worth of pieces.
+/// The self-intersection test compares pieces pairwise; the bound keeps it to about half a
+/// million pairs. A path arc of 100 m radius still takes a full turn's worth of pieces.
 pub const MAX_SWEEP_PIECES: usize = 1024;
 
 /// Why a profile cannot be swept along a path.
@@ -50,9 +50,9 @@ pub enum SweepError {
         /// The segment after the turn.
         segment: usize,
     },
-    /// On an arc, a point of the profile comes within the linear tolerance of the arc's
-    /// centre, or beyond it: the inner side would fold over itself.
-    #[error("the profile reaches the centre of arc segment {segment}")]
+    /// On an arc, a point of the profile comes so near the arc's axis, or beyond it, that the
+    /// inner side would fold over itself, or run less than the linear tolerance along a step.
+    #[error("the profile reaches the axis of arc segment {segment}")]
     ArcTooTight {
         /// The arc segment.
         segment: usize,
@@ -90,9 +90,9 @@ impl Solid {
     /// face at each end of the path, and a hole through it for each profile hole.
     ///
     /// Arcs of the profile are first replaced by chords, and each path arc of radius R by its
-    /// tangent polygon: n steps of α ≤ 90°, n pieces touching the arc plus two half pieces at its
-    /// ends, so the path keeps its tangents where the arc starts and ends. n is computed for the
-    /// farthest a profile point gets from the arc's centre, so the solid stays within
+    /// tangent polygon: n steps of α ≤ 90°, that is n − 1 pieces touching the arc plus two half
+    /// pieces at its ends, so the path keeps its tangents where the arc starts and ends. n is
+    /// computed for the farthest a profile point gets from the arc's axis, so the solid stays within
     /// [`ARC_CHORD_TOLERANCE`](crate::ARC_CHORD_TOLERANCE) of the exact shape
     /// (`docs/dev/adr/0020-sweeps-and-revolutions.md`). The volume is that of the faceted shape:
     /// a straight piece contributes the faceted profile's area `A_f` times the length its
@@ -106,30 +106,14 @@ impl Solid {
     /// [`SweepError`] when the reference is not finite, zero or parallel to the start tangent,
     /// when faceting the profile's arcs fails, when the sweep would have more than
     /// [`MAX_SWEEP_PIECES`] pieces or [`MAX_SOLID_FACES`] faces, when the path turns back on
-    /// itself, when the profile reaches the centre of a path arc, when two corners cut through
+    /// itself, when the profile reaches the axis of a path arc, when two corners cut through
     /// a piece, when parts of the sweep may cross each other (a conservative test: it may
     /// refuse a sweep whose distant parts come close without touching), or when the result is
     /// not a valid solid.
     pub fn sweep(profile: &Profile, path: &Path, reference: Vector3) -> Result<Self, SweepError> {
         let reference = unit_reference(reference)?;
         let profile = profile.faceted()?;
-        let loops: Vec<&[Edge]> = core::iter::once(profile.outer())
-            .chain(profile.holes())
-            .collect();
-        let offsets: Vec<[f64; 2]> = loops
-            .iter()
-            .flat_map(|edges| edges.iter().map(|e| [e.start().x, e.start().y]))
-            .collect();
-        let mut rings: Vec<Range<usize>> = Vec::with_capacity(loops.len());
-        for edges in &loops {
-            let first = rings.last().map_or(0, |ring| ring.end);
-            rings.push(first..first + edges.len());
-        }
-        // The farthest any profile point gets from the path: edges are straight now, so a
-        // vertex.
-        let reach = offsets
-            .iter()
-            .fold(0.0, |r: f64, &[u, v]| r.max(length([u, v, 0.0])));
+        let (offsets, rings, reach) = layout(&profile);
         let pieces = Pieces::new(path, reach, offsets.len())?;
         let start = pieces.start_section(reference, &offsets)?;
         pieces.check_turns()?;
@@ -142,6 +126,23 @@ impl Solid {
         let faces = swept_faces(&rings, pieces.count() + 1, offsets.len());
         Ok(Self::from_faces(points, &faces)?)
     }
+}
+
+/// The faceted profile's vertices as offsets from the path, in the profile's frame, the rings
+/// they form, and the farthest any profile point gets from the path: edges are straight, so that
+/// is a vertex.
+fn layout(faceted: &Profile) -> (Vec<[f64; 2]>, Vec<Range<usize>>, f64) {
+    let loops: Vec<&[Edge]> = core::iter::once(faceted.outer())
+        .chain(faceted.holes())
+        .collect();
+    let offsets: Vec<[f64; 2]> = loops
+        .iter()
+        .flat_map(|edges| edges.iter().map(|e| [e.start().x, e.start().y]))
+        .collect();
+    let reach = offsets
+        .iter()
+        .fold(0.0, |r: f64, &[u, v]| r.max(length([u, v, 0.0])));
+    (offsets, rings(&loops), reach)
 }
 
 /// The reference as a unit vector, scaled first so that a huge or subnormal one neither
@@ -298,7 +299,7 @@ impl Pieces {
         offsets: &[[f64; 2]],
     ) -> Result<Vec<Vector>, SweepError> {
         let t = self.directions[0];
-        let normal = sub(reference, scale(t, dot(reference, t)));
+        let normal = across(reference, t);
         let size = length(normal);
         // ADR 0001 has no angular tolerance: the reference is parallel to t when its normal part
         // turns no profile point by more than the tolerance.
@@ -342,7 +343,7 @@ impl Pieces {
             if k == self.firsts[segment]
                 && let Curve3::Arc(arc) = &path.curves()[segment]
             {
-                self.check_arc(arc, &sections[k * stride..], segment)?;
+                self.check_arc(arc, &sections[k * stride..(k + 1) * stride], segment)?;
             }
             let (point, normal) = (self.points[k + 1], self.joint_normal(k + 1));
             let along = dot(t, normal);
@@ -358,21 +359,30 @@ impl Pieces {
         Ok(sections)
     }
 
-    /// No profile point of the section where `arc` starts reaches within the tolerance of its
-    /// centre. The offset towards the centre is the same in every section of the arc, so the
-    /// start decides. When both ends of the arc are radial planes, nothing else tests its two end
-    /// pieces against each other: the gap between them, at the profile point nearest the arc's
-    /// axis, must exceed the tolerance too.
+    /// The profile point nearest the arc's axis, at `inner` from it, runs the shortest along the
+    /// arc: (`inner`) · tan(α/2) along each half piece at the arc's ends, twice that inside. It
+    /// must run more than the tolerance; with α/2 ≤ 45°, it then lies more than the tolerance
+    /// from the axis too. The offset towards the axis is the same in every section of the arc,
+    /// so the section where the arc starts decides. When both ends of the arc are radial planes,
+    /// nothing else tests its two end pieces against each other: the gap between them, at that
+    /// point, must exceed the tolerance as well.
     fn check_arc(&self, arc: &Arc3, section: &[Vector], segment: usize) -> Result<(), SweepError> {
         let start = arc.start;
         let inward = section.iter().fold(f64::NEG_INFINITY, |m, &p| {
             m.max(-dot(sub(p, start), arc.outward))
         });
-        if inward >= arc.radius - WITHIN_TOLERANCE {
+        let inner = arc.radius - inward;
+        let (first, end) = (self.firsts[segment], self.firsts[segment + 1]);
+        // An arc of n steps has n + 1 pieces.
+        #[expect(
+            clippy::cast_precision_loss,
+            reason = "piece counts are at most MAX_SWEEP_PIECES"
+        )]
+        let half_step = arc.sweep / (2.0 * (end - first - 1) as f64);
+        if inner * libm::tan(half_step) <= WITHIN_TOLERANCE {
             return Err(SweepError::ArcTooTight { segment });
         }
-        let (first, end) = (self.firsts[segment], self.firsts[segment + 1]);
-        let gap = 2.0 * (arc.radius - inward) * libm::sin((TAU - arc.sweep) / 2.0);
+        let gap = 2.0 * inner * libm::sin((TAU - arc.sweep) / 2.0);
         if arc.sweep > PI
             && gap <= WITHIN_TOLERANCE
             && self.is_radial(first)
@@ -809,14 +819,7 @@ mod tests {
         reference: Vector3,
     ) -> (Pieces, Vec<Vector>) {
         let path = Path::new(segments).unwrap();
-        let offsets: Vec<[f64; 2]> = profile
-            .outer()
-            .iter()
-            .map(|e| [e.start().x, e.start().y])
-            .collect();
-        let reach = offsets
-            .iter()
-            .fold(0.0, |r: f64, &[u, v]| r.max(libm::hypot(u, v)));
+        let (offsets, _, reach) = layout(&profile.faceted().unwrap());
         let pieces = Pieces::new(&path, reach, offsets.len()).unwrap();
         let reference = unit_reference(reference).unwrap();
         let start = pieces.start_section(reference, &offsets).unwrap();
@@ -964,30 +967,6 @@ mod tests {
             try_sweep(&bar(), back, Z).err(),
             Some(SweepError::DoublesBack { segment: 1 })
         );
-        // A 0.1 m radius arc around (−0.1, 0, 0), entered from a tangent line along +y. With
-        // reference x, profile y = x points away from the centre and x = x × y = z across the
-        // arc's plane: the bar reaches only its 0.05 m half height towards the centre, accepted.
-        let tight_arc = circle_arc(-0.1, 0.0, 0.1, 0.0, FRAC_PI_2);
-        let tight = vec![line(q(0.0, -1.0, 0.0), tight_arc.start()), tight_arc];
-        let ok = try_sweep(&bar(), tight.clone(), Vector3::new(1.0, 0.0, 0.0));
-        assert!(ok.is_ok(), "{ok:?}");
-        // With reference z, profile x = z × y = −x points to the centre: the bar's 0.1 m half
-        // width reaches R − tolerance, and the inner side would fold.
-        assert_eq!(
-            try_sweep(&bar(), tight, Z).err(),
-            Some(SweepError::ArcTooTight { segment: 1 })
-        );
-        // An arc 2 µrad short of a full turn of radius 1 m, its ends 2 µm apart, with the profile
-        // reaching to 0.1 mm from the centre: there the end faces are 2e-10 m apart.
-        let almost = vec![circle_arc(0.0, 0.0, 1.0, 0.0, TAU - 2e-6)];
-        let inner = profile(rectangle(0.5, -0.05, 0.9999, 0.05), vec![]);
-        assert_eq!(
-            try_sweep(&inner, almost, Z).err(),
-            Some(SweepError::SelfIntersecting {
-                first: 0,
-                second: 0
-            })
-        );
         // A tight U, its 0.1 m middle leg between two left turns of 90°, and a 0.6 m wide
         // profile: each corner takes 0.3 m off the inner side of the leg, 0.1 − 2 · 0.3 < 0.
         // (A Z would not: its two mitres are parallel, and the leg keeps its length.)
@@ -1025,6 +1004,59 @@ mod tests {
             try_sweep(&bar(), far, Z).err(),
             Some(SweepError::Solid(BrepError::OutsideModelExtent { .. }))
         ));
+    }
+
+    #[test]
+    fn arcs_too_tight_or_closing_on_themselves_are_refused() {
+        // A 0.1 m radius arc around (−0.1, 0, 0), entered from a tangent line along +y. With
+        // reference x, profile y = x points away from the centre and x = x × y = z across the
+        // arc's plane: the bar reaches only its 0.05 m half height towards the centre, accepted.
+        let tight_arc = circle_arc(-0.1, 0.0, 0.1, 0.0, FRAC_PI_2);
+        let tight = vec![line(q(0.0, -1.0, 0.0), tight_arc.start()), tight_arc];
+        let ok = try_sweep(&bar(), tight.clone(), Vector3::new(1.0, 0.0, 0.0));
+        assert!(ok.is_ok(), "{ok:?}");
+        // With reference z, profile x = z × y = −x points to the centre: the bar's 0.1 m half
+        // width reaches R − tolerance, and the inner side would fold.
+        assert_eq!(
+            try_sweep(&bar(), tight, Z).err(),
+            Some(SweepError::ArcTooTight { segment: 1 })
+        );
+        // A profile 5 µm from the same arc's axis: farther than the tolerance, but at
+        // R + d + s = 0.213 m the arc takes 9 steps of h = 0.087 rad, and that point would run
+        // only 5e-6 · tan h = 0.44 µm along each half piece. Too tight, not a corner.
+        let tight = vec![line(q(0.0, -1.0, 0.0), tight_arc.start()), tight_arc];
+        let close = profile(rectangle(0.0, -0.05, 0.1 - 5e-6, 0.05), vec![]);
+        assert_eq!(
+            try_sweep(&close, tight, Z).err(),
+            Some(SweepError::ArcTooTight { segment: 1 })
+        );
+        // An arc 2 µrad short of a full turn of radius 1 m, its ends 2 µm apart, with the profile
+        // reaching to 0.1 mm from the centre: there the end faces are 2e-10 m apart.
+        let almost = vec![circle_arc(0.0, 0.0, 1.0, 0.0, TAU - 2e-6)];
+        let inner = profile(rectangle(0.5, -0.05, 0.9999, 0.05), vec![]);
+        assert_eq!(
+            try_sweep(&inner, almost, Z).err(),
+            Some(SweepError::SelfIntersecting {
+                first: 0,
+                second: 0
+            })
+        );
+    }
+
+    #[test]
+    fn a_nearly_straight_arc_takes_one_step() {
+        // A 15 km chord with a 2 µm sagitta: R = c² / 8s = 1.4e13 m, where 1 − s/r rounds to 1.
+        // One step does: two half pieces, nearly along the chord. V = 0.02 · 15 000 m³, to well
+        // within the 4e-10 relative length the polygon adds.
+        let flat = vec![arc(
+            q(-7500.0, 0.0, 0.0),
+            q(0.0, 2e-6, 0.0),
+            q(7500.0, 0.0, 0.0),
+        )];
+        let solid = sweep(&bar(), flat, Z);
+        assert_eq!(solid.face_count(), 2 * 4 + 2);
+        one_shell(&solid, 0);
+        assert_near(solid.volume(), 300.0);
     }
 
     #[test]

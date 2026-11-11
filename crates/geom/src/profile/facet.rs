@@ -91,8 +91,10 @@ fn chord_count(arc: &Arc, budget: usize) -> Option<usize> {
 /// `max_step` radians and the count at least `minimum`. Returned as a whole-valued float so that
 /// callers compare it with their budget before converting it: hostile input may give a huge one.
 pub(crate) fn step_count(radius: f64, sweep: f64, max_step: f64, minimum: f64) -> f64 {
-    // Half the largest angle a chord may span; the clamp covers radii below half the tolerance.
-    let half_angle = libm::acos((1.0 - ARC_CHORD_TOLERANCE / radius).max(-1.0));
+    // Half the largest angle a chord may span, acos(1 − s/r), written 2 asin(√(s / 2r)) so that a
+    // huge radius does not round 1 − s/r to 1 and the angle to 0; the clamp covers radii below
+    // half the tolerance, where it is a half turn.
+    let half_angle = 2.0 * libm::asin(libm::sqrt((ARC_CHORD_TOLERANCE / (2.0 * radius)).min(1.0)));
     let step = (2.0 * half_angle).min(max_step);
     (sweep.abs() / step).ceil().max(minimum)
 }
@@ -170,6 +172,8 @@ mod tests {
         assert_eq!(step_count(2.0, 2.0 * PI, PI / 2.0, 1.0), 100.0);
         // Radius 0 does not give NaN: the clamp lets a chord span half a turn.
         assert_eq!(step_count(0.0, PI, f64::INFINITY, 1.0), 1.0);
+        // A radius of 1.4e13 m still gets a finite count: acos(1 − s/r) would round to 0.
+        assert_eq!(step_count(1.4e13, 1e-9, f64::INFINITY, 1.0), 1.0);
     }
 
     #[test]

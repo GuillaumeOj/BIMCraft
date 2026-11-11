@@ -5,6 +5,7 @@
 use core::f64::consts::{FRAC_PI_2, PI, TAU};
 use core::ops::Range;
 
+use super::extrude::rings;
 use super::{BrepError, FaceInput, MAX_SOLID_FACES, Solid};
 use crate::profile::step_count;
 use crate::tolerance::WITHIN_TOLERANCE;
@@ -183,11 +184,7 @@ impl Solid {
             .iter()
             .flat_map(|edges| edges.iter().map(|edge| frame.vertex(edge.start())))
             .collect();
-        let mut rings: Vec<Range<usize>> = Vec::with_capacity(loops.len());
-        for edges in &loops {
-            let first = rings.last().map_or(0, |ring| ring.end);
-            rings.push(first..first + edges.len());
-        }
+        let rings = rings(&loops);
         let flip = side_of_axis(&vertices)?;
         let radius = vertices.iter().fold(0.0, |r: f64, v| r.max(v.across.abs()));
         if full {
