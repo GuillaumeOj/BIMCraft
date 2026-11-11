@@ -51,30 +51,55 @@ impl Solid {
         }
         let profile = profile.faceted()?;
         // Every loop vertex once at the bottom, then again at the top, `top` indices later.
-        let loops: Vec<&[Edge]> = core::iter::once(profile.outer())
-            .chain(profile.holes())
-            .collect();
+        let loops = loops(&profile);
         let starts = || loops.iter().flat_map(|edges| edges.iter().map(Edge::start));
         let mut vertices: Vec<Point3> = starts().map(|p| Point3::new(p.x, p.y, 0.0)).collect();
         let top = vertices.len();
         vertices.extend(
             starts().map(|p| Point3::new(p.x + direction.x, p.y + direction.y, direction.z)),
         );
-        let mut rings: Vec<Range<usize>> = Vec::with_capacity(loops.len());
-        for edges in &loops {
-            let first = rings.last().map_or(0, |ring| ring.end);
-            rings.push(first..first + edges.len());
-        }
-        Ok(Self::from_faces(vertices, &prism_faces(&rings, top))?)
+        Ok(Self::from_faces(
+            vertices,
+            &swept_faces(&rings(&loops), 2, top),
+        )?)
     }
 }
 
-/// The faces of a prism over `rings` (the outer ring counterclockwise from above, then the holes
-/// clockwise), whose top copy of vertex `v` is `v + top`. Each face is counterclockwise seen
-/// from outside, its holes clockwise.
-fn prism_faces(rings: &[Range<usize>], top: usize) -> Vec<FaceInput> {
+/// The vertex after `v` in its ring: the end of the profile edge that starts at `v`.
+pub(super) const fn after(ring: &Range<usize>, v: usize) -> usize {
+    if v + 1 == ring.end { ring.start } else { v + 1 }
+}
+
+/// The profile's loops: the outer one, then the holes.
+pub(super) fn loops(profile: &Profile) -> Vec<&[Edge]> {
+    core::iter::once(profile.outer())
+        .chain(profile.holes())
+        .collect()
+}
+
+/// Where each loop's vertices lie in a list of all the loops' vertices, one per edge, in order.
+pub(super) fn rings(loops: &[&[Edge]]) -> Vec<Range<usize>> {
+    let mut rings: Vec<Range<usize>> = Vec::with_capacity(loops.len());
+    for edges in loops {
+        let first = rings.last().map_or(0, |ring| ring.end);
+        rings.push(first..first + edges.len());
+    }
+    rings
+}
+
+/// The faces of a solid swept over `rings` (the outer ring counterclockwise in the profile's
+/// frame, then the holes clockwise) through `sections` copies of them, copy `k` of vertex `v`
+/// being `v + k · stride`, each copy further along the third axis of the frame: the first and
+/// last copies as end faces, then one side face per profile edge and step. Each face is
+/// counterclockwise seen from outside, its holes clockwise. `sections` is at least 2.
+pub(super) fn swept_faces(
+    rings: &[Range<usize>],
+    sections: usize,
+    stride: usize,
+) -> Vec<FaceInput> {
+    let last = (sections - 1) * stride;
     let reversed = |ring: &Range<usize>| ring.clone().rev().collect();
-    let raised = |ring: &Range<usize>| ring.clone().map(|v| v + top).collect();
+    let raised = |ring: &Range<usize>| ring.clone().map(|v| v + last).collect();
     let mut faces = vec![
         FaceInput {
             outer: reversed(&rings[0]),
@@ -86,14 +111,18 @@ fn prism_faces(rings: &[Range<usize>], top: usize) -> Vec<FaceInput> {
         },
     ];
     // Along each edge a → b, material lies on the left, so a, b, b', a' turns counterclockwise
-    // seen from the right, outside: ((b − a) × d) · right(b − a) = d.z |b − a|² > 0.
-    for ring in rings {
-        for a in ring.clone() {
-            let b = if a + 1 == ring.end { ring.start } else { a + 1 };
-            faces.push(FaceInput {
-                outer: vec![a, b, b + top, a + top],
-                holes: Vec::new(),
-            });
+    // seen from the right, outside: ((b − a) × d) · right(b − a) = d.z |b − a|² > 0, with d the
+    // step from one copy to the next.
+    for k in 0..sections - 1 {
+        let (here, next) = (k * stride, (k + 1) * stride);
+        for ring in rings {
+            for a in ring.clone() {
+                let b = after(ring, a);
+                faces.push(FaceInput {
+                    outer: vec![a + here, b + here, b + next, a + next],
+                    holes: Vec::new(),
+                });
+            }
         }
     }
     faces

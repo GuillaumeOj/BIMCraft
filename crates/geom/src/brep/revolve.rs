@@ -2,19 +2,14 @@
 //!
 //! Rationale and constants: `docs/dev/adr/0020-sweeps-and-revolutions.md`.
 
-use core::f64::consts::{FRAC_PI_2, PI, TAU};
+use core::f64::consts::{FRAC_PI_2, TAU};
 use core::ops::Range;
 
-use super::{BrepError, FaceInput, Solid};
-use crate::profile::step_count;
+use super::extrude::{after, loops, rings};
+use super::{BrepError, FaceInput, MAX_SOLID_FACES, Solid};
+use crate::profile::{closes_on_itself, step_count};
 use crate::tolerance::WITHIN_TOLERANCE;
-use crate::{Edge, MODEL_EXTENT, Point2, Point3, Profile, ProfileError, Vector2};
-
-/// Largest number of faces a revolved solid may have.
-///
-/// Counting happens before any face is built, so hostile input cannot make a revolution allocate
-/// millions of faces. A profile of at most 9 edges still turns a full circle of radius 10 km.
-pub const MAX_SOLID_FACES: usize = 65_536;
+use crate::{MODEL_EXTENT, Point2, Point3, Profile, ProfileError, Vector2};
 
 /// The axis of a revolution: a line of the profile plane z = 0.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -182,23 +177,17 @@ impl Solid {
         // At most 2π here, so "at least" is "exactly".
         let full = angle >= TAU;
         let profile = profile.faceted()?;
-        let loops: Vec<&[Edge]> = core::iter::once(profile.outer())
-            .chain(profile.holes())
-            .collect();
+        let loops = loops(&profile);
         let vertices: Vec<Vertex> = loops
             .iter()
             .flat_map(|edges| edges.iter().map(|edge| frame.vertex(edge.start())))
             .collect();
-        let mut rings: Vec<Range<usize>> = Vec::with_capacity(loops.len());
-        for edges in &loops {
-            let first = rings.last().map_or(0, |ring| ring.end);
-            rings.push(first..first + edges.len());
-        }
+        let rings = rings(&loops);
         let flip = side_of_axis(&vertices)?;
         let radius = vertices.iter().fold(0.0, |r: f64, v| r.max(v.across.abs()));
         if full {
             check_not_pinched(&vertices, &rings)?;
-        } else if angle > PI && 2.0 * radius * libm::sin((TAU - angle) / 2.0) <= WITHIN_TOLERANCE {
+        } else if closes_on_itself(end_gap_radius(&vertices, radius), angle) {
             return Err(RevolutionError::NearlyFullTurn);
         }
         let steps = step_count(radius, angle, FRAC_PI_2, 1.0);
@@ -224,14 +213,21 @@ fn side_of_axis(vertices: &[Vertex]) -> Result<bool, RevolutionError> {
     Ok(right == Some(true))
 }
 
+/// The distance from the axis at which the end faces of a nearly full turn must stay apart. A
+/// profile away from the axis brings them nearest at its vertex nearest the axis (edges are
+/// straight), where nothing joins them. One touching the axis joins them there, a thin wedge
+/// like any sharp edge, so its farthest vertex, `r_max`, decides.
+fn end_gap_radius(vertices: &[Vertex], r_max: f64) -> f64 {
+    if vertices.iter().any(Vertex::on_axis) {
+        r_max
+    } else {
+        vertices.iter().fold(r_max, |r, v| r.min(v.across.abs()))
+    }
+}
+
 /// The vertex before `v` in its ring.
 const fn before(ring: &Range<usize>, v: usize) -> usize {
     if v == ring.start { ring.end - 1 } else { v - 1 }
-}
-
-/// The vertex after `v` in its ring: the end of the profile edge that starts at `v`.
-const fn after(ring: &Range<usize>, v: usize) -> usize {
-    if v + 1 == ring.end { ring.start } else { v + 1 }
 }
 
 /// In a full turn, a vertex on the axis needs an edge along the axis next to it: with two edges
@@ -419,9 +415,11 @@ impl Layout {
 
 #[cfg(test)]
 mod tests {
+    use core::f64::consts::PI;
+
     use super::*;
     use crate::profile::tests::{ccw, circle, line, p, polygon, rectangle};
-    use crate::{ARC_CHORD_TOLERANCE, Shell};
+    use crate::{ARC_CHORD_TOLERANCE, Edge, Shell};
 
     /// The y axis, pointing up.
     const Y_AXIS: RevolutionAxis = RevolutionAxis {
@@ -782,6 +780,13 @@ mod tests {
             run(Y_AXIS, TAU - 1e-7).err(),
             Some(RevolutionError::NearlyFullTurn)
         );
+        // Off the axis, the inner side decides: 1 mm to 10 m from it, 1 µrad short of a full
+        // turn, the end faces are 2 · 10 · sin(5e-7) = 10 µm apart at r_max but 1 nm at 1 mm.
+        let annulus = revolve(rectangle(1e-3, 0.0, 10.0, 1.0), vec![], Y_AXIS, TAU - 1e-6);
+        assert_eq!(annulus.err(), Some(RevolutionError::NearlyFullTurn));
+        // Touching the axis, the end faces meet there anyway: r_max decides.
+        let touching = revolve(rectangle(0.0, 0.0, 10.0, 1.0), vec![], Y_AXIS, TAU - 1e-6);
+        assert!(touching.is_ok(), "{touching:?}");
         // A circle of radius 1 km 1.5 km from the axis: 2221 chords, about 3500 steps.
         let wide = revolve(circle(1500.0, 0.0, 1000.0), vec![], Y_AXIS, TAU);
         assert_eq!(wide.err(), Some(RevolutionError::TooManyFaces));
