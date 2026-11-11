@@ -191,6 +191,10 @@ pub enum CameraError {
     /// The aspect ratio of the target is not a positive finite number.
     #[error("the aspect ratio of the view is not a positive number")]
     InvalidAspect,
+    /// The projection parameters are valid but so extreme that the single-precision matrix of
+    /// the GPU cannot represent them.
+    #[error("the projection of the camera is too extreme for the GPU")]
+    ProjectionOutOfRange,
 }
 
 #[cfg(test)]
@@ -387,6 +391,7 @@ mod tests {
             CameraError::InvalidHeight,
             CameraError::FarNotBeyondNear,
             CameraError::InvalidAspect,
+            CameraError::ProjectionOutOfRange,
         ] {
             let message = error.to_string();
             assert!(message.starts_with("the "), "{message}");

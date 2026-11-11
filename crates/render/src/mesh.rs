@@ -42,7 +42,7 @@ impl MeshData {
         normals: &[[f32; 3]],
         indices: &[u32],
     ) -> Result<Self, MeshError> {
-        check_counts(positions.len(), indices.len())?;
+        check_counts(positions.len(), normals.len(), indices.len())?;
         let mut min = [f64::INFINITY; 3];
         let mut max = [f64::NEG_INFINITY; 3];
         for (vertex, point) in positions.iter().enumerate() {
@@ -82,19 +82,14 @@ impl MeshData {
     }
 
     /// Checks that the mesh can be drawn: sizes within bounds, one normal per position, finite
-    /// values, unit normals, whole triangles and indices in range.
+    /// values, local coordinates within [`MAX_WORLD_COORDINATE`](crate::MAX_WORLD_COORDINATE),
+    /// unit normals, whole triangles and indices in range.
     ///
     /// # Errors
     ///
     /// The first [`MeshError`] found.
     pub fn validate(&self) -> Result<(), MeshError> {
-        check_counts(self.positions.len(), self.indices.len())?;
-        if self.normals.len() != self.positions.len() {
-            return Err(MeshError::LengthMismatch {
-                positions: self.positions.len(),
-                normals: self.normals.len(),
-            });
-        }
+        check_counts(self.positions.len(), self.normals.len(), self.indices.len())?;
         if !self.origin.iter().all(|c| c.is_finite()) {
             return Err(MeshError::NonFiniteOrigin);
         }
@@ -104,7 +99,7 @@ impl MeshData {
         if let Some(vertex) = self
             .positions
             .iter()
-            .position(|p| !p.iter().all(|c| c.is_finite()))
+            .position(|p| !p.iter().all(|&c| crate::in_world(f64::from(c))))
         {
             return Err(MeshError::NonFinitePosition { vertex });
         }
@@ -133,8 +128,8 @@ impl MeshData {
     }
 }
 
-/// Rejects empty and oversized meshes before anything is read or allocated.
-fn check_counts(vertices: usize, indices: usize) -> Result<(), MeshError> {
+/// Rejects empty, oversized and mismatched meshes before anything is read or allocated.
+fn check_counts(vertices: usize, normals: usize, indices: usize) -> Result<(), MeshError> {
     if vertices == 0 || indices == 0 {
         return Err(MeshError::Empty);
     }
@@ -148,6 +143,12 @@ fn check_counts(vertices: usize, indices: usize) -> Result<(), MeshError> {
         return Err(MeshError::TooManyIndices {
             count: indices,
             max: MAX_MESH_INDICES,
+        });
+    }
+    if normals != vertices {
+        return Err(MeshError::LengthMismatch {
+            positions: vertices,
+            normals,
         });
     }
     Ok(())
@@ -212,8 +213,9 @@ pub enum MeshError {
     /// The origin of the mesh lies beyond [`MAX_WORLD_COORDINATE`](crate::MAX_WORLD_COORDINATE).
     #[error("the origin of the mesh lies too far from the world origin")]
     OriginOutOfRange,
-    /// A position is not finite, or, for [`MeshData::from_world`], lies beyond
-    /// [`MAX_WORLD_COORDINATE`](crate::MAX_WORLD_COORDINATE).
+    /// A position is not finite or has a coordinate beyond
+    /// [`MAX_WORLD_COORDINATE`](crate::MAX_WORLD_COORDINATE): in the world for
+    /// [`MeshData::from_world`], relative to the origin for [`MeshData::validate`].
     #[error("vertex {vertex} of the mesh is not a finite point within the world bounds")]
     NonFinitePosition {
         /// The vertex.
@@ -345,16 +347,19 @@ mod tests {
 
     #[test]
     fn oversized_meshes_are_rejected_without_reading_them() {
-        assert_eq!(check_counts(MAX_MESH_VERTICES, MAX_MESH_INDICES), Ok(()));
         assert_eq!(
-            check_counts(MAX_MESH_VERTICES + 1, 3),
+            check_counts(MAX_MESH_VERTICES, MAX_MESH_VERTICES, MAX_MESH_INDICES),
+            Ok(())
+        );
+        assert_eq!(
+            check_counts(MAX_MESH_VERTICES + 1, MAX_MESH_VERTICES + 1, 3),
             Err(MeshError::TooManyVertices {
                 count: MAX_MESH_VERTICES + 1,
                 max: MAX_MESH_VERTICES
             })
         );
         assert_eq!(
-            check_counts(3, MAX_MESH_INDICES + 1),
+            check_counts(3, 3, MAX_MESH_INDICES + 1),
             Err(MeshError::TooManyIndices {
                 count: MAX_MESH_INDICES + 1,
                 max: MAX_MESH_INDICES
@@ -399,8 +404,8 @@ mod tests {
     }
 
     #[test]
-    fn a_position_that_is_not_finite_is_rejected() {
-        for bad in [f32::NAN, f32::INFINITY, f32::NEG_INFINITY] {
+    fn a_position_that_is_not_finite_or_too_far_is_rejected() {
+        for bad in [f32::NAN, f32::INFINITY, f32::NEG_INFINITY, f32::MAX, -2e9] {
             for axis in 0..3 {
                 let mut mesh = triangle();
                 mesh.positions[1][axis] = bad;

@@ -136,7 +136,18 @@ pub(crate) fn projection_matrix(
             ]
         }
     };
-    Ok(columns.map(|column| column.map(to_f32)))
+    let matrix = columns.map(|column| column.map(to_f32));
+    // Valid but extreme parameters (a near plane of 1e-50 m, a field of view of 1e-300 rad)
+    // overflow `f32` or round a non-zero entry to 0: the GPU would draw nothing or garbage.
+    let representable = columns
+        .iter()
+        .flatten()
+        .zip(matrix.iter().flatten())
+        .all(|(&exact, &rounded)| rounded.is_finite() && (rounded != 0.0 || exact == 0.0));
+    if !representable {
+        return Err(CameraError::ProjectionOutOfRange);
+    }
+    Ok(matrix)
 }
 
 /// The only conversion from `f64` to `f32` of the transforms.
@@ -489,6 +500,31 @@ mod tests {
             projection_matrix(&flat, 1.0),
             Err(CameraError::InvalidHeight)
         );
+    }
+
+    #[test]
+    fn projections_the_gpu_cannot_represent_are_rejected() {
+        let perspective = |fov_y_radians, near| Projection::Perspective {
+            fov_y_radians,
+            near,
+        };
+        let orthographic = |height, near, far| Projection::Orthographic { height, near, far };
+        for (projection, aspect) in [
+            // The near plane rounds to 0, so every depth would be 0 and fail the depth test.
+            (perspective(1.0, 1e-50), 1.0),
+            (perspective(1.0, 1e300), 1.0),
+            (perspective(1e-300, 0.1), 1.0),
+            (PERSPECTIVE, 1e-300),
+            (orthographic(1e-40, 0.1, 10.0), 1.0),
+            (orthographic(1e300, 0.1, 10.0), 1.0),
+            (orthographic(1.0, 0.1, 1e300), 1.0),
+        ] {
+            assert_eq!(
+                projection_matrix(&projection, aspect),
+                Err(CameraError::ProjectionOutOfRange),
+                "{projection:?} at aspect {aspect}"
+            );
+        }
     }
 
     fn config() -> ProptestConfig {
