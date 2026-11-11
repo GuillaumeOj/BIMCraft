@@ -862,6 +862,50 @@ mod tests {
             try_sweep(&lowered, path, up).err(),
             Some(SweepError::SelfIntersecting { .. })
         ));
+        // The mirror case: the arc starts the path and a line leaves its end straight up. The
+        // corner turns the end tangent, about +y, into +z, its mitre's tip reaching forward, by
+        // the profile's depth below the arc's plane, into the first pieces of the arc. With the
+        // profile 0.1 to 0.2 m below the plane (y = z at the start), the last arc piece meets
+        // the first one: rejected, by that pair, which the end plane of the arc and the start of
+        // the path both fail to separate.
+        let below = profile(rectangle(-0.05, -0.2, 0.05, -0.1), vec![]);
+        let end = ring.end();
+        let path = vec![ring, line(end, q(end.x, end.y, 1.0))];
+        let (ending, sections) = pieces(&below, path.clone(), Z);
+        let last = ending.count() - 2;
+        assert!(ending.is_radial(0) && !ending.is_radial(last));
+        assert!(!ending.clear(0, last, &sections, 4, &ending.reaches()));
+        assert_eq!(
+            try_sweep(&below, path, Z).err(),
+            Some(SweepError::SelfIntersecting {
+                first: 0,
+                second: 0
+            })
+        );
+    }
+
+    #[test]
+    fn errors_describe_their_cause_without_coordinates() {
+        use std::error::Error as _;
+
+        let error = SweepError::Faceting(ProfileError::TooManyEdges);
+        assert_eq!(
+            error.to_string(),
+            "the profile's arcs cannot be replaced by chords"
+        );
+        assert!(error.source().is_some());
+        let error = SweepError::SelfIntersecting {
+            first: 2,
+            second: 5,
+        };
+        assert_eq!(
+            error.to_string(),
+            "the sweep along segments 2 and 5 may cross itself"
+        );
+        assert_eq!(
+            SweepError::Solid(BrepError::Empty).to_string(),
+            "the swept solid is invalid"
+        );
     }
 
     #[test]

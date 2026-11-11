@@ -12,8 +12,8 @@ use std::f64::consts::PI;
 use std::fmt::Write as _;
 
 use geom::{
-    ArcDirection, Edge, Orientation, Point2, Point3, Profile, RevolutionAxis, Solid, Vector2,
-    Vector3, incircle, insphere, orient2d, orient3d,
+    ArcDirection, Edge, Orientation, Path, PathSegment, Point2, Point3, Profile, RevolutionAxis,
+    Solid, Vector2, Vector3, incircle, insphere, orient2d, orient3d,
 };
 
 const GOLDEN: &str = include_str!("golden.txt");
@@ -326,6 +326,62 @@ fn revolutions(out: &mut Output) {
     }
 }
 
+/// Sweeps of random circles along a random line, a tilted corner and a tangent arc: the arc's
+/// centre and tangent polygon come from `libm` and the mitred sections from the kernel's
+/// arithmetic, so the vertices and the volume depend on both being identical everywhere.
+fn sweeps(out: &mut Output) {
+    let mut rng = Rng::for_case("sweep");
+    for i in 0..SAMPLES {
+        let start = rng.point3();
+        let radius = rng.uniform(0.5, 10.0);
+        let length = rng.uniform(0.5, 10.0);
+        let heading = rng.uniform(-PI, PI);
+        let angle = rng.uniform(0.2, 5.0);
+        let (c, s) = (libm::cos(heading), libm::sin(heading));
+        // A line along the heading, rising by `length` / 4.
+        let corner = Point3::new(
+            start.x + length * c,
+            start.y + length * s,
+            start.z + length / 4.0,
+        );
+        // A level arc turning left from the corner, tangent to the heading.
+        let centre = Point2::new(corner.x - radius * s, corner.y + radius * c);
+        let on_arc = |turn: f64| {
+            let (ct, st) = (libm::cos(heading + turn), libm::sin(heading + turn));
+            Point3::new(centre.x + radius * st, centre.y - radius * ct, corner.z)
+        };
+        let path = Path::new(vec![
+            PathSegment::Line { start, end: corner },
+            PathSegment::Arc {
+                start: corner,
+                through: on_arc(angle / 2.0),
+                end: on_arc(angle),
+            },
+        ]);
+        let section = rng.uniform(1e-2, 0.4);
+        let circle = Edge::Arc {
+            start: Point2::new(section, 0.0),
+            end: Point2::new(section, 0.0),
+            centre: Point2::new(0.0, 0.0),
+            direction: ArcDirection::CounterClockwise,
+        };
+        let solid = path.ok().and_then(|path| {
+            Profile::new(vec![circle], vec![])
+                .ok()
+                .and_then(|profile| Solid::sweep(&profile, &path, Vector3::new(0.0, 0.0, 1.0)).ok())
+        });
+        let Some(solid) = solid else {
+            let _ = writeln!(out.0, "sweep[{i}] error");
+            continue;
+        };
+        let middle = solid.vertices()[solid.vertices().len() / 3];
+        out.value("sweep.x", i, middle.x);
+        out.value("sweep.y", i, middle.y);
+        out.value("sweep.z", i, middle.z);
+        out.value("sweep.volume", i, solid.volume());
+    }
+}
+
 /// Unions, differences and intersections of overlapping extruded circles: the vertices where the faceted sides
 /// cross come from the kernel's arithmetic, so the volumes depend on it being identical
 /// everywhere.
@@ -432,6 +488,7 @@ fn compute() -> String {
     booleans(&mut out);
     shear_centres(&mut out);
     revolutions(&mut out);
+    sweeps(&mut out);
     out.0
 }
 
