@@ -9,7 +9,7 @@ use core::fmt;
 
 pub(crate) use edge::Curve;
 pub use edge::{ArcDirection, Edge};
-pub(crate) use facet::step_count;
+pub(crate) use facet::{closes_on_itself, step_count};
 use mass::{Moments, loop_moments};
 pub(crate) use validate::{encloses, segments_touch};
 

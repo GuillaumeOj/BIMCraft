@@ -2,12 +2,12 @@
 //!
 //! Rationale and constants: `docs/dev/adr/0020-sweeps-and-revolutions.md`.
 
-use core::f64::consts::{FRAC_PI_2, PI, TAU};
+use core::f64::consts::{FRAC_PI_2, TAU};
 use core::ops::Range;
 
 use super::extrude::{after, loops, rings};
 use super::{BrepError, FaceInput, MAX_SOLID_FACES, Solid};
-use crate::profile::step_count;
+use crate::profile::{closes_on_itself, step_count};
 use crate::tolerance::WITHIN_TOLERANCE;
 use crate::{MODEL_EXTENT, Point2, Point3, Profile, ProfileError, Vector2};
 
@@ -187,10 +187,7 @@ impl Solid {
         let radius = vertices.iter().fold(0.0, |r: f64, v| r.max(v.across.abs()));
         if full {
             check_not_pinched(&vertices, &rings)?;
-        } else if angle > PI
-            && 2.0 * end_gap_radius(&vertices, radius) * libm::sin((TAU - angle) / 2.0)
-                <= WITHIN_TOLERANCE
-        {
+        } else if closes_on_itself(end_gap_radius(&vertices, radius), angle) {
             return Err(RevolutionError::NearlyFullTurn);
         }
         let steps = step_count(radius, angle, FRAC_PI_2, 1.0);
@@ -418,6 +415,8 @@ impl Layout {
 
 #[cfg(test)]
 mod tests {
+    use core::f64::consts::PI;
+
     use super::*;
     use crate::profile::tests::{ccw, circle, line, p, polygon, rectangle};
     use crate::{ARC_CHORD_TOLERANCE, Edge, Shell};

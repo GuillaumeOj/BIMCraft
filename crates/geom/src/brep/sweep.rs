@@ -2,13 +2,13 @@
 //!
 //! Rationale and constants: `docs/dev/adr/0020-sweeps-and-revolutions.md`.
 
-use core::f64::consts::{FRAC_PI_2, PI, TAU};
+use core::f64::consts::FRAC_PI_2;
 use core::ops::Range;
 
 use super::extrude::{loops, rings, swept_faces};
 use super::{BrepError, MAX_SOLID_FACES, Solid};
 use crate::path::{Arc3, Curve3};
-use crate::profile::step_count;
+use crate::profile::{closes_on_itself, step_count};
 use crate::tolerance::WITHIN_TOLERANCE;
 use crate::vector::{Vector, across, add, coords, cross, dot, length, scale, sub};
 use crate::{ARC_CHORD_TOLERANCE, Path, Point3, Profile, ProfileError, Vector3};
@@ -114,16 +114,13 @@ impl Solid {
         let reference = unit_reference(reference)?;
         let profile = profile.faceted()?;
         let (offsets, rings, reach) = layout(&profile);
-        let pieces = Pieces::new(path, reach, offsets.len())?;
-        let start = pieces.start_section(reference, &offsets)?;
-        pieces.check_turns()?;
-        let sections = pieces.sections(path, start, offsets.len())?;
-        pieces.check_apart(&sections, offsets.len())?;
+        let (pieces, sections) = Pieces::prepare(path, &offsets, reach, reference)?;
+        pieces.check_apart(&sections)?;
         let points = sections
             .into_iter()
             .map(|[x, y, z]| Point3::new(x, y, z))
             .collect();
-        let faces = swept_faces(&rings, pieces.count() + 1, offsets.len());
+        let faces = swept_faces(&rings, pieces.count() + 1, pieces.stride);
         Ok(Self::from_faces(points, &faces)?)
     }
 }
@@ -200,14 +197,57 @@ struct Pieces {
     firsts: Vec<usize>,
     /// The farthest a profile point gets from the path.
     reach: f64,
-    /// Whether each piece is bounded by radial planes of its arc at both ends (see
+    /// The number of profile vertices: the size of a section.
+    stride: usize,
+    /// Whether each piece is of an arc and bounded by radial planes of it at both ends (see
     /// [`is_radial`](Self::is_radial)).
     radial: Vec<bool>,
 }
 
+/// The number of pieces, given the steps of each segment (0 for a line), once it and the faces
+/// it gives are known to fit in [`MAX_SWEEP_PIECES`] and [`MAX_SOLID_FACES`]. A section has
+/// `edges` vertices.
+fn checked_piece_count(steps: &[f64], edges: usize) -> Result<usize, SweepError> {
+    // An arc of n steps has n + 1 pieces, a line one.
+    let count: f64 = steps.iter().map(|n| n + 1.0).sum();
+    #[expect(
+        clippy::cast_precision_loss,
+        reason = "the limits and edge counts are far below 2^53"
+    )]
+    {
+        if count > MAX_SWEEP_PIECES as f64 {
+            return Err(SweepError::TooManyPieces);
+        }
+        if count.mul_add(edges as f64, 2.0) > MAX_SOLID_FACES as f64 {
+            return Err(SweepError::TooManyFaces);
+        }
+    }
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "a whole number up to MAX_SWEEP_PIECES"
+    )]
+    Ok(count as usize)
+}
+
 impl Pieces {
-    /// Counts the pieces and the faces they give before building anything.
-    fn new(path: &Path, reach: f64, edges: usize) -> Result<Self, SweepError> {
+    /// The pieces of `path`, with the profile placed at its start and carried along it: every
+    /// section, after the checks that need only the pieces and the sections.
+    fn prepare(
+        path: &Path,
+        offsets: &[[f64; 2]],
+        reach: f64,
+        reference: Vector,
+    ) -> Result<(Self, Vec<Vector>), SweepError> {
+        let pieces = Self::new(path, reach, offsets.len())?;
+        let start = pieces.start_section(reference, offsets)?;
+        pieces.check_turns()?;
+        let sections = pieces.sections(path, start)?;
+        Ok((pieces, sections))
+    }
+
+    /// Cuts the path into pieces, counting them and their faces before building anything.
+    fn new(path: &Path, reach: f64, stride: usize) -> Result<Self, SweepError> {
         let steps: Vec<f64> = path
             .curves()
             .iter()
@@ -216,28 +256,10 @@ impl Pieces {
                 Curve3::Arc(arc) => arc_steps(arc, reach),
             })
             .collect();
-        // An arc of n steps has n + 1 pieces, a line one.
-        let count: f64 = steps.iter().map(|n| n + 1.0).sum();
-        #[expect(
-            clippy::cast_precision_loss,
-            reason = "the limits and edge counts are far below 2^53"
-        )]
-        {
-            if count > MAX_SWEEP_PIECES as f64 {
-                return Err(SweepError::TooManyPieces);
-            }
-            if count.mul_add(edges as f64, 2.0) > MAX_SOLID_FACES as f64 {
-                return Err(SweepError::TooManyFaces);
-            }
-        }
-        #[expect(
-            clippy::cast_possible_truncation,
-            clippy::cast_sign_loss,
-            reason = "a whole number up to MAX_SWEEP_PIECES"
-        )]
-        let mut points = Vec::with_capacity(count as usize + 1);
+        let count = checked_piece_count(&steps, stride)?;
+        let mut points = Vec::with_capacity(count + 1);
         points.push(coords(path.segments()[0].start()));
-        let mut segments = Vec::new();
+        let mut segments = Vec::with_capacity(count);
         let mut firsts = Vec::with_capacity(steps.len() + 1);
         for (segment, (curve, &n)) in path.curves().iter().zip(&steps).enumerate() {
             firsts.push(points.len() - 1);
@@ -270,9 +292,14 @@ impl Pieces {
             segments,
             firsts,
             reach,
+            stride,
             radial: Vec::new(),
         };
-        pieces.radial = (0..pieces.count()).map(|k| pieces.is_radial(k)).collect();
+        pieces.radial = (0..pieces.count())
+            .map(|k| {
+                matches!(path.curves()[pieces.segments[k]], Curve3::Arc(_)) && pieces.is_radial(k)
+            })
+            .collect();
         Ok(pieces)
     }
 
@@ -322,10 +349,14 @@ impl Pieces {
         let y = scale(normal, 1.0 / size);
         let x = cross(y, t);
         let origin = self.points[0];
-        Ok(offsets
-            .iter()
-            .map(|&[u, v]| [0, 1, 2].map(|i| u.mul_add(x[i], v.mul_add(y[i], origin[i]))))
-            .collect())
+        // Room for every section: `sections` fills it in without moving the start.
+        let mut start = Vec::with_capacity(self.stride * (self.count() + 1));
+        start.extend(
+            offsets
+                .iter()
+                .map(|&[u, v]| [0, 1, 2].map(|i| u.mul_add(x[i], v.mul_add(y[i], origin[i])))),
+        );
+        Ok(start)
     }
 
     /// Rejects a turn back where a segment starts. Inside an arc the turns are at most 90°.
@@ -344,13 +375,8 @@ impl Pieces {
     /// projection along the incoming direction onto the plane bisecting a corner is the profile
     /// turned by the smallest rotation between the two directions (ADR 0020), and the side faces
     /// are planar by construction, their two long edges both along the piece.
-    fn sections(
-        &self,
-        path: &Path,
-        mut sections: Vec<Vector>,
-        stride: usize,
-    ) -> Result<Vec<Vector>, SweepError> {
-        sections.reserve(stride * self.count());
+    fn sections(&self, path: &Path, mut sections: Vec<Vector>) -> Result<Vec<Vector>, SweepError> {
+        let stride = self.stride;
         for (k, &t) in self.directions.iter().enumerate() {
             let segment = self.segments[k];
             if k == self.firsts[segment]
@@ -367,8 +393,7 @@ impl Pieces {
                     // Between two radial planes of an arc, a short run is the profile reaching
                     // too near the arc's axis: (inner) · tan(α/2) per half piece. Elsewhere a
                     // corner's mitre cuts it.
-                    let on_arc = matches!(path.curves()[segment], Curve3::Arc(_));
-                    return Err(if on_arc && self.radial[k] {
+                    return Err(if self.radial[k] {
                         SweepError::ArcTooTight { segment }
                     } else {
                         SweepError::MitresCross { segment }
@@ -396,8 +421,7 @@ impl Pieces {
             return Err(SweepError::ArcTooTight { segment });
         }
         let (first, end) = (self.firsts[segment], self.firsts[segment + 1]);
-        let gap = 2.0 * inner * libm::sin((TAU - arc.sweep) / 2.0);
-        if arc.sweep > PI && gap <= WITHIN_TOLERANCE && self.radial[first] && self.radial[end - 1] {
+        if closes_on_itself(inner, arc.sweep) && self.radial[first] && self.radial[end - 1] {
             return Err(SweepError::SelfIntersecting {
                 first: segment,
                 second: segment,
@@ -425,11 +449,11 @@ impl Pieces {
 
     /// No two pieces that are not neighbours may meet (ADR 0020, D3): every such pair must be
     /// [`clear`](Self::clear).
-    fn check_apart(&self, sections: &[Vector], stride: usize) -> Result<(), SweepError> {
+    fn check_apart(&self, sections: &[Vector]) -> Result<(), SweepError> {
         let reaches = self.reaches();
         for i in 0..self.count() {
             for j in i + 2..self.count() {
-                if !self.clear(i, j, sections, stride, &reaches) {
+                if !self.clear(i, j, sections, &reaches) {
                     return Err(SweepError::SelfIntersecting {
                         first: self.segments[i],
                         second: self.segments[j],
@@ -440,63 +464,87 @@ impl Pieces {
         Ok(())
     }
 
-    /// How far each piece may reach from its axis segment: the profile's reach divided by
-    /// cos(φ/2) for a corner of φ at either end, the mitre's tip.
+    /// How far each piece may be taken to reach from its axis segment: the profile's reach
+    /// divided by cos(φ/2) for a corner of φ at either end, the mitre's tip, plus
+    /// [`DISTANCE_SLACK`] times the piece's length for the rounding of [`segment_distance`].
     fn reaches(&self) -> Vec<f64> {
         (0..self.count())
-            .map(|k| self.reach / self.half_turn_cosine(k).min(self.half_turn_cosine(k + 1)))
+            .map(|k| {
+                let tip = self.reach / self.half_turn_cosine(k).min(self.half_turn_cosine(k + 1));
+                tip + DISTANCE_SLACK * length(sub(self.points[k + 1], self.points[k]))
+            })
             .collect()
     }
 
-    /// Whether pieces `i` and `j`, not neighbours, provably do not meet. Pieces of one arc
-    /// bounded by its radial planes each lie in their own wedge of the arc. Any other pair must
-    /// pass one of two sound tests. First, axis segments farther apart than both reaches cannot
-    /// meet. Otherwise, each piece lies in the convex hull of its two sections, so a plane with
-    /// every vertex of one piece on one side and every vertex of the other on the other side,
-    /// more than the tolerance apart, separates them; the planes tried are those where the first
-    /// piece's segment ends and where the second's starts.
-    fn clear(
-        &self,
-        first: usize,
-        second: usize,
-        sections: &[Vector],
-        stride: usize,
-        reaches: &[f64],
-    ) -> bool {
-        let segments = (self.segments[first], self.segments[second]);
-        if segments.0 == segments.1 && self.radial[first] && self.radial[second] {
-            return true;
-        }
-        let points = &self.points;
-        let axis = |k: usize| [points[k], points[k + 1]];
-        if segment_distance(axis(first), axis(second))
+    /// Whether pieces `first` and `second`, not neighbours, provably do not meet. Pieces of one
+    /// arc bounded by its radial planes each lie in their own wedge of the arc. Any other pair
+    /// must pass one of two sound tests: [`axes_apart`](Self::axes_apart) or
+    /// [`separated`](Self::separated).
+    fn clear(&self, first: usize, second: usize, sections: &[Vector], reaches: &[f64]) -> bool {
+        let (one, two) = (self.segments[first], self.segments[second]);
+        (one == two && self.radial[first] && self.radial[second])
+            || self.axes_apart(first, second, reaches)
+            || self.separated(first, second, sections)
+    }
+
+    /// Whether the axis segments of two pieces are farther apart than both reaches, so the
+    /// pieces cannot meet.
+    fn axes_apart(&self, first: usize, second: usize, reaches: &[f64]) -> bool {
+        let axis = |k: usize| [self.points[k], self.points[k + 1]];
+        segment_distance(axis(first), axis(second))
             > reaches[first] + reaches[second] + WITHIN_TOLERANCE
-        {
-            return true;
-        }
+    }
+
+    /// Whether a plane separates two pieces. Each piece lies in the convex hull of its two
+    /// sections, so a plane with every vertex of one piece on one side and every vertex of the
+    /// other on the other side, more than the tolerance apart, separates them; the planes tried
+    /// are those where the first piece's segment ends and where the second's starts.
+    fn separated(&self, first: usize, second: usize, sections: &[Vector]) -> bool {
         let separates = |joint: usize| {
             let normal = self.joint_normal(joint);
             let normal = scale(normal, 1.0 / length(normal));
-            let origin = points[joint];
-            // The lowest and highest signed distances of a piece's vertices from the plane.
+            let origin = self.points[joint];
             let side = |k: usize| {
-                sections[k * stride..(k + 2) * stride].iter().fold(
-                    (f64::INFINITY, f64::NEG_INFINITY),
-                    |(low, high), &vertex| {
-                        let distance = dot(sub(vertex, origin), normal);
-                        (low.min(distance), high.max(distance))
-                    },
+                extent(
+                    &sections[k * self.stride..(k + 2) * self.stride],
+                    origin,
+                    normal,
                 )
             };
             let (one, two) = (side(first), side(second));
             one.1 < two.0 - WITHIN_TOLERANCE || two.1 < one.0 - WITHIN_TOLERANCE
         };
-        separates(self.firsts[segments.0 + 1]) || separates(self.firsts[segments.1])
+        separates(self.firsts[self.segments[first] + 1])
+            || separates(self.firsts[self.segments[second]])
     }
 }
 
+/// The lowest and highest signed distances of `vertices` from the plane through `origin` with
+/// the unit `normal`.
+fn extent(vertices: &[Vector], origin: Vector, normal: Vector) -> (f64, f64) {
+    vertices.iter().fold(
+        (f64::INFINITY, f64::NEG_INFINITY),
+        |(low, high), &vertex| {
+            let distance = dot(sub(vertex, origin), normal);
+            (low.min(distance), high.max(distance))
+        },
+    )
+}
+
+/// Rounding slack of [`segment_distance`], per metre of piece length: the reach test treats each
+/// piece as this much longer in reach (ADR 0020).
+///
+/// For nearly parallel segments the closest-point fraction `s` divides by a determinant of
+/// relative error ε / sin²θ (θ the angle between them, ε = 2⁻⁵²), so it can be wrong. The pair
+/// of points returned is still on the segments, so the distance can only be *over*estimated, by
+/// at most L · min(sin θ, ε / sin θ) ≤ L · √ε ≈ 1.5 · 10⁻⁸ · L for segments of length L. An
+/// overestimate is the unsound direction: it can pass pieces that are closer than their reaches.
+/// 10⁻⁷ is about six times that bound, and costs 2 µm on 10 m pieces.
+const DISTANCE_SLACK: f64 = 1e-7;
+
 /// The distance between two segments, from their closest points (Ericson, *Real-Time Collision
-/// Detection*, 5.1.9). Both segments have a positive length.
+/// Detection*, 5.1.9). Both segments have a positive length. Nearly parallel segments may come
+/// out up to [`DISTANCE_SLACK`] times their lengths too far apart: callers must allow for it.
 fn segment_distance([start1, end1]: [Vector; 2], [start2, end2]: [Vector; 2]) -> f64 {
     let (d1, d2, between) = (sub(end1, start1), sub(end2, start2), sub(start1, start2));
     let (long1, long2) = (dot(d1, d1), dot(d2, d2));
@@ -829,11 +877,8 @@ mod tests {
     ) -> (Pieces, Vec<Vector>) {
         let path = Path::new(segments).unwrap();
         let (offsets, _, reach) = layout(&profile.faceted().unwrap());
-        let pieces = Pieces::new(&path, reach, offsets.len()).unwrap();
         let reference = unit_reference(reference).unwrap();
-        let start = pieces.start_section(reference, &offsets).unwrap();
-        let sections = pieces.sections(&path, start, offsets.len()).unwrap();
-        (pieces, sections)
+        Pieces::prepare(&path, &offsets, reach, reference).unwrap()
     }
 
     #[test]
@@ -867,9 +912,9 @@ mod tests {
         let last = cornered.count() - 1;
         assert!(!cornered.is_radial(1) && cornered.is_radial(2) && cornered.is_radial(last));
         let reaches = cornered.reaches();
-        assert!(!cornered.clear(1, last, &sections, 4, &reaches));
+        assert!(!cornered.clear(1, last, &sections, &reaches));
         // Halfway round, the first piece and the far side of the circle are 2 m apart: clear.
-        assert!(cornered.clear(1, last / 2, &sections, 4, &reaches));
+        assert!(cornered.clear(1, last / 2, &sections, &reaches));
         assert!(matches!(
             try_sweep(&lowered, path, up).err(),
             Some(SweepError::SelfIntersecting { .. })
@@ -886,7 +931,7 @@ mod tests {
         let (ending, sections) = pieces(&below, path.clone(), Z);
         let last = ending.count() - 2;
         assert!(ending.is_radial(0) && !ending.is_radial(last));
-        assert!(!ending.clear(0, last, &sections, 4, &ending.reaches()));
+        assert!(!ending.clear(0, last, &sections, &ending.reaches()));
         assert_eq!(
             try_sweep(&below, path, Z).err(),
             Some(SweepError::SelfIntersecting {
@@ -1027,13 +1072,12 @@ mod tests {
         // With reference z, profile x = z × y = −x points to the centre: the bar's 0.1 m half
         // width reaches R − tolerance, and the inner side would fold.
         assert_eq!(
-            try_sweep(&bar(), tight, Z).err(),
+            try_sweep(&bar(), tight.clone(), Z).err(),
             Some(SweepError::ArcTooTight { segment: 1 })
         );
         // A profile 5 µm from the same arc's axis: farther than the tolerance, but at
         // R + d + s = 0.213 m the arc takes 9 steps of h = 0.087 rad, and that point would run
         // only 5e-6 · tan h = 0.44 µm along each half piece. Too tight, not a corner.
-        let tight = vec![line(q(0.0, -1.0, 0.0), tight_arc.start()), tight_arc];
         let close = profile(rectangle(0.0, -0.05, 0.1 - 5e-6, 0.05), vec![]);
         assert_eq!(
             try_sweep(&close, tight, Z).err(),
@@ -1085,14 +1129,48 @@ mod tests {
 
     #[test]
     fn segment_distance_handles_every_configuration() {
-        let d = |a: [Vector; 2], b: [Vector; 2]| segment_distance(a, b);
         let x = [[0.0, 0.0, 0.0], [2.0, 0.0, 0.0]];
         // Crossing above: 1 apart.
-        assert_near(d(x, [[1.0, -1.0, 1.0], [1.0, 1.0, 1.0]]), 1.0);
+        assert_near(
+            segment_distance(x, [[1.0, -1.0, 1.0], [1.0, 1.0, 1.0]]),
+            1.0,
+        );
         // Parallel, overlapping.
-        assert_near(d(x, [[1.0, 3.0, 0.0], [5.0, 3.0, 0.0]]), 3.0);
+        assert_near(segment_distance(x, [[1.0, 3.0, 0.0], [5.0, 3.0, 0.0]]), 3.0);
         // The closest point of the second beyond its start, then beyond its end.
-        assert_near(d(x, [[-1.0, 1.0, 0.0], [-1.0, 2.0, 0.0]]), libm::sqrt(2.0));
-        assert_near(d(x, [[3.0, 2.0, 0.0], [3.0, 1.0, 0.0]]), libm::sqrt(2.0));
+        let corner = libm::sqrt(2.0);
+        assert_near(
+            segment_distance(x, [[-1.0, 1.0, 0.0], [-1.0, 2.0, 0.0]]),
+            corner,
+        );
+        assert_near(
+            segment_distance(x, [[3.0, 2.0, 0.0], [3.0, 1.0, 0.0]]),
+            corner,
+        );
+    }
+
+    #[test]
+    fn nearly_parallel_pieces_are_not_taken_for_far_apart() {
+        // A U with 20 km legs, as long as the model extent allows: 20 km along +x, 0.19995 m
+        // along +y, 20 km back along −x, the return leg tilted by 1e-4 m over its length (5e-9
+        // rad). A 0.1 m square profile reaches 0.0707 m, and at a 90° corner a piece's mitre
+        // tip reaches 0.0707 / cos 45° = 0.1 m: both legs may reach 0.2 m. The legs are really
+        // 0.19995 m apart, at the corner, so within that. But for segments this parallel the
+        // closest-point fraction divides by rounding noise, and `segment_distance` picks the
+        // far end of the return leg: 0.20005 m, past the reaches. Unguarded, the test would
+        // pass the pair as apart, wrongly.
+        let (a, b, c) = (q(-1e4, 0.0, 0.0), q(1e4, 0.0, 0.0), q(1e4, 0.19995, 0.0));
+        let d = q(-1e4, 0.19995 + 1e-4, 0.0);
+        let square = profile(rectangle(-0.05, -0.05, 0.05, 0.05), vec![]);
+        let (pieces, _) = pieces(&square, vec![line(a, b), line(b, c), line(c, d)], Z);
+        let axis = |k: usize| [pieces.points[k], pieces.points[k + 1]];
+        let computed = segment_distance(axis(0), axis(2));
+        let reaches = pieces.reaches();
+        let bare = pieces.reach * 2.0 * libm::sqrt(2.0) + WITHIN_TOLERANCE;
+        assert!(computed > 0.2 + WITHIN_TOLERANCE && 0.19995 < bare);
+        assert!(
+            !pieces.axes_apart(0, 2, &reaches),
+            "passed as apart: {computed}"
+        );
     }
 }

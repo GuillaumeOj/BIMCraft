@@ -1,11 +1,13 @@
 //! Arcs replaced by chords, for operations that build planar faces only. Rationale:
 //! `docs/dev/adr/0008-arc-faceting.md`.
 
+use core::f64::consts::{PI, TAU};
 use std::borrow::Cow;
 
 use crate::ARC_CHORD_TOLERANCE;
 use crate::profile::edge::{Arc, Curve, Edge, point_on_circle};
 use crate::profile::{MAX_PROFILE_EDGES, Profile, ProfileError};
+use crate::tolerance::WITHIN_TOLERANCE;
 
 impl Profile {
     /// The same profile with every arc replaced by chords at most [`ARC_CHORD_TOLERANCE`] away
@@ -84,6 +86,13 @@ fn chord_count(arc: &Arc, budget: usize) -> Option<usize> {
         reason = "a whole number between 1 and the budget"
     )]
     fits.then_some(count as usize)
+}
+
+/// Whether the two ends of a turn of `sweep` radians, at `radius` metres from its axis, lie
+/// within the linear tolerance of each other: past a half turn, the chord between them,
+/// 2 r sin((2π − θ)/2), is that short. Such a turn nearly closes on itself.
+pub(crate) fn closes_on_itself(radius: f64, sweep: f64) -> bool {
+    sweep > PI && 2.0 * radius * libm::sin((TAU - sweep) / 2.0) <= WITHIN_TOLERANCE
 }
 
 /// The fewest steps of equal angle that cover `sweep` radians of a circle of `radius` metres
@@ -174,6 +183,18 @@ mod tests {
         assert_eq!(step_count(0.0, PI, f64::INFINITY, 1.0), 1.0);
         // A radius of 1.4e13 m still gets a finite count: acos(1 − s/r) would round to 0.
         assert_eq!(step_count(1.4e13, 1e-9, f64::INFINITY, 1.0), 1.0);
+    }
+
+    #[test]
+    fn a_turn_closes_on_itself_past_a_half_turn_when_its_ends_meet() {
+        // 2 r sin((2π − θ)/2) at r = 1 m: 2 µm for 2π − θ = 2 µrad, 1 µm (within) for 1 µrad.
+        assert!(closes_on_itself(1.0, 2.0 * PI - 1e-6));
+        assert!(!closes_on_itself(1.0, 2.0 * PI - 2e-6 - 1e-9));
+        // A bigger radius moves the ends apart: at r = 10 m, 1 µrad is 10 µm.
+        assert!(!closes_on_itself(10.0, 2.0 * PI - 1e-6));
+        // A short turn's ends are close too, but it does not close: only past a half turn.
+        assert!(!closes_on_itself(1.0, 1e-9));
+        assert!(!closes_on_itself(1.0, PI));
     }
 
     #[test]
