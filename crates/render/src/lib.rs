@@ -22,6 +22,11 @@
 mod camera;
 mod mesh;
 mod placement;
+#[cfg_attr(
+    not(test),
+    expect(dead_code, reason = "the GPU pipeline is its first caller (#68)")
+)]
+mod transform;
 
 pub use camera::{Camera, CameraError, Projection};
 pub use mesh::{MAX_MESH_INDICES, MAX_MESH_VERTICES, MeshData, MeshError};
