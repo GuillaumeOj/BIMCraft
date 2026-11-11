@@ -230,6 +230,25 @@ fn objects_can_be_added_moved_and_removed() {
 }
 
 #[test]
+fn objects_sharing_a_mesh_are_all_drawn() {
+    let mut fixture = Fixture::new();
+    let mesh = fixture.renderer.add_mesh(&cube(0.5)).unwrap();
+    for x in [-1.0, 1.0] {
+        fixture
+            .renderer
+            .add_object(mesh, Placement::from_translation([x, 0.0, 0.0]), RED)
+            .unwrap();
+    }
+    fixture.add_cube(0.5, [2.0, 0.0, 0.0], GREEN);
+    let frame = fixture.frame();
+    for x in [-1.0, 1.0] {
+        assert!(frame.pixel(column(x), SIZE / 2)[0] > 200, "{x}");
+    }
+    assert!(frame.pixel(column(2.0), SIZE / 2)[1] > 200);
+    assert_eq!(frame.centre(), CLEAR_BYTES);
+}
+
+#[test]
 fn removing_a_mesh_removes_its_objects() {
     let mut fixture = Fixture::new();
     let mesh = fixture.renderer.add_mesh(&cube(1.0)).unwrap();

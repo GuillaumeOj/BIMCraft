@@ -366,8 +366,9 @@ impl Renderer {
     ///
     /// `target` must view a single-sampled 2D texture of the renderer's device and format, with
     /// one mip level and one layer, `size` pixels wide and high, usable as a render attachment.
-    /// All of that is checked but the view's own format, which wgpu does not expose: the view
-    /// must keep the texture's format, or wgpu reports a validation error to the device.
+    /// All of that is checked but the texture's device and the view's own format, which wgpu
+    /// does not expose: the texture must come from the renderer's device and the view must keep
+    /// the texture's format, or wgpu reports a validation error to the device.
     ///
     /// # Errors
     ///
@@ -573,11 +574,16 @@ impl Renderer {
         pass.set_bind_group(0, &self.frame_bind_group, &[]);
         // `max_objects` keeps every offset within u32.
         let offsets = (0_u32..).step_by(self.object_stride as usize);
-        for ((_, mesh), offset) in self.placed_meshes().zip(offsets) {
+        // Objects placing the same mesh one after another keep its buffers bound.
+        let mut bound = None;
+        for ((object, mesh), offset) in self.placed_meshes().zip(offsets) {
             pass.set_bind_group(1, &uniforms.bind_group, &[offset]);
-            pass.set_vertex_buffer(0, mesh.positions.slice(..));
-            pass.set_vertex_buffer(1, mesh.normals.slice(..));
-            pass.set_index_buffer(mesh.indices.slice(..), wgpu::IndexFormat::Uint32);
+            if bound != Some(object.mesh) {
+                pass.set_vertex_buffer(0, mesh.positions.slice(..));
+                pass.set_vertex_buffer(1, mesh.normals.slice(..));
+                pass.set_index_buffer(mesh.indices.slice(..), wgpu::IndexFormat::Uint32);
+                bound = Some(object.mesh);
+            }
             pass.draw_indexed(0..mesh.index_count, 0, 0..1);
         }
     }
