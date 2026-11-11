@@ -6,9 +6,9 @@
 //!
 //! Every way to get a [`Solid`] goes through [`Solid::from_faces`], which runs
 //! [`Solid::validate`] before returning, so an invalid solid never exists, in debug or release
-//! builds. [`Solid::extrude`] builds the faces of a prism and hands them to it. Operations that
-//! will later edit a solid in place must call [`Solid::validate`] on their result too, as ADR 0001
-//! requires of the booleans.
+//! builds. [`Solid::extrude`] builds the faces of a prism and [`Solid::revolve`] those of a turned
+//! profile, and both hand them to it. Operations that will later edit a solid in place must call
+//! [`Solid::validate`] on their result too, as ADR 0001 requires of the booleans.
 //!
 //! Validation checks topology, the Euler–Poincaré formula, planarity, orientation and the
 //! tolerance rules of `docs/dev/adr/0001-geometry-tolerance-policy.md`. It does not check that
@@ -20,11 +20,13 @@ mod build;
 mod error;
 mod extrude;
 mod locate;
+mod revolve;
 mod validate;
 
 pub use error::BrepError;
 pub use extrude::ExtrusionError;
 pub use locate::Containment;
+pub use revolve::{MAX_SOLID_FACES, RevolutionAxis, RevolutionError};
 pub(crate) use validate::{FaceFault, enclosed_volume, face_plane, longest_edge_squared, too_thin};
 
 use crate::Point3;

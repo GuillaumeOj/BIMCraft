@@ -17,6 +17,23 @@ impl Point2 {
     }
 }
 
+/// A displacement in the plane, in metres.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Vector2 {
+    /// First component.
+    pub x: f64,
+    /// Second component.
+    pub y: f64,
+}
+
+impl Vector2 {
+    /// Creates a vector from its components.
+    #[must_use]
+    pub const fn new(x: f64, y: f64) -> Self {
+        Self { x, y }
+    }
+}
+
 /// A point in space.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Point3 {
