@@ -5,13 +5,13 @@
 use core::f64::consts::{FRAC_PI_2, PI, TAU};
 use core::ops::Range;
 
-use super::extrude::{rings, swept_faces};
+use super::extrude::{loops, rings, swept_faces};
 use super::{BrepError, MAX_SOLID_FACES, Solid};
 use crate::path::{Arc3, Curve3};
 use crate::profile::step_count;
 use crate::tolerance::WITHIN_TOLERANCE;
 use crate::vector::{Vector, across, add, coords, cross, dot, length, scale, sub};
-use crate::{ARC_CHORD_TOLERANCE, Edge, Path, Point3, Profile, ProfileError, Vector3};
+use crate::{ARC_CHORD_TOLERANCE, Path, Point3, Profile, ProfileError, Vector3};
 
 /// Largest number of straight pieces a sweep cuts its path into.
 ///
@@ -132,9 +132,7 @@ impl Solid {
 /// they form, and the farthest any profile point gets from the path: edges are straight, so that
 /// is a vertex.
 fn layout(faceted: &Profile) -> (Vec<[f64; 2]>, Vec<Range<usize>>, f64) {
-    let loops: Vec<&[Edge]> = core::iter::once(faceted.outer())
-        .chain(faceted.holes())
-        .collect();
+    let loops = loops(faceted);
     let offsets: Vec<[f64; 2]> = loops
         .iter()
         .flat_map(|edges| edges.iter().map(|e| [e.start().x, e.start().y]))
@@ -529,7 +527,7 @@ mod tests {
     use super::*;
     use crate::path::tests::{arc, line, q};
     use crate::profile::tests::{circle, rectangle};
-    use crate::{ARC_CHORD_TOLERANCE, MODEL_EXTENT, PathSegment};
+    use crate::{ARC_CHORD_TOLERANCE, Edge, MODEL_EXTENT, PathSegment};
 
     const Z: Vector3 = Vector3::new(0.0, 0.0, 1.0);
 
@@ -961,8 +959,8 @@ mod tests {
             try_sweep(&bar(), wide, Z).err(),
             Some(SweepError::TooManyPieces)
         );
-        // A 2 m round section (100 chords) on three quarters of a 200 m circle: 748 pieces, so
-        // 74 800 faces.
+        // A 2 m round section (100 chords) on three quarters of a 200 m circle: 749 steps at
+        // R + d + s = 202.001 m, so 750 pieces and 75 002 faces.
         let round = profile(circle(0.0, 0.0, 2.0), vec![]);
         let long = vec![circle_arc(0.0, 0.0, 200.0, 0.0, 1.5 * PI)];
         assert_eq!(

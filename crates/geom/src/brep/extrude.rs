@@ -51,9 +51,7 @@ impl Solid {
         }
         let profile = profile.faceted()?;
         // Every loop vertex once at the bottom, then again at the top, `top` indices later.
-        let loops: Vec<&[Edge]> = core::iter::once(profile.outer())
-            .chain(profile.holes())
-            .collect();
+        let loops = loops(&profile);
         let starts = || loops.iter().flat_map(|edges| edges.iter().map(Edge::start));
         let mut vertices: Vec<Point3> = starts().map(|p| Point3::new(p.x, p.y, 0.0)).collect();
         let top = vertices.len();
@@ -70,6 +68,13 @@ impl Solid {
 /// The vertex after `v` in its ring: the end of the profile edge that starts at `v`.
 pub(super) const fn after(ring: &Range<usize>, v: usize) -> usize {
     if v + 1 == ring.end { ring.start } else { v + 1 }
+}
+
+/// The profile's loops: the outer one, then the holes.
+pub(super) fn loops(profile: &Profile) -> Vec<&[Edge]> {
+    core::iter::once(profile.outer())
+        .chain(profile.holes())
+        .collect()
 }
 
 /// Where each loop's vertices lie in a list of all the loops' vertices, one per edge, in order.
