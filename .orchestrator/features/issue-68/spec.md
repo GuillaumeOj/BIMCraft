@@ -46,7 +46,7 @@ Depth uses `Depth32Float` with reverse-Z (near → 1, far → 0, compare `Greate
 
 ### D4. The visual test (acceptance: “no jitter at 10⁶ m”)
 
-Integration test `crates/render/tests/jitter.rs`, rendering offscreen (e.g. 256×256, `Rgba8Unorm`, read back to the CPU):
+A `#[cfg(test)]` module inside the crate (e.g. `crates/render/src/jitter_tests.rs`), so it reaches the crate-private naive path without any public hook or cargo feature, rendering offscreen (e.g. 256×256, `Rgba8Unorm`, read back to the CPU):
 
 1. A test scene with fine detail: e.g. a comb of slats 5 mm wide, 5 mm apart, a few metres long, plus a cube, seen from about 3 m, so a 1-pixel shift is visible.
 2. A **camera sweep**: N frames (≥ 16) where the eye moves by sub-millimetre steps (e.g. 0.1 mm) along a path. The sweep is rendered three times: scene and camera at the origin (reference), translated by (10⁶, 10⁶, 10²) m, and by (10⁷, 10⁷, 10²) m.
@@ -81,6 +81,6 @@ One pull request on `orch/issue-68/integration`, closing #68, with `VP-04`/`GEO-
 | # | Owner | Task | Depends on |
 | --- | --- | --- | --- |
 | T1 | back | `render` crate skeleton (manifest, lints, layers, `wasm-crates.txt`), camera, placements, mesh data and validation, camera-relative matrix maths and the CPU precision tests (D1, D2, D3 validation, D4 CPU part); ADR 0020 | — |
-| T2 | back | wgpu pipeline: WGSL shader, GPU mesh and object storage, render pass into a texture view, headless device helper, readback; the visual test `tests/jitter.rs` with its negative control; CI GPU adapter (lavapipe) and failure artefact; wasm32 build; `cargo deny` | T1 |
+| T2 | back | wgpu pipeline: WGSL shader, GPU mesh and object storage, render pass into a texture view, headless device helper, readback; the in-crate visual test (`#[cfg(test)]` module) with its negative control; CI GPU adapter (lavapipe) and failure artefact; wasm32 build; `cargo deny` | T1 |
 
 T1 runs with a plan first. Both tasks use Opus (new crate, numerical subtlety, GPU in CI).
