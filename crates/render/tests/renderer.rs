@@ -199,12 +199,15 @@ fn an_orthographic_camera_draws_too() {
 #[test]
 fn objects_can_be_added_moved_and_removed() {
     let mut fixture = Fixture::new();
-    // More objects than the first uniform buffers hold, so they grow.
+    // One object, then four more: the object uniforms grow from one slot to eight.
     let xs = [-2.0, -1.0, 0.0, 1.0, 2.0];
-    let objects: Vec<_> = xs
-        .iter()
-        .map(|&x| fixture.add_cube(0.5, [x, 0.0, 0.0], RED))
-        .collect();
+    let mut objects = vec![fixture.add_cube(0.5, [xs[0], 0.0, 0.0], RED)];
+    assert!(fixture.frame().pixel(column(xs[0]), SIZE / 2)[0] > 200);
+    objects.extend(
+        xs[1..]
+            .iter()
+            .map(|&x| fixture.add_cube(0.5, [x, 0.0, 0.0], RED)),
+    );
     let frame = fixture.frame();
     for &x in &xs {
         assert!(frame.pixel(column(x), SIZE / 2)[0] > 200, "{x}");
@@ -343,9 +346,9 @@ fn bad_targets_cameras_and_clear_colours_are_rejected() {
 }
 
 #[test]
-fn targets_of_another_format_or_usage_are_rejected() {
+fn targets_of_another_format_usage_or_shape_are_rejected() {
     let mut fixture = Fixture::new();
-    let other = |format, usage| {
+    let other = |format, usage, mip_level_count, layers| {
         fixture
             .device
             .create_texture(&wgpu::TextureDescriptor {
@@ -353,9 +356,9 @@ fn targets_of_another_format_or_usage_are_rejected() {
                 size: wgpu::Extent3d {
                     width: SIZE,
                     height: SIZE,
-                    depth_or_array_layers: 1,
+                    depth_or_array_layers: layers,
                 },
-                mip_level_count: 1,
+                mip_level_count,
                 sample_count: 1,
                 dimension: wgpu::TextureDimension::D2,
                 format,
@@ -364,12 +367,12 @@ fn targets_of_another_format_or_usage_are_rejected() {
             })
             .create_view(&wgpu::TextureViewDescriptor::default())
     };
+    let attachment = wgpu::TextureUsages::RENDER_ATTACHMENT;
     let views = [
-        other(
-            wgpu::TextureFormat::Bgra8Unorm,
-            wgpu::TextureUsages::RENDER_ATTACHMENT,
-        ),
-        other(FORMAT, wgpu::TextureUsages::TEXTURE_BINDING),
+        other(wgpu::TextureFormat::Bgra8Unorm, attachment, 1, 1),
+        other(FORMAT, wgpu::TextureUsages::TEXTURE_BINDING, 1, 1),
+        other(FORMAT, attachment, 2, 1),
+        other(FORMAT, attachment, 1, 2),
     ];
     for view in views {
         assert_eq!(
@@ -403,7 +406,7 @@ fn errors_name_the_problem_without_coordinates() {
     }
     .to_string();
     assert!(message.contains("no GPU adapter") && message.contains("VULKAN"));
-    assert!(message.contains("mesa-vulkan-drivers"));
+    assert!(message.contains("lavapipe") && message.contains("WARP"));
     assert_eq!(
         RenderError::TooManyObjects { max: 7 }.to_string(),
         "the renderer holds the 7 objects this device can draw in one frame"

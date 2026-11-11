@@ -49,8 +49,8 @@ pub struct ObjectId(u64);
 pub enum RenderError {
     /// No GPU adapter is available for the backends tried, so nothing can be drawn.
     #[error(
-        "no GPU adapter found for the backends {backends:?} ({reason}); install one, such as \
-         Mesa's lavapipe Vulkan driver on Linux (package mesa-vulkan-drivers)"
+        "no GPU adapter found for the backends {backends:?} ({reason}); a GPU driver, or a \
+         software one such as lavapipe (Vulkan) or WARP (DX12), provides one"
     )]
     NoAdapter {
         /// The backends that were tried.
@@ -143,7 +143,9 @@ struct DepthBuffer {
 /// view (VP-04, GEO-07).
 ///
 /// The host creates the device, the queue and the target (a window surface, a browser canvas or
-/// an offscreen texture); the renderer only records and submits its pass.
+/// an offscreen texture); the renderer only records and submits its pass. Input is validated
+/// before it reaches the GPU; what the GPU alone can refuse, such as running out of memory, goes
+/// to the device's error handler, which the host chooses (wgpu's default one panics).
 pub struct Renderer {
     device: wgpu::Device,
     queue: wgpu::Queue,
@@ -156,7 +158,12 @@ pub struct Renderer {
     object_stride: u32,
     /// The most objects one frame can draw on this device.
     max_objects: usize,
+    /// The largest buffer and the widest texture of the device, which never change.
+    max_buffer_size: u64,
+    max_texture_side: u32,
     object_uniforms: Option<ObjectUniforms>,
+    /// The bytes of the object uniforms, kept between frames to avoid an allocation each frame.
+    object_bytes: Vec<u8>,
     depth: Option<DepthBuffer>,
     meshes: BTreeMap<MeshId, GpuMesh>,
     /// Ordered by id, so frames draw in a deterministic order.
@@ -213,7 +220,8 @@ impl Renderer {
             }],
         });
         let pipeline = create_pipeline(device, &[&frame_layout, &object_layout], color_format);
-        let (object_stride, max_objects) = object_slots(&device.limits());
+        let limits = device.limits();
+        let (object_stride, max_objects) = object_slots(&limits);
         Ok(Self {
             device: device.clone(),
             queue: queue.clone(),
@@ -224,7 +232,10 @@ impl Renderer {
             object_layout,
             object_stride,
             max_objects,
+            max_buffer_size: limits.max_buffer_size,
+            max_texture_side: limits.max_texture_dimension_2d,
             object_uniforms: None,
+            object_bytes: Vec::new(),
             depth: None,
             meshes: BTreeMap::new(),
             objects: BTreeMap::new(),
@@ -241,7 +252,7 @@ impl Renderer {
     /// buffer of the mesh exceeds the device's largest buffer.
     pub fn add_mesh(&mut self, mesh: &MeshData) -> Result<MeshId, MeshError> {
         mesh.validate()?;
-        let index_count = index_count(mesh, self.device.limits().max_buffer_size)?;
+        let index_count = index_count(mesh, self.max_buffer_size)?;
         let buffer = |label, contents: &[u8], usage| {
             self.device
                 .create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -353,8 +364,10 @@ impl Renderer {
     /// Draws every object into `target`, seen from `camera`, over the `clear` colour (linear
     /// RGBA), and submits the pass to the queue.
     ///
-    /// `target` must be a view of the whole first mip level of a single-sampled 2D texture of
-    /// the renderer's format, `size` pixels wide and high, usable as a render attachment.
+    /// `target` must view a single-sampled 2D texture of the renderer's device and format, with
+    /// one mip level and one layer, `size` pixels wide and high, usable as a render attachment.
+    /// All of that is checked but the view's own format, which wgpu does not expose: the view
+    /// must keep the texture's format, or wgpu reports a validation error to the device.
     ///
     /// # Errors
     ///
@@ -441,7 +454,7 @@ impl Renderer {
         if size.contains(&0) {
             return Err(RenderError::ZeroSizedTarget);
         }
-        let max = self.device.limits().max_texture_dimension_2d;
+        let max = self.max_texture_side;
         if size.iter().any(|&side| side > max) {
             return Err(RenderError::TargetTooLarge { max });
         }
@@ -449,6 +462,8 @@ impl Renderer {
         let matches = texture.format() == self.color_format
             && texture.dimension() == wgpu::TextureDimension::D2
             && texture.sample_count() == 1
+            && texture.mip_level_count() == 1
+            && texture.depth_or_array_layers() == 1
             && texture
                 .usage()
                 .contains(wgpu::TextureUsages::RENDER_ATTACHMENT)
@@ -470,7 +485,8 @@ impl Renderer {
             return;
         };
         let stride = self.object_stride as usize;
-        let mut bytes = vec![0_u8; stride * self.objects.len()];
+        let bytes = &mut self.object_bytes;
+        bytes.resize(stride * self.objects.len(), 0);
         for (object, slot) in self.objects.values().zip(bytes.chunks_exact_mut(stride)) {
             let Some(mesh) = self.meshes.get(&object.mesh) else {
                 continue;
@@ -479,7 +495,7 @@ impl Renderer {
             let uniform = object_uniform(&model_view, object.color);
             slot[..UNIFORM_SIZE as usize].copy_from_slice(bytemuck::cast_slice(&uniform));
         }
-        self.queue.write_buffer(&uniforms.buffer, 0, &bytes);
+        self.queue.write_buffer(&uniforms.buffer, 0, bytes);
     }
 
     /// Grows the object uniform buffer to hold every object, doubling its capacity.
@@ -595,7 +611,6 @@ fn object_slots(limits: &wgpu::Limits) -> (u32, usize) {
 /// Whether every device can render a floating-point colour into textures of `format`.
 fn is_renderable(format: wgpu::TextureFormat, features: wgpu::Features) -> bool {
     format.has_color_aspect()
-        && !format.is_depth_stencil_format()
         && matches!(
             format.sample_type(None, Some(features)),
             Some(wgpu::TextureSampleType::Float { .. })

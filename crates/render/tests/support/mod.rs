@@ -10,17 +10,20 @@ pub const FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
 /// Bytes per pixel of [`FORMAT`].
 const PIXEL_BYTES: u32 = 4;
 
-/// A GPU device for the tests. A missing adapter fails the test, naming it: the tests are never
-/// skipped (AGENTS.md §1.2).
+/// The GPU device of the tests, created once per test binary. A missing adapter fails the test,
+/// naming it: the tests are never skipped (AGENTS.md §1.2).
 pub fn device() -> (wgpu::Device, wgpu::Queue) {
-    match pollster::block_on(render::headless_device()) {
-        Ok(device) => device,
-        Err(error @ RenderError::NoAdapter { .. }) => panic!(
-            "the GPU tests need a GPU adapter, software ones included (lavapipe on Linux, WARP \
-             on Windows, Metal on macOS): {error}"
-        ),
-        Err(error) => panic!("the GPU tests could not create a device: {error}"),
-    }
+    static DEVICE: std::sync::OnceLock<(wgpu::Device, wgpu::Queue)> = std::sync::OnceLock::new();
+    DEVICE
+        .get_or_init(|| match pollster::block_on(render::headless_device()) {
+            Ok(device) => device,
+            Err(error @ RenderError::NoAdapter { .. }) => panic!(
+                "the GPU tests need a GPU adapter, software ones included (lavapipe on Linux: \
+                 scripts/linux-gpu-deps.sh; WARP on Windows; Metal on macOS): {error}"
+            ),
+            Err(error) => panic!("the GPU tests could not create a device: {error}"),
+        })
+        .clone()
 }
 
 /// An offscreen colour target of [`FORMAT`] that can be read back.

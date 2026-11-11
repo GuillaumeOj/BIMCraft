@@ -34,6 +34,9 @@ fn vs_main(@location(0) position: vec3<f32>, @location(1) normal: vec3<f32>) -> 
 @fragment
 fn fs_main(in: Varyings) -> @location(0) vec4<f32> {
     let ambient = frame.light.w;
-    let diffuse = abs(dot(normalize(in.normal), frame.light.xyz));
+    // Interpolated normals can cancel out between opposite vertex normals: no diffuse light then,
+    // rather than the NaN of normalising a zero vector.
+    let norm = length(in.normal);
+    let diffuse = select(0.0, abs(dot(in.normal, frame.light.xyz)) / norm, norm > 1e-6);
     return vec4<f32>(object.color.rgb * (ambient + (1.0 - ambient) * diffuse), object.color.a);
 }
