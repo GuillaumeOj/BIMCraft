@@ -5,7 +5,7 @@
 use core::f64::consts::{FRAC_PI_2, PI, TAU};
 use core::ops::Range;
 
-use super::extrude::rings;
+use super::extrude::{after, rings};
 use super::{BrepError, FaceInput, MAX_SOLID_FACES, Solid};
 use crate::profile::step_count;
 use crate::tolerance::WITHIN_TOLERANCE;
@@ -218,11 +218,6 @@ fn side_of_axis(vertices: &[Vertex]) -> Result<bool, RevolutionError> {
 /// The vertex before `v` in its ring.
 const fn before(ring: &Range<usize>, v: usize) -> usize {
     if v == ring.start { ring.end - 1 } else { v - 1 }
-}
-
-/// The vertex after `v` in its ring: the end of the profile edge that starts at `v`.
-const fn after(ring: &Range<usize>, v: usize) -> usize {
-    if v + 1 == ring.end { ring.start } else { v + 1 }
 }
 
 /// In a full turn, a vertex on the axis needs an edge along the axis next to it: with two edges

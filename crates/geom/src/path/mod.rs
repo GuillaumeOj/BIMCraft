@@ -148,8 +148,8 @@ impl Path {
 /// The geometry of a path segment.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) enum Curve3 {
-    /// A straight segment, from its start to its end.
-    Line(Vector, Vector),
+    /// A straight segment, by its end: it starts where the previous segment ends.
+    Line(Vector),
     /// A circular arc.
     Arc(Arc3),
 }

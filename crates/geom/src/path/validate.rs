@@ -48,7 +48,7 @@ fn curve(segment: &PathSegment, index: usize) -> Result<Curve3, PathError> {
             if length(sub(end, start)) <= WITHIN_TOLERANCE {
                 return Err(PathError::ZeroLengthLine { segment: index });
             }
-            Ok(Curve3::Line(start, end))
+            Ok(Curve3::Line(end))
         }
         PathSegment::Arc {
             start,

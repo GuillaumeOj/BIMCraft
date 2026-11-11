@@ -202,6 +202,9 @@ struct Pieces {
     firsts: Vec<usize>,
     /// The farthest a profile point gets from the path.
     reach: f64,
+    /// Whether each piece is bounded by radial planes of its arc at both ends (see
+    /// [`is_radial`](Self::is_radial)).
+    radial: Vec<bool>,
 }
 
 impl Pieces {
@@ -229,13 +232,19 @@ impl Pieces {
                 return Err(SweepError::TooManyFaces);
             }
         }
-        let mut points = vec![coords(path.segments()[0].start())];
+        #[expect(
+            clippy::cast_possible_truncation,
+            clippy::cast_sign_loss,
+            reason = "a whole number up to MAX_SWEEP_PIECES"
+        )]
+        let mut points = Vec::with_capacity(count as usize + 1);
+        points.push(coords(path.segments()[0].start()));
         let mut segments = Vec::new();
         let mut firsts = Vec::with_capacity(steps.len() + 1);
         for (segment, (curve, &n)) in path.curves().iter().zip(&steps).enumerate() {
             firsts.push(points.len() - 1);
             match curve {
-                Curve3::Line(_, end) => points.push(*end),
+                Curve3::Line(end) => points.push(*end),
                 Curve3::Arc(arc) => {
                     #[expect(
                         clippy::cast_possible_truncation,
@@ -257,13 +266,16 @@ impl Pieces {
                 scale(d, 1.0 / length(d))
             })
             .collect();
-        Ok(Self {
+        let mut pieces = Self {
             points,
             directions,
             segments,
             firsts,
             reach,
-        })
+            radial: Vec::new(),
+        };
+        pieces.radial = (0..pieces.count()).map(|k| pieces.is_radial(k)).collect();
+        Ok(pieces)
     }
 
     const fn count(&self) -> usize {
@@ -274,18 +286,21 @@ impl Pieces {
     /// its two ends, bisecting the corner between two pieces elsewhere.
     fn joint_normal(&self, k: usize) -> Vector {
         let d = &self.directions;
-        if k == 0 {
-            d[0]
-        } else if k == d.len() {
-            d[k - 1]
+        if self.is_path_end(k) {
+            d[k.min(d.len() - 1)]
         } else {
             add(d[k - 1], d[k])
         }
     }
 
+    /// Whether joint `k` is the start or the end of the path.
+    const fn is_path_end(&self, k: usize) -> bool {
+        k == 0 || k == self.count()
+    }
+
     /// The cosine of half the turn at joint `k`: 1 at the ends of the path.
     fn half_turn_cosine(&self, k: usize) -> f64 {
-        if k == 0 || k == self.count() {
+        if self.is_path_end(k) {
             1.0
         } else {
             length(self.joint_normal(k)) / 2.0
@@ -351,7 +366,15 @@ impl Pieces {
                 let from = sections[k * stride + v];
                 let run = dot(sub(point, from), normal) / along;
                 if run.is_nan() || run <= WITHIN_TOLERANCE {
-                    return Err(SweepError::MitresCross { segment });
+                    // Between two radial planes of an arc, a short run is the profile reaching
+                    // too near the arc's axis: (inner) · tan(α/2) per half piece. Elsewhere a
+                    // corner's mitre cuts it.
+                    let on_arc = matches!(path.curves()[segment], Curve3::Arc(_));
+                    return Err(if on_arc && self.radial[k] {
+                        SweepError::ArcTooTight { segment }
+                    } else {
+                        SweepError::MitresCross { segment }
+                    });
                 }
                 sections.push(add(from, scale(t, run)));
             }
@@ -359,35 +382,24 @@ impl Pieces {
         Ok(sections)
     }
 
-    /// The profile point nearest the arc's axis, at `inner` from it, runs the shortest along the
-    /// arc: (`inner`) · tan(α/2) along each half piece at the arc's ends, twice that inside. It
-    /// must run more than the tolerance; with α/2 ≤ 45°, it then lies more than the tolerance
-    /// from the axis too. The offset towards the axis is the same in every section of the arc,
-    /// so the section where the arc starts decides. When both ends of the arc are radial planes,
-    /// nothing else tests its two end pieces against each other: the gap between them, at that
-    /// point, must exceed the tolerance as well.
+    /// The profile point nearest the arc's axis, at `inner` from it, must lie more than the
+    /// tolerance from the axis; how far it then runs along each piece is the mitre check's. The
+    /// offset towards the axis is the same in every section of the arc, so the section where the
+    /// arc starts decides. When both ends of the arc are radial planes, nothing else tests its
+    /// two end pieces against each other: the gap between them, at that point, must exceed the
+    /// tolerance as well.
     fn check_arc(&self, arc: &Arc3, section: &[Vector], segment: usize) -> Result<(), SweepError> {
         let start = arc.start;
         let inward = section.iter().fold(f64::NEG_INFINITY, |m, &p| {
             m.max(-dot(sub(p, start), arc.outward))
         });
         let inner = arc.radius - inward;
-        let (first, end) = (self.firsts[segment], self.firsts[segment + 1]);
-        // An arc of n steps has n + 1 pieces.
-        #[expect(
-            clippy::cast_precision_loss,
-            reason = "piece counts are at most MAX_SWEEP_PIECES"
-        )]
-        let half_step = arc.sweep / (2.0 * (end - first - 1) as f64);
-        if inner * libm::tan(half_step) <= WITHIN_TOLERANCE {
+        if inner <= WITHIN_TOLERANCE {
             return Err(SweepError::ArcTooTight { segment });
         }
+        let (first, end) = (self.firsts[segment], self.firsts[segment + 1]);
         let gap = 2.0 * inner * libm::sin((TAU - arc.sweep) / 2.0);
-        if arc.sweep > PI
-            && gap <= WITHIN_TOLERANCE
-            && self.is_radial(first)
-            && self.is_radial(end - 1)
-        {
+        if arc.sweep > PI && gap <= WITHIN_TOLERANCE && self.radial[first] && self.radial[end - 1] {
             return Err(SweepError::SelfIntersecting {
                 first: segment,
                 second: segment,
@@ -408,8 +420,7 @@ impl Pieces {
     /// Whether joint `k` is an end of the path, or turns so little that its plane is the plane
     /// normal to the path within the tolerance, across the profile.
     fn is_straight(&self, k: usize) -> bool {
-        k == 0
-            || k == self.count()
+        self.is_path_end(k)
             || length(sub(self.directions[k - 1], self.directions[k])) * self.reach
                 <= WITHIN_TOLERANCE
     }
@@ -455,7 +466,7 @@ impl Pieces {
         reaches: &[f64],
     ) -> bool {
         let segments = (self.segments[first], self.segments[second]);
-        if segments.0 == segments.1 && self.is_radial(first) && self.is_radial(second) {
+        if segments.0 == segments.1 && self.radial[first] && self.radial[second] {
             return true;
         }
         let points = &self.points;

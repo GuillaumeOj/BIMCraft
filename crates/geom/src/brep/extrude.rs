@@ -67,6 +67,11 @@ impl Solid {
     }
 }
 
+/// The vertex after `v` in its ring: the end of the profile edge that starts at `v`.
+pub(super) const fn after(ring: &Range<usize>, v: usize) -> usize {
+    if v + 1 == ring.end { ring.start } else { v + 1 }
+}
+
 /// Where each loop's vertices lie in a list of all the loops' vertices, one per edge, in order.
 pub(super) fn rings(loops: &[&[Edge]]) -> Vec<Range<usize>> {
     let mut rings: Vec<Range<usize>> = Vec::with_capacity(loops.len());
@@ -107,7 +112,7 @@ pub(super) fn swept_faces(
         let (here, next) = (k * stride, (k + 1) * stride);
         for ring in rings {
             for a in ring.clone() {
-                let b = if a + 1 == ring.end { ring.start } else { a + 1 };
+                let b = after(ring, a);
                 faces.push(FaceInput {
                     outer: vec![a + here, b + here, b + next, a + next],
                     holes: Vec::new(),

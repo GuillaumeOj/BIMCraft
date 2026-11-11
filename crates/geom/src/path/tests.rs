@@ -50,10 +50,7 @@ fn a_chain_of_lines_and_arcs_is_kept_as_given() {
     let path = Path::new(segments.clone()).unwrap();
     assert_eq!(path.segments(), segments.as_slice());
     assert_eq!(path.curves().len(), 3);
-    assert_eq!(
-        path.curves()[0],
-        Curve3::Line([0.0, 0.0, 0.0], [2.0, 0.0, 0.0])
-    );
+    assert_eq!(path.curves()[0], Curve3::Line([2.0, 0.0, 0.0]));
     assert_eq!(segments[1].start(), q(2.0, 0.0, 0.0));
     assert_eq!(segments[1].end(), q(3.0, 1.0, 0.0));
 }
