@@ -20,7 +20,7 @@ Depth has the same problem in another form: a standard depth buffer spends most 
 - An object places a mesh in the world with an `f64` placement: an orthonormal rotation `R` (reflections allowed) and a translation `t`. A local vertex `v` of a mesh with origin `o` is at `R · (o + v) + t`.
 - Each frame, for each object, the renderer computes in `f64` the model-view matrix with the camera at the origin: rotation `V · R` and translation `V · (R · o + (t − eye))`, where `V` is the view rotation. The large terms cancel in `f64` (about 2·10⁻⁹ m of error at 10⁷ m), and only this result, whose size is the distance to the camera, is rounded to `f32`, once.
 - The vertex shader computes `clip = P · MV · v` in `f32`. No matrix sent to the GPU contains the camera's world position.
-- Internally, the renderer measures GPU coordinates from a **render origin**, the eye. A test-only variant pins it to the world origin, a classic pipeline whose world model and view matrices are rounded to `f32` and multiplied in `f32`. It exists only as the negative control of the tests below; it is not public API.
+- The renderer has no switch for a classic pipeline. The tests below build its negative controls without one: the CPU tests keep a test-only model-view whose world model and view matrices are rounded to `f32` and multiplied in `f32`, and the GPU test feeds the public API what a classic pipeline would store.
 - Matrices are column-major `[[f32; 4]; 4]`, the layout of a WGSL `mat4x4<f32>` uniform. The trigonometry of the projection uses `libm` (ENG-04).
 
 **Reverse-Z depth.** Depth is `Depth32Float` with reverse-Z: the near plane maps to 1, distance decreases depth, the depth test is `Greater`. The perspective projection has an infinite far plane (depth `near / distance`); the orthographic projection maps an explicit near plane to 1 and far plane to 0. Floating-point depth values are densest near 0, which reverse-Z puts far from the camera, so resolution stays nearly uniform in relative terms.
@@ -31,7 +31,7 @@ Depth has the same problem in another form: a standard depth buffer spends most 
 
 - CPU tests emulate the `f32` operations of the vertex shader and compare the projected vertices with an `f64` reference. On a 256 px viewport, seen from about 3 m, the camera-relative path stays within 0.01 px at 10⁶ m and 10⁷ m; the naive path is off by more than a pixel.
 - A fixed-seed property test translates the scene and the camera by the same vector, up to 10⁷ m, and checks that each entry of the `f32` model-view moves by at most one `f32` ulp *at the entry's scale*: the spacing of `f32` values at `max(|a|, |b|, 1)`. A strict ulp of each entry cannot hold for entries that should be 0, which the `f64` rounding of `target − eye` far from the origin makes about 10⁻¹⁰.
-- A GPU visual test renders a camera sweep in sub-millimetre steps at the origin, at 10⁶ m and at 10⁷ m, and compares the frames pixel by pixel; the same sweep with the render origin at the world origin must fail the comparison, which proves that the test sees jitter.
+- A GPU visual test renders a camera sweep in sub-millimetre steps at the origin, at 10⁶ m and at 10⁷ m, and compares the frames pixel by pixel; the same sweep at 10⁶ m through a classic pipeline must fail the comparison, which proves that the test sees jitter. The classic pipeline is emulated in the inputs, through the public API: a mesh whose world vertex positions are each rounded to `f32` with its origin at the world origin, the placement of the cube rounded to `f32`, and the eye and target of each frame rounded to `f32`, so every world coordinate snaps to the 6.25 cm grid as in a world-space `f32` vertex buffer. The test then needs no hook in the renderer.
 
 ## Consequences
 
@@ -45,7 +45,7 @@ Depth has the same problem in another form: a standard depth buffer spends most 
 - **Floating origin snapped to a grid, re-based when the camera moves away.** It needs a threshold, re-uploads or re-transforms data at each re-base, and still loses precision between re-bases. Recomputing the per-object matrices every frame costs less and has no threshold.
 - **High/low split vertices emulating double precision in the shader** (each coordinate as the sum of two `f32`). Twice the vertex memory and extra shader work, for precision that the per-mesh origin already gives.
 - **`f64` in the shader.** WGSL has no `f64`, and native support is slow or missing on many GPUs.
-- **`f32` model and view matrices multiplied on the GPU.** The classic pipeline: it is exactly what jitters, and it is kept only as the negative control.
+- **`f32` model and view matrices multiplied on the GPU.** The classic pipeline: it is exactly what jitters, and only the negative controls of the tests emulate it.
 - **A standard depth range (near to 0, far to 1).** It wastes the floating-point precision of the depth buffer next to the camera and z-fights far away.
 
 ## References

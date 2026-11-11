@@ -37,28 +37,23 @@ impl ViewFrame {
     }
 }
 
-/// Which point the coordinates sent to the GPU are measured from.
+/// Which point the coordinates sent to the GPU are measured from, in the precision tests.
+#[cfg(test)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum RenderOrigin {
     /// The eye of the camera: the transform is camera-relative, the large terms cancel in `f64`.
     Eye,
-    /// The world origin, as a classic pipeline does: the negative control of the precision tests,
-    /// which shows the jitter the camera-relative transform removes. Never used to render.
-    #[cfg(test)]
+    /// The world origin, as a classic pipeline does: the negative control of these tests, which
+    /// shows the jitter the camera-relative transform removes.
     World,
 }
 
+#[cfg(test)]
 impl RenderOrigin {
     /// The model-view matrix of a mesh with origin `mesh_origin` placed by `placement`.
-    pub(crate) fn model_view(
-        self,
-        view: &ViewFrame,
-        mesh_origin: [f64; 3],
-        placement: &Placement,
-    ) -> Matrix {
+    fn model_view(self, view: &ViewFrame, mesh_origin: [f64; 3], placement: &Placement) -> Matrix {
         match self {
             Self::Eye => camera_relative_model_view(view, mesh_origin, placement),
-            #[cfg(test)]
             Self::World => naive_model_view(view, mesh_origin, placement),
         }
     }

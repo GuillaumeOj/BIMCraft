@@ -8,11 +8,14 @@ license.workspace = true
 publish = false
 
 [dependencies]
+bytemuck = { workspace = true }
 geom = { workspace = true }
 libm = { workspace = true }
 thiserror = { workspace = true }
+wgpu = { workspace = true }
 
 [dev-dependencies]
+pollster = { workspace = true }
 proptest = { workspace = true }
 
 [lints]
