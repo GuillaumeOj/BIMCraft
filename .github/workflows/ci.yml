@@ -91,7 +91,18 @@ jobs:
       - name: Install the desktop window's Linux libraries (GTK 3, WebKitGTK)
         if: runner.os == 'Linux'
         run: scripts/linux-desktop-deps.sh
+      # The renderer's GPU tests need an adapter: lavapipe on Linux; Windows has WARP (DX12) and
+      # macOS Metal. The tests fail, never skip, without one.
+      - name: Install a software GPU (Mesa lavapipe)
+        if: runner.os == 'Linux'
+        run: scripts/linux-gpu-deps.sh
       - run: scripts/check-all.sh rust
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: failure()
+        with:
+          name: render-jitter-${{ matrix.os }}
+          path: target/render-jitter
+          if-no-files-found: ignore
       # The desktop program with the bundled UI, in the target directory the rust check warmed.
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
@@ -132,7 +143,15 @@ jobs:
           tool: cargo-llvm-cov@${{ env.CARGO_LLVM_COV_VERSION }}
       - name: Install the desktop window's Linux libraries (GTK 3, WebKitGTK)
         run: scripts/linux-desktop-deps.sh
+      - name: Install a software GPU (Mesa lavapipe) for the renderer's GPU tests
+        run: scripts/linux-gpu-deps.sh
       - run: scripts/check-all.sh coverage
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: failure()
+        with:
+          name: render-jitter-coverage
+          path: target/llvm-cov-target/render-jitter
+          if-no-files-found: ignore
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
