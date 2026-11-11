@@ -32,15 +32,17 @@ pub struct MeshData {
 
 impl MeshData {
     /// Builds a mesh from `f64` positions; its origin is the centre of their bounding box.
+    /// The normals and indices are moved into the mesh, not copied.
     ///
     /// # Errors
     ///
-    /// A [`MeshError`] when a position is not finite or lies beyond [`MAX_WORLD_COORDINATE`](crate::MAX_WORLD_COORDINATE), or
-    /// when the mesh fails [`MeshData::validate`].
+    /// A [`MeshError`] when a position is not finite or lies beyond
+    /// [`MAX_WORLD_COORDINATE`](crate::MAX_WORLD_COORDINATE), or when the mesh fails
+    /// [`MeshData::validate`].
     pub fn from_world(
         positions: &[Point3],
-        normals: &[[f32; 3]],
-        indices: &[u32],
+        normals: Vec<[f32; 3]>,
+        indices: Vec<u32>,
     ) -> Result<Self, MeshError> {
         check_counts(positions.len(), normals.len(), indices.len())?;
         let mut min = [f64::INFINITY; 3];
@@ -63,22 +65,19 @@ impl MeshData {
         )]
         let local = positions
             .iter()
-            .map(|p| {
-                [
-                    (p.x - origin[0]) as f32,
-                    (p.y - origin[1]) as f32,
-                    (p.z - origin[2]) as f32,
-                ]
-            })
+            .map(|p| core::array::from_fn(|axis| ([p.x, p.y, p.z][axis] - origin[axis]) as f32))
             .collect();
-        let mesh = Self {
+        // The origin and the local positions lie within the world bounds by construction: the
+        // origin is between bounds already checked, and each local coordinate is at most half
+        // their spread, which rounds to at most `MAX_WORLD_COORDINATE`, exact in `f32`.
+        check_normals(&normals)?;
+        check_indices(&indices, positions.len())?;
+        Ok(Self {
             origin,
             positions: local,
-            normals: normals.to_vec(),
-            indices: indices.to_vec(),
-        };
-        mesh.validate()?;
-        Ok(mesh)
+            normals,
+            indices,
+        })
     }
 
     /// Checks that the mesh can be drawn: sizes within bounds, one normal per position, finite
@@ -103,28 +102,35 @@ impl MeshData {
         {
             return Err(MeshError::NonFinitePosition { vertex });
         }
-        if let Some(vertex) = self.normals.iter().position(|n| !is_unit(*n)) {
-            return Err(MeshError::InvalidNormal { vertex });
-        }
-        if !self.indices.len().is_multiple_of(3) {
-            return Err(MeshError::IndexCountNotMultipleOfThree {
-                count: self.indices.len(),
-            });
-        }
-        let vertex_count = self.positions.len();
-        if let Some((position, &index)) = self
-            .indices
-            .iter()
-            .enumerate()
-            .find(|&(_, &index)| usize::try_from(index).map_or(true, |i| i >= vertex_count))
-        {
-            return Err(MeshError::IndexOutOfRange {
-                position,
-                index,
-                vertex_count,
-            });
-        }
-        Ok(())
+        check_normals(&self.normals)?;
+        check_indices(&self.indices, self.positions.len())
+    }
+}
+
+fn check_normals(normals: &[[f32; 3]]) -> Result<(), MeshError> {
+    match normals.iter().position(|n| !is_unit(*n)) {
+        Some(vertex) => Err(MeshError::InvalidNormal { vertex }),
+        None => Ok(()),
+    }
+}
+
+fn check_indices(indices: &[u32], vertex_count: usize) -> Result<(), MeshError> {
+    if !indices.len().is_multiple_of(3) {
+        return Err(MeshError::IndexCountNotMultipleOfThree {
+            count: indices.len(),
+        });
+    }
+    match indices
+        .iter()
+        .enumerate()
+        .find(|&(_, &index)| usize::try_from(index).map_or(true, |i| i >= vertex_count))
+    {
+        Some((position, &index)) => Err(MeshError::IndexOutOfRange {
+            position,
+            index,
+            vertex_count,
+        }),
+        None => Ok(()),
     }
 }
 
@@ -232,7 +238,6 @@ pub enum MeshError {
 #[cfg(test)]
 mod tests {
     use proptest::prelude::*;
-    use proptest::test_runner::RngSeed;
 
     use super::*;
     use crate::MAX_WORLD_COORDINATE;
@@ -265,7 +270,7 @@ mod tests {
             Point3::new(1e6 + 3.0, 1e6 + 4.0, 100.0),
             Point3::new(1e6 + 2.0, 1e6, 102.0),
         ];
-        let mesh = MeshData::from_world(&points, &[UP; 3], &[0, 1, 2]).unwrap();
+        let mesh = MeshData::from_world(&points, vec![UP; 3], vec![0, 1, 2]).unwrap();
         assert_eq!(bits(mesh.origin), bits([1e6 + 2.0, 1e6 + 1.0, 101.0]));
         assert_eq!(
             mesh.positions,
@@ -294,8 +299,9 @@ mod tests {
             Point3::new(MAX_WORLD_COORDINATE, 0.0, 0.0),
             Point3::new(0.0, 1.0, 0.0),
         ];
-        let mesh = MeshData::from_world(&points, &[UP; 3], &[0, 1, 2]).unwrap();
+        let mesh = MeshData::from_world(&points, vec![UP; 3], vec![0, 1, 2]).unwrap();
         assert_eq!(bits(mesh.origin), bits([0.0, 0.5, 0.0]));
+        assert_eq!(mesh.validate(), Ok(()));
     }
 
     #[test]
@@ -312,7 +318,7 @@ mod tests {
                 coordinates[axis] = bad;
                 points[2] = Point3::new(coordinates[0], coordinates[1], coordinates[2]);
                 assert_eq!(
-                    MeshData::from_world(&points, &[UP; 3], &[0, 1, 2]),
+                    MeshData::from_world(&points, vec![UP; 3], vec![0, 1, 2]),
                     Err(MeshError::NonFinitePosition { vertex: 2 })
                 );
             }
@@ -322,12 +328,12 @@ mod tests {
     #[test]
     fn from_world_checks_the_counts_first_and_validates_the_rest() {
         assert_eq!(
-            MeshData::from_world(&[], &[], &[0, 1, 2]),
+            MeshData::from_world(&[], Vec::new(), vec![0, 1, 2]),
             Err(MeshError::Empty)
         );
         let points = [Point3::new(0.0, 0.0, 0.0); 3];
         assert_eq!(
-            MeshData::from_world(&points, &[UP; 2], &[0, 1, 2]),
+            MeshData::from_world(&points, vec![UP; 2], vec![0, 1, 2]),
             Err(MeshError::LengthMismatch {
                 positions: 3,
                 normals: 2
@@ -475,7 +481,7 @@ mod tests {
             Point3::new(0.0, 987_654.321, 0.0),
             Point3::new(0.0, 0.0, f64::NAN),
         ];
-        let error = MeshData::from_world(&points, &[UP; 3], &[0, 1, 2]).unwrap_err();
+        let error = MeshData::from_world(&points, vec![UP; 3], vec![0, 1, 2]).unwrap_err();
         let message = error.to_string();
         assert_eq!(
             message,
@@ -505,15 +511,6 @@ mod tests {
         }
     }
 
-    fn config() -> ProptestConfig {
-        ProptestConfig {
-            cases: 256,
-            rng_seed: RngSeed::Fixed(68),
-            failure_persistence: None,
-            ..ProptestConfig::default()
-        }
-    }
-
     fn any_f32() -> impl Strategy<Value = f32> {
         prop_oneof![
             -10.0f32..10.0,
@@ -524,7 +521,7 @@ mod tests {
     }
 
     proptest! {
-        #![proptest_config(config())]
+        #![proptest_config(crate::proptest_config())]
 
         /// Arbitrary meshes are accepted or rejected with an error, never a panic.
         #[test]
@@ -541,7 +538,10 @@ mod tests {
                 .iter()
                 .map(|p| Point3::new(f64::from(p[0]) + origin[0], f64::from(p[1]), f64::from(p[2])))
                 .collect();
-            let _ = MeshData::from_world(&world, &mesh.normals, &mesh.indices);
+            // What from_world builds always passes the full validation it skips.
+            if let Ok(built) = MeshData::from_world(&world, mesh.normals, mesh.indices) {
+                prop_assert_eq!(built.validate(), Ok(()));
+            }
         }
     }
 }

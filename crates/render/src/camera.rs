@@ -4,11 +4,22 @@ use core::f64::consts::PI;
 
 use geom::{Point3, Vector3};
 
+use crate::MAX_WORLD_COORDINATE;
+use crate::vector::{Rotation, cross, norm, scale, sub};
+
 /// The shortest distance between the eye and the target, in metres.
 const MIN_VIEW_DISTANCE: f64 = 1e-9;
 
 /// The smallest sine of the angle between the view direction and the up vector.
 const MIN_UP_SINE: f64 = 1e-6;
+
+/// The shortest near distance, view height and near-to-far depth of a projection, in metres.
+/// With the other bounds of [`Projection::validate`], every entry of the projection matrix is a
+/// normal `f32` number, neither infinite nor rounded to zero.
+const MIN_PROJECTION_LENGTH: f64 = 1e-6;
+
+/// The narrowest field of view, and the margin below π of the widest, in radians.
+const MIN_FIELD_OF_VIEW: f64 = 1e-6;
 
 /// How the camera projects the view onto the screen. Both use reverse-Z: depth is 1 at the near
 /// plane and decreases with the distance, which keeps depth resolution far from the camera.
@@ -33,7 +44,9 @@ pub enum Projection {
 }
 
 impl Projection {
-    /// Checks that the parameters are finite and in range.
+    /// Checks that the parameters are finite and in range: the field of view between 10⁻⁶ rad
+    /// and π − 10⁻⁶ rad; the near plane, the view height and the far plane between a micrometre
+    /// and [`MAX_WORLD_COORDINATE`], the far plane at least a micrometre beyond the near plane.
     ///
     /// # Errors
     ///
@@ -47,21 +60,19 @@ impl Projection {
                 if !(fov_y_radians.is_finite() && near.is_finite()) {
                     return Err(CameraError::NonFinite);
                 }
-                if !(fov_y_radians > 0.0 && fov_y_radians < PI) {
+                if !(MIN_FIELD_OF_VIEW..=PI - MIN_FIELD_OF_VIEW).contains(&fov_y_radians) {
                     return Err(CameraError::InvalidFieldOfView);
                 }
-                check_near(near)
+                check_length(near, CameraError::InvalidNear)
             }
             Self::Orthographic { height, near, far } => {
                 if !(height.is_finite() && near.is_finite() && far.is_finite()) {
                     return Err(CameraError::NonFinite);
                 }
-                if height <= 0.0 {
-                    return Err(CameraError::InvalidHeight);
-                }
-                check_near(near)?;
-                if far <= near {
-                    return Err(CameraError::FarNotBeyondNear);
+                check_length(height, CameraError::InvalidHeight)?;
+                check_length(near, CameraError::InvalidNear)?;
+                if far - near < MIN_PROJECTION_LENGTH || far > MAX_WORLD_COORDINATE {
+                    return Err(CameraError::InvalidFar);
                 }
                 Ok(())
             }
@@ -69,11 +80,11 @@ impl Projection {
     }
 }
 
-fn check_near(near: f64) -> Result<(), CameraError> {
-    if near > 0.0 {
+fn check_length(length: f64, error: CameraError) -> Result<(), CameraError> {
+    if (MIN_PROJECTION_LENGTH..=MAX_WORLD_COORDINATE).contains(&length) {
         Ok(())
     } else {
-        Err(CameraError::InvalidNear)
+        Err(error)
     }
 }
 
@@ -84,36 +95,34 @@ pub struct Camera {
     pub eye: Point3,
     /// Point the camera looks at, in metres.
     pub target: Point3,
-    /// Which way is up on the screen; any vector not parallel to the view direction.
+    /// Which way is up on the screen; any finite vector not parallel to the view direction.
     pub up: Vector3,
     /// How the view is projected.
     pub projection: Projection,
 }
 
 impl Camera {
-    /// Checks that the camera is finite, within
-    /// [`MAX_WORLD_COORDINATE`](crate::MAX_WORLD_COORDINATE), not degenerate, and that its
-    /// projection is valid.
+    /// Checks that the camera is finite, that its eye and target lie within
+    /// [`MAX_WORLD_COORDINATE`], that it is not degenerate, and that its projection is valid.
     ///
     /// # Errors
     ///
     /// The first [`CameraError`] found.
     pub fn validate(&self) -> Result<(), CameraError> {
-        self.view_basis().map(|_| ())
+        self.view_basis()?;
+        self.projection.validate()
     }
 
     /// The rows of the view rotation, from world axes to camera axes: right, up and backwards,
-    /// since the camera looks down its −z axis. Validates the camera.
-    pub(crate) fn view_basis(&self) -> Result<[[f64; 3]; 3], CameraError> {
+    /// since the camera looks down its −z axis. Validates everything but the projection.
+    pub(crate) fn view_basis(&self) -> Result<Rotation, CameraError> {
         let eye = [self.eye.x, self.eye.y, self.eye.z];
         let target = [self.target.x, self.target.y, self.target.z];
         let up = [self.up.x, self.up.y, self.up.z];
-        let values = || eye.iter().chain(&target).chain(&up);
-        if !values().all(|v| v.is_finite()) {
+        if !eye.iter().chain(&target).chain(&up).all(|v| v.is_finite()) {
             return Err(CameraError::NonFinite);
         }
-        self.projection.validate()?;
-        if !values().all(|&v| crate::in_world(v)) {
+        if !eye.iter().chain(&target).all(|&v| crate::in_world(v)) {
             return Err(CameraError::OutOfRange);
         }
         let view = sub(target, eye);
@@ -122,7 +131,8 @@ impl Camera {
             return Err(CameraError::EyeAtTarget);
         }
         let forward = scale(view, 1.0 / distance);
-        // Dividing by the largest component first keeps a tiny up vector from underflowing.
+        // Dividing by the largest component first keeps the up vector from underflowing or
+        // overflowing, whatever its length.
         let largest = up.iter().fold(0.0_f64, |m, v| m.max(v.abs()));
         if largest == 0.0 {
             return Err(CameraError::UpParallelToView);
@@ -139,26 +149,6 @@ impl Camera {
     }
 }
 
-pub(crate) fn sub(a: [f64; 3], b: [f64; 3]) -> [f64; 3] {
-    [a[0] - b[0], a[1] - b[1], a[2] - b[2]]
-}
-
-fn scale(a: [f64; 3], s: f64) -> [f64; 3] {
-    [a[0] * s, a[1] * s, a[2] * s]
-}
-
-fn cross(a: [f64; 3], b: [f64; 3]) -> [f64; 3] {
-    [
-        a[1] * b[2] - a[2] * b[1],
-        a[2] * b[0] - a[0] * b[2],
-        a[0] * b[1] - a[1] * b[0],
-    ]
-}
-
-fn norm(a: [f64; 3]) -> f64 {
-    (a[0] * a[0] + a[1] * a[1] + a[2] * a[2]).sqrt()
-}
-
 /// Why a camera cannot be used. Messages never contain coordinates (SEC-03).
 #[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
 #[non_exhaustive]
@@ -166,8 +156,7 @@ pub enum CameraError {
     /// A coordinate or a projection parameter is not finite.
     #[error("the camera has a value that is not finite")]
     NonFinite,
-    /// The eye, the target or the up vector lies beyond
-    /// [`MAX_WORLD_COORDINATE`](crate::MAX_WORLD_COORDINATE).
+    /// The eye or the target lies beyond [`MAX_WORLD_COORDINATE`].
     #[error("the camera lies too far from the world origin")]
     OutOfRange,
     /// The eye and the target are the same point, so there is no view direction.
@@ -176,34 +165,29 @@ pub enum CameraError {
     /// The up vector is zero or parallel to the view direction.
     #[error("the up vector of the camera is zero or parallel to the view direction")]
     UpParallelToView,
-    /// The field of view is not strictly between 0 and π.
+    /// The field of view is not within the range of [`Projection::validate`].
     #[error("the field of view of the camera is not between 0 and 180 degrees")]
     InvalidFieldOfView,
-    /// The near plane is not in front of the camera.
-    #[error("the near plane of the camera is not in front of it")]
+    /// The near plane is not within the range of [`Projection::validate`].
+    #[error("the near plane of the camera is not at a usable distance in front of it")]
     InvalidNear,
-    /// The orthographic view height is not positive.
-    #[error("the view height of the camera is not positive")]
+    /// The orthographic view height is not within the range of [`Projection::validate`].
+    #[error("the view height of the camera is not a usable positive length")]
     InvalidHeight,
-    /// The far plane is not beyond the near plane.
-    #[error("the far plane of the camera is not beyond its near plane")]
-    FarNotBeyondNear,
-    /// The aspect ratio of the target is not a positive finite number.
-    #[error("the aspect ratio of the view is not a positive number")]
+    /// The far plane is not beyond the near plane, or lies beyond [`MAX_WORLD_COORDINATE`].
+    #[error("the far plane of the camera is not at a usable distance beyond its near plane")]
+    InvalidFar,
+    /// The aspect ratio of the target is not between 10⁻⁴ and 10⁴.
+    #[error("the aspect ratio of the view is not a usable positive number")]
     InvalidAspect,
-    /// The projection parameters are valid but so extreme that the single-precision matrix of
-    /// the GPU cannot represent them.
-    #[error("the projection of the camera is too extreme for the GPU")]
-    ProjectionOutOfRange,
 }
 
 #[cfg(test)]
 mod tests {
     use proptest::prelude::*;
-    use proptest::test_runner::RngSeed;
 
     use super::*;
-    use crate::MAX_WORLD_COORDINATE;
+    use crate::vector::is_orthonormal;
 
     const PERSPECTIVE: Projection = Projection::Perspective {
         fov_y_radians: 1.0,
@@ -232,14 +216,7 @@ mod tests {
         slanted.eye = Point3::new(1e7 + 2.0, 1e7 - 1.0, 120.0);
         slanted.target = Point3::new(1e7, 1e7, 100.0);
         slanted.up = Vector3::new(0.3, 0.1, 5.0);
-        let basis = slanted.view_basis().unwrap();
-        for i in 0..3 {
-            for j in 0..3 {
-                let dot: f64 = (0..3).map(|k| basis[i][k] * basis[j][k]).sum();
-                let expected = if i == j { 1.0 } else { 0.0 };
-                assert!((dot - expected).abs() < 1e-15);
-            }
-        }
+        assert!(is_orthonormal(&slanted.view_basis().unwrap(), 1e-15));
     }
 
     #[test]
@@ -296,7 +273,7 @@ mod tests {
     }
 
     #[test]
-    fn cameras_too_far_from_the_origin_are_rejected() {
+    fn eyes_and_targets_too_far_from_the_origin_are_rejected() {
         let far = MAX_WORLD_COORDINATE * 1.5;
         let mut c = camera();
         c.eye = Point3::new(far, 0.0, 0.0);
@@ -304,9 +281,14 @@ mod tests {
         let mut c = camera();
         c.target = Point3::new(0.0, far, 0.0);
         assert_eq!(c.validate(), Err(CameraError::OutOfRange));
-        let mut c = camera();
-        c.up = Vector3::new(0.0, 0.0, far);
-        assert_eq!(c.validate(), Err(CameraError::OutOfRange));
+        // The up vector is a direction: its length does not matter.
+        for length in [far, f64::MAX, 1e-300] {
+            let c = Camera {
+                up: Vector3::new(0.0, 0.0, length),
+                ..camera()
+            };
+            assert_eq!(c.view_basis(), camera().view_basis());
+        }
     }
 
     #[test]
@@ -338,14 +320,14 @@ mod tests {
 
     #[test]
     fn perspective_parameters_are_checked() {
-        for fov_y_radians in [0.0, -0.5, PI, 4.0] {
+        for fov_y_radians in [0.0, 1e-7, -0.5, PI - 1e-7, PI, 4.0] {
             let p = Projection::Perspective {
                 fov_y_radians,
                 near: 0.1,
             };
             assert_eq!(p.validate(), Err(CameraError::InvalidFieldOfView));
         }
-        for near in [0.0, -1.0] {
+        for near in [0.0, -1.0, 1e-7, MAX_WORLD_COORDINATE * 1.5] {
             let p = Projection::Perspective {
                 fov_y_radians: 1.0,
                 near,
@@ -353,17 +335,34 @@ mod tests {
             assert_eq!(p.validate(), Err(CameraError::InvalidNear));
         }
         assert_eq!(PERSPECTIVE.validate(), Ok(()));
+        for (fov_y_radians, near) in [
+            (MIN_FIELD_OF_VIEW, MIN_PROJECTION_LENGTH),
+            (PI - MIN_FIELD_OF_VIEW, MAX_WORLD_COORDINATE),
+        ] {
+            let p = Projection::Perspective {
+                fov_y_radians,
+                near,
+            };
+            assert_eq!(p.validate(), Ok(()));
+        }
     }
 
     #[test]
     fn orthographic_parameters_are_checked() {
         let ortho = |height, near, far| Projection::Orthographic { height, near, far }.validate();
         assert_eq!(ortho(10.0, 0.1, 100.0), Ok(()));
-        assert_eq!(ortho(0.0, 0.1, 100.0), Err(CameraError::InvalidHeight));
-        assert_eq!(ortho(-1.0, 0.1, 100.0), Err(CameraError::InvalidHeight));
-        assert_eq!(ortho(10.0, 0.0, 100.0), Err(CameraError::InvalidNear));
-        assert_eq!(ortho(10.0, 1.0, 1.0), Err(CameraError::FarNotBeyondNear));
-        assert_eq!(ortho(10.0, 2.0, 1.0), Err(CameraError::FarNotBeyondNear));
+        let (min, max) = (MIN_PROJECTION_LENGTH, MAX_WORLD_COORDINATE);
+        assert_eq!(ortho(min, min, 2.0 * min), Ok(()));
+        assert_eq!(ortho(max, max - 1.0, max), Ok(()));
+        for height in [0.0, -1.0, 1e-7, max * 1.5] {
+            assert_eq!(ortho(height, 0.1, 100.0), Err(CameraError::InvalidHeight));
+        }
+        for near in [0.0, 1e-7, max * 1.5] {
+            assert_eq!(ortho(10.0, near, max * 2.0), Err(CameraError::InvalidNear));
+        }
+        for (near, far) in [(1.0, 1.0), (2.0, 1.0), (1.0, 1.0 + 1e-7), (1.0, max * 1.5)] {
+            assert_eq!(ortho(10.0, near, far), Err(CameraError::InvalidFar));
+        }
     }
 
     #[test]
@@ -376,7 +375,7 @@ mod tests {
             },
             ..camera()
         };
-        assert_eq!(c.validate(), Err(CameraError::FarNotBeyondNear));
+        assert_eq!(c.validate(), Err(CameraError::InvalidFar));
     }
 
     #[test]
@@ -389,22 +388,12 @@ mod tests {
             CameraError::InvalidFieldOfView,
             CameraError::InvalidNear,
             CameraError::InvalidHeight,
-            CameraError::FarNotBeyondNear,
+            CameraError::InvalidFar,
             CameraError::InvalidAspect,
-            CameraError::ProjectionOutOfRange,
         ] {
             let message = error.to_string();
             assert!(message.starts_with("the "), "{message}");
             assert!(!message.contains('-') && !message.contains('.'));
-        }
-    }
-
-    fn config() -> ProptestConfig {
-        ProptestConfig {
-            cases: 256,
-            rng_seed: RngSeed::Fixed(68),
-            failure_persistence: None,
-            ..ProptestConfig::default()
         }
     }
 
@@ -419,7 +408,7 @@ mod tests {
     }
 
     proptest! {
-        #![proptest_config(config())]
+        #![proptest_config(crate::proptest_config())]
 
         /// Arbitrary cameras are accepted or rejected with an error, never a panic, and an
         /// accepted camera has an orthonormal basis.

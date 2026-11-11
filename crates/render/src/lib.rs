@@ -27,6 +27,11 @@ mod placement;
     expect(dead_code, reason = "the GPU pipeline is its first caller (#68)")
 )]
 mod transform;
+#[cfg_attr(
+    not(test),
+    expect(dead_code, reason = "the GPU pipeline uses the rest (#68)")
+)]
+mod vector;
 
 pub use camera::{Camera, CameraError, Projection};
 pub use mesh::{MAX_MESH_INDICES, MAX_MESH_VERTICES, MeshData, MeshError};
@@ -41,4 +46,16 @@ pub const MAX_WORLD_COORDINATE: f64 = 1e9;
 /// Whether `value` is a finite world coordinate within [`MAX_WORLD_COORDINATE`].
 fn in_world(value: f64) -> bool {
     value.abs() <= MAX_WORLD_COORDINATE
+}
+
+/// The configuration of the property tests: fixed seed, no persistence, so runs are
+/// deterministic (AGENTS.md §5).
+#[cfg(test)]
+fn proptest_config() -> proptest::test_runner::Config {
+    proptest::test_runner::Config {
+        cases: 256,
+        rng_seed: proptest::test_runner::RngSeed::Fixed(68),
+        failure_persistence: None,
+        ..proptest::test_runner::Config::default()
+    }
 }

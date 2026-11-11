@@ -25,7 +25,7 @@ Depth has the same problem in another form: a standard depth buffer spends most 
 
 **Reverse-Z depth.** Depth is `Depth32Float` with reverse-Z: the near plane maps to 1, distance decreases depth, the depth test is `Greater`. The perspective projection has an infinite far plane (depth `near / distance`); the orthographic projection maps an explicit near plane to 1 and far plane to 0. Floating-point depth values are densest near 0, which reverse-Z puts far from the camera, so resolution stays nearly uniform in relative terms.
 
-**Validation.** Meshes come from model files: positions, normals, indices, placements and cameras are checked (finite values, world coordinates within 10⁹ m, unit normals, whole triangles, indices in range, counts that fit `u32` and the GPU buffer limits, orthonormal rotations, non-degenerate cameras) and rejected with typed errors whose messages never contain coordinates (SEC-03).
+**Validation.** Meshes come from model files: positions, normals, indices, placements and cameras are checked (finite values, world coordinates within 10⁹ m, unit normals, whole triangles, indices in range, counts that fit `u32` and the GPU buffer limits, orthonormal rotations, non-degenerate cameras, and projection parameters and aspect ratios within ranges where every entry of the `f32` projection matrix is a normal number) and rejected with typed errors whose messages never contain coordinates (SEC-03).
 
 **Verification.**
 

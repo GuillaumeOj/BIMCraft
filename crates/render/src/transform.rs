@@ -9,13 +9,14 @@
 //! Matrices are column-major `[[f32; 4]; 4]`, an array of columns: the layout of a WGSL
 //! `mat4x4<f32>` uniform.
 
-use crate::camera::sub;
+use crate::vector::{Rotation, add, apply, mul, sub};
 use crate::{Camera, CameraError, Placement, Projection};
+
+/// The narrowest and widest aspect ratios of a view, width over height.
+const ASPECT_RANGE: core::ops::RangeInclusive<f64> = 1e-4..=1e4;
 
 /// A 4×4 matrix sent to the GPU, column-major: `m[column][row]`.
 pub(crate) type Matrix = [[f32; 4]; 4];
-
-type Rotation = [[f64; 3]; 3];
 
 /// The view of a validated camera, in `f64`: where it is and how it is turned.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -27,7 +28,7 @@ pub(crate) struct ViewFrame {
 }
 
 impl ViewFrame {
-    /// Validates `camera` and computes its view, once per frame.
+    /// Validates `camera`, its projection aside, and computes its view, once per frame.
     pub(crate) fn new(camera: &Camera) -> Result<Self, CameraError> {
         Ok(Self {
             eye: [camera.eye.x, camera.eye.y, camera.eye.z],
@@ -73,7 +74,7 @@ pub(crate) fn camera_relative_model_view(
     mesh_origin: [f64; 3],
     placement: &Placement,
 ) -> Matrix {
-    let rotation = mul_rotations(&view.rotation, &placement.rotation);
+    let rotation = mul(&view.rotation, &placement.rotation);
     let offset = add(
         apply(&placement.rotation, mesh_origin),
         sub(placement.translation, view.eye),
@@ -108,7 +109,7 @@ pub(crate) fn projection_matrix(
     aspect: f64,
 ) -> Result<Matrix, CameraError> {
     projection.validate()?;
-    if !(aspect.is_finite() && aspect > 0.0) {
+    if !ASPECT_RANGE.contains(&aspect) {
         return Err(CameraError::InvalidAspect);
     }
     // Columns, as on the GPU.
@@ -136,18 +137,8 @@ pub(crate) fn projection_matrix(
             ]
         }
     };
-    let matrix = columns.map(|column| column.map(to_f32));
-    // Valid but extreme parameters (a near plane of 1e-50 m, a field of view of 1e-300 rad)
-    // overflow `f32` or round a non-zero entry to 0: the GPU would draw nothing or garbage.
-    let representable = columns
-        .iter()
-        .flatten()
-        .zip(matrix.iter().flatten())
-        .all(|(&exact, &rounded)| rounded.is_finite() && (rounded != 0.0 || exact == 0.0));
-    if !representable {
-        return Err(CameraError::ProjectionOutOfRange);
-    }
-    Ok(matrix)
+    // The ranges of the projection and of the aspect keep every entry a normal f32 number.
+    Ok(columns.map(|column| column.map(to_f32)))
 }
 
 /// The only conversion from `f64` to `f32` of the transforms.
@@ -161,33 +152,18 @@ fn to_f32(value: f64) -> f32 {
 
 /// The 4×4 matrix `[rotation | translation]` in `f32`, column-major.
 fn to_gpu(rotation: &Rotation, translation: [f64; 3]) -> Matrix {
-    let mut matrix = [[0.0; 4]; 4];
-    for (column, out) in matrix.iter_mut().take(3).enumerate() {
-        for row in 0..3 {
-            out[row] = to_f32(rotation[row][column]);
+    core::array::from_fn(|column| {
+        match column {
+            3 => [translation[0], translation[1], translation[2], 1.0],
+            _ => [
+                rotation[0][column],
+                rotation[1][column],
+                rotation[2][column],
+                0.0,
+            ],
         }
-    }
-    matrix[3] = [
-        to_f32(translation[0]),
-        to_f32(translation[1]),
-        to_f32(translation[2]),
-        1.0,
-    ];
-    matrix
-}
-
-fn mul_rotations(a: &Rotation, b: &Rotation) -> Rotation {
-    core::array::from_fn(|row| {
-        core::array::from_fn(|column| (0..3).map(|k| a[row][k] * b[k][column]).sum())
+        .map(to_f32)
     })
-}
-
-fn apply(rotation: &Rotation, v: [f64; 3]) -> [f64; 3] {
-    rotation.map(|row| row[0] * v[0] + row[1] * v[1] + row[2] * v[2])
-}
-
-fn add(a: [f64; 3], b: [f64; 3]) -> [f64; 3] {
-    [a[0] + b[0], a[1] + b[1], a[2] + b[2]]
 }
 
 /// `a · b` in `f32`, as the GPU would multiply them.
@@ -211,7 +187,6 @@ mod tests {
 
     use geom::{Point3, Vector3};
     use proptest::prelude::*;
-    use proptest::test_runner::RngSeed;
 
     use super::*;
 
@@ -361,7 +336,7 @@ mod tests {
         let scene = Scene::at([0.0; 3]);
         let model_view = scene.model_view(RenderOrigin::Eye);
         let basis = scene.camera.view_basis().unwrap();
-        let expected = mul_rotations(&basis, &rotation_z(0.3));
+        let expected = mul(&basis, &rotation_z(0.3));
         for column in 0..3 {
             for row in 0..3 {
                 assert_eq!(
@@ -485,7 +460,7 @@ mod tests {
 
     #[test]
     fn invalid_projections_and_aspects_are_rejected() {
-        for aspect in [0.0, -1.0, f64::NAN, f64::INFINITY] {
+        for aspect in [0.0, -1.0, 9e-5, 1.1e4, f64::NAN, f64::INFINITY] {
             assert_eq!(
                 projection_matrix(&PERSPECTIVE, aspect),
                 Err(CameraError::InvalidAspect)
@@ -502,37 +477,41 @@ mod tests {
         );
     }
 
-    #[test]
-    fn projections_the_gpu_cannot_represent_are_rejected() {
-        let perspective = |fov_y_radians, near| Projection::Perspective {
-            fov_y_radians,
-            near,
-        };
-        let orthographic = |height, near, far| Projection::Orthographic { height, near, far };
-        for (projection, aspect) in [
-            // The near plane rounds to 0, so every depth would be 0 and fail the depth test.
-            (perspective(1.0, 1e-50), 1.0),
-            (perspective(1.0, 1e300), 1.0),
-            (perspective(1e-300, 0.1), 1.0),
-            (PERSPECTIVE, 1e-300),
-            (orthographic(1e-40, 0.1, 10.0), 1.0),
-            (orthographic(1e300, 0.1, 10.0), 1.0),
-            (orthographic(1.0, 0.1, 1e300), 1.0),
-        ] {
-            assert_eq!(
-                projection_matrix(&projection, aspect),
-                Err(CameraError::ProjectionOutOfRange),
-                "{projection:?} at aspect {aspect}"
-            );
+    /// Checks that the non-zero entries of a projection, at `cells` (column, row), are normal
+    /// `f32` numbers and every other entry is 0.
+    fn assert_representable(matrix: &Matrix, cells: &[(usize, usize)]) {
+        for (column, values) in matrix.iter().enumerate() {
+            for (row, value) in values.iter().enumerate() {
+                if cells.contains(&(column, row)) {
+                    assert!(value.is_normal(), "{matrix:?}");
+                } else {
+                    assert_eq!(value.to_bits(), 0.0_f32.to_bits(), "{matrix:?}");
+                }
+            }
         }
     }
 
-    fn config() -> ProptestConfig {
-        ProptestConfig {
-            cases: 256,
-            rng_seed: RngSeed::Fixed(68),
-            failure_persistence: None,
-            ..ProptestConfig::default()
+    #[test]
+    fn the_most_extreme_valid_projections_fit_in_f32() {
+        let (min, max) = (1e-6, crate::MAX_WORLD_COORDINATE);
+        for aspect in [1e-4, 1e4] {
+            for fov_y_radians in [min, core::f64::consts::PI - min] {
+                for near in [min, max] {
+                    let projection = Projection::Perspective {
+                        fov_y_radians,
+                        near,
+                    };
+                    let matrix = projection_matrix(&projection, aspect).unwrap();
+                    assert_representable(&matrix, &[(0, 0), (1, 1), (2, 3), (3, 2)]);
+                }
+            }
+            for height in [min, max] {
+                for (near, far) in [(min, 2.0 * min), (min, max), (max - 1.0, max)] {
+                    let projection = Projection::Orthographic { height, near, far };
+                    let matrix = projection_matrix(&projection, aspect).unwrap();
+                    assert_representable(&matrix, &[(0, 0), (1, 1), (2, 2), (3, 2), (3, 3)]);
+                }
+            }
         }
     }
 
@@ -541,7 +520,7 @@ mod tests {
     }
 
     proptest! {
-        #![proptest_config(config())]
+        #![proptest_config(crate::proptest_config())]
 
         /// Translating the scene and the camera by the same vector, up to 10⁷ m away, leaves
         /// the camera-relative model-view within one ulp (at the scale of each entry), whether

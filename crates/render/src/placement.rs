@@ -40,16 +40,8 @@ impl Placement {
         if !self.rotation.iter().flatten().all(|v| v.is_finite()) {
             return Err(PlacementError::NonFiniteRotation);
         }
-        for i in 0..3 {
-            for j in 0..3 {
-                let dot: f64 = (0..3)
-                    .map(|k| self.rotation[i][k] * self.rotation[j][k])
-                    .sum();
-                let expected = if i == j { 1.0 } else { 0.0 };
-                if (dot - expected).abs() > ORTHONORMAL_TOLERANCE {
-                    return Err(PlacementError::NotOrthonormal);
-                }
-            }
+        if !crate::vector::is_orthonormal(&self.rotation, ORTHONORMAL_TOLERANCE) {
+            return Err(PlacementError::NotOrthonormal);
         }
         if !self.translation.iter().all(|v| v.is_finite()) {
             return Err(PlacementError::NonFiniteTranslation);
