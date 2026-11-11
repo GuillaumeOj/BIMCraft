@@ -7,8 +7,33 @@
 //! (`docs/dev/adr/0020-camera-relative-rendering.md`). A model 10⁷ m from the origin renders like
 //! the same model at the origin.
 //!
+//! A [`MeshData`] holds `f32` vertices relative to an `f64` origin; [`MeshData::from_world`]
+//! picks the centre of the bounding box so the local coordinates stay small. A [`Placement`]
+//! puts a mesh in the world, and a [`Camera`] looks at it through a [`Projection`]. Each type
+//! validates its input, since meshes come from model files: failures are a [`MeshError`], a
+//! [`PlacementError`] or a [`CameraError`], whose messages never contain coordinates (SEC-03).
+//!
 //! This crate builds for native targets and `wasm32-unknown-unknown` (ARCH-01), never touches the
 //! platform directly (ARCH-02) and computes trigonometry with `libm` (ENG-04).
 
 // ARCH-02: forbid, not deny, so nothing in this crate can opt out. See docs/dev/quality.md.
 #![forbid(clippy::disallowed_methods, clippy::disallowed_types)]
+
+mod camera;
+mod mesh;
+mod placement;
+
+pub use camera::{Camera, CameraError, Projection};
+pub use mesh::{MAX_MESH_INDICES, MAX_MESH_VERTICES, MeshData, MeshError};
+pub use placement::{Placement, PlacementError};
+
+/// The largest magnitude of a world coordinate, in metres: of a mesh origin, a placement
+/// translation, and the eye and target of a camera. It is a thousand times the size of the Earth
+/// and still leaves `f64` a precision better than a micrometre, while keeping every product far
+/// from overflow.
+pub const MAX_WORLD_COORDINATE: f64 = 1e9;
+
+/// Whether `value` is a finite world coordinate within [`MAX_WORLD_COORDINATE`].
+fn in_world(value: f64) -> bool {
+    value.abs() <= MAX_WORLD_COORDINATE
+}
