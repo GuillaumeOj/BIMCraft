@@ -54,7 +54,11 @@ fuzz_target!(|input: Input| {
     } else {
         // A full turn: the outer shell, then one void per hole, and one more for each cavity
         // that a profile touching the axis in two places encloses.
-        let voids = solid.shells().iter().filter(|shell| shell.is_void()).count();
+        let voids = solid
+            .shells()
+            .iter()
+            .filter(|shell| shell.is_void())
+            .count();
         assert!(voids >= holes);
         assert_eq!(solid.shells().len(), 1 + voids);
     }
