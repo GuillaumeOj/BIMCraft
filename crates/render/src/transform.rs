@@ -43,8 +43,9 @@ pub(crate) enum RenderOrigin {
     /// The eye of the camera: the transform is camera-relative, the large terms cancel in `f64`.
     Eye,
     /// The world origin, as a classic pipeline does: the negative control of the precision tests,
-    /// which shows the jitter the camera-relative transform removes. Never used to render.
-    #[cfg(test)]
+    /// which shows the jitter the camera-relative transform removes. Never used to render but by
+    /// the negative control of `tests/jitter.rs`.
+    #[cfg(any(test, feature = "jitter-control"))]
     World,
 }
 
@@ -58,7 +59,7 @@ impl RenderOrigin {
     ) -> Matrix {
         match self {
             Self::Eye => camera_relative_model_view(view, mesh_origin, placement),
-            #[cfg(test)]
+            #[cfg(any(test, feature = "jitter-control"))]
             Self::World => naive_model_view(view, mesh_origin, placement),
         }
     }
@@ -84,7 +85,7 @@ pub(crate) fn camera_relative_model_view(
 
 /// The model-view matrix of a classic pipeline: the world model matrix and the world view matrix
 /// are each rounded to `f32`, then multiplied in `f32`, so world coordinates reach `f32`.
-#[cfg(test)]
+#[cfg(any(test, feature = "jitter-control"))]
 fn naive_model_view(view: &ViewFrame, mesh_origin: [f64; 3], placement: &Placement) -> Matrix {
     let model = to_gpu(
         &placement.rotation,
@@ -167,14 +168,14 @@ fn to_gpu(rotation: &Rotation, translation: [f64; 3]) -> Matrix {
 }
 
 /// `a · b` in `f32`, as the GPU would multiply them.
-#[cfg(test)]
+#[cfg(any(test, feature = "jitter-control"))]
 fn mul_f32(a: &Matrix, b: &Matrix) -> Matrix {
     b.map(|column| mul_vector(a, column))
 }
 
 /// `m · v` in `f32`, summing the columns in order, without fused multiply-add: the operations of
 /// the vertex shader.
-#[cfg(test)]
+#[cfg(any(test, feature = "jitter-control"))]
 fn mul_vector(m: &Matrix, v: [f32; 4]) -> [f32; 4] {
     core::array::from_fn(|row| {
         m[0][row] * v[0] + m[1][row] * v[1] + m[2][row] * v[2] + m[3][row] * v[3]

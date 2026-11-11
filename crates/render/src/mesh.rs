@@ -227,6 +227,14 @@ pub enum MeshError {
         /// The vertex.
         vertex: usize,
     },
+    /// A buffer of the mesh is larger than the largest buffer of the GPU device.
+    #[error("the mesh needs a {bytes}-byte buffer, more than the {max} bytes the GPU allows")]
+    TooLargeForDevice {
+        /// Size of the largest buffer of the mesh, in bytes.
+        bytes: u64,
+        /// The limit of the device, in bytes.
+        max: u64,
+    },
     /// A normal is not finite or not of unit length.
     #[error("the normal of vertex {vertex} of the mesh is not a unit vector")]
     InvalidNormal {

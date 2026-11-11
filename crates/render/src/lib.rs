@@ -22,20 +22,14 @@
 mod camera;
 mod mesh;
 mod placement;
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "the GPU pipeline is its first caller (#68)")
-)]
+mod renderer;
 mod transform;
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "the GPU pipeline uses the rest (#68)")
-)]
 mod vector;
 
 pub use camera::{Camera, CameraError, Projection};
 pub use mesh::{MAX_MESH_INDICES, MAX_MESH_VERTICES, MeshData, MeshError};
 pub use placement::{Placement, PlacementError};
+pub use renderer::{MeshId, ObjectId, RenderError, Renderer, headless_device};
 
 /// The largest magnitude of a world coordinate, in metres: of a mesh origin and its local
 /// positions, a placement translation, and the eye, target and up vector of a camera. It is a
