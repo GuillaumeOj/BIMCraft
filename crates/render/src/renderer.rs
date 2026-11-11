@@ -475,38 +475,41 @@ impl Renderer {
         }
     }
 
+    /// Every object with its mesh, in id order: the order of the uniform slots and of the draws.
+    /// `remove_mesh` removes the objects of a mesh, so every object has one.
+    fn placed_meshes(&self) -> impl Iterator<Item = (&Object, &GpuMesh)> {
+        self.objects
+            .values()
+            .filter_map(|object| Some((object, self.meshes.get(&object.mesh)?)))
+    }
+
     /// Writes the camera-relative model-view and the colour of every object, in id order.
     fn upload_objects(&mut self, view: &ViewFrame) {
         if self.objects.is_empty() {
             return;
         }
-        self.reserve_objects();
-        let Some(uniforms) = &self.object_uniforms else {
-            return;
-        };
+        let buffer = self.reserve_objects();
         let stride = self.object_stride as usize;
-        let bytes = &mut self.object_bytes;
+        let mut bytes = core::mem::take(&mut self.object_bytes);
         bytes.resize(stride * self.objects.len(), 0);
-        for (object, slot) in self.objects.values().zip(bytes.chunks_exact_mut(stride)) {
-            let Some(mesh) = self.meshes.get(&object.mesh) else {
-                continue;
-            };
+        for ((object, mesh), slot) in self.placed_meshes().zip(bytes.chunks_exact_mut(stride)) {
             let model_view = self.origin.model_view(view, mesh.origin, &object.placement);
             let uniform = object_uniform(&model_view, object.color);
             slot[..UNIFORM_SIZE as usize].copy_from_slice(bytemuck::cast_slice(&uniform));
         }
-        self.queue.write_buffer(&uniforms.buffer, 0, bytes);
+        self.queue.write_buffer(&buffer, 0, &bytes);
+        self.object_bytes = bytes;
     }
 
-    /// Grows the object uniform buffer to hold every object, doubling its capacity.
-    fn reserve_objects(&mut self) {
+    /// Grows the object uniform buffer to hold every object, doubling its capacity, and returns it.
+    fn reserve_objects(&mut self) -> wgpu::Buffer {
         let count = self.objects.len();
-        if self
+        if let Some(uniforms) = self
             .object_uniforms
             .as_ref()
-            .is_some_and(|uniforms| uniforms.capacity >= count)
+            .filter(|uniforms| uniforms.capacity >= count)
         {
-            return;
+            return uniforms.buffer.clone();
         }
         let capacity = count.next_power_of_two().min(self.max_objects);
         let buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
@@ -528,10 +531,11 @@ impl Renderer {
             }],
         });
         self.object_uniforms = Some(ObjectUniforms {
-            buffer,
+            buffer: buffer.clone(),
             bind_group,
             capacity,
         });
+        buffer
     }
 
     /// The depth buffer for a target of `size`, created on the first frame and on resizes.
@@ -567,14 +571,9 @@ impl Renderer {
         };
         pass.set_pipeline(&self.pipeline);
         pass.set_bind_group(0, &self.frame_bind_group, &[]);
-        for (slot, object) in (0_u64..).zip(self.objects.values()) {
-            let Some(mesh) = self.meshes.get(&object.mesh) else {
-                continue;
-            };
-            // `max_objects` keeps every offset within u32.
-            let Ok(offset) = u32::try_from(slot * u64::from(self.object_stride)) else {
-                return;
-            };
+        // `max_objects` keeps every offset within u32.
+        let offsets = (0_u32..).step_by(self.object_stride as usize);
+        for ((_, mesh), offset) in self.placed_meshes().zip(offsets) {
             pass.set_bind_group(1, &uniforms.bind_group, &[offset]);
             pass.set_vertex_buffer(0, mesh.positions.slice(..));
             pass.set_vertex_buffer(1, mesh.normals.slice(..));

@@ -9,7 +9,8 @@
 //! coordinates measured from the world origin, as a classic pipeline does: it must fail, which
 //! proves the comparison sees jitter.
 //!
-//! The first frame of each sweep, and every frame that fails, are written as PPM images to
+//! The first frame of each sweep, and every frame that should match and does not (with its
+//! reference), are written as PPM images to
 //! `target/render-jitter/` (or `target/llvm-cov-target/render-jitter/` under coverage).
 
 // Helpers of a test: a failure is a test failure.
@@ -153,9 +154,15 @@ fn difference(a: &[u8], b: &[u8]) -> (u8, usize) {
         })
 }
 
-/// Compares a sweep with the reference sweep, frame by frame, and writes the first frame and
-/// every failing frame as images named after `label`.
-fn compare(label: &str, reference: &[Vec<u8>], frames: &[Vec<u8>]) -> Comparison {
+/// Compares a sweep with the reference sweep, frame by frame, and writes its first frame as an
+/// image named after `label`. When the sweep should match (`expect_match`), every failing frame
+/// is written too, with its reference.
+fn compare(
+    label: &str,
+    reference: &[Vec<u8>],
+    frames: &[Vec<u8>],
+    expect_match: bool,
+) -> Comparison {
     let mut comparison = Comparison::default();
     let pixels = f64::from(SIZE * SIZE);
     for (frame, (expected, actual)) in (0..).zip(reference.iter().zip(frames)) {
@@ -168,8 +175,10 @@ fn compare(label: &str, reference: &[Vec<u8>], frames: &[Vec<u8>]) -> Comparison
         if fails {
             comparison.failing_frames.push(frame);
         }
-        if fails || frame == 0 {
+        if fails && expect_match {
             write_frame(&format!("{label}-{frame:02}-reference"), expected);
+        }
+        if (fails && expect_match) || frame == 0 {
             write_frame(&format!("{label}-{frame:02}"), actual);
         }
     }
@@ -215,6 +224,7 @@ fn report(label: &str, comparison: &Comparison) {
 fn far_from_the_origin_the_frames_match_the_frames_at_the_origin() {
     let (device, queue) = support::device();
     let reference = Scene::new(&device, &queue, [0.0; 3]).sweep(&device, &queue);
+    write_frame("origin-00", &reference[0]);
 
     // The scene is visible, and the sweep moves it on the screen: the test can see a shift.
     // The top left corner shows the background.
@@ -228,7 +238,7 @@ fn far_from_the_origin_the_frames_match_the_frames_at_the_origin() {
     let mut failures = Vec::new();
     for (label, shift) in [("1e6", [1e6, 1e6, 1e2]), ("1e7", [1e7, 1e7, 1e2])] {
         let frames = Scene::new(&device, &queue, shift).sweep(&device, &queue);
-        let comparison = compare(label, &reference, &frames);
+        let comparison = compare(label, &reference, &frames, true);
         if !comparison.passes() {
             failures.push(format!(
                 "{label}: frames {:?} differ from the origin (max {}/255, {:.4} % of pixels)",
@@ -250,9 +260,9 @@ fn far_from_the_origin_the_frames_match_the_frames_at_the_origin() {
     let mut naive = Scene::new(&device, &queue, [1e6, 1e6, 1e2]);
     naive.renderer.measure_from_world_origin();
     let frames = naive.sweep(&device, &queue);
-    let comparison = compare("1e6-naive", &reference, &frames);
+    let comparison = compare("1e6-naive", &reference, &frames, false);
     assert!(
-        !comparison.passes() && comparison.failing_frames.len() == reference.len(),
-        "the negative control renders without jitter, so the test cannot detect it"
+        comparison.failing_frames.len() == reference.len(),
+        "the negative control renders frames without jitter, so the test cannot detect it"
     );
 }
