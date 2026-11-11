@@ -5,16 +5,10 @@
 use core::f64::consts::{FRAC_PI_2, PI, TAU};
 use core::ops::Range;
 
-use super::{BrepError, FaceInput, Solid};
+use super::{BrepError, FaceInput, MAX_SOLID_FACES, Solid};
 use crate::profile::step_count;
 use crate::tolerance::WITHIN_TOLERANCE;
 use crate::{Edge, MODEL_EXTENT, Point2, Point3, Profile, ProfileError, Vector2};
-
-/// Largest number of faces a revolved solid may have.
-///
-/// Counting happens before any face is built, so hostile input cannot make a revolution allocate
-/// millions of faces. A profile of at most 9 edges still turns a full circle of radius 10 km.
-pub const MAX_SOLID_FACES: usize = 65_536;
 
 /// The axis of a revolution: a line of the profile plane z = 0.
 #[derive(Clone, Copy, Debug, PartialEq)]

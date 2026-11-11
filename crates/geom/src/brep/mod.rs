@@ -6,9 +6,10 @@
 //!
 //! Every way to get a [`Solid`] goes through [`Solid::from_faces`], which runs
 //! [`Solid::validate`] before returning, so an invalid solid never exists, in debug or release
-//! builds. [`Solid::extrude`] builds the faces of a prism and [`Solid::revolve`] those of a turned
-//! profile, and both hand them to it. Operations that will later edit a solid in place must call
-//! [`Solid::validate`] on their result too, as ADR 0001 requires of the booleans.
+//! builds. [`Solid::extrude`] builds the faces of a prism, [`Solid::revolve`] those of a turned
+//! profile and [`Solid::sweep`] those of a profile moved along a path, and all hand them to it.
+//! Operations that will later edit a solid in place must call [`Solid::validate`] on their result
+//! too, as ADR 0001 requires of the booleans.
 //!
 //! Validation checks topology, the Euler–Poincaré formula, planarity, orientation and the
 //! tolerance rules of `docs/dev/adr/0001-geometry-tolerance-policy.md`. It does not check that
@@ -21,15 +22,24 @@ mod error;
 mod extrude;
 mod locate;
 mod revolve;
+mod sweep;
 mod validate;
 
 pub use error::BrepError;
 pub use extrude::ExtrusionError;
 pub use locate::Containment;
-pub use revolve::{MAX_SOLID_FACES, RevolutionAxis, RevolutionError};
+pub use revolve::{RevolutionAxis, RevolutionError};
+pub use sweep::{MAX_SWEEP_PIECES, SweepError};
 pub(crate) use validate::{FaceFault, enclosed_volume, face_plane, longest_edge_squared, too_thin};
 
 use crate::Point3;
+
+/// Largest number of faces a revolved or swept solid may have.
+///
+/// Counting happens before any face is built, so hostile input cannot make a revolution or a
+/// sweep allocate millions of faces. A profile of at most 9 edges still turns a full circle of
+/// radius 10 km.
+pub const MAX_SOLID_FACES: usize = 65_536;
 
 /// A face given by vertex indices into the solid's vertex list.
 ///

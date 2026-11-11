@@ -65,16 +65,23 @@ impl Solid {
             let first = rings.last().map_or(0, |ring| ring.end);
             rings.push(first..first + edges.len());
         }
-        Ok(Self::from_faces(vertices, &prism_faces(&rings, top))?)
+        Ok(Self::from_faces(vertices, &swept_faces(&rings, 2, top))?)
     }
 }
 
-/// The faces of a prism over `rings` (the outer ring counterclockwise from above, then the holes
-/// clockwise), whose top copy of vertex `v` is `v + top`. Each face is counterclockwise seen
-/// from outside, its holes clockwise.
-fn prism_faces(rings: &[Range<usize>], top: usize) -> Vec<FaceInput> {
+/// The faces of a solid swept over `rings` (the outer ring counterclockwise in the profile's
+/// frame, then the holes clockwise) through `sections` copies of them, copy `k` of vertex `v`
+/// being `v + k · stride`, each copy further along the third axis of the frame: the first and
+/// last copies as end faces, then one side face per profile edge and step. Each face is
+/// counterclockwise seen from outside, its holes clockwise. `sections` is at least 2.
+pub(super) fn swept_faces(
+    rings: &[Range<usize>],
+    sections: usize,
+    stride: usize,
+) -> Vec<FaceInput> {
+    let last = (sections - 1) * stride;
     let reversed = |ring: &Range<usize>| ring.clone().rev().collect();
-    let raised = |ring: &Range<usize>| ring.clone().map(|v| v + top).collect();
+    let raised = |ring: &Range<usize>| ring.clone().map(|v| v + last).collect();
     let mut faces = vec![
         FaceInput {
             outer: reversed(&rings[0]),
@@ -86,14 +93,18 @@ fn prism_faces(rings: &[Range<usize>], top: usize) -> Vec<FaceInput> {
         },
     ];
     // Along each edge a → b, material lies on the left, so a, b, b', a' turns counterclockwise
-    // seen from the right, outside: ((b − a) × d) · right(b − a) = d.z |b − a|² > 0.
-    for ring in rings {
-        for a in ring.clone() {
-            let b = if a + 1 == ring.end { ring.start } else { a + 1 };
-            faces.push(FaceInput {
-                outer: vec![a, b, b + top, a + top],
-                holes: Vec::new(),
-            });
+    // seen from the right, outside: ((b − a) × d) · right(b − a) = d.z |b − a|² > 0, with d the
+    // step from one copy to the next.
+    for k in 0..sections - 1 {
+        let (here, next) = (k * stride, (k + 1) * stride);
+        for ring in rings {
+            for a in ring.clone() {
+                let b = if a + 1 == ring.end { ring.start } else { a + 1 };
+                faces.push(FaceInput {
+                    outer: vec![a + here, b + here, b + next, a + next],
+                    holes: Vec::new(),
+                });
+            }
         }
     }
     faces
