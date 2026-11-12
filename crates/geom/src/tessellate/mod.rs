@@ -15,7 +15,8 @@ mod search;
 
 use polygon::{Failed, triangulate};
 
-use crate::vector::{add, coords, largest_axis, newell, unit};
+use crate::boolean::Projection;
+use crate::vector::{add, coords, newell, unit};
 use crate::{Point2, Point3, Solid, Vector3};
 
 /// A triangle mesh with one normal per vertex, flat-shaded (GEO-05).
@@ -95,16 +96,18 @@ impl Solid {
     ) -> Result<(), TessellationError> {
         let untriangulable = TessellationError::Untriangulable { face };
         let points: Vec<Point3> = vertices.iter().map(|&v| self.vertices()[v]).collect();
+        let corners: Vec<_> = points.iter().map(|&p| coords(p)).collect();
         // Validation checked the face; only its area vector is needed.
         let mut start = 0;
         let mut area = [0.0; 3];
         for &end in ends {
-            let ring: Vec<_> = points[start..end].iter().map(|&p| coords(p)).collect();
-            area = add(area, newell(&ring));
+            area = add(area, newell(&corners[start..end]));
             start = end;
         }
         let [x, y, z] = unit(area).ok_or(untriangulable)?;
-        let flat = project(&points, area);
+        // The projection the booleans decide faces in, so their rings are simple in it too.
+        let projection = Projection::along(area);
+        let flat: Vec<Point2> = corners.iter().map(|&c| projection.apply(c)).collect();
         let triangles = triangulate(&flat, ends).map_err(|Failed| untriangulable)?;
         let base = mesh.positions.len();
         let too_many = TessellationError::TooManyVertices { face };
@@ -119,25 +122,6 @@ impl Solid {
         mesh.positions.extend(points);
         Ok(())
     }
-}
-
-/// The points seen along the largest component of the area vector, dropping it, with the two
-/// others in the order that keeps the outer ring counterclockwise. Dropping a coordinate is
-/// exact, so the projected points keep every exact relation of their coordinates.
-fn project(points: &[Point3], area: [f64; 3]) -> Vec<Point2> {
-    let axis = largest_axis(area);
-    let (first, second) = if area[axis] > 0.0 {
-        ((axis + 1) % 3, (axis + 2) % 3)
-    } else {
-        ((axis + 2) % 3, (axis + 1) % 3)
-    };
-    points
-        .iter()
-        .map(|&p| {
-            let c = coords(p);
-            Point2::new(c[first], c[second])
-        })
-        .collect()
 }
 
 #[cfg(test)]

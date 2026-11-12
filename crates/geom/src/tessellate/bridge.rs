@@ -9,7 +9,7 @@
 
 use std::cmp::Ordering;
 
-use super::polygon::{Chain, Failed, on_segment, same, segments_meet};
+use super::polygon::{Chain, Failed, on_segment, segments_meet};
 use crate::Point2;
 
 /// Bridges every hole into the outer ring, whose first node is `heads[0]`, and returns a node
@@ -77,7 +77,7 @@ fn is_bridge<'r>(
     p: usize,
 ) -> Result<bool, Failed> {
     let (pm, pp) = (chain.point(m), chain.point(p));
-    if same(pm, pp) || !chain.in_cone(p, pm)? || !chain.in_cone(m, pp)? {
+    if pm == pp || !chain.in_cone(p, pm)? || !chain.in_cone(m, pp)? {
         return Ok(false);
     }
     for &head in rings {
@@ -93,7 +93,7 @@ fn is_bridge<'r>(
 
 /// Whether edge `x y` meets the bridge `m p` anywhere but at a shared end.
 fn blocks(m: Point2, p: Point2, x: Point2, y: Point2) -> Result<bool, Failed> {
-    let end = |q: Point2| same(q, m) || same(q, p);
+    let end = |q: Point2| q == m || q == p;
     match (end(x), end(y)) {
         // The bridge itself, already an edge.
         (true, true) => Ok(true),
@@ -110,14 +110,10 @@ fn splice(chain: &mut Chain<'_>, p: usize, m: usize) {
     let (after_p, before_m) = (chain.nodes[p].next, chain.nodes[m].prev);
     let m_copy = chain.push(chain.nodes[m].point);
     let p_copy = chain.push(chain.nodes[p].point);
-    chain.nodes[p].next = m;
-    chain.nodes[m].prev = p;
-    chain.nodes[before_m].next = m_copy;
-    chain.nodes[m_copy].prev = before_m;
-    chain.nodes[m_copy].next = p_copy;
-    chain.nodes[p_copy].prev = m_copy;
-    chain.nodes[p_copy].next = after_p;
-    chain.nodes[after_p].prev = p_copy;
+    chain.link(p, m);
+    chain.link(before_m, m_copy);
+    chain.link(m_copy, p_copy);
+    chain.link(p_copy, after_p);
 }
 
 #[cfg(test)]

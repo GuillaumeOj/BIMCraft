@@ -202,14 +202,14 @@ fn flushed(point: Vector) -> Vector {
 /// A projection of a plane onto two coordinate axes, keeping the orientation seen from the side
 /// its normal points to: rings turning counter-clockwise there have a positive area.
 #[derive(Clone, Copy, Debug)]
-pub(super) struct Projection {
+pub(crate) struct Projection {
     /// The two kept axes, then the dropped one.
     axes: [usize; 3],
 }
 
 impl Projection {
     /// Drops the axis along which the normal is largest, so the projection never degenerates.
-    pub(super) fn along(normal: Vector) -> Self {
+    pub(crate) fn along(normal: Vector) -> Self {
         let k = largest_axis(normal);
         let (u, v) = ((k + 1) % 3, (k + 2) % 3);
         let axes = if normal[k] > 0.0 {
@@ -220,7 +220,7 @@ impl Projection {
         Self { axes }
     }
 
-    pub(super) const fn apply(self, p: Vector) -> Point2 {
+    pub(crate) const fn apply(self, p: Vector) -> Point2 {
         Point2::new(p[self.axes[0]], p[self.axes[1]])
     }
 }

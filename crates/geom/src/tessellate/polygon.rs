@@ -11,7 +11,7 @@ use crate::{MERGE_CHAIN_WIDTH, Orientation, Point2, orient2d};
 
 /// A face the triangulation gave up on. It carries nothing: the caller names the face.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) struct Failed;
+pub(super) struct Failed;
 
 /// Triangulates a polygon given as the points of its rings one after the other, the outer ring
 /// first, counterclockwise, then the holes, clockwise, and where each ring ends. Returns three
@@ -23,20 +23,27 @@ pub(crate) struct Failed;
 /// is then searched for the triangulation with the fewest and smallest slivers turning the
 /// wrong way, and fails if it has none; a larger ring is clipped taking slivers where no ear is
 /// left, which clips exactly as the strict pass does until then (see [`ear`] and [`search`]).
-pub(crate) fn triangulate(points: &[Point2], ends: &[usize]) -> Result<Vec<[usize; 3]>, Failed> {
-    let (mut chain, heads) = Chain::new(points, ends)?;
-    let start = bridge::bridge_holes(&mut chain, &heads)?;
-    if chain.ring(start).count() > MAX_SEARCH_NODES {
+pub(super) fn triangulate(points: &[Point2], ends: &[usize]) -> Result<Vec<[usize; 3]>, Failed> {
+    let bridged = || -> Result<(Chain<'_>, usize), Failed> {
+        let (mut chain, heads) = Chain::new(points, ends)?;
+        let start = bridge::bridge_holes(&mut chain, &heads)?;
+        Ok((chain, start))
+    };
+    let (mut chain, start) = bridged()?;
+    // Bridging leaves every node on the one ring.
+    if chain.nodes.len() > MAX_SEARCH_NODES {
         return ear::clip(&mut chain, start, true);
     }
-    if let Ok(triangles) = ear::clip(&mut chain.clone(), start, false) {
+    if let Ok(triangles) = ear::clip(&mut chain, start, false) {
         return Ok(triangles);
     }
-    search::search(&chain, start)?.ok_or(Failed)
+    // Clipping cut the ring: the rare face that needs the search bridges it again.
+    let (chain, start) = bridged()?;
+    search::search(&chain, start)
 }
 
 /// A node of a ring: a point and its neighbours along the ring.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy)]
 pub(super) struct Node {
     /// Index of the node's point.
     pub(super) point: usize,
@@ -45,7 +52,6 @@ pub(super) struct Node {
 }
 
 /// Rings of nodes, linked in both directions, over a face's points.
-#[derive(Clone)]
 pub(super) struct Chain<'a> {
     points: &'a [Point2],
     pub(super) nodes: Vec<Node>,
@@ -84,6 +90,12 @@ impl<'a> Chain<'a> {
         })
     }
 
+    /// Makes `b` follow `a` along their ring.
+    pub(super) fn link(&mut self, a: usize, b: usize) {
+        self.nodes[a].next = b;
+        self.nodes[b].prev = a;
+    }
+
     /// Adds a node for `point` and returns it; the caller links it.
     pub(super) fn push(&mut self, point: usize) -> usize {
         self.nodes.push(Node {
@@ -115,11 +127,6 @@ pub(super) fn orient(a: Point2, b: Point2, c: Point2) -> Result<Orientation, Fai
     orient2d(a, b, c).map_err(|_| Failed)
 }
 
-/// Whether two points are the same, exactly.
-pub(super) fn same(a: Point2, b: Point2) -> bool {
-    a == b
-}
-
 /// Whether `p` lies on the closed segment `a b`.
 pub(super) fn on_segment(a: Point2, b: Point2, p: Point2) -> Result<bool, Failed> {
     Ok(within(a, b, p) && orient(a, b, p)? == Orientation::Zero)
@@ -145,13 +152,30 @@ pub(super) fn within(a: Point2, b: Point2, p: Point2) -> bool {
     a.x.min(b.x) <= p.x && p.x <= a.x.max(b.x) && a.y.min(b.y) <= p.y && p.y <= a.y.max(b.y)
 }
 
+/// Twice the signed area of the triangle `p a q`, positive counterclockwise; rounded, unlike
+/// [`orient`], so only for measuring.
+pub(super) fn doubled_area(p: Point2, a: Point2, q: Point2) -> f64 {
+    (a.x - p.x) * (q.y - p.y) - (q.x - p.x) * (a.y - p.y)
+}
+
 /// Whether a triangle is no wider than [`MERGE_CHAIN_WIDTH`]: twice its area over its longest
-/// side, compared squared.
+/// side, compared squared. Measured in the face's projection, where widths shrink by up to √3,
+/// so a sliver may be up to √3 times as wide in the face's plane.
 pub(super) fn is_sliver(p: Point2, a: Point2, q: Point2) -> bool {
-    let doubled = (a.x - p.x) * (q.y - p.y) - (q.x - p.x) * (a.y - p.y);
+    let doubled = doubled_area(p, a, q);
     let longest = [(p, a), (a, q), (q, p)]
         .iter()
         .map(|&(s, e)| (e.x - s.x) * (e.x - s.x) + (e.y - s.y) * (e.y - s.y))
         .fold(0.0, f64::max);
     doubled * doubled <= MERGE_CHAIN_WIDTH * MERGE_CHAIN_WIDTH * longest
+}
+
+/// The doubled area, unsigned, of the triangle of three nodes if it is a sliver of three
+/// distinct points, not two copies of a bridged vertex: the one rule for the triangles both
+/// fallbacks may turn the wrong way.
+pub(super) fn sliver_area(chain: &Chain<'_>, corners: [usize; 3]) -> Option<f64> {
+    let [first, second, third] = corners.map(|node| chain.nodes[node].point);
+    let [p, a, q] = corners.map(|node| chain.point(node));
+    (first != second && second != third && first != third && is_sliver(p, a, q))
+        .then(|| doubled_area(p, a, q).abs())
 }

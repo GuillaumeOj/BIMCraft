@@ -10,14 +10,14 @@
 
 use std::cmp::Ordering;
 
-use super::polygon::{Chain, Failed, is_sliver, orient};
+use super::polygon::{Chain, Failed, orient, sliver_area};
 use crate::Orientation;
 
 /// The most nodes a ring may have to be searched: the search takes time cubic in it.
 pub(super) const MAX_SEARCH_NODES: usize = 256;
 
 /// What a triangulation costs: its slivers turning the wrong way, then their doubled area.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy)]
 struct Cost {
     slivers: usize,
     area: f64,
@@ -44,11 +44,10 @@ impl Cost {
 }
 
 /// The cheapest triangulation of the ring through `start`, as three point indices per
-/// triangle; `None` if it has none. The caller keeps rings to [`MAX_SEARCH_NODES`] nodes.
-pub(super) fn search(chain: &Chain<'_>, start: usize) -> Result<Option<Vec<[usize; 3]>>, Failed> {
+/// triangle, or [`Failed`] if it has none. The caller keeps rings to [`MAX_SEARCH_NODES`] nodes.
+pub(super) fn search(chain: &Chain<'_>, start: usize) -> Result<Vec<[usize; 3]>, Failed> {
     let nodes: Vec<usize> = chain.ring(start).collect();
     let count = nodes.len();
-    let points: Vec<usize> = nodes.iter().map(|&node| chain.nodes[node].point).collect();
     let at = |i: usize, j: usize| i * count + j;
     // best[at(i, j)]: the cheapest triangulation of the sub-chain from node i to node j closed
     // by the segment j i, and the node its triangle on that segment takes.
@@ -74,7 +73,7 @@ pub(super) fn search(chain: &Chain<'_>, start: usize) -> Result<Option<Vec<[usiz
         }
     }
     if best[at(0, count - 1)].is_none() {
-        return Ok(None);
+        return Err(Failed);
     }
     let mut triangles = Vec::with_capacity(count - 2);
     let mut pending = vec![(0, count - 1)];
@@ -84,10 +83,10 @@ pub(super) fn search(chain: &Chain<'_>, start: usize) -> Result<Option<Vec<[usiz
         }
         // Every sub-chain of a triangulation found has one too.
         let (_, k) = best[at(i, j)].ok_or(Failed)?;
-        triangles.push([points[i], points[k], points[j]]);
+        triangles.push([i, k, j].map(|corner| chain.nodes[nodes[corner]].point));
         pending.extend([(i, k), (k, j)]);
     }
-    Ok(Some(triangles))
+    Ok(triangles)
 }
 
 /// What one triangle of nodes costs: nothing if it turns strictly counterclockwise, its doubled
@@ -97,13 +96,5 @@ fn triangle_cost(chain: &Chain<'_>, corners: [usize; 3]) -> Result<Option<Cost>,
     if orient(p, a, q)? == Orientation::Positive {
         return Ok(Some(Cost::ZERO));
     }
-    let [first, second, third] = corners.map(|node| chain.nodes[node].point);
-    if first == second || second == third || first == third || !is_sliver(p, a, q) {
-        return Ok(None);
-    }
-    let doubled = (a.x - p.x) * (q.y - p.y) - (q.x - p.x) * (a.y - p.y);
-    Ok(Some(Cost {
-        slivers: 1,
-        area: doubled.abs(),
-    }))
+    Ok(sliver_area(chain, corners).map(|area| Cost { slivers: 1, area }))
 }

@@ -22,7 +22,7 @@ A `TriangleMesh` of positions, normals and `u32` indices. Each face is triangula
 
 ### Projection
 
-The face is projected on the coordinate plane that drops the largest component of its area vector, the two others ordered so the outer ring stays counterclockwise. Dropping a coordinate is exact, so the projected points are valid input for the exact `orient2d` (validation already bounds every coordinate), and every orientation, containment and crossing test below is exact.
+The face is projected on the coordinate plane that drops the largest component of its area vector, the two others ordered so the outer ring stays counterclockwise: the projection the booleans decide faces in (`boolean::Projection`), shared. Dropping a coordinate is exact, so the projected points are valid input for the exact `orient2d` (validation already bounds every coordinate), and every orientation, containment and crossing test below is exact.
 
 ### Hole bridging
 
@@ -36,7 +36,7 @@ The single ring left is clipped ear by ear. A node is an ear when its triangle t
 
 When strict clipping fails, as on the faces above:
 
-1. **Search**, for rings of at most `MAX_SEARCH_NODES` = 256 nodes: dynamic programming over all triangulations of the ring (as for the minimum-weight triangulation of a polygon) keeps only triangles that turn strictly counterclockwise or are **slivers**, no wider (twice the area over the longest side) than `MERGE_CHAIN_WIDTH`, 10 µm, the reach of the merge pass, and of distinct points; it minimises the number of slivers, then their area. The triangles of any triangulation of a ring add up, with their signs, to its winding number, so when all turn counterclockwise they cover a simple ring exactly once; a sliver is used only where the ring leaves no other choice.
+1. **Search**, for rings of at most `MAX_SEARCH_NODES` = 256 nodes: dynamic programming over all triangulations of the ring (as for the minimum-weight triangulation of a polygon) keeps only triangles that turn strictly counterclockwise or are **slivers**, no wider (twice the area over the longest side) than `MERGE_CHAIN_WIDTH`, 10 µm, the reach of the merge pass, and of distinct points (measured in the projection, where widths shrink by up to √3, so up to √3 times that in the face's plane; the checks allow twice); it minimises the number of slivers, then their area. The triangles of any triangulation of a ring add up, with their signs, to its winding number, so when all turn counterclockwise they cover a simple ring exactly once; a sliver is used only where the ring leaves no other choice.
 2. **Relaxed clipping**, for larger rings, in place of strict clipping, which it follows step by step until no node is an ear: it then cuts the first sliver of three distinct points along the ring.
 3. Otherwise, a small ring the search finds nothing for, or a large one left with no sliver, the face is `Untriangulable`. A defect wider than a sliver, such as a hole outside its face, which validation does not catch either, ends here.
 

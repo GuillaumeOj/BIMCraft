@@ -203,11 +203,12 @@ fn assert_slivers_only_where_needed(p: &[Point2], ends: &[usize], triangles: &[[
 #[test]
 fn a_ring_crossing_itself_within_the_tolerance_is_searched() {
     let p = points(&SELF_CROSSING);
+    let (mut chain, heads) = Chain::new(&p, &[6]).expect("a ring");
+    assert_eq!(clip(&mut chain, heads[0], false), Err(Failed));
     let (chain, heads) = Chain::new(&p, &[6]).expect("a ring");
-    assert_eq!(clip(&mut chain.clone(), heads[0], false), Err(Failed));
-    let found = search(&chain, heads[0]).expect("exact predicates");
-    assert_eq!(found, triangulate(&p, &[6]).ok());
-    assert_slivers_only_where_needed(&p, &[6], &found.expect("a triangulation"));
+    let found = search(&chain, heads[0]).expect("a triangulation");
+    assert_eq!(Ok(&found), triangulate(&p, &[6]).as_ref());
+    assert_slivers_only_where_needed(&p, &[6], &found);
 }
 
 #[test]
@@ -245,9 +246,9 @@ fn a_ring_too_large_to_search_is_clipped_with_slivers() {
         ring.push((0.5 + 0.5 * libm::cos(angle), 0.5 * libm::sin(angle)));
     }
     let p = points(&ring);
-    let (chain, heads) = Chain::new(&p, &[p.len()]).expect("a ring");
-    assert_eq!(clip(&mut chain.clone(), heads[0], false), Err(Failed));
-    assert!(chain.ring(heads[0]).count() > MAX_SEARCH_NODES);
+    let (mut chain, heads) = Chain::new(&p, &[p.len()]).expect("a ring");
+    assert!(chain.nodes.len() > MAX_SEARCH_NODES);
+    assert_eq!(clip(&mut chain, heads[0], false), Err(Failed));
     let triangles = triangulate(&p, &[p.len()]).expect("a triangulation");
     assert_slivers_only_where_needed(&p, &[p.len()], &triangles);
 }
@@ -256,12 +257,13 @@ fn a_ring_too_large_to_search_is_clipped_with_slivers() {
 fn a_ring_without_ears_takes_slivers_when_relaxed() {
     // Clockwise and a micrometre wide: no node is an ear, every triangle is a sliver.
     let p = points(&[(0.0, 0.0), (0.0, 1e-6), (1e-6, 1e-6), (1e-6, 0.0)]);
-    let (chain, heads) = Chain::new(&p, &[4]).expect("a ring");
-    assert_eq!(clip(&mut chain.clone(), heads[0], false), Err(Failed));
-    let triangles = clip(&mut chain.clone(), heads[0], true).expect("slivers");
+    let (mut chain, heads) = Chain::new(&p, &[4]).expect("a ring");
+    assert_eq!(clip(&mut chain, heads[0], false), Err(Failed));
+    let (mut chain, heads) = Chain::new(&p, &[4]).expect("a ring");
+    let triangles = clip(&mut chain, heads[0], true).expect("slivers");
     assert_eq!(triangles.len(), 2);
     // Wider, the same ring has no sliver either.
     let wide = points(&[(0.0, 0.0), (0.0, 1.0), (1.0, 1.0), (1.0, 0.0)]);
-    let (chain, heads) = Chain::new(&wide, &[4]).expect("a ring");
-    assert_eq!(clip(&mut chain.clone(), heads[0], true), Err(Failed));
+    let (mut chain, heads) = Chain::new(&wide, &[4]).expect("a ring");
+    assert_eq!(clip(&mut chain, heads[0], true), Err(Failed));
 }

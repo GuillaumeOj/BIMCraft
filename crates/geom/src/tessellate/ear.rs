@@ -14,10 +14,10 @@
 //! [`MERGE_CHAIN_WIDTH`](crate::MERGE_CHAIN_WIDTH) whichever way it turns, which no display
 //! shows. Wider defects have none, and the face fails.
 
-use super::polygon::{Chain, Failed, Node, is_sliver, orient, same, within};
+use super::polygon::{Chain, Failed, Node, orient, sliver_area, within};
 use crate::{Orientation, Point2};
 
-/// Clips ears from the ring through `start` until a triangle is left, and returns every
+/// Clips ears from the ring through `start` until none is left, and returns every
 /// triangle as three point indices. Only when `relaxed` does it take slivers, and only once no
 /// node is an ear.
 pub(super) fn clip(
@@ -30,31 +30,24 @@ pub(super) fn clip(
     let mut node = start;
     // Nodes visited since the last clip: once every node has been, none is an ear.
     let mut misses = 0;
-    while remaining > 3 {
-        if is_ear(chain, node)? {
-            node = cut(chain, node, &mut triangles);
-            remaining -= 1;
-            misses = 0;
+    while remaining >= 3 {
+        let target = if is_ear(chain, node)? {
+            node
         } else {
             misses += 1;
             node = chain.nodes[node].next;
-            if misses >= remaining {
-                if !relaxed {
-                    return Err(Failed);
-                }
-                let sliver = find_sliver(chain, node).ok_or(Failed)?;
-                node = cut(chain, sliver, &mut triangles);
-                remaining -= 1;
-                misses = 0;
+            if misses < remaining {
+                continue;
             }
-        }
+            if !relaxed {
+                return Err(Failed);
+            }
+            find_sliver(chain, node).ok_or(Failed)?
+        };
+        node = cut(chain, target, &mut triangles);
+        remaining -= 1;
+        misses = 0;
     }
-    let Node { prev, next, .. } = chain.nodes[node];
-    let (p, a, q) = (chain.point(prev), chain.point(node), chain.point(next));
-    if orient(p, a, q)? != Orientation::Positive && !(relaxed && is_distinct_sliver(chain, node)) {
-        return Err(Failed);
-    }
-    cut(chain, node, &mut triangles);
     Ok(triangles)
 }
 
@@ -62,32 +55,21 @@ pub(super) fn clip(
 fn cut(chain: &mut Chain<'_>, node: usize, triangles: &mut Vec<[usize; 3]>) -> usize {
     let Node { point, prev, next } = chain.nodes[node];
     triangles.push([chain.nodes[prev].point, point, chain.nodes[next].point]);
-    chain.nodes[prev].next = next;
-    chain.nodes[next].prev = prev;
+    chain.link(prev, next);
     next
 }
 
 /// The first node from `start` along the ring whose triangle is a sliver, if any.
 fn find_sliver(chain: &Chain<'_>, start: usize) -> Option<usize> {
-    chain
-        .ring(start)
-        .find(|&node| is_distinct_sliver(chain, node))
-}
-
-/// Whether the triangle of `node` and its neighbours is a sliver of three distinct points, not
-/// two copies of a bridged vertex.
-fn is_distinct_sliver(chain: &Chain<'_>, node: usize) -> bool {
-    let Node { prev, next, point } = chain.nodes[node];
-    let (before, after) = (chain.nodes[prev].point, chain.nodes[next].point);
-    point != before
-        && point != after
-        && before != after
-        && is_sliver(chain.point(prev), chain.point(node), chain.point(next))
+    chain.ring(start).find(|&node| {
+        let Node { prev, next, .. } = chain.nodes[node];
+        sliver_area(chain, [prev, node, next]).is_some()
+    })
 }
 
 /// Whether the triangle of `node` and its neighbours turns strictly counterclockwise and no
 /// other node lies in it, nor any edge from a copy of one of its corners enters it.
-pub(super) fn is_ear(chain: &Chain<'_>, node: usize) -> Result<bool, Failed> {
+fn is_ear(chain: &Chain<'_>, node: usize) -> Result<bool, Failed> {
     let Node { prev, next, .. } = chain.nodes[node];
     let (p, a, q) = (chain.point(prev), chain.point(node), chain.point(next));
     if orient(p, a, q)? != Orientation::Positive {
@@ -107,7 +89,7 @@ pub(super) fn is_ear(chain: &Chain<'_>, node: usize) -> Result<bool, Failed> {
         if !within(low, high, v) {
             continue;
         }
-        if let Some(&(corner, after, before)) = corners.iter().find(|(c, ..)| same(*c, v)) {
+        if let Some(&(corner, after, before)) = corners.iter().find(|(c, ..)| *c == v) {
             let Node {
                 prev: w0, next: w1, ..
             } = chain.nodes[other];
