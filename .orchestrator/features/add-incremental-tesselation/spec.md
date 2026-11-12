@@ -66,8 +66,11 @@ impl Solid { pub fn tessellate(&self) -> Result<TriangleMesh, TessellationError>
   whatever is chosen is recorded in **ADR 0022 (face triangulation; 0020 and 0021 are taken on main)**.
 - Bounded work: faces are bounded by the solid's own limits; the ADR states the worst-case cost.
 - No panic: any face the algorithm cannot triangulate is a typed `TessellationError` naming the
-  face index, never coordinates (SEC-03). For a solid that passed `Solid::validate`, this must
-  not happen; tests and fuzzing check it.
+  face index, never coordinates (SEC-03). Extrusions and every exact face always triangulate.
+  Valid boolean results whose faces are simple only within the tolerance (rings crossing or
+  coming within the merge pass's reach of themselves) may get sliver triangles no wider than
+  `MERGE_CHAIN_WIDTH` or, failing that, `Untriangulable`; ADR 0022 records this contract and the
+  boolean follow-up. Tests and fuzzing check both.
 
 Invariants checked by unit, property (`proptest`, seeded) and fuzz tests, on extrusions of random
 profiles (with holes and arcs) and on boolean results:
