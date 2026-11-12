@@ -63,11 +63,14 @@ impl Solid { pub fn tessellate(&self) -> Result<TriangleMesh, TessellationError>
   the holes into the outer ring, then clip ears, deciding every orientation and point-in-triangle
   test with the exact `orient2d` predicate. The owner may propose another algorithm in the plan
   (for example a constrained Delaunay triangulation without Steiner points) if it is more robust;
-  whatever is chosen is recorded in **ADR 0021 (face triangulation)**.
+  whatever is chosen is recorded in **ADR 0022 (face triangulation; 0020 and 0021 are taken on main)**.
 - Bounded work: faces are bounded by the solid's own limits; the ADR states the worst-case cost.
 - No panic: any face the algorithm cannot triangulate is a typed `TessellationError` naming the
-  face index, never coordinates (SEC-03). For a solid that passed `Solid::validate`, this must
-  not happen; tests and fuzzing check it.
+  face index, never coordinates (SEC-03). Extrusions and every exact face always triangulate.
+  Valid boolean results whose faces are simple only within the tolerance (rings crossing or
+  coming within the merge pass's reach of themselves) may get sliver triangles no wider than
+  `MERGE_CHAIN_WIDTH` or, failing that, `Untriangulable`; ADR 0022 records this contract and the
+  boolean follow-up. Tests and fuzzing check both.
 
 Invariants checked by unit, property (`proptest`, seeded) and fuzz tests, on extrusions of random
 profiles (with holes and arcs) and on boolean results:
@@ -155,7 +158,7 @@ Failures are per element: a generator or tessellation error puts the element in 
 it without a mesh, and does not stop the others. Error messages carry no coordinates or model
 content (SEC-03). Iteration order is deterministic (`BTreeMap`/`BTreeSet`).
 
-**ADR 0022 (incremental tessellation)** records the dependency keys, the invalidation rules, the
+**ADR 0023 (incremental tessellation)** records the dependency keys, the invalidation rules, the
 object-level granularity and the alternatives (re-mesh everything, attribute-level tracking,
 recording reads through a model proxy).
 
@@ -187,14 +190,14 @@ Coverage: `geom` and `scene` ≥ 98 % lines. `cargo clippy -D warnings`, `cargo 
 
 | # | Node | Task | Depends on |
 | --- | --- | --- | --- |
-| 1 | back | `geom`: `Solid::tessellate`, `TriangleMesh`, `TessellationError`; unit, property and fuzz tests; ADR 0021; `geom` crate docs | — |
-| 2 | back | `scene` crate: generators, view, dependency graph, invalidation from change events, `SceneUpdate`; re-mesh counting tests and the property test; ADR 0022; spec table, layers, critical and wasm lists | 1 |
+| 1 | back | `geom`: `Solid::tessellate`, `TriangleMesh`, `TessellationError`; unit, property and fuzz tests; ADR 0022; `geom` crate docs | — |
+| 2 | back | `scene` crate: generators, view, dependency graph, invalidation from change events, `SceneUpdate`; re-mesh counting tests and the property test; ADR 0023; spec table, layers, critical and wasm lists | 1 |
 
 Task 1 starts with a plan (algorithm choice). Both run on Opus (exact geometry, critical crates).
 
 ## 5. Notes for the integration
 
-- The integration branch is behind `main` (which now has `render` and ADR 0020); it is rebased
+- The integration branch is behind `main` (which now has `render`, ADR 0020 and ADR 0021); it is rebased
   onto `main` before the pull request. Workspace `Cargo.toml` and `Cargo.lock` may conflict there.
 - No new third-party dependency is expected.
 - PR body: "User docs: N/A (internal change)", Refs #69, requirement IDs GEO-05, CORE-08.
