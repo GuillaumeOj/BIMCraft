@@ -48,7 +48,7 @@ impl TriangleMesh {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, thiserror::Error)]
 pub enum TessellationError {
     /// The face's vertices admit no triangulation, even with slivers: its rings cross, or come
-    /// within a few tolerances of themselves, more widely than a sliver can cover. Validation
+    /// within the reach of the merge pass of themselves, more widely than a sliver can cover. Validation
     /// does not rule it out, as it does not check that faces are simple: a solid that passes
     /// [`Solid::validate`] may still have such a face (ADR 0022).
     #[error("face {face} cannot be triangulated")]
@@ -112,6 +112,9 @@ impl Solid {
         let flat: Vec<Point2> = corners.iter().map(|&c| projection.apply(c)).collect();
         let triangles = triangulate(&flat, ends).map_err(|Failed| untriangulable)?;
         let base = mesh.positions.len();
+        mesh.indices.reserve(3 * triangles.len());
+        mesh.positions.reserve(vertices.len());
+        mesh.normals.reserve(vertices.len());
         let too_many = TessellationError::TooManyVertices { face };
         // Every vertex is a corner of some triangle, so this checks every position's index.
         for local in triangles.into_iter().flatten() {

@@ -114,10 +114,7 @@ pub fn surface_area(solid: &Solid) -> f64 {
                 std::iter::once(&face.outer)
                     .chain(&face.holes)
                     .fold([0.0; 3], |sum, ring| {
-                        let ring: Vec<[f64; 3]> = ring
-                            .iter()
-                            .map(|&v| [points[v].x, points[v].y, points[v].z])
-                            .collect();
+                        let ring: Vec<[f64; 3]> = ring.iter().map(|&v| xyz(points[v])).collect();
                         add(sum, newell(&ring))
                     });
             norm(area) / 2.0
@@ -174,6 +171,12 @@ pub fn all_located(
         .all(|&p| allowed(solid.locate(p)) || solid.boundary_distance(p) <= MERGE_REACH)
 }
 
+/// The widest a defect of a face simple only within the tolerance may be for tessellation to
+/// cover it with a sliver, or to fail: twice [`MERGE_CHAIN_WIDTH`], the reach of the merge pass
+/// measured in the face's plane (ADR 0022); a sliver is measured in a projection, where widths
+/// shrink by up to √3, which the second factor covers.
+const TESSELLATION_REACH: f64 = 2.0 * MERGE_CHAIN_WIDTH;
+
 /// How strictly [`check_tessellation`] holds a solid to the invariants of its mesh.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Contract {
@@ -185,6 +188,11 @@ pub enum Contract {
     /// their corners, and an edge may be used more than once where a folded face lies on
     /// another, as long as it has as many reverses as uses (ADR 0022).
     WithinTolerance,
+}
+
+/// A point as plain coordinates.
+const fn xyz(p: Point3) -> [f64; 3] {
+    [p.x, p.y, p.z]
 }
 
 /// Tessellates a valid solid and checks its mesh (GEO-05): each face gives `n + 2h − 2`
@@ -207,25 +215,18 @@ pub fn check_tessellation(solid: &Solid, contract: Contract) {
         Err(error) => panic!("tessellation: {error:?}"),
     };
     assert_eq!(mesh.normals.len(), mesh.positions.len());
-    let corner = |index: u32| {
-        let p = mesh.positions[usize::try_from(index).expect("32-bit indices fit")];
-        [p.x, p.y, p.z]
-    };
-    let mut triangles = mesh.indices.as_chunks::<3>().0.iter();
-    assert!(mesh.indices.as_chunks::<3>().1.is_empty());
+    let corner =
+        |index: u32| xyz(mesh.positions[usize::try_from(index).expect("32-bit indices fit")]);
+    let (mesh_triangles, rest) = mesh.indices.as_chunks::<3>();
+    assert!(rest.is_empty());
+    let mut triangles = mesh_triangles.iter();
     let (mut base, mut surface) = (0, 0.0);
     for (face, input) in solid.to_faces().iter().enumerate() {
         let rings: Vec<&Vec<usize>> = std::iter::once(&input.outer).chain(&input.holes).collect();
         let n: usize = rings.iter().map(|ring| ring.len()).sum();
         let (mut area, mut rounding) = ([0.0; 3], 0.0);
         for ring in &rings {
-            let points: Vec<[f64; 3]> = ring
-                .iter()
-                .map(|&v| {
-                    let p = solid.vertices()[v];
-                    [p.x, p.y, p.z]
-                })
-                .collect();
+            let points: Vec<[f64; 3]> = ring.iter().map(|&v| xyz(solid.vertices()[v])).collect();
             area = add(area, newell(&points));
             rounding += newell_magnitude(&points);
         }
@@ -268,7 +269,7 @@ pub fn check_tessellation(solid: &Solid, contract: Contract) {
     assert!(triangles.next().is_none() && base == mesh.positions.len());
     let key = |index: u32| corner(index).map(|c| (c + 0.0).to_bits());
     let mut edges: HashMap<_, usize> = HashMap::new();
-    for t in mesh.indices.as_chunks::<3>().0 {
+    for t in mesh_triangles {
         for (i, j) in [(t[0], t[1]), (t[1], t[2]), (t[2], t[0])] {
             *edges.entry((key(i), key(j))).or_default() += 1;
         }
@@ -282,7 +283,7 @@ pub fn check_tessellation(solid: &Solid, contract: Contract) {
     }
     let apex = mesh.indices.first().map_or([0.0; 3], |&i| corner(i));
     let (mut six_volume, mut rounding) = (0.0, 0.0);
-    for t in mesh.indices.as_chunks::<3>().0 {
+    for t in mesh_triangles {
         let [a, b, c] = t.map(|i| sub(corner(i), apex));
         six_volume += dot(a, cross(b, c));
         rounding += norm(a) * norm(b) * norm(c);
@@ -304,15 +305,12 @@ pub fn check_tessellation(solid: &Solid, contract: Contract) {
 /// projection on a plane may show crossing itself.
 fn has_close_features(solid: &Solid, face: usize) -> bool {
     let input = &solid.to_faces()[face];
-    let point = |v: usize| {
-        let p = solid.vertices()[v];
-        [p.x, p.y, p.z]
-    };
+    let point = |v: usize| xyz(solid.vertices()[v]);
     let edges: Vec<(usize, usize)> = std::iter::once(&input.outer)
         .chain(&input.holes)
         .flat_map(|ring| (0..ring.len()).map(|i| (ring[i], ring[(i + 1) % ring.len()])))
         .collect();
-    let reach = 2.0 * MERGE_CHAIN_WIDTH;
+    let reach = TESSELLATION_REACH;
     edges.iter().enumerate().any(|(i, &(a, b))| {
         edges[i + 1..].iter().any(|&(c, d)| {
             a != c
@@ -371,7 +369,7 @@ fn is_sliver([a, b, c]: [[f64; 3]; 3]) -> bool {
         .iter()
         .map(|&side| norm(side))
         .fold(0.0, f64::max);
-    norm(cross(sub(b, a), sub(c, a))) <= 2.0 * MERGE_CHAIN_WIDTH * longest
+    norm(cross(sub(b, a), sub(c, a))) <= TESSELLATION_REACH * longest
 }
 
 /// How a triangle turns, exactly, seen along the largest component of its face's area vector:

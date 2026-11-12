@@ -7,7 +7,7 @@
 //! the copies of a bridged vertex, which edges leave a position.
 //!
 //! A face is planar and keeps its features apart only within the tolerance, so its rings may
-//! cross where they come within a few tolerances of each other, and a ring that crosses itself
+//! cross where they come within the reach of the merge pass of each other, and a ring that crosses itself
 //! can run out of ears, or admit no triangulation into counterclockwise triangles at all. A
 //! ring too large for the search of [`super::search`] is then clipped relaxed: once no node is
 //! an ear, it takes a sliver, a triangle no wider than
@@ -25,7 +25,8 @@ pub(super) fn clip(
     start: usize,
     relaxed: bool,
 ) -> Result<Vec<[usize; 3]>, Failed> {
-    let mut remaining = chain.ring(start).count();
+    // Bridging leaves every node on the one ring.
+    let mut remaining = chain.nodes.len();
     let mut triangles = Vec::with_capacity(remaining.saturating_sub(2));
     let mut node = start;
     // Nodes visited since the last clip: once every node has been, none is an ear.
