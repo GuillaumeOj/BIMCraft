@@ -247,7 +247,7 @@ fn a_ring_too_large_to_search_is_clipped_with_slivers() {
     let p = points(&ring);
     let (chain, heads) = Chain::new(&p, &[p.len()]).expect("a ring");
     assert_eq!(clip(&mut chain.clone(), heads[0], false), Err(Failed));
-    assert_eq!(search(&chain, heads[0]), Ok(None));
+    assert!(chain.ring(heads[0]).count() > MAX_SEARCH_NODES);
     let triangles = triangulate(&p, &[p.len()]).expect("a triangulation");
     assert_slivers_only_where_needed(&p, &[p.len()], &triangles);
 }

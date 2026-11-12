@@ -51,7 +51,7 @@ pub(super) fn clip(
     }
     let Node { prev, next, .. } = chain.nodes[node];
     let (p, a, q) = (chain.point(prev), chain.point(node), chain.point(next));
-    if orient(p, a, q)? != Orientation::Positive && !(relaxed && is_sliver(p, a, q)) {
+    if orient(p, a, q)? != Orientation::Positive && !(relaxed && is_distinct_sliver(chain, node)) {
         return Err(Failed);
     }
     cut(chain, node, &mut triangles);
@@ -69,10 +69,20 @@ fn cut(chain: &mut Chain<'_>, node: usize, triangles: &mut Vec<[usize; 3]>) -> u
 
 /// The first node from `start` along the ring whose triangle is a sliver, if any.
 fn find_sliver(chain: &Chain<'_>, start: usize) -> Option<usize> {
-    chain.ring(start).find(|&node| {
-        let Node { prev, next, .. } = chain.nodes[node];
-        is_sliver(chain.point(prev), chain.point(node), chain.point(next))
-    })
+    chain
+        .ring(start)
+        .find(|&node| is_distinct_sliver(chain, node))
+}
+
+/// Whether the triangle of `node` and its neighbours is a sliver of three distinct points, not
+/// two copies of a bridged vertex.
+fn is_distinct_sliver(chain: &Chain<'_>, node: usize) -> bool {
+    let Node { prev, next, point } = chain.nodes[node];
+    let (before, after) = (chain.nodes[prev].point, chain.nodes[next].point);
+    point != before
+        && point != after
+        && before != after
+        && is_sliver(chain.point(prev), chain.point(node), chain.point(next))
 }
 
 /// Whether the triangle of `node` and its neighbours turns strictly counterclockwise and no

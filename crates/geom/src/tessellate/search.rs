@@ -44,13 +44,10 @@ impl Cost {
 }
 
 /// The cheapest triangulation of the ring through `start`, as three point indices per
-/// triangle; `None` if it has none, or more than [`MAX_SEARCH_NODES`] nodes.
+/// triangle; `None` if it has none. The caller keeps rings to [`MAX_SEARCH_NODES`] nodes.
 pub(super) fn search(chain: &Chain<'_>, start: usize) -> Result<Option<Vec<[usize; 3]>>, Failed> {
     let nodes: Vec<usize> = chain.ring(start).collect();
     let count = nodes.len();
-    if count > MAX_SEARCH_NODES {
-        return Ok(None);
-    }
     let points: Vec<usize> = nodes.iter().map(|&node| chain.nodes[node].point).collect();
     let at = |i: usize, j: usize| i * count + j;
     // best[at(i, j)]: the cheapest triangulation of the sub-chain from node i to node j closed

@@ -1,4 +1,4 @@
-# 0021. Face triangulation
+# 0022. Face triangulation
 
 - Status: Accepted
 - Requirements: GEO-05 (also GEO-03, ENG-02, ENG-04, SEC-03)
@@ -37,8 +37,8 @@ The single ring left is clipped ear by ear. A node is an ear when its triangle t
 When strict clipping fails, as on the faces above:
 
 1. **Search**, for rings of at most `MAX_SEARCH_NODES` = 256 nodes: dynamic programming over all triangulations of the ring (as for the minimum-weight triangulation of a polygon) keeps only triangles that turn strictly counterclockwise or are **slivers**, no wider (twice the area over the longest side) than `MERGE_CHAIN_WIDTH`, 10 µm, the reach of the merge pass, and of distinct points; it minimises the number of slivers, then their area. The triangles of any triangulation of a ring add up, with their signs, to its winding number, so when all turn counterclockwise they cover a simple ring exactly once; a sliver is used only where the ring leaves no other choice.
-2. **Relaxed clipping**, for larger rings: strict clipping that, once no node is an ear, cuts the first sliver along the ring.
-3. Otherwise the face is `Untriangulable`. A defect wider than a sliver, such as a hole outside its face, which validation does not catch either, ends here.
+2. **Relaxed clipping**, for larger rings, in place of strict clipping, which it follows step by step until no node is an ear: it then cuts the first sliver of three distinct points along the ring.
+3. Otherwise, a small ring the search finds nothing for, or a large one left with no sliver, the face is `Untriangulable`. A defect wider than a sliver, such as a hole outside its face, which validation does not catch either, ends here.
 
 ### Cost
 

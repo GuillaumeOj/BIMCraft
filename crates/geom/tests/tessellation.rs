@@ -5,7 +5,7 @@
 //! triangle count of each face, indices in range, no degenerate triangle, each face's area kept,
 //! normals agreeing with the face, a closed and consistently oriented mesh, and the enclosed
 //! volume equal to the solid's; random boolean results, simple and planar only within the
-//! tolerance, are held to them as ADR 0021 relaxes them.
+//! tolerance, are held to them as ADR 0022 relaxes them.
 
 use std::collections::HashMap;
 
@@ -109,7 +109,7 @@ enum Contract {
     /// Faces planar and simple only within the tolerance, as boolean results at random: a face
     /// may fail if its rings come within twice `MERGE_CHAIN_WIDTH` of themselves, slivers that
     /// narrow may turn the wrong way, and an edge may be used more than once if it has as many
-    /// reverses (ADR 0021).
+    /// reverses (ADR 0022).
     WithinTolerance,
 }
 

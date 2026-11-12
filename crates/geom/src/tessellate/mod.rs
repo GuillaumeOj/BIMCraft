@@ -1,4 +1,4 @@
-//! Triangle meshes of solids, for display (GEO-05). Rationale: ADR 0021.
+//! Triangle meshes of solids, for display (GEO-05). Rationale: ADR 0022.
 //!
 //! Each face is triangulated on its own, from its own vertices: it is projected on the
 //! coordinate plane that drops the largest component of its normal, its holes are bridged into
@@ -15,8 +15,7 @@ mod search;
 
 use polygon::{Failed, triangulate};
 
-use crate::brep::face_plane;
-use crate::vector::{coords, largest_axis, unit};
+use crate::vector::{add, coords, largest_axis, newell, unit};
 use crate::{Point2, Point3, Solid, Vector3};
 
 /// A triangle mesh with one normal per vertex, flat-shaded (GEO-05).
@@ -47,14 +46,17 @@ impl TriangleMesh {
 /// content and must stay out of logs and crash reports (SEC-03).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, thiserror::Error)]
 pub enum TessellationError {
-    /// The face's vertices admit no triangulation, as when its rings cross once projected on
-    /// its plane. No solid that passes [`Solid::validate`] is expected to have such a face.
+    /// The face's vertices admit no triangulation, even with slivers: its rings cross, or come
+    /// within a few tolerances of themselves, more widely than a sliver can cover. Validation
+    /// does not rule it out, as it does not check that faces are simple: a solid that passes
+    /// [`Solid::validate`] may still have such a face (ADR 0022).
     #[error("face {face} cannot be triangulated")]
     Untriangulable {
         /// Index of the face.
         face: usize,
     },
-    /// The mesh would have more vertices than 32-bit indices address.
+    /// The mesh would have more vertices than 32-bit indices address. This bounds the index
+    /// width only; a renderer may cap meshes lower.
     #[error("the mesh has too many vertices for 32-bit indices at face {face}")]
     TooManyVertices {
         /// Index of the first face that does not fit.
@@ -93,8 +95,14 @@ impl Solid {
     ) -> Result<(), TessellationError> {
         let untriangulable = TessellationError::Untriangulable { face };
         let points: Vec<Point3> = vertices.iter().map(|&v| self.vertices()[v]).collect();
-        let corners: Vec<_> = points.iter().map(|&p| coords(p)).collect();
-        let (area, _) = face_plane(&corners, ends).map_err(|_| untriangulable)?;
+        // Validation checked the face; only its area vector is needed.
+        let mut start = 0;
+        let mut area = [0.0; 3];
+        for &end in ends {
+            let ring: Vec<_> = points[start..end].iter().map(|&p| coords(p)).collect();
+            area = add(area, newell(&ring));
+            start = end;
+        }
         let [x, y, z] = unit(area).ok_or(untriangulable)?;
         let flat = project(&points, area);
         let triangles = triangulate(&flat, ends).map_err(|Failed| untriangulable)?;

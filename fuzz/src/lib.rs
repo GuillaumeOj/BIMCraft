@@ -110,16 +110,17 @@ pub fn surface_area(solid: &Solid) -> f64 {
         .to_faces()
         .iter()
         .map(|face| {
-            let mut area = [0.0_f64; 3];
-            for ring in std::iter::once(&face.outer).chain(&face.holes) {
-                for (i, &start) in ring.iter().enumerate() {
-                    let (p, q) = (points[start], points[ring[(i + 1) % ring.len()]]);
-                    area[0] += (p.y - q.y) * (p.z + q.z);
-                    area[1] += (p.z - q.z) * (p.x + q.x);
-                    area[2] += (p.x - q.x) * (p.y + q.y);
-                }
-            }
-            area.iter().map(|c| c * c).sum::<f64>().sqrt() / 2.0
+            let area =
+                std::iter::once(&face.outer)
+                    .chain(&face.holes)
+                    .fold([0.0; 3], |sum, ring| {
+                        let ring: Vec<[f64; 3]> = ring
+                            .iter()
+                            .map(|&v| [points[v].x, points[v].y, points[v].z])
+                            .collect();
+                        add(sum, newell(&ring))
+                    });
+            norm(area) / 2.0
         })
         .sum()
 }
@@ -182,7 +183,7 @@ pub enum Contract {
     /// For boolean results, whose faces are planar and simple only within the tolerance: a face
     /// may fail if its rings come within twice [`MERGE_CHAIN_WIDTH`] of themselves away from
     /// their corners, and an edge may be used more than once where a folded face lies on
-    /// another, as long as it has as many reverses as uses (ADR 0021).
+    /// another, as long as it has as many reverses as uses (ADR 0022).
     WithinTolerance,
 }
 
@@ -248,7 +249,8 @@ pub fn check_tessellation(solid: &Solid, contract: Contract) {
             }
             let corners = triangle.map(corner);
             assert!(
-                turn(area, corners) == Orientation::Positive || is_sliver(corners),
+                turn(area, corners) == Orientation::Positive
+                    || (contract == Contract::WithinTolerance && is_sliver(corners)),
                 "face {face}: a triangle wider than a sliver turns the wrong way"
             );
             let [a, b, c] = corners;
@@ -357,7 +359,7 @@ fn segment_distance(
 
 /// Whether a triangle is no wider than twice [`MERGE_CHAIN_WIDTH`]: the only triangles the
 /// tessellation may leave flat or turning the wrong way, where a face planar and simple only
-/// within the tolerance crosses itself (ADR 0021). It decides them projected on the face's
+/// within the tolerance crosses itself (ADR 0022). It decides them projected on the face's
 /// coordinate plane, where widths shrink by up to √3; twice covers that.
 fn is_sliver([a, b, c]: [[f64; 3]; 3]) -> bool {
     let longest = [sub(b, a), sub(c, b), sub(a, c)]

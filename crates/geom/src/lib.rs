@@ -50,8 +50,8 @@
 //! [`Solid::tessellate`] turns a solid into a [`TriangleMesh`] for display (GEO-05): each face
 //! is triangulated from its own vertices with the exact predicates, into `n + 2h − 2` triangles
 //! for `n` vertices and `h` holes, flat-shaded with its outward unit normal and counterclockwise
-//! seen from outside. Failures name the face in a [`TessellationError`]; no valid solid is
-//! expected to have one (ADR 0021).
+//! seen from outside. Failures name the face in a [`TessellationError`]: an exact face never
+//! fails, but a face simple only within the tolerance may, valid or not (ADR 0022).
 //!
 //! [`Profile::shear_centre`] computes the shear centre of any profile with finite elements, for
 //! the location point of profile-based members; failures are a [`ShearCentreError`].

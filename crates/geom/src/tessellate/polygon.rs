@@ -5,6 +5,7 @@
 //! copies hole bridging makes of a vertex, and the triangulation must tell them from distinct
 //! vertices however close.
 
+use super::search::MAX_SEARCH_NODES;
 use super::{bridge, ear, search};
 use crate::{MERGE_CHAIN_WIDTH, Orientation, Point2, orient2d};
 
@@ -18,19 +19,20 @@ pub(crate) struct Failed;
 /// holes.
 ///
 /// Exact faces are clipped ear by ear. A face planar and simple only within the tolerance may
-/// cross itself so that clipping runs out of ears; it is then searched for the triangulation
-/// with the fewest and smallest slivers turning the wrong way, or, too large to search, clipped
-/// taking slivers where no ear is left (see [`ear`] and [`search`]).
+/// cross itself so that clipping runs out of ears. A ring of at most [`MAX_SEARCH_NODES`] nodes
+/// is then searched for the triangulation with the fewest and smallest slivers turning the
+/// wrong way, and fails if it has none; a larger ring is clipped taking slivers where no ear is
+/// left, which clips exactly as the strict pass does until then (see [`ear`] and [`search`]).
 pub(crate) fn triangulate(points: &[Point2], ends: &[usize]) -> Result<Vec<[usize; 3]>, Failed> {
     let (mut chain, heads) = Chain::new(points, ends)?;
     let start = bridge::bridge_holes(&mut chain, &heads)?;
+    if chain.ring(start).count() > MAX_SEARCH_NODES {
+        return ear::clip(&mut chain, start, true);
+    }
     if let Ok(triangles) = ear::clip(&mut chain.clone(), start, false) {
         return Ok(triangles);
     }
-    if let Some(triangles) = search::search(&chain, start)? {
-        return Ok(triangles);
-    }
-    ear::clip(&mut chain, start, true)
+    search::search(&chain, start)?.ok_or(Failed)
 }
 
 /// A node of a ring: a point and its neighbours along the ring.
