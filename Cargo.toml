@@ -15,6 +15,8 @@ license = "MIT"
 # Member crates use `name = { workspace = true }`.
 [workspace.dependencies]
 api = { path = "crates/api" }
+# Vertex and uniform data as bytes for the GPU (render).
+bytemuck = "=1.25.2"
 core-model = { path = "crates/core-model" }
 core-txn = { path = "crates/core-txn" }
 criterion = { version = "=0.8.2", default-features = false }
@@ -31,8 +33,11 @@ num-rational = { version = "=0.4.2", default-features = false, features = [
 ] }
 persist = { path = "crates/persist" }
 platform = { path = "crates/platform" }
+# Blocks on the renderer's async device requests in its tests only.
+pollster = "=1.0.1"
 proptest = "=1.11.0"
 rayon = "=1.12.0"
+render = { path = "crates/render" }
 robust = "=1.2.0"
 # Without the default `cache` feature, which only adds a statement cache and its dependencies.
 rusqlite = { version = "=0.41.1", default-features = false, features = [
@@ -53,6 +58,16 @@ tauri-build = { version = "=2.7.4", default-features = false }
 tempfile = "=3.27.0"
 thiserror = "=2.0.21"
 toml = "=1.1.6"
+# The renderer of the 3D viewport (VP-04). Without the default features: WGSL shaders and the
+# Metal, Vulkan, DX12 and browser WebGPU backends only, no GLES/WebGL (VP-05 comes later).
+wgpu = { version = "=30.0.1", default-features = false, features = [
+  "dx12",
+  "metal",
+  "std",
+  "vulkan",
+  "webgpu",
+  "wgsl",
+] }
 
 # Member crates opt in with `[lints] workspace = true`.
 [workspace.lints.rust]

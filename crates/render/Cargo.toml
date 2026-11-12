@@ -1,0 +1,22 @@
+[package]
+name = "render"
+version = "0.0.0"
+description = "Renderer of the 3D viewport, with camera-relative transforms in double precision."
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+bytemuck = { workspace = true }
+geom = { workspace = true }
+libm = { workspace = true }
+thiserror = { workspace = true }
+wgpu = { workspace = true }
+
+[dev-dependencies]
+pollster = { workspace = true }
+proptest = { workspace = true }
+
+[lints]
+workspace = true

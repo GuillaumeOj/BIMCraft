@@ -81,6 +81,10 @@ IFC 4.3 files must round-trip without loss (INT-03), and the round-trip runs in 
 
 To add files, list them in the manifest with their checksum (`shasum -a 256`), after checking their licence. To move to a newer revision, update the revision and every checksum together, and wait 14 days after the revision is published, as for dependencies.
 
+## GPU tests
+
+The renderer's tests in `crates/render/tests/` draw offscreen on a real GPU adapter and read the pixels back; `jitter.rs` is the visual test of VP-04 and GEO-07 ([ADR 0020](adr/0020-camera-relative-rendering.md)). Software adapters are enough: Mesa's lavapipe Vulkan driver on Linux (`scripts/linux-gpu-deps.sh`, which CI runs in the Rust and coverage jobs), WARP through DX12 on Windows, Metal on macOS. Without an adapter the tests fail with a message naming the missing one; they are never skipped (AGENTS.md §1.2). `WGPU_BACKEND` (for example `vulkan`) chooses the backend. The jitter test renders the same sweep far from the origin and at the origin, and checks that they match. Its negative control feeds the public API what a classic `f32` pipeline would store (world vertices, the placement of the cube, the eye and the target, each rounded to `f32`) and checks that the comparison fails on every frame, so the renderer has no hook for it. The jitter test writes the first frame of each sweep, and every frame that should match and does not, as PPM images to `target/render-jitter/` (`target/llvm-cov-target/render-jitter/` under coverage); CI attaches that folder to a failed run.
+
 ## Benchmarks
 
 Hot paths keep [criterion](https://docs.rs/criterion) benchmarks in their crate's `benches/`: the exact predicates of the geometry kernel (`cargo bench -p geom`) and the attribute tables of the model (`cargo bench -p core-model`). CI compiles them through `clippy --all-targets` but does not run them: timings on shared runners are too noisy to gate on. Run them before and after a change to a hot path and quote the numbers in the pull request. Reference numbers, and the memory measured per object (NFR-08), live in [performance-baselines.md](performance-baselines.md).
