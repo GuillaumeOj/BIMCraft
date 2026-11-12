@@ -28,7 +28,7 @@
 //! [`Solid::revolve`] turns a profile around an axis of its plane by a partial or full turn
 //! (GEO-02): cones, domes, rings and turned members. Arcs, and the circles points travel on, become
 //! chords within [`ARC_CHORD_TOLERANCE`]; a solid has at most [`MAX_SOLID_FACES`] faces; failures
-//! are a [`RevolutionError`]. Rationale: `docs/dev/adr/0020-sweeps-and-revolutions.md`.
+//! are a [`RevolutionError`]. Rationale: `docs/dev/adr/0021-sweeps-and-revolutions.md`.
 //!
 //! [`Solid::sweep`] moves a profile along a [`Path`] of 3D lines and circular arcs (GEO-02):
 //! curved beams, handrails, wall sweeps. [`Path::new`] validates the path and rejects gaps,

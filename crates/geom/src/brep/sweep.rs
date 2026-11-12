@@ -1,6 +1,6 @@
 //! Solids made by sweeping a profile along a path (GEO-02).
 //!
-//! Rationale and constants: `docs/dev/adr/0020-sweeps-and-revolutions.md`.
+//! Rationale and constants: `docs/dev/adr/0021-sweeps-and-revolutions.md`.
 
 use core::f64::consts::FRAC_PI_2;
 use core::ops::Range;
@@ -94,7 +94,7 @@ impl Solid {
     /// pieces at its ends, so the path keeps its tangents where the arc starts and ends. n is
     /// computed for the farthest a profile point gets from the arc's axis, so the solid stays within
     /// [`ARC_CHORD_TOLERANCE`](crate::ARC_CHORD_TOLERANCE) of the exact shape
-    /// (`docs/dev/adr/0020-sweeps-and-revolutions.md`). The volume is that of the faceted shape:
+    /// (`docs/dev/adr/0021-sweeps-and-revolutions.md`). The volume is that of the faceted shape:
     /// a straight piece contributes the faceted profile's area `A_f` times the length its
     /// centroid travels between the piece's two end planes, and a path arc
     /// 2n · tan(α/2) · `A_f` · r̄, with r̄ the centroid's distance from the arc's axis. The
@@ -373,7 +373,7 @@ impl Pieces {
     /// Every section, from the start one: each profile vertex runs along piece k from its
     /// point in section k to the plane of joint k + 1. Parallel transport needs no frame: the
     /// projection along the incoming direction onto the plane bisecting a corner is the profile
-    /// turned by the smallest rotation between the two directions (ADR 0020), and the side faces
+    /// turned by the smallest rotation between the two directions (ADR 0021), and the side faces
     /// are planar by construction, their two long edges both along the piece.
     fn sections(&self, path: &Path, mut sections: Vec<Vector>) -> Result<Vec<Vector>, SweepError> {
         let stride = self.stride;
@@ -447,7 +447,7 @@ impl Pieces {
                 <= WITHIN_TOLERANCE
     }
 
-    /// No two pieces that are not neighbours may meet (ADR 0020, D3): every such pair must be
+    /// No two pieces that are not neighbours may meet (ADR 0021, D3): every such pair must be
     /// [`clear`](Self::clear).
     fn check_apart(&self, sections: &[Vector]) -> Result<(), SweepError> {
         let reaches = self.reaches();
@@ -532,7 +532,7 @@ fn extent(vertices: &[Vector], origin: Vector, normal: Vector) -> (f64, f64) {
 }
 
 /// Rounding slack of [`segment_distance`], per metre of piece length: the reach test treats each
-/// piece as this much longer in reach (ADR 0020).
+/// piece as this much longer in reach (ADR 0021).
 ///
 /// For nearly parallel segments the closest-point fraction `s` divides by a determinant of
 /// relative error ε / sin²θ (θ the angle between them, ε = 2⁻⁵²), so it can be wrong. The pair

@@ -1,6 +1,6 @@
 //! Property-based tests of revolution (GEO-02, ENG-02): random rectangles, with or without a
 //! hole, on either side of a random axis and touching it or not, turned by random angles must
-//! give the shells and volume of ADR 0020; arbitrary loops, axes and angles must give a valid
+//! give the shells and volume of ADR 0021; arbitrary loops, axes and angles must give a valid
 //! solid or a typed error.
 
 use std::f64::consts::{PI, TAU};

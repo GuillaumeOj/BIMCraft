@@ -1,6 +1,6 @@
 //! Solids made by revolving a profile around an axis (GEO-02).
 //!
-//! Rationale and constants: `docs/dev/adr/0020-sweeps-and-revolutions.md`.
+//! Rationale and constants: `docs/dev/adr/0021-sweeps-and-revolutions.md`.
 
 use core::f64::consts::{FRAC_PI_2, TAU};
 use core::ops::Range;
@@ -154,7 +154,7 @@ impl Solid {
     /// Arcs of the profile are first replaced by chords, and the circle each point travels on by
     /// steps of at most 90°, each within [`ARC_CHORD_TOLERANCE`](crate::ARC_CHORD_TOLERANCE) of
     /// the exact shape for the farthest point from the axis, since a solid has planar faces only
-    /// (`docs/dev/adr/0020-sweeps-and-revolutions.md`). The volume is that of the faceted shape,
+    /// (`docs/dev/adr/0021-sweeps-and-revolutions.md`). The volume is that of the faceted shape,
     /// n · sin(θ/n) · A · r̄ for n steps, with A and r̄ the area and the centroid's distance to
     /// the axis of the faceted profile.
     ///
@@ -474,7 +474,7 @@ mod tests {
 
     /// Pappus: V = A · θ · r̄ for the exact shape. The faceted solid differs from it by at most
     /// twice the tolerance (profile chords and revolution steps) times the area of the exact
-    /// surface the arcs and steps replace (ADR 0020).
+    /// surface the arcs and steps replace (ADR 0021).
     fn assert_pappus(solid: &Solid, exact: f64, lateral_area: f64) {
         let gap = exact - solid.volume();
         assert!(

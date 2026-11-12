@@ -1,6 +1,6 @@
 //! Property-based tests of sweeps (GEO-02, ENG-02): centred rectangles, with or without a hole,
 //! swept along random polylines must give one shell and the volume area × path length of ADR
-//! 0020, and along random arcs a volume just above Pappus'; arbitrary profiles, paths and
+//! 0021, and along random arcs a volume just above Pappus'; arbitrary profiles, paths and
 //! references must give a valid solid or a typed error, never a panic.
 
 use std::f64::consts::{PI, TAU};

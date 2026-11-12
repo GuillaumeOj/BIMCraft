@@ -1,6 +1,6 @@
 //! Open 3D paths of lines and circular arcs, along which profiles are swept (GEO-02).
 //!
-//! Rationale: `docs/dev/adr/0020-sweeps-and-revolutions.md`.
+//! Rationale: `docs/dev/adr/0021-sweeps-and-revolutions.md`.
 
 mod validate;
 
