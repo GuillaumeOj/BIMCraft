@@ -5,6 +5,7 @@ persist
 geom
 material
 georef
+scene
 disc-arch
 disc-struct
 disc-mep

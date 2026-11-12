@@ -3439,6 +3439,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "scene"
+version = "0.0.0"
+dependencies = [
+ "core-model",
+ "core-txn",
+ "geom",
+ "proptest",
+ "schema",
+ "thiserror 2.0.21",
+]
+
+[[package]]
 name = "schema"
 version = "0.0.0"
 dependencies = [
