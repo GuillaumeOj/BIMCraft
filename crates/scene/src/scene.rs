@@ -5,6 +5,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use core_model::derived::DependencyGraph;
 use core_model::{AttributeValue, EntityId, Model};
 use core_txn::ChangeEvent;
+use geom::Solid;
 use schema::Representation;
 
 use crate::mesh::ElementMesh;
@@ -28,7 +29,7 @@ enum Key {
 /// [`Scene::mesh`] re-meshes a stale element on demand.
 ///
 /// The mesh of an element depends on its own object, its type, every relationship it takes part
-/// in, the objects its own and its type's attributes refer to, and the objects its generator
+/// in, the objects its own and its type's attributes and properties refer to, and the objects its generator
 /// reports reading ([`Generated::inputs`]): an object-level granularity, which change events
 /// provide (ADR 0023).
 #[derive(Debug)]
@@ -198,16 +199,17 @@ impl Scene {
             return;
         };
         self.dirty.insert(id);
-        let (mut dependencies, outcome): (BTreeSet<Key>, _) =
-            match self.compute(model, id, &representation.generator) {
-                Ok((mesh, inputs)) => (inputs.into_iter().map(Key::Object).collect(), Ok(mesh)),
-                // The inputs a failed generator read are unknown: keep the ones it read before, so
-                // that fixing one of them meshes the element again.
-                Err(error) => (
-                    self.graph.dependencies(&Key::Mesh(id)).copied().collect(),
-                    Err(error),
-                ),
-            };
+        let (inputs, outcome) = match self.generate(model, id, &representation.generator) {
+            Ok(Generated { solids, inputs }) => (Some(inputs), mesh_of(&solids)),
+            Err(error) => (None, Err(error)),
+        };
+        // The inputs a failed generator read are unknown: keep the ones it read before, so
+        // that fixing one of them meshes the element again. A generator that ran and whose solids
+        // could not be meshed did say what it read.
+        let mut dependencies: BTreeSet<Key> = match inputs {
+            Some(inputs) => inputs.into_iter().map(Key::Object).collect(),
+            None => self.graph.dependencies(&Key::Mesh(id)).copied().collect(),
+        };
         dependencies.extend(base_dependencies(model, id));
         let declared = self.declare(id, dependencies);
         match outcome.and_then(|mesh| declared.map(|()| mesh)) {
@@ -222,29 +224,20 @@ impl Scene {
         }
     }
 
-    /// The mesh of an element and the objects its generator read.
-    fn compute(
+    /// The solids of an element and the objects its generator read.
+    fn generate(
         &self,
         model: &Model,
         id: EntityId,
         generator: &str,
-    ) -> Result<(ElementMesh, BTreeSet<EntityId>), SceneError> {
+    ) -> Result<Generated, SceneError> {
         let generator = self
             .generators
             .get(generator)
             .ok_or_else(|| SceneError::NoGenerator {
                 generator: generator.to_owned(),
             })?;
-        let Generated { solids, inputs } = generator.generate(model, id)?;
-        let parts = solids
-            .iter()
-            .enumerate()
-            .map(|(solid, s)| {
-                s.tessellate()
-                    .map_err(|source| SceneError::Tessellation { solid, source })
-            })
-            .collect::<Result<Vec<_>, _>>()?;
-        Ok((ElementMesh::merge(parts)?, inputs))
+        Ok(generator.generate(model, id)?)
     }
 
     /// Records what the mesh of `id` depends on, and marks it up to date.
@@ -296,8 +289,21 @@ impl Scene {
     }
 }
 
+/// The mesh of an element: its solids tessellated and merged.
+fn mesh_of(solids: &[Solid]) -> Result<ElementMesh, SceneError> {
+    let parts = solids
+        .iter()
+        .enumerate()
+        .map(|(solid, s)| {
+            s.tessellate()
+                .map_err(|source| SceneError::Tessellation { solid, source })
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    ElementMesh::merge(parts)
+}
+
 /// What the mesh of an element always depends on: its own object, its type, the relationships it
-/// takes part in and the objects its own and its type's attributes refer to. A generator reads
+/// takes part in and the objects its own and its type's attributes and properties refer to. A generator reads
 /// the model through these, whether or not it gets as far as saying so.
 fn base_dependencies(model: &Model, id: EntityId) -> BTreeSet<Key> {
     let mut dependencies = BTreeSet::from([Key::Object(id)]);
@@ -310,15 +316,18 @@ fn base_dependencies(model: &Model, id: EntityId) -> BTreeSet<Key> {
     );
     for object in std::iter::once(id).chain(kind) {
         if let Some(state) = model.state(object) {
-            dependencies.extend(references(&state.values).map(Key::Object));
+            let properties = state.properties.iter().flat_map(|(_, values)| values);
+            dependencies.extend(references(state.values.iter().chain(properties)).map(Key::Object));
         }
     }
     dependencies
 }
 
-/// The objects attribute values refer to, in lists and sourced values too.
-pub(crate) fn references(values: &[(String, AttributeValue)]) -> impl Iterator<Item = EntityId> {
-    let mut pending: Vec<&AttributeValue> = values.iter().map(|(_, value)| value).collect();
+/// The objects attribute and property values refer to, in lists and sourced values too.
+pub(crate) fn references<'a>(
+    values: impl Iterator<Item = &'a (String, AttributeValue)>,
+) -> impl Iterator<Item = EntityId> {
+    let mut pending: Vec<&AttributeValue> = values.map(|(_, value)| value).collect();
     let mut found = Vec::new();
     // Iterative: nesting is bounded by the schema, but values are model content.
     while let Some(value) = pending.pop() {

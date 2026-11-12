@@ -8,7 +8,7 @@ use crate::scene::references;
 #[test]
 fn references_are_found_in_lists_and_sourced_values_however_deep() {
     let source = Source::new("EN 1992-1-1", "3.1.2").unwrap();
-    let values = vec![
+    let values = [
         ("a".to_owned(), AttributeValue::Ref(id(1))),
         (
             "b".to_owned(),
@@ -27,7 +27,7 @@ fn references_are_found_in_lists_and_sourced_values_however_deep() {
             AttributeValue::Text("not a reference".into()),
         ),
     ];
-    let mut found: Vec<_> = references(&values).collect();
+    let mut found: Vec<_> = references(values.iter()).collect();
     found.sort();
     assert_eq!(found, vec![id(1), id(2), id(3), id(4)]);
 }

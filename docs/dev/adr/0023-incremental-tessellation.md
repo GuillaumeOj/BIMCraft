@@ -33,14 +33,14 @@ The graph has two kinds of node: `Mesh(element)` and `Object(id)`, an object of 
 1. its own object;
 2. its type, if it has one;
 3. every relationship it takes part in;
-4. every object its own and its type's attributes refer to, in lists and sourced values too;
+4. every object its own and its type's attributes and property values refer to, in lists and sourced values too;
 5. every object its generator lists in `Generated::inputs`.
 
 The dependencies are declared again after every generation, so they follow the model: an element that now reads another finish stops depending on the former one.
 
-Items 2 to 4 are known from the model alone, whether or not the generator succeeds or gets as far as saying what it read. Item 4 matters when a generator fails: a wall that refers to a finish that does not exist yet must be meshed when the finish is created, and a generator that fails on the missing object cannot say that it wanted it. Item 5 covers what no attribute says: a layer set found through a relationship, a shared resource.
+Items 2 to 4 are known from the model alone, whether or not the generator succeeds or gets as far as saying what it read. Item 4 matters when a generator fails or its solids cannot be meshed: a wall that refers to a finish that does not exist yet must be meshed when the finish is created, and a generator that fails on the missing object cannot say that it wanted it. Item 5 covers what no attribute says: a layer set found through a relationship, a shared resource.
 
-After a failure the generator's own list is unknown: the element keeps the objects it read the last time it succeeded, so fixing one of them meshes it again.
+When the generator itself fails its own list is unknown: the element keeps the objects it read the last time it succeeded, so fixing one of them meshes it again. A generator that succeeds but whose solids cannot be tessellated or merged did report its list, which is kept.
 
 ### Invalidation
 

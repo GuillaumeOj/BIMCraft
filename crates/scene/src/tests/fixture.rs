@@ -10,7 +10,7 @@ use core_txn::{ChangeEvent, Document, ModelCommand, Origin};
 use geom::{Edge, FaceInput, Point2, Point3, Profile, Solid, Vector3};
 use schema::{
     Attribute, Cardinality, Entity, EntityKind, IfcMapping, Namespace, Placement, Presence,
-    QuantityKind, Representation, Role, RoleTarget, TypeDef, Value, ValueType,
+    PropertySet, QuantityKind, Representation, Role, RoleTarget, TypeDef, Value, ValueType,
 };
 
 use crate::{Generated, GeneratorError, Generators, Scene, SceneUpdate, View};
@@ -85,6 +85,7 @@ pub fn namespace() -> Namespace {
             name: "WallType".into(),
             doc: None,
         }),
+        property_sets: vec![PSET.into()],
         representations: vec![representation(
             "body",
             100,
@@ -167,8 +168,25 @@ pub fn namespace() -> Namespace {
             .into_iter()
             .map(|entity| (entity.name.clone(), entity))
             .collect(),
-        property_sets: BTreeMap::new(),
+        property_sets: BTreeMap::from([(PSET.into(), wall_common())]),
         enumerations: BTreeMap::new(),
+    }
+}
+
+/// The property set of walls, which holds a reference to another finish.
+pub const PSET: &str = "Pset_WallCommon";
+
+fn wall_common() -> PropertySet {
+    PropertySet {
+        name: PSET.into(),
+        applies_to: vec!["Wall".into()],
+        doc: None,
+        properties: vec![attribute(
+            "AcousticFinish",
+            ValueType::Ref("Finish".into()),
+            Presence::Optional,
+            Placement::Instance,
+        )],
     }
 }
 

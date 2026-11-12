@@ -3,14 +3,17 @@
 //! Each step asserts two things: what the update reports, and the generator calls that really
 //! ran, so a lazy `mesh()` or a hidden recomputation cannot pass unnoticed.
 
-use core_model::AttributeValue;
+use std::collections::BTreeSet;
+
+use core_model::{AttributeValue, EntityId, Model};
+use core_txn::ModelCommand;
 use geom::TessellationError;
 
 use super::fixture::{
-    Harness, add_participant, assign, batch, component, contain, create, delete, id, ids, prism,
-    remove_participant, set, set_real, wall_type, walls,
+    Harness, PSET, add_participant, assign, batch, component, contain, create, delete, id, ids,
+    prism, remove_participant, set, set_real, untriangulable_solid, wall_type, walls,
 };
-use crate::{ElementMesh, GeneratorError, Scene, SceneError, View};
+use crate::{ElementMesh, Generated, GeneratorError, Generators, Scene, SceneError, View};
 
 fn real(value: f64) -> AttributeValue {
     AttributeValue::Real(value)
@@ -237,9 +240,31 @@ fn a_solid_that_cannot_be_tessellated_fails_its_element_only() {
 }
 
 #[test]
+fn a_solid_that_cannot_be_tessellated_still_depends_on_what_its_generator_read() {
+    let mut h = Harness::new();
+    let mut generators = Generators::new();
+    // No attribute of the wall refers to finish 99: only the generator's `inputs` say so.
+    generators.register("wall::body", |_: &Model, _: EntityId| {
+        Ok(Generated {
+            solids: vec![untriangulable_solid()],
+            inputs: BTreeSet::from([id(99)]),
+        })
+    });
+    h.scene = Scene::new(generators, View::new("body", 100));
+    h.execute(batch(vec![
+        create(1, "Wall", Vec::new()),
+        create(99, "Finish", Vec::new()),
+    ]));
+    assert!(h.rebuild().failed.contains_key(&id(1)));
+    // The generator ran and said what it read, so a change to it meshes the wall again.
+    let update = h.run(set_real(99, "offset", 0.5));
+    assert!(update.failed.contains_key(&id(1)));
+}
+
+#[test]
 fn a_representation_without_a_generator_fails_its_elements() {
     let mut h = Harness::new();
-    h.scene = Scene::new(crate::Generators::new(), View::new("body", 100));
+    h.scene = Scene::new(Generators::new(), View::new("body", 100));
     h.execute(walls(2));
     let update = h.rebuild();
     let expected = SceneError::NoGenerator {
@@ -347,11 +372,11 @@ fn rebuilding_meshes_everything_again_and_reports_what_is_gone() {
 
 #[test]
 fn an_element_with_several_solids_gets_one_merged_mesh() {
-    let mut generators = crate::Generators::new();
-    generators.register("wall::body", |_: &core_model::Model, _| {
-        Ok(crate::Generated {
+    let mut generators = Generators::new();
+    generators.register("wall::body", |_: &Model, _| {
+        Ok(Generated {
             solids: vec![prism(1.0, 1.0, 1.0)?, prism(2.0, 2.0, 2.0)?],
-            ..crate::Generated::default()
+            ..Generated::default()
         })
     });
     let mut h = Harness::new();
@@ -382,4 +407,20 @@ fn an_object_a_generator_reports_reading_makes_its_element_stale() {
     // The finish is gone: the columns are meshed again without it, and again when it comes back.
     assert_eq!(h.run(delete(99)).changed, ids([1, 2]));
     assert_eq!(h.run(create(99, "Finish", Vec::new())).changed, ids([1, 2]));
+}
+
+#[test]
+fn an_object_a_property_refers_to_makes_its_element_stale() {
+    let mut h = Harness::new();
+    h.execute(batch(vec![walls(2), create(10, "Finish", Vec::new())]));
+    h.execute(ModelCommand::AttachPropertySet {
+        id: id(1),
+        set: PSET.into(),
+        values: vec![("AcousticFinish".into(), AttributeValue::Ref(id(10)))],
+    });
+    h.rebuild();
+    // The generator reads no property: the reference alone ties the wall to the finish.
+    let update = h.run(set_real(10, "offset", 0.05));
+    assert_eq!(update.changed, ids([1]));
+    assert_eq!(h.calls.elements(), vec![id(1)]);
 }
