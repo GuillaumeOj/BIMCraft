@@ -213,7 +213,7 @@ pub fn check_tessellation(solid: &Solid, contract: Contract) {
     };
     let mut triangles = mesh.indices.as_chunks::<3>().0.iter();
     assert!(mesh.indices.as_chunks::<3>().1.is_empty());
-    let mut base = 0;
+    let (mut base, mut surface) = (0, 0.0);
     for (face, input) in solid.to_faces().iter().enumerate() {
         let rings: Vec<&Vec<usize>> = std::iter::once(&input.outer).chain(&input.holes).collect();
         let n: usize = rings.iter().map(|ring| ring.len()).sum();
@@ -230,6 +230,7 @@ pub fn check_tessellation(solid: &Solid, contract: Contract) {
             rounding += newell_magnitude(&points);
         }
         let face_area = norm(area) / 2.0;
+        surface += face_area;
         let unit = area.map(|c| c / norm(area));
         for normal in &mesh.normals[base..base + n] {
             assert!(
@@ -291,7 +292,7 @@ pub fn check_tessellation(solid: &Solid, contract: Contract) {
     // volume takes each face as flat, where the mesh follows its vertices, which may be off its
     // plane by the tolerance: that sweeps at most the tolerance times the area (ADR 0001).
     let volume = solid.volume();
-    let slack = 1e-9 * volume + 1e-14 * rounding + LINEAR_TOLERANCE * surface_area(solid);
+    let slack = 1e-9 * volume + 1e-14 * rounding + LINEAR_TOLERANCE * surface;
     assert!(
         (six_volume / 6.0 - volume).abs() <= slack,
         "enclosed volume"
@@ -337,6 +338,10 @@ fn segment_distance(
         sub(start, other_start),
     );
     let (length, other_length) = (dot(along, along), dot(other, other));
+    if length == 0.0 || other_length == 0.0 {
+        // A zero-length edge: no segment to measure along, so it counts as close.
+        return 0.0;
+    }
     let (gap_other, gap_along, cosine) = (dot(other, gap), dot(along, gap), dot(along, other));
     let denominator = length * other_length - cosine * cosine;
     let mut t = if denominator > 0.0 {

@@ -95,8 +95,10 @@ impl Solid {
         mesh: &mut TriangleMesh,
     ) -> Result<(), TessellationError> {
         let untriangulable = TessellationError::Untriangulable { face };
-        let points: Vec<Point3> = vertices.iter().map(|&v| self.vertices()[v]).collect();
-        let corners: Vec<_> = points.iter().map(|&p| coords(p)).collect();
+        let corners: Vec<_> = vertices
+            .iter()
+            .map(|&v| coords(self.vertices()[v]))
+            .collect();
         // Validation checked the face; only its area vector is needed.
         let mut start = 0;
         let mut area = [0.0; 3];
@@ -105,7 +107,7 @@ impl Solid {
             start = end;
         }
         let [x, y, z] = unit(area).ok_or(untriangulable)?;
-        // The projection the booleans decide faces in, so their rings are simple in it too.
+        // The booleans' projection rule, applied to this face's own area vector.
         let projection = Projection::along(area);
         let flat: Vec<Point2> = corners.iter().map(|&c| projection.apply(c)).collect();
         let triangles = triangulate(&flat, ends).map_err(|Failed| untriangulable)?;
@@ -118,8 +120,9 @@ impl Solid {
         }
         let normal = Vector3::new(x, y, z);
         mesh.normals
-            .extend(std::iter::repeat_n(normal, points.len()));
-        mesh.positions.extend(points);
+            .extend(std::iter::repeat_n(normal, vertices.len()));
+        mesh.positions
+            .extend(vertices.iter().map(|&v| self.vertices()[v]));
         Ok(())
     }
 }

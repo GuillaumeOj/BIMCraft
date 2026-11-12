@@ -280,6 +280,10 @@ fn segment_distance(start: V, end: V, other_start: V, other_end: V) -> f64 {
         sub(start, other_start),
     );
     let (length, other_length) = (dot(along, along), dot(other, other));
+    if length == 0.0 || other_length == 0.0 {
+        // A zero-length edge: no segment to measure along, so it counts as close.
+        return 0.0;
+    }
     let (gap_other, gap_along, cosine) = (dot(other, gap), dot(along, gap), dot(along, other));
     let denominator = length * other_length - cosine * cosine;
     let mut t = if denominator > 0.0 {
