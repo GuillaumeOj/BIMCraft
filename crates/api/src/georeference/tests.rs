@@ -254,7 +254,7 @@ fn set_and_clear_are_single_undo_steps_recorded_with_their_origin() {
     call(&mut session, "history.undo", json!({})).unwrap();
     assert_eq!(get(&mut session)["value"]["crs_epsg"], 2154);
     call(&mut session, "history.undo", json!({})).unwrap();
-    assert!(site_ids(&session).is_empty());
+    assert_eq!(site_ids(&session).len(), 0);
     call(&mut session, "history.redo", json!({})).unwrap();
     assert_eq!(get(&mut session)["value"]["crs_epsg"], 2154);
 }
@@ -315,7 +315,7 @@ fn set_refuses_coordinates_beyond_the_bound() {
         call(&mut session, "georef.set", params),
         Err(ApiError::InvalidParams { .. })
     ));
-    assert!(site_ids(&session).is_empty());
+    assert_eq!(site_ids(&session).len(), 0);
 }
 
 #[test]
@@ -326,7 +326,7 @@ fn set_refuses_a_base_point_outside_the_projection() {
         reason(call(&mut session, "georef.set", params)),
         GeorefError::OutsideDomain { index: None }
     );
-    assert!(site_ids(&session).is_empty());
+    assert_eq!(site_ids(&session).len(), 0);
 }
 
 #[test]

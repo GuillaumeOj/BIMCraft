@@ -42,7 +42,7 @@ fn notifications_are_kept_until_taken() {
     assert_eq!(transport.send(&create(1)), Ok(None));
     assert_eq!(transport.send(&create(2)), Ok(None));
     assert_eq!(transport.notifications().len(), 2);
-    assert!(transport.notifications().is_empty());
+    assert_eq!(transport.notifications().len(), 0);
 }
 
 #[test]
