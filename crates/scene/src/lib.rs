@@ -3,7 +3,7 @@
 //! The viewport draws triangle meshes, and re-meshing the whole model after every command does
 //! not scale (NFR-02). A [`Scene`] meshes each element once, through the [`Generator`] its
 //! schema names for the representation a [`View`] picks (GEO-06), and keeps those meshes current
-//! from the [`ChangeEvent`] of each transaction, undo and redo (CORE-07): [`Scene::apply`] marks
+//! from the [`core_txn::ChangeEvent`] of each transaction, undo and redo (CORE-07): [`Scene::apply`] marks
 //! stale the elements the event can have changed, and [`Scene::update`] re-meshes those and only
 //! those, reporting them in a [`SceneUpdate`].
 //!
@@ -30,7 +30,6 @@ mod mesh;
 mod scene;
 mod view;
 
-pub use core_txn::ChangeEvent;
 pub use error::SceneError;
 pub use generator::{Generated, Generator, GeneratorError, Generators};
 pub use mesh::ElementMesh;

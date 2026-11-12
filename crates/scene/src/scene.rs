@@ -6,7 +6,7 @@ use core_model::derived::DependencyGraph;
 use core_model::{AttributeValue, EntityId, Model};
 use core_txn::ChangeEvent;
 use geom::Solid;
-use schema::Representation;
+use schema::{Entity, Representation};
 
 use crate::mesh::ElementMesh;
 use crate::{Generated, Generators, SceneError, View};
@@ -28,19 +28,15 @@ enum Key {
 /// reports what changed since the last update. Nothing is computed before it is needed, and
 /// [`Scene::mesh`] re-meshes a stale element on demand.
 ///
-/// The mesh of an element depends on its own object, its type, every relationship it takes part
-/// in, the objects its own and its type's attributes and properties refer to, and the objects its generator
-/// reports reading ([`Generated::inputs`]): an object-level granularity, which change events
-/// provide (ADR 0023).
+/// What an element's mesh depends on is listed in the crate documentation and in ADR 0023:
+/// object-level granularity, which change events provide.
 #[derive(Debug)]
 pub struct Scene {
     generators: Generators,
     view: View,
     graph: DependencyGraph<Key, ()>,
-    /// The mesh of each element that has one.
-    meshes: BTreeMap<EntityId, ElementMesh>,
-    /// Why each element without a mesh has none.
-    failures: BTreeMap<EntityId, SceneError>,
+    /// The mesh of each element, or why it has none.
+    outcomes: BTreeMap<EntityId, Result<ElementMesh, SceneError>>,
     /// Elements to mesh again, or for the first time.
     stale: BTreeSet<EntityId>,
     /// Elements whose state changed since the last update was reported.
@@ -84,8 +80,7 @@ impl Scene {
             generators,
             view,
             graph: DependencyGraph::new(),
-            meshes: BTreeMap::new(),
-            failures: BTreeMap::new(),
+            outcomes: BTreeMap::new(),
             stale: BTreeSet::new(),
             dirty: BTreeSet::new(),
             reported: BTreeMap::new(),
@@ -96,8 +91,7 @@ impl Scene {
     /// scene held. The elements it knew that the model no longer has are `removed`.
     pub fn rebuild(&mut self, model: &Model) -> SceneUpdate {
         self.graph = DependencyGraph::new();
-        self.meshes.clear();
-        self.failures.clear();
+        self.outcomes.clear();
         self.stale.clear();
         self.dirty.extend(self.reported.keys().copied());
         for id in model.ids() {
@@ -163,18 +157,17 @@ impl Scene {
         if self.stale.remove(&element) {
             self.remesh(model, element);
         }
-        self.meshes.get(&element)
+        self.outcomes.get(&element)?.as_ref().ok()
     }
 
     /// The representation of `id` the scene's view picks, if `id` is an element that has one.
     fn representation<'m>(&self, model: &'m Model, id: EntityId) -> Option<&'m Representation> {
-        let entity = model.namespace().entities.get(model.entity_of(id)?)?;
-        self.view.pick(&entity.representations)
+        self.view.pick(&entity_of(model, id)?.representations)
     }
 
     /// Whether the scene meshes `id`, or is about to.
     fn is_tracked(&self, id: EntityId) -> bool {
-        self.meshes.contains_key(&id) || self.failures.contains_key(&id) || self.stale.contains(&id)
+        self.outcomes.contains_key(&id) || self.stale.contains(&id)
     }
 
     fn mark_stale(&mut self, id: EntityId) {
@@ -185,8 +178,7 @@ impl Scene {
     /// Drops everything the scene holds about a deleted object.
     fn forget(&mut self, id: EntityId) {
         self.graph.remove(&Key::Mesh(id));
-        self.meshes.remove(&id);
-        self.failures.remove(&id);
+        self.outcomes.remove(&id);
         self.stale.remove(&id);
         self.dirty.insert(id);
     }
@@ -212,16 +204,8 @@ impl Scene {
         };
         dependencies.extend(base_dependencies(model, id));
         let declared = self.declare(id, dependencies);
-        match outcome.and_then(|mesh| declared.map(|()| mesh)) {
-            Ok(mesh) => {
-                self.failures.remove(&id);
-                self.meshes.insert(id, mesh);
-            }
-            Err(error) => {
-                self.meshes.remove(&id);
-                self.failures.insert(id, error);
-            }
-        }
+        self.outcomes
+            .insert(id, outcome.and_then(|mesh| declared.map(|()| mesh)));
     }
 
     /// The solids of an element and the objects its generator read.
@@ -258,22 +242,16 @@ impl Scene {
     fn flush(&mut self) -> SceneUpdate {
         let mut update = SceneUpdate::default();
         for id in std::mem::take(&mut self.dirty) {
-            let now = if self.meshes.contains_key(&id) {
-                Some(true)
-            } else {
-                self.failures.contains_key(&id).then_some(false)
-            };
-            match (self.reported.get(&id).copied(), now) {
-                (Some(true), Some(true)) => {
+            let now = self.outcomes.get(&id);
+            match (self.reported.get(&id), now) {
+                (Some(true), Some(Ok(_))) => {
                     update.changed.insert(id);
                 }
-                (_, Some(true)) => {
+                (_, Some(Ok(_))) => {
                     update.added.insert(id);
                 }
-                (_, Some(false)) => {
-                    if let Some(error) = self.failures.get(&id) {
-                        update.failed.insert(id, error.clone());
-                    }
+                (_, Some(Err(error))) => {
+                    update.failed.insert(id, error.clone());
                 }
                 (Some(_), None) => {
                     update.removed.insert(id);
@@ -281,7 +259,7 @@ impl Scene {
                 (None, None) => {}
             }
             match now {
-                Some(meshed) => self.reported.insert(id, meshed),
+                Some(outcome) => self.reported.insert(id, outcome.is_ok()),
                 None => self.reported.remove(&id),
             };
         }
@@ -314,11 +292,13 @@ fn base_dependencies(model: &Model, id: EntityId) -> BTreeSet<Key> {
             .relationships_of(id)
             .map(|role| Key::Object(role.relationship)),
     );
-    for object in std::iter::once(id).chain(kind) {
-        if let Some(state) = model.state(object) {
-            let properties = state.properties.iter().flat_map(|(_, values)| values);
-            dependencies.extend(references(state.values.iter().chain(properties)).map(Key::Object));
-        }
+    // An object that does not exist has no state, so no references.
+    for state in std::iter::once(id)
+        .chain(kind)
+        .filter_map(|object| model.state(object))
+    {
+        let properties = state.properties.iter().flat_map(|(_, values)| values);
+        dependencies.extend(references(state.values.iter().chain(properties)).map(Key::Object));
     }
     dependencies
 }
@@ -331,30 +311,27 @@ pub(crate) fn references<'a>(
     let mut found = Vec::new();
     // Iterative: nesting is bounded by the schema, but values are model content.
     while let Some(value) = pending.pop() {
-        match value {
+        match value.plain() {
             AttributeValue::Ref(target) => found.push(*target),
             AttributeValue::List(items) => pending.extend(items),
-            AttributeValue::Sourced(sourced) => pending.push(&sourced.value),
             _ => {}
         }
     }
     found.into_iter()
 }
 
+/// The entity of the object with this id, as the schema defines it.
+fn entity_of(model: &Model, id: EntityId) -> Option<&Entity> {
+    model.namespace().entities.get(model.entity_of(id)?)
+}
+
 /// The objects that take part in `relationship` now, in any role; none for an object that is not
 /// a relationship.
-fn participants(model: &Model, relationship: EntityId) -> Vec<EntityId> {
-    let Some(entity) = model
-        .entity_of(relationship)
-        .and_then(|name| model.namespace().entities.get(name))
-    else {
-        return Vec::new();
-    };
-    entity
-        .roles
-        .iter()
-        .filter_map(|role| model.participants(relationship, &role.name).ok())
+fn participants(model: &Model, relationship: EntityId) -> impl Iterator<Item = EntityId> {
+    entity_of(model, relationship)
+        .into_iter()
+        .flat_map(|entity| &entity.roles)
+        .filter_map(move |role| model.participants(relationship, &role.name).ok())
         .flatten()
         .copied()
-        .collect()
 }

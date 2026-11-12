@@ -2,8 +2,9 @@
 
 use core_model::{AttributeValue, Source};
 
-use super::fixture::{calls_debug, id};
+use super::fixture::{Calls, generators, id};
 use crate::scene::references;
+use crate::{Scene, View};
 
 #[test]
 fn references_are_found_in_lists_and_sourced_values_however_deep() {
@@ -33,11 +34,12 @@ fn references_are_found_in_lists_and_sourced_values_however_deep() {
 }
 
 #[test]
-fn generators_and_scenes_describe_themselves_without_content() {
-    assert_eq!(
-        calls_debug(),
-        "Scene { generators: {\"column::axis\", \"column::coarse\", \"column::fine\", \"wall::body\"}, \
-         view: View { context: \"body\", lod: 100 }, graph: DependencyGraph { nodes: {} }, \
-         meshes: {}, failures: {}, stale: {}, dirty: {}, reported: {} }"
+fn a_scene_describes_itself_by_generator_paths_not_by_generators() {
+    let scene = Scene::new(generators(&Calls::default()), View::new("body", 100));
+    let description = format!("{scene:?}");
+    assert!(description.starts_with("Scene {"));
+    assert!(
+        description.contains(r#"{"column::axis", "column::coarse", "column::fine", "wall::body"}"#)
     );
+    assert!(description.contains(r#"View { context: "body", lod: 100 }"#));
 }

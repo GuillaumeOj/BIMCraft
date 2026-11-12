@@ -223,11 +223,18 @@ pub fn ids<const N: usize>(raws: [u128; N]) -> BTreeSet<EntityId> {
     raws.into_iter().map(id).collect()
 }
 
-fn real(model: &Model, element: EntityId, attribute: &str) -> Result<f64, GeneratorError> {
-    match model.get(element, attribute) {
-        Ok(Some(AttributeValue::Real(value))) => Ok(value),
-        _ => Err(GeneratorError::MissingInput),
-    }
+pub fn real(value: f64) -> AttributeValue {
+    AttributeValue::Real(value)
+}
+
+/// The number an attribute holds, or the generators' error for a missing input.
+fn read_real(model: &Model, element: EntityId, attribute: &str) -> Result<f64, GeneratorError> {
+    model
+        .get(element, attribute)
+        .ok()
+        .flatten()
+        .and_then(|value| value.as_real())
+        .ok_or(GeneratorError::MissingInput)
 }
 
 /// A prism of `height` over a rectangle `width` by `depth`.
@@ -294,9 +301,10 @@ pub fn generators(calls: &Calls) -> Generators {
         move |model: &Model, wall: EntityId| -> Result<Generated, GeneratorError> {
             log.push("wall::body", wall);
             let (offset, inputs) = match model.get(wall, "finish") {
-                Ok(Some(AttributeValue::Ref(finish))) => {
-                    (real(model, finish, "offset")?, BTreeSet::from([finish]))
-                }
+                Ok(Some(AttributeValue::Ref(finish))) => (
+                    read_real(model, finish, "offset")?,
+                    BTreeSet::from([finish]),
+                ),
                 _ => (0.0, BTreeSet::new()),
             };
             if model.get(wall, "name") == Ok(Some(AttributeValue::Text("unmeshable".into()))) {
@@ -305,8 +313,8 @@ pub fn generators(calls: &Calls) -> Generators {
                     inputs,
                 });
             }
-            let thickness = real(model, wall, "thickness")? + offset;
-            let solid = prism(4.0, thickness, real(model, wall, "height")?)?;
+            let thickness = read_real(model, wall, "thickness")? + offset;
+            let solid = prism(4.0, thickness, read_real(model, wall, "height")?)?;
             Ok(Generated {
                 solids: vec![solid],
                 inputs,
@@ -355,9 +363,14 @@ impl Harness {
 
     pub fn viewing(view: View) -> Self {
         let calls = Calls::default();
+        Self::with_generators(generators(&calls), view, calls)
+    }
+
+    /// A harness whose scene uses `generators`, which log into `calls` if they are given it.
+    pub fn with_generators(generators: Generators, view: View, calls: Calls) -> Self {
         Self {
             doc: Document::new(Model::new(&namespace()).expect("a valid schema")),
-            scene: Scene::new(generators(&calls), view),
+            scene: Scene::new(generators, view),
             calls,
         }
     }
@@ -418,7 +431,7 @@ pub fn set(raw: u128, attribute: &str, value: Option<AttributeValue>) -> ModelCo
 }
 
 pub fn set_real(raw: u128, attribute: &str, value: f64) -> ModelCommand {
-    set(raw, attribute, Some(AttributeValue::Real(value)))
+    set(raw, attribute, Some(real(value)))
 }
 
 pub fn delete(raw: u128) -> ModelCommand {
@@ -447,7 +460,7 @@ pub fn component(raw: u128) -> ModelCommand {
                 id: "acme/partition".into(),
                 version: 1,
             },
-            defaults: vec![("thickness".into(), AttributeValue::Real(0.2))],
+            defaults: vec![("thickness".into(), real(0.2))],
         },
     }
 }
@@ -493,13 +506,5 @@ pub fn walls(count: u128) -> ModelCommand {
         (1..=count)
             .map(|raw| create(raw, "Wall", Vec::new()))
             .collect(),
-    )
-}
-
-/// The debug description of a new scene over [`generators`].
-pub fn calls_debug() -> String {
-    format!(
-        "{:?}",
-        Scene::new(generators(&Calls::default()), View::new("body", 100))
     )
 }

@@ -31,17 +31,31 @@ pub(crate) fn merge_with_limit(
     parts: Vec<TriangleMesh>,
     max_vertices: u64,
 ) -> Result<TriangleMesh, SceneError> {
-    let mut merged = TriangleMesh::default();
-    for part in parts.into_iter().filter(|part| !part.positions.is_empty()) {
-        let base = merged.positions.len();
-        let fits = base
-            .checked_add(part.positions.len())
-            .and_then(|total| u64::try_from(total).ok())
-            .is_some_and(|total| total <= max_vertices);
-        let offset = u32::try_from(base).map_err(|_| SceneError::TooManyVertices)?;
-        if !fits {
-            return Err(SceneError::TooManyVertices);
-        }
+    let parts: Vec<TriangleMesh> = parts
+        .into_iter()
+        .filter(|part| !part.positions.is_empty())
+        .collect();
+    let vertices = parts
+        .iter()
+        .try_fold(0_usize, |sum, part| sum.checked_add(part.positions.len()))
+        .filter(|&total| u64::try_from(total).is_ok_and(|total| total <= max_vertices))
+        .ok_or(SceneError::TooManyVertices)?;
+    let indices: usize = parts.iter().map(|part| part.indices.len()).sum();
+    let mut parts = parts.into_iter();
+    // The first mesh is taken as it is: an element of one solid is not copied.
+    let Some(mut merged) = parts.next() else {
+        return Ok(TriangleMesh::default());
+    };
+    merged
+        .positions
+        .reserve_exact(vertices - merged.positions.len());
+    merged
+        .normals
+        .reserve_exact(vertices - merged.normals.len());
+    merged.indices.reserve_exact(indices - merged.indices.len());
+    for part in parts {
+        let offset =
+            u32::try_from(merged.positions.len()).map_err(|_| SceneError::TooManyVertices)?;
         for index in part.indices {
             merged.indices.push(
                 index

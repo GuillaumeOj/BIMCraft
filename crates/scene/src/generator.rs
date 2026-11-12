@@ -9,8 +9,9 @@ use geom::{BooleanError, BrepError, ExtrusionError, ProfileError, Solid};
 /// Computes the solids of one representation of an element (GEO-06).
 ///
 /// A generator reads the model and nothing else, so its result is a function of the objects it
-/// read: the element, its type, the relationships it takes part in, and the objects it lists in
-/// [`Generated::inputs`]. The scene recomputes it when one of them changes, and only then.
+/// read: the element, its type, the relationships it takes part in, the objects its attributes
+/// refer to, and the objects it lists in [`Generated::inputs`]. The scene recomputes it when one
+/// of them changes, and only then.
 pub trait Generator {
     /// The solids of `element`'s representation.
     ///
@@ -37,8 +38,8 @@ pub struct Generated {
     /// The solids of the representation.
     pub solids: Vec<Solid>,
     /// Other objects the generator read (a layer set, an opening…), beyond the element itself,
-    /// its type and the relationships it takes part in, which the scene always tracks. A change
-    /// to any of them makes the element's mesh stale.
+    /// its type, the relationships it takes part in and the objects its attributes refer to,
+    /// which the scene always tracks. A change to any of them makes the element's mesh stale.
     pub inputs: BTreeSet<EntityId>,
 }
 

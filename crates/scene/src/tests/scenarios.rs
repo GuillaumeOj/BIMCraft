@@ -10,14 +10,10 @@ use core_txn::ModelCommand;
 use geom::TessellationError;
 
 use super::fixture::{
-    Harness, PSET, add_participant, assign, batch, component, contain, create, delete, id, ids,
-    prism, remove_participant, set, set_real, untriangulable_solid, wall_type, walls,
+    Calls, Harness, PSET, add_participant, assign, batch, component, contain, create, delete, id,
+    ids, prism, real, remove_participant, set, set_real, untriangulable_solid, wall_type, walls,
 };
-use crate::{ElementMesh, Generated, GeneratorError, Generators, Scene, SceneError, View};
-
-fn real(value: f64) -> AttributeValue {
-    AttributeValue::Real(value)
-}
+use crate::{ElementMesh, Generated, GeneratorError, Generators, SceneError, View};
 
 /// Walls `1..=count` and a built scene, ready for edits.
 fn scene_of(count: u128) -> Harness {
@@ -241,7 +237,6 @@ fn a_solid_that_cannot_be_tessellated_fails_its_element_only() {
 
 #[test]
 fn a_solid_that_cannot_be_tessellated_still_depends_on_what_its_generator_read() {
-    let mut h = Harness::new();
     let mut generators = Generators::new();
     // No attribute of the wall refers to finish 99: only the generator's `inputs` say so.
     generators.register("wall::body", |_: &Model, _: EntityId| {
@@ -250,7 +245,7 @@ fn a_solid_that_cannot_be_tessellated_still_depends_on_what_its_generator_read()
             inputs: BTreeSet::from([id(99)]),
         })
     });
-    h.scene = Scene::new(generators, View::new("body", 100));
+    let mut h = Harness::with_generators(generators, View::new("body", 100), Calls::default());
     h.execute(batch(vec![
         create(1, "Wall", Vec::new()),
         create(99, "Finish", Vec::new()),
@@ -263,8 +258,8 @@ fn a_solid_that_cannot_be_tessellated_still_depends_on_what_its_generator_read()
 
 #[test]
 fn a_representation_without_a_generator_fails_its_elements() {
-    let mut h = Harness::new();
-    h.scene = Scene::new(Generators::new(), View::new("body", 100));
+    let mut h =
+        Harness::with_generators(Generators::new(), View::new("body", 100), Calls::default());
     h.execute(walls(2));
     let update = h.rebuild();
     let expected = SceneError::NoGenerator {
@@ -379,8 +374,7 @@ fn an_element_with_several_solids_gets_one_merged_mesh() {
             ..Generated::default()
         })
     });
-    let mut h = Harness::new();
-    h.scene = Scene::new(generators, View::new("body", 100));
+    let mut h = Harness::with_generators(generators, View::new("body", 100), Calls::default());
     h.execute(create(1, "Wall", Vec::new()));
     h.scene.rebuild(h.doc.model());
     let mesh = mesh_of(&mut h, 1).expect("a mesh").mesh;
