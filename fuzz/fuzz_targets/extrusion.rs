@@ -1,11 +1,12 @@
 //! Feeds arbitrary profiles and directions to extrusion (GEO-02). Nothing may panic; a downward
 //! direction is always rejected as such, and an accepted extrusion must be a valid solid of one
 //! shell with a through hole per profile hole, whose volume is positive and, for a profile of
-//! lines only, its area times the height, with one side face per edge.
+//! lines only, its area times the height, with one side face per edge. Its triangle mesh must
+//! hold every invariant of `check_tessellation` (GEO-05).
 
 #![no_main]
 
-use bimcraft_fuzz::{RawProfile, direction, profile_loops};
+use bimcraft_fuzz::{Contract, RawProfile, check_tessellation, direction, profile_loops};
 use geom::{Edge, ExtrusionError, Profile, Solid};
 use libfuzzer_sys::fuzz_target;
 
@@ -28,6 +29,7 @@ fuzz_target!(|input: Input| {
         return;
     };
     assert_eq!(solid.validate(), Ok(()));
+    check_tessellation(&solid, Contract::Exact);
     let holes = u32::try_from(profile.holes().len()).expect("at most a few holes");
     match solid.shells() {
         [shell] => assert_eq!(shell.genus(), holes),
