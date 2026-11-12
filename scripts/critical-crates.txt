@@ -8,6 +8,7 @@ persist
 geom
 material
 georef
+scene
 analysis
 api
 interop-ifc

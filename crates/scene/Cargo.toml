@@ -1,0 +1,21 @@
+[package]
+name = "scene"
+version = "0.0.0"
+description = "Element meshes derived from the model, kept current incrementally."
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+core-model = { workspace = true }
+core-txn = { workspace = true }
+geom = { workspace = true }
+schema = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+proptest = { workspace = true }
+
+[lints]
+workspace = true
