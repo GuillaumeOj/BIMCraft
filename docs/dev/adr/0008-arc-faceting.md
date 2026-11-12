@@ -34,6 +34,7 @@ Chords lie inside the arc's circle and can move a loop by up to the tolerance, m
 - Two loops less than 1 mm apart where one of them is an arc may be a valid profile but fail to extrude. No construction use needs that.
 - True cylindrical faces arrive with GEO-09 and a record that supersedes this one for the cases it covers.
 - Changing `ARC_CHORD_TOLERANCE` changes stored results.
+- Sweeps and revolutions facet the curve their motion traces with the same formula, factored as one helper, and add their own bounds: [ADR 0021](0021-sweeps-and-revolutions.md).
 
 ## Alternatives considered
 

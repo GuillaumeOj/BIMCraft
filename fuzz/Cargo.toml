@@ -137,3 +137,17 @@ path = "fuzz_targets/material_library.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "revolution"
+path = "fuzz_targets/revolution.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "sweep"
+path = "fuzz_targets/sweep.rs"
+test = false
+doc = false
+bench = false

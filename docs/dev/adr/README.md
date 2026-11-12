@@ -39,5 +39,6 @@ Copy [`_template.md`](_template.md) and follow its comments.
 | [0018](0018-sourced-values.md) | Sourced values | Accepted |
 | [0019](0019-materials-and-layered-build-ups.md) | Materials and layered build-ups | Accepted |
 | [0020](0020-camera-relative-rendering.md) | Camera-relative rendering | Accepted |
+| [0021](0021-sweeps-and-revolutions.md) | Sweeps and revolutions | Accepted |
 
 One decision predates this folder and stays in the specification: the web UI over an all-Rust UI ([specification §13](../../specifications.md#13-ui-and-rendering), "Decision record").

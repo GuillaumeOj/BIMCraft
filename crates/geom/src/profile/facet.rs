@@ -1,11 +1,13 @@
 //! Arcs replaced by chords, for operations that build planar faces only. Rationale:
 //! `docs/dev/adr/0008-arc-faceting.md`.
 
+use core::f64::consts::{PI, TAU};
 use std::borrow::Cow;
 
 use crate::ARC_CHORD_TOLERANCE;
 use crate::profile::edge::{Arc, Curve, Edge, point_on_circle};
 use crate::profile::{MAX_PROFILE_EDGES, Profile, ProfileError};
+use crate::tolerance::WITHIN_TOLERANCE;
 
 impl Profile {
     /// The same profile with every arc replaced by chords at most [`ARC_CHORD_TOLERANCE`] away
@@ -71,10 +73,8 @@ fn facet_loop(edges: &[Edge], budget: &mut usize) -> Result<Vec<Edge>, ProfileEr
 /// The fewest chords of equal angle whose sagitta is within [`ARC_CHORD_TOLERANCE`]: at least
 /// one, and three for a full circle. `None` when more than `budget` are needed.
 fn chord_count(arc: &Arc, budget: usize) -> Option<usize> {
-    // Half the largest angle a chord may span; the clamp covers radii below half the tolerance.
-    let half_angle = libm::acos((1.0 - ARC_CHORD_TOLERANCE / arc.radius).max(-1.0));
     let minimum = if arc.is_full_circle() { 3.0 } else { 1.0 };
-    let count = (arc.sweep.abs() / (2.0 * half_angle)).ceil().max(minimum);
+    let count = step_count(arc.radius, arc.sweep, f64::INFINITY, minimum);
     #[expect(
         clippy::cast_precision_loss,
         reason = "the budget is at most MAX_PROFILE_EDGES"
@@ -86,6 +86,26 @@ fn chord_count(arc: &Arc, budget: usize) -> Option<usize> {
         reason = "a whole number between 1 and the budget"
     )]
     fits.then_some(count as usize)
+}
+
+/// Whether the two ends of a turn of `sweep` radians, at `radius` metres from its axis, lie
+/// within the linear tolerance of each other: past a half turn, the chord between them,
+/// 2 r sin((2π − θ)/2), is that short. Such a turn nearly closes on itself.
+pub(crate) fn closes_on_itself(radius: f64, sweep: f64) -> bool {
+    sweep > PI && 2.0 * radius * libm::sin((TAU - sweep) / 2.0) <= WITHIN_TOLERANCE
+}
+
+/// The fewest steps of equal angle that cover `sweep` radians of a circle of `radius` metres
+/// with chords whose sagitta is within [`ARC_CHORD_TOLERANCE`] (ADR 0008), each step at most
+/// `max_step` radians and the count at least `minimum`. Returned as a whole-valued float so that
+/// callers compare it with their budget before converting it: hostile input may give a huge one.
+pub(crate) fn step_count(radius: f64, sweep: f64, max_step: f64, minimum: f64) -> f64 {
+    // Half the largest angle a chord may span, acos(1 − s/r), written 2 asin(√(s / 2r)) so that a
+    // huge radius does not round 1 − s/r to 1 and the angle to 0; the clamp covers radii below
+    // half the tolerance, where it is a half turn.
+    let half_angle = 2.0 * libm::asin(libm::sqrt((ARC_CHORD_TOLERANCE / (2.0 * radius)).min(1.0)));
+    let step = (2.0 * half_angle).min(max_step);
+    (sweep.abs() / step).ceil().max(minimum)
 }
 
 #[cfg(test)]
@@ -142,6 +162,39 @@ mod tests {
             p(0.0, 0.0),
         ));
         assert_eq!(chord_count(&short, MAX_PROFILE_EDGES), Some(1));
+    }
+
+    #[test]
+    #[expect(clippy::float_cmp, reason = "whole numbers")]
+    fn step_count_follows_the_sagitta_formula_and_its_limits() {
+        // r = 2 m: half angle acos(1 − 1e-3 / 2) = 0.03162, so a full turn needs
+        // ⌈2π / 0.06325⌉ = 100 steps, whichever the sign of the sweep.
+        assert_eq!(step_count(2.0, 2.0 * PI, f64::INFINITY, 1.0), 100.0);
+        assert_eq!(step_count(2.0, -2.0 * PI, f64::INFINITY, 1.0), 100.0);
+        // A small sweep still takes the minimum.
+        assert_eq!(step_count(2.0, 1e-3, f64::INFINITY, 1.0), 1.0);
+        assert_eq!(step_count(2.0, 1e-3, f64::INFINITY, 3.0), 3.0);
+        // Below half the tolerance one chord could span a half turn; the step limit takes over.
+        assert_eq!(step_count(4e-4, 2.0 * PI, PI / 2.0, 1.0), 4.0);
+        assert_eq!(step_count(4e-4, PI, PI / 2.0, 1.0), 2.0);
+        // A limit above the sagitta's own changes nothing.
+        assert_eq!(step_count(2.0, 2.0 * PI, PI / 2.0, 1.0), 100.0);
+        // Radius 0 does not give NaN: the clamp lets a chord span half a turn.
+        assert_eq!(step_count(0.0, PI, f64::INFINITY, 1.0), 1.0);
+        // A radius of 1.4e13 m still gets a finite count: acos(1 − s/r) would round to 0.
+        assert_eq!(step_count(1.4e13, 1e-9, f64::INFINITY, 1.0), 1.0);
+    }
+
+    #[test]
+    fn a_turn_closes_on_itself_past_a_half_turn_when_its_ends_meet() {
+        // 2 r sin((2π − θ)/2) at r = 1 m: 2 µm for 2π − θ = 2 µrad, 1 µm (within) for 1 µrad.
+        assert!(closes_on_itself(1.0, 2.0 * PI - 1e-6));
+        assert!(!closes_on_itself(1.0, 2.0 * PI - 2e-6 - 1e-9));
+        // A bigger radius moves the ends apart: at r = 10 m, 1 µrad is 10 µm.
+        assert!(!closes_on_itself(10.0, 2.0 * PI - 1e-6));
+        // A short turn's ends are close too, but it does not close: only past a half turn.
+        assert!(!closes_on_itself(1.0, 1e-9));
+        assert!(!closes_on_itself(1.0, PI));
     }
 
     #[test]
