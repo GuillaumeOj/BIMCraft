@@ -13,12 +13,14 @@
 //! inside or on the union, every vertex of the difference inside or on the first operand and not
 //! inside the second, every vertex of the intersection inside or on both. "On" is within the
 //! tolerance, or within the reach of a vertex merge, which may move a vertex across a group up to
-//! ten tolerances wide along each axis.
+//! ten tolerances wide along each axis. Every result's triangle mesh must hold the invariants of
+//! `check_tessellation` (GEO-05).
 
 #![no_main]
 
 use bimcraft_fuzz::{
-    RawProfile, all_located, direction, profile_loops, unless_too_close, volume_slack,
+    Contract, RawProfile, all_located, check_tessellation, direction, profile_loops,
+    unless_too_close, volume_slack,
 };
 use geom::{Containment, Profile, Solid};
 use libfuzzer_sys::fuzz_target;
@@ -54,6 +56,7 @@ fuzz_target!(|input: Input| {
     if let Some(union) = unless_too_close(a.union(&b), "union") {
         let union = union.expect("a union is never empty");
         assert_eq!(union.validate(), Ok(()));
+        check_tessellation(&union, Contract::WithinTolerance);
         let volume = union.volume();
         assert!(volume <= va + vb + slack && volume >= va.max(vb) - slack);
         assert!(all_located(a.vertices(), &union, not_outside));
@@ -62,6 +65,7 @@ fuzz_target!(|input: Input| {
     if let Some(cut) = unless_too_close(a.difference(&b), "difference") {
         let volume = cut.map_or(0.0, |cut| {
             assert_eq!(cut.validate(), Ok(()));
+            check_tessellation(&cut, Contract::WithinTolerance);
             assert!(all_located(cut.vertices(), &a, not_outside));
             assert!(all_located(cut.vertices(), &b, |c| c != Containment::Inside));
             cut.volume()
@@ -71,6 +75,7 @@ fuzz_target!(|input: Input| {
     if let Some(shared) = unless_too_close(a.intersection(&b), "intersection") {
         let volume = shared.map_or(0.0, |shared| {
             assert_eq!(shared.validate(), Ok(()));
+            check_tessellation(&shared, Contract::WithinTolerance);
             assert!(all_located(shared.vertices(), &a, not_outside));
             assert!(all_located(shared.vertices(), &b, not_outside));
             shared.volume()
