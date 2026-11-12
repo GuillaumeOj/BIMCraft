@@ -174,6 +174,13 @@ impl Model {
         &self.store
     }
 
+    /// The schema the model was created from: its entities, with their attributes, roles and
+    /// geometric representations (GEO-06).
+    #[must_use]
+    pub const fn namespace(&self) -> &Namespace {
+        &self.namespace
+    }
+
     /// Number of stored objects, relationships included.
     #[must_use]
     pub fn len(&self) -> usize {
