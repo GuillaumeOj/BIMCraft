@@ -165,6 +165,22 @@ impl Solid {
             .collect()
     }
 
+    /// Fills `vertices` with the vertex indices of a face's rings, the outer ring first, and
+    /// `ends` with where each ring ends in it.
+    pub(crate) fn face_vertices(
+        &self,
+        face: usize,
+        vertices: &mut Vec<usize>,
+        ends: &mut Vec<usize>,
+    ) {
+        vertices.clear();
+        ends.clear();
+        for &ring in &self.faces[face].rings {
+            vertices.extend(self.ring_vertices(ring));
+            ends.push(vertices.len());
+        }
+    }
+
     /// The half-edges of a ring, in order. Only call on rings whose links are known to close.
     fn ring_half_edges(&self, ring: usize) -> impl Iterator<Item = usize> + '_ {
         let first = self.rings[ring].first;
