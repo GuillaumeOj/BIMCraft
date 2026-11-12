@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
-  "packageManager": "bun@1.4.2",
+  "packageManager": "bun@1.4.4",
   "scripts": {
     "build:viewport": "sh ../scripts/build-viewport.sh",
     "dev": "bun run build:viewport && vite",
