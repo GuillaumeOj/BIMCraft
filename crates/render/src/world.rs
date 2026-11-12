@@ -822,7 +822,7 @@ mod tests {
         assert_eq!(world.ghost_state_count(), 0);
         let list = prepare(&mut world, [0.0; 3]);
         assert_eq!((list.stats.fine, list.stats.ghosts), (3, 0));
-        assert!(list.ghost_buckets.is_empty());
+        assert_eq!(list.ghost_buckets.len(), 0);
         // A removed ghost is no longer counted.
         world.set_state(objects[2], DisplayState::Ghost).unwrap();
         world.remove_object(objects[2]).unwrap();

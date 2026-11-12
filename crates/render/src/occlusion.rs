@@ -352,7 +352,7 @@ mod tests {
         assert_eq!(occlusion.visit(0, &BOX, None, false, true), Step::Leave);
         let (mut queries, mut records) = (Vec::new(), Vec::new());
         occlusion.select(8, &view_from([0.0; 3]), &mut queries, &mut records);
-        assert!(queries.is_empty());
+        assert_eq!(queries.len(), 0);
         // Back in view: drawn, although its last result is recent, until a new query answers.
         assert!(!frame(&mut occlusion, 8).0);
         let back = occlusion.frame;

@@ -58,7 +58,6 @@ pub(crate) fn count(n: usize) -> f64 {
 }
 
 #[cfg(test)]
-#[expect(clippy::float_cmp, reason = "small integers and halves, exact in f64")]
 mod tests {
     use super::*;
 

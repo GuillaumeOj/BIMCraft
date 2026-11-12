@@ -606,7 +606,7 @@ mod tests {
         ] {
             let message = error.to_string();
             assert!(!message.contains("123456") && !message.contains("987654"));
-            assert!(!message.is_empty());
+            assert_ne!(message, "");
         }
     }
 

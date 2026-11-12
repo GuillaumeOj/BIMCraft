@@ -813,7 +813,7 @@ mod tests {
              ENTITY X; END_ENTITY;",
         );
         assert_eq!(model.select_members("A"), ["C", "X"]);
-        assert!(model.select_members("C").is_empty());
+        assert_eq!(model.select_members("C").len(), 0);
     }
 
     #[test]
@@ -912,7 +912,7 @@ mod tests {
         );
         let root = model.entity("root").unwrap();
         assert!(root.is_abstract);
-        assert!(root.supertypes.is_empty());
+        assert_eq!(root.supertypes.len(), 0);
         let leaf = model.entity("Leaf").unwrap();
         assert!(!leaf.is_abstract);
         assert_eq!(leaf.supertypes, ["Mid"]);

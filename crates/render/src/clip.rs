@@ -148,10 +148,6 @@ fn narrow(value: f64) -> f32 {
 }
 
 #[cfg(test)]
-#[expect(
-    clippy::float_cmp,
-    reason = "the values compared are exact: unit axes, small integers and zeros"
-)]
 mod tests {
     use super::*;
     use crate::MAX_WORLD_COORDINATE;

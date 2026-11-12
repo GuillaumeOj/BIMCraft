@@ -79,7 +79,7 @@ fn computes_each_node_once_then_serves_the_cache() {
     assert_eq!(model.take_computed(), [0, 1, 2, 3]);
     assert_eq!(model.get(&mut graph, 3), 20);
     assert_eq!(model.get(&mut graph, 1), 10);
-    assert!(model.take_computed().is_empty());
+    assert_eq!(model.take_computed().len(), 0);
 }
 
 #[test]
@@ -107,7 +107,7 @@ fn invalidating_an_input_recomputes_only_its_dependents() {
     assert_eq!(model.get(&mut graph, 3), 14);
     assert_eq!(model.take_computed(), [0, 1, 2, 3]);
     assert_eq!(model.get(&mut graph, 5), 0);
-    assert!(model.take_computed().is_empty());
+    assert_eq!(model.take_computed().len(), 0);
 }
 
 #[test]
@@ -143,7 +143,7 @@ fn redeclaring_the_same_dependencies_keeps_the_cache() {
     assert_eq!(graph.set_dependencies(3, [2, 1, 2]), Ok(()));
     assert!(graph.is_clean(&3));
     model.get(&mut graph, 3);
-    assert!(model.take_computed().is_empty());
+    assert_eq!(model.take_computed().len(), 0);
 }
 
 #[test]
@@ -268,7 +268,7 @@ fn reports_the_whole_cycle_and_leaves_the_graph_unchanged() {
     assert!(graph.is_clean(&5));
     assert!(!graph.is_clean(&7), "the rejected call adds no node");
     assert_eq!(model.get(&mut graph, 5), 0);
-    assert!(model.take_computed().is_empty());
+    assert_eq!(model.take_computed().len(), 0);
 }
 
 #[test]

@@ -337,10 +337,6 @@ pub(crate) fn plane_half(scene_radius: f64) -> f64 {
 }
 
 #[cfg(test)]
-#[expect(
-    clippy::float_cmp,
-    reason = "exact values: axes, sums of small integers"
-)]
 mod tests {
     use super::*;
     use crate::math::norm;

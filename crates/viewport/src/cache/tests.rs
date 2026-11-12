@@ -1,5 +1,3 @@
-#![expect(clippy::float_cmp, reason = "small integers and halves, exact in f64")]
-
 use super::*;
 use crate::test_support::{Call, FakeSink, box_mesh, cubes, element, id};
 
@@ -146,7 +144,7 @@ fn inconsistent_deltas_change_nothing() {
         run(&mut cache, &mut sink, &full),
         Err(SceneError::UnknownMesh)
     );
-    assert!(sink.take_calls().is_empty());
+    assert_eq!(sink.take_calls().len(), 0);
     assert_eq!(cache.revision(), Some(5));
     // Removing the last user of a mesh with the mesh is consistent.
     let mut both = incremental(6, 5);
@@ -168,7 +166,7 @@ fn a_mesh_removed_and_sent_again_keeps_its_objects() {
     delta.removed_meshes = vec![7];
     delta.meshes = vec![box_mesh(7, [0.0; 3], [-0.5; 3], [0.5; 3])];
     run(&mut cache, &mut sink, &delta).unwrap();
-    assert!(sink.take_calls().is_empty());
+    assert_eq!(sink.take_calls().len(), 0);
     assert!(sink.objects.contains_key(&id(1)));
     assert!(cache.element(id(1)).is_some());
 }

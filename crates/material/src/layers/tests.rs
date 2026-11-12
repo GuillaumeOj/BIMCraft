@@ -194,7 +194,7 @@ fn every_problem_is_reported_at_once_with_its_layer() {
             LayerSetError::InvalidMaterial(4),
         ]
     );
-    assert!(LayerSet::problems("W", None, &wall(), category).is_empty());
+    assert_eq!(LayerSet::problems("W", None, &wall(), category).len(), 0);
     // An unknown material is the caller's to report: `category_of` says None only for objects
     // that are not materials, and the model layer turns that into UnknownMaterial.
     assert_eq!(

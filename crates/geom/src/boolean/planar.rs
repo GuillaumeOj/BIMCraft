@@ -306,7 +306,7 @@ mod tests {
     #[test]
     fn open_chains_are_dropped() {
         let edges: BTreeSet<_> = [(0, 1), (1, 2)].into_iter().collect();
-        assert!(chain(&edges, at).is_empty());
+        assert_eq!(chain(&edges, at).len(), 0);
     }
 
     #[test]

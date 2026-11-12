@@ -404,6 +404,6 @@ mod tests {
 
     #[test]
     fn a_wall_above_a_face_cuts_nothing() {
-        assert!(cut(0.5, 1.0).is_empty());
+        assert_eq!(cut(0.5, 1.0).len(), 0);
     }
 }

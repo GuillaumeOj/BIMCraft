@@ -343,7 +343,7 @@ fn a_transaction_sets_and_clears_the_georeference_in_one_undo_step() {
         value: Some((2154, [652_000.0, 6_862_000.0, 35.0], 0.25, 0.9996)),
     };
     let event = document.execute(set, Origin::Ui).unwrap();
-    assert!(!format!("{event:?}").is_empty());
+    assert_ne!(format!("{event:?}").len(), 0);
     assert_eq!(read(document.model()), Ok(Some((SITE_ID, sample(None)))));
 
     let clear = SetGeoreference {

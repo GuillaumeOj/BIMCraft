@@ -273,7 +273,7 @@ mod tests {
     fn memory_storage_ignores_operations_that_are_never_awaited() {
         let storage = MemoryStorage::new();
         drop(storage.write("a", b"one"));
-        assert!(storage.keys().is_empty());
+        assert_eq!(storage.keys().len(), 0);
         assert_eq!(now_or_never(storage.write("a", b"one")), Some(Ok(())));
         drop(storage.remove("a"));
         assert_eq!(storage.keys(), ["a"]);

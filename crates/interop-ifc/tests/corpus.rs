@@ -68,7 +68,7 @@ fn is_mapped(record: &Record) -> bool {
 #[test]
 fn the_manifest_lists_the_corpus() {
     let names = names();
-    assert!(!names.is_empty());
+    assert_ne!(names.len(), 0);
     assert_eq!(
         names.iter().collect::<BTreeSet<_>>().len(),
         names.len(),

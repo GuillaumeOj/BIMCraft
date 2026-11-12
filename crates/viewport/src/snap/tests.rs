@@ -1,5 +1,3 @@
-#![expect(clippy::float_cmp, reason = "small integers, exact in f64")]
-
 use geom::{Point3, Vector3};
 use render::Projection;
 

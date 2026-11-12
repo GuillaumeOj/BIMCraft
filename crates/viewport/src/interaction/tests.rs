@@ -199,7 +199,7 @@ fn a_scene_the_renderer_refuses_is_reported_and_dropped() {
     assert!(events.contains(&ViewportEvent::Error(ErrorKey::SceneRejected)));
     assert!(events.contains(&ViewportEvent::Selection(Vec::new())));
     assert_eq!(viewport.revision(), None);
-    assert!(viewport.selection().is_empty());
+    assert_eq!(viewport.selection().len(), 0);
 }
 
 #[test]
@@ -217,7 +217,7 @@ fn removed_elements_leave_the_selection_and_the_hover() {
     let events = viewport.drain_events();
     assert!(events.contains(&ViewportEvent::Selection(Vec::new())));
     assert!(events.contains(&ViewportEvent::Hover(None)));
-    assert!(viewport.selection().is_empty());
+    assert_eq!(viewport.selection().len(), 0);
 }
 
 // Selection.
@@ -258,7 +258,7 @@ fn clicks_select_add_toggle_and_clear() {
     assert_eq!(viewport.selection().len(), 2);
     quiet(&mut viewport);
     click(&mut viewport, [2.0, 2.0], NONE);
-    assert!(viewport.selection().is_empty());
+    assert_eq!(viewport.selection().len(), 0);
     assert_eq!(
         announced_now(&mut viewport),
         [AnnouncementKey::SelectionCleared]
@@ -278,7 +278,7 @@ fn hover_follows_the_pointer_and_is_not_announced() {
     );
     let beside = offset(px(&viewport, [3.0, -0.5, 0.5]), 1.0, 0.0);
     hover(&mut viewport, beside);
-    assert!(viewport.drain_events().is_empty());
+    assert_eq!(viewport.drain_events().len(), 0);
     viewport.input(InputEvent::PointerLeave);
     assert_eq!(viewport.drain_events(), [ViewportEvent::Hover(None)]);
     assert!(viewport.sink().states.is_empty());
@@ -300,10 +300,10 @@ fn esc_and_commands_clear_or_set_the_selection() {
         "the same selection again is no change"
     );
     key(&mut viewport, Key::Escape);
-    assert!(viewport.selection().is_empty());
+    assert_eq!(viewport.selection().len(), 0);
     viewport.command(ViewCommand::Select(vec![id(1)]));
     viewport.command(ViewCommand::ClearSelection);
-    assert!(viewport.selection().is_empty());
+    assert_eq!(viewport.selection().len(), 0);
 }
 
 #[test]
@@ -325,7 +325,7 @@ fn a_press_that_barely_moves_is_a_click() {
         mods: NONE,
     });
     assert_eq!(viewport.selection(), [id(1)]);
-    assert!(intents(&viewport.drain_events()).is_empty());
+    assert_eq!(intents(&viewport.drain_events()).len(), 0);
 }
 
 // Moves.
@@ -390,7 +390,7 @@ fn dragging_an_element_moves_it_with_snapping() {
         ..SceneDelta::default()
     };
     viewport.apply_delta(&delta).unwrap();
-    assert!(viewport.sink().preview.ghosts.is_empty());
+    assert_eq!(viewport.sink().preview.ghosts.len(), 0);
     assert_eq!(
         viewport.sink().states.get(&id(1)),
         Some(&DisplayState::Selected)
@@ -417,7 +417,7 @@ fn a_drag_on_nothing_does_nothing_and_shift_drag_pans() {
         mods: NONE,
     });
     assert_eq!(viewport.camera(), camera);
-    assert!(intents(&viewport.drain_events()).is_empty());
+    assert_eq!(intents(&viewport.drain_events()).len(), 0);
     let on = px(&viewport, [0.0, -0.5, 0.5]);
     viewport.input(InputEvent::PointerDown {
         pos: on,
@@ -434,7 +434,7 @@ fn a_drag_on_nothing_does_nothing_and_shift_drag_pans() {
         mods: SHIFT,
     });
     assert_ne!(viewport.camera(), camera);
-    assert!(viewport.selection().is_empty());
+    assert_eq!(viewport.selection().len(), 0);
     // The grabbed point stays under the pointer.
     let grabbed = px(&viewport, [0.0, -0.5, 0.5]);
     assert!((grabbed[0] - on[0] - 30.0).abs() < 1e-6 && (grabbed[1] - on[1]).abs() < 1e-6);
@@ -450,7 +450,7 @@ fn the_move_tool_takes_a_base_a_target_and_typed_distances() {
     );
     // Without a selection, clicks do nothing.
     click_on(&mut viewport, CORNER_1, NONE);
-    assert!(viewport.selection().is_empty());
+    assert_eq!(viewport.selection().len(), 0);
     viewport.command(ViewCommand::Select(vec![id(1)]));
     assert_eq!(
         tool_states(&viewport.drain_events()),
@@ -527,7 +527,7 @@ fn bad_typed_values_are_ignored() {
     key(&mut viewport, Key::Backspace);
     // Letters are not typed values.
     key(&mut viewport, Key::Char('x'));
-    assert!(intents(&viewport.drain_events()).is_empty());
+    assert_eq!(intents(&viewport.drain_events()).len(), 0);
 }
 
 #[test]
@@ -551,7 +551,7 @@ fn esc_steps_back_one_step_at_a_time() {
     );
     assert_eq!(viewport.selection(), [id(1)]);
     viewport.command(ViewCommand::Cancel);
-    assert!(viewport.selection().is_empty());
+    assert_eq!(viewport.selection().len(), 0);
 }
 
 #[test]
@@ -569,8 +569,8 @@ fn esc_clears_a_typed_distance_before_cancelling_the_move() {
     assert!(viewport.typed.text().is_none());
     assert!(matches!(viewport.step, Step::MoveTarget { base, .. } if base == CORNER_1));
     let events = viewport.drain_events();
-    assert!(tool_states(&events).is_empty());
-    assert!(announced(&mut viewport, &events).is_empty());
+    assert_eq!(tool_states(&events).len(), 0);
+    assert_eq!(announced(&mut viewport, &events).len(), 0);
     let label = events.iter().rev().find_map(|event| match event {
         ViewportEvent::PreviewLabel(Some(label)) => Some(label),
         _ => None,
@@ -600,7 +600,7 @@ fn esc_clears_a_typed_distance_before_cancelling_the_move() {
         announced(&mut viewport, &events),
         [AnnouncementKey::MoveCancelled]
     );
-    assert!(intents(&events).is_empty());
+    assert_eq!(intents(&events).len(), 0);
 }
 
 #[test]
@@ -617,7 +617,7 @@ fn a_waiting_preview_vanishes_after_its_frames_or_on_esc() {
     assert_eq!(viewport.sink().preview.ghosts.len(), 1);
     let tick = viewport.tick();
     assert!(tick.draw);
-    assert!(viewport.sink().preview.ghosts.is_empty());
+    assert_eq!(viewport.sink().preview.ghosts.len(), 0);
     assert!(!viewport.tick().again);
     // Esc drops it at once, before the selection.
     viewport.set_tool(Tool::Move);
@@ -625,7 +625,7 @@ fn a_waiting_preview_vanishes_after_its_frames_or_on_esc() {
     click_on(&mut viewport, CORNER_2, NONE);
     viewport.set_tool(Tool::Select);
     key(&mut viewport, Key::Escape);
-    assert!(viewport.sink().preview.ghosts.is_empty());
+    assert_eq!(viewport.sink().preview.ghosts.len(), 0);
     assert_eq!(viewport.selection(), [id(1)]);
 }
 
@@ -638,7 +638,7 @@ fn ghosts_the_device_cannot_hold_are_dropped_quietly() {
     click_on(&mut viewport, CORNER_1, NONE);
     hover_on(&mut viewport, CORNER_2);
     let preview = viewport.sink().preview.clone();
-    assert!(preview.ghosts.is_empty());
+    assert_eq!(preview.ghosts.len(), 0);
     assert_eq!(preview.lines.len(), 1, "the rubber band stays");
     assert_ne!(
         viewport.sink().states.get(&id(1)),
@@ -668,7 +668,7 @@ fn alt_suspends_snapping_until_released() {
         })
     };
     assert_eq!(snapping(&viewport.drain_events()), Some(false));
-    assert!(viewport.sink().preview.markers.is_empty());
+    assert_eq!(viewport.sink().preview.markers.len(), 0);
     viewport.input(InputEvent::KeyUp {
         key: Key::Alt,
         mods: NONE,
@@ -687,7 +687,7 @@ fn alt_suspends_snapping_until_released() {
     assert_eq!(snapping(&viewport.drain_events()), Some(true));
     viewport.command(ViewCommand::Snapping(false));
     assert_eq!(snapping(&viewport.drain_events()), Some(false));
-    assert!(viewport.sink().preview.markers.is_empty());
+    assert_eq!(viewport.sink().preview.markers.len(), 0);
 }
 
 // Blocks.
@@ -1031,7 +1031,7 @@ fn a_flat_block_is_refused_and_esc_steps_back() {
     assert_eq!(viewport.tool_step(), ToolStep::Height);
     type_text(&mut viewport, "0");
     key(&mut viewport, Key::Enter);
-    assert!(intents(&viewport.drain_events()).is_empty());
+    assert_eq!(intents(&viewport.drain_events()).len(), 0);
     // The refused value is still typed: Esc empties it first, then steps back.
     key(&mut viewport, Key::Escape);
     assert_eq!(viewport.tool_step(), ToolStep::Height);
@@ -1215,7 +1215,7 @@ fn a_refused_typed_height_places_nothing() {
     for bad in [0.0, -1.0, f64::NAN, 2e6] {
         viewport.command(ViewCommand::TypedDistance(bad));
     }
-    assert!(intents(&viewport.drain_events()).is_empty());
+    assert_eq!(intents(&viewport.drain_events()).len(), 0);
     assert_eq!(viewport.tool_step(), ToolStep::Height);
 }
 
@@ -1318,7 +1318,7 @@ fn a_drag_cut_by_a_blur_is_cancelled_and_leaves_no_marker() {
     viewport.input(InputEvent::Blur);
     assert_eq!(viewport.tool_step(), ToolStep::Idle);
     click(&mut viewport, offset(to, 1.0, 0.0), NONE);
-    assert!(intents(&viewport.drain_events()).is_empty());
+    assert_eq!(intents(&viewport.drain_events()).len(), 0);
     // A drag that ends leaves no snap marker behind in the Select tool.
     press(&mut viewport);
     viewport.input(InputEvent::PointerUp {
@@ -1327,7 +1327,7 @@ fn a_drag_cut_by_a_blur_is_cancelled_and_leaves_no_marker() {
         mods: NONE,
     });
     assert_eq!(intents(&viewport.drain_events()).len(), 1);
-    assert!(viewport.sink().preview.markers.is_empty());
+    assert_eq!(viewport.sink().preview.markers.len(), 0);
 }
 
 #[test]
@@ -1355,7 +1355,7 @@ fn a_pointer_leave_mid_drag_cancels_without_an_intent() {
         button: Button::Primary,
         mods: NONE,
     });
-    assert!(intents(&viewport.drain_events()).is_empty());
+    assert_eq!(intents(&viewport.drain_events()).len(), 0);
 }
 
 #[test]
@@ -1380,7 +1380,7 @@ fn a_blur_mid_drag_ends_the_move_even_with_a_value_typed() {
     viewport.input(InputEvent::Blur);
     assert_eq!(viewport.tool_step(), ToolStep::Idle);
     click(&mut viewport, offset(to, 1.0, 0.0), NONE);
-    assert!(intents(&viewport.drain_events()).is_empty());
+    assert_eq!(intents(&viewport.drain_events()).len(), 0);
 }
 
 #[test]
@@ -1398,7 +1398,7 @@ fn a_pointer_leave_after_a_press_makes_the_release_no_click() {
         button: Button::Primary,
         mods: NONE,
     });
-    assert!(viewport.selection().is_empty());
+    assert_eq!(viewport.selection().len(), 0);
 }
 
 #[test]

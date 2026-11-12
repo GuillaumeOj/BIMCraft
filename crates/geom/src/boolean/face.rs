@@ -507,7 +507,7 @@ mod tests {
         let pool = Pool::of(vec![[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]]);
         let mut face = PlanarFace::new(vec![vec![0, 1, 2]], &pool, 0);
         face.remap(&[0, 0, 2], &pool);
-        assert!(face.rings.is_empty());
+        assert_eq!(face.rings.len(), 0);
     }
 
     #[test]

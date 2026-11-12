@@ -585,7 +585,7 @@ fn objects_under_a_rectangle_of_pixels_are_found() {
             found.push(id);
         })
         .unwrap();
-    assert!(found.is_empty());
+    assert_eq!(found, [] as [ObjectId; 0]);
     assert_eq!(
         fixture
             .renderer

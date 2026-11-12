@@ -995,7 +995,7 @@ fn every_error_kind_has_a_message() {
         ValidationErrorKind::TypeEntityWithoutType,
     ];
     for kind in kinds {
-        assert!(!kind.to_string().is_empty());
+        assert_ne!(kind.to_string().len(), 0);
     }
     assert_eq!(
         ValidationErrorKind::DefaultMismatch {

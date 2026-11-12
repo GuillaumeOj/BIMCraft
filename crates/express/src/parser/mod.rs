@@ -378,7 +378,7 @@ mod tests {
         let schema = parse("SCHEMA demo 'v1'; END_SCHEMA;").unwrap();
         assert_eq!(schema.name.name, "demo");
         assert_eq!(schema.version.as_deref(), Some("v1"));
-        assert!(schema.declarations.is_empty());
+        assert_eq!(schema.declarations.len(), 0);
         assert_eq!(parse("schema s; end_schema;").unwrap().version, None);
     }
 

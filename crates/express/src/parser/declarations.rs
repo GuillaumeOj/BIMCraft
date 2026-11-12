@@ -561,7 +561,7 @@ mod tests {
         else {
             panic!("not an enumeration");
         };
-        assert!(items.is_empty());
+        assert_eq!(items.len(), 0);
     }
 
     #[test]
@@ -589,7 +589,7 @@ mod tests {
         };
         assert!(extensible && generic_entity);
         assert_eq!(based_on.unwrap().name, "S");
-        assert!(items.is_empty());
+        assert_eq!(items.len(), 0);
     }
 
     #[test]
@@ -753,7 +753,7 @@ mod tests {
         let Declaration::Function(function) = declarations.remove(0) else {
             panic!("not a function");
         };
-        assert!(function.parameters.is_empty());
+        assert_eq!(function.parameters.len(), 0);
         let Declaration::Procedure(procedure) = declarations.remove(0) else {
             panic!("not a procedure");
         };
@@ -761,7 +761,7 @@ mod tests {
         let Declaration::Procedure(procedure) = declarations.remove(0) else {
             panic!("not a procedure");
         };
-        assert!(procedure.algorithm.body.is_empty());
+        assert_eq!(procedure.algorithm.body.len(), 0);
     }
 
     #[test]
