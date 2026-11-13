@@ -8,7 +8,9 @@
 
 NFR-02 asks for 60 frames per second while orbiting the reference model of the specification (§14): a building of about 100,000 elements. Building models repeat a few element types many times: columns, beams, ceiling tiles, desks. Before this decision the renderer drew each object with its own draw call and its own slot in a dynamic uniform buffer, and drew every object every frame, whether it was in view, behind the camera or smaller than a pixel. 100,000 draw calls per frame is far beyond what WebGPU in a browser sustains, and most of them draw nothing visible.
 
-[ADR 0020](0020-camera-relative-rendering.md) still holds: each object's model-view is computed on the CPU in `f64` relative to the camera, and only that result reaches the GPU in `f32`. Whatever is added here keeps that rule and runs on native GPUs and WebGPU alike (ARCH-01). The host deduplicates element meshes by content (spec D3), so objects that look alike share one mesh. Occlusion culling comes next ([#70](https://github.com/GuillaumeOj/BIMCraft/issues/70), task B3) and builds on what is decided here.
+[ADR 0020](0020-camera-relative-rendering.md) still holds: each object's model-view is computed on the CPU in `f64` relative to the camera, and only that result reaches the GPU in `f32`. Whatever is added here keeps that rule and runs on native GPUs and WebGPU alike (ARCH-01). The host deduplicates element meshes by content (spec D3), so objects that look alike share one mesh. Occlusion culling, added afterwards ([#70](https://github.com/GuillaumeOj/BIMCraft/issues/70), task B3), builds on the hierarchy decided here; its section below amends this record.
+
+Inside a building, most elements are hidden behind slabs, walls and façades. Frustum culling keeps them all when they are in front of the camera, so the GPU still draws them. WebGPU has occlusion queries (`wgpu::QueryType::Occlusion`: how many samples of a draw passed the depth test), but no conditional rendering and no way to read a result in the same frame: results come back through a buffer mapped asynchronously, a frame or more later, and nothing may block in a browser.
 
 ## Decision
 
@@ -38,7 +40,18 @@ The sphere does not depend on the rotation, so turning an element does not chang
 
 **Hysteresis.** Less detail is taken as soon as the size falls under a threshold; more detail only once the size reaches the threshold times `1 + hysteresis`. An object whose size wavers inside that band keeps its level, so it does not flicker while the camera moves. An object that is new, or was out of view in the previous frame, takes the level of its size without hysteresis. Changing the settings resets every object the same way.
 
-**Settings** (`RenderSettings`, validated by `Renderer::set_settings`). Thresholds are between 0 and 10⁵ px, the hysteresis between 0 and 1. A threshold of 0 turns its feature off, and `frustum_culling: false` turns culling off; the pixel-comparison tests use these switches.
+**Occlusion culling.** Objects are tested in *clusters*, not one by one: a cluster is a node of the hierarchy with at most 128 objects below it whose box is compact, that is, of a surface area at most 3 times that of its objects' boxes together. Each node keeps its count of leaves and the sum of its leaves' areas, updated with the bounds. Without the compactness rule, a lone wall joins the 70 objects behind it in one box that the wall itself makes visible; with it, the reference model has 5,780 clusters. Each frame:
+
+1. The world walks the hierarchy down to the clusters in view (`Bvh::clusters`, `crates/render/src/occlusion.rs`). A node is skipped, with every object below it, when a *trusted* result found it hidden: a result of a query issued while the node was in view without a break, after the last edit of the hierarchy or the settings, at most 4 frames ago. Otherwise a cluster is drawn.
+2. When trusted results found both children of a node above the clusters hidden, and no newer one found the node visible, the node is skipped and tested in their place (the pull-up of coherent hierarchical culling, CHC++). Over a few frames a hidden region collapses to a handful of queries.
+3. After the opaque pass, the same render pass draws the box of each node chosen for a query, enlarged by 10⁻⁵ of its radius plus its distance, from a unit cube and a camera-relative model-view computed in `f64` like every object's. The pipeline tests depth with `GreaterEqual` and writes neither colour nor depth, inside one occlusion query per box. A box across the near plane is never queried, since clipping could hide what it holds; its objects are drawn.
+4. The results are resolved into a buffer, copied into a readback buffer, and mapped asynchronously. A later frame reads the mapped buffers it finds (`Device::poll` without waiting runs the callbacks natively; the browser runs them itself) and records each result against the frame that issued it. At most 3 readback buffers are on their way; when all are, the frame issues no queries.
+
+The budget of queries per frame (`occlusion_queries`, 1,024 by default, at most 4,096, WebGPU's largest query set) goes first to the nodes the frame skips, so that what they would reveal is found soon, then to the clusters queried longest ago.
+
+The rule is conservative: a node without a trusted result is drawn. Adding, moving or removing an object, or changing the settings, distrusts every earlier result, so removing a wall shows what it hid in the same frame; a node newly in view is drawn until a query issued while it is in view answers; turning the camera in place changes what hides what nowhere. What remains is the latency of the results: an object revealed by a camera that moves sideways (parallax) or by a level-of-detail switch of its occluder appears one or two frames late, at most 4. The draw order does not change, so a frame without reveals is pixel for pixel the frame without occlusion culling.
+
+**Settings** (`RenderSettings`, validated by `Renderer::set_settings`). Thresholds are between 0 and 10⁵ px, the hysteresis between 0 and 1, the occlusion queries between 1 and 4,096. A threshold of 0 turns its feature off, `frustum_culling: false` turns frustum culling off and `occlusion_culling: false` occlusion culling; the pixel-comparison tests use these switches.
 
 | Setting | Default | Why |
 | --- | --- | --- |
@@ -46,10 +59,12 @@ The sphere does not depend on the rotation, so turning an element does not chang
 | `coarse_below_px` | 24 px | Below about 24 px, the I-sections, doors, desks and chairs of a building are not told apart from their boxes. |
 | `hide_below_px` | 1 px | Below a pixel an object covers at most one sample, which it would hit or miss by chance anyway. |
 | `hysteresis` | 25 % | Wider than the change in projected size of one step of a smooth orbit or zoom. |
+| `occlusion_culling` | on | It changes no pixel of a still view; a moving view can show a revealed object a frame or two late. |
+| `occlusion_queries` | 1,024 | A sixth of the reference model's clusters per frame, hidden ones first: a hidden region needs one query per frame once pulled up, and the boxes stay cheap draws next to the objects. |
 
-**Public API.** `add_mesh`, `remove_mesh`, `add_object`, `set_placement` and `remove_object` keep their signatures and meaning. `render` returns `FrameStats`: the counts of objects culled outside the view, culled as too small, drawn fine, drawn coarse, and the draw calls. `prepare_frame` runs the CPU part of a frame alone, for the benches and the tests of culling and levels. `drawn_level` tells the level an object got in the last prepared frame. `settings` and `set_settings` read and change the settings.
+**Public API.** `add_mesh`, `remove_mesh`, `add_object`, `set_placement` and `remove_object` keep their signatures and meaning. `render` returns `FrameStats`: the counts of objects culled outside the view, culled as hidden behind others, culled as too small, drawn fine, drawn coarse, the draw calls and the occlusion queries. `prepare_frame` runs the CPU part of a frame alone, for the benches and the tests of culling and levels; it uses the occlusion results already delivered but issues no queries. `drawn_level` tells the level an object got in the last prepared frame. `settings` and `set_settings` read and change the settings.
 
-**Reference model and measurements.** `crates/render/tests/support/reference.rs` generates the reference model without randomness: 10 storeys of about 10,000 elements each, 100,150 in all, built from 15 meshes. Each storey has columns, beams, slab panels, a curtain wall, cellular offices with doors and furniture, an open plan, and a ceiling of 0.6 m tiles with lights and sprinkler heads. The model sits at a national-grid offset, (2.5·10⁶, 1.2·10⁶, 0) m. The tests, the unit tests of the crate and the benches share it. `cargo bench -p render --bench frame` measures the frame preparation while orbiting, and the GPU frame time on a hardware adapter. The method and the reference numbers are in [performance-baselines.md](../performance-baselines.md); a weekly workflow keeps criterion's output ([quality.md](../quality.md#benchmarks)). The target for the CPU preparation is a median under 4 ms, which leaves the GPU the rest of the 16.7 ms of a frame at 60 fps.
+**Reference model and measurements.** `crates/render/tests/support/reference.rs` generates the reference model without randomness: 10 storeys of about 10,000 elements each, 100,150 in all, built from 15 meshes. Each storey has columns, beams, slab panels, a curtain wall, cellular offices with doors and furniture, an open plan, and a ceiling of 0.6 m tiles with lights and sprinkler heads. The model sits at a national-grid offset, (2.5·10⁶, 1.2·10⁶, 0) m. The tests, the unit tests of the crate and the benches share it. `cargo bench -p render --bench frame` measures the frame preparation while orbiting, and the GPU frame time on a hardware adapter, each with occlusion culling on and off. The method and the reference numbers are in [performance-baselines.md](../performance-baselines.md); a weekly workflow keeps criterion's output ([quality.md](../quality.md#benchmarks)). The target for the CPU preparation is a median under 4 ms, which leaves the GPU the rest of the 16.7 ms of a frame at 60 fps.
 
 **Verification.** The tests check behaviour, not time:
 
@@ -58,15 +73,18 @@ The sphere does not depend on the rotation, so turning an element does not chang
 - A fixed-seed property test checks that the hierarchy finds exactly what a brute-force scan finds, through any sequence of insertions, moves and removals.
 - Unit tests check the frustum planes at 10⁷ m from the origin.
 - GPU tests run on lavapipe in CI and are never skipped. Objects sharing a mesh draw the same pixels in one call as separate meshes do in 25. The culled frame equals the unculled frame on part of the reference model. A small detailed object draws exactly its bounding box. A sub-pixel object leaves the frame empty.
+- Occlusion culling is tested on the CPU with the results a GPU would give behind a wall: when a cluster is skipped, when a result expires or is distrusted, the pull-up of hidden siblings, the order of the budget, the query boxes far from the origin, and the near plane. On a GPU, a wall hides a group of 81 cubes: once the results are in, exactly that group is skipped, and every frame equals the frame without occlusion culling pixel for pixel, as do the frame after the wall is removed and the frame after the camera turns a new group into view.
 
 ## Consequences
 
 - A frame costs one draw call per mesh and level in view, not one per object; with the reference model, at most 30.
 - The CPU still visits every object each frame to choose its level and write its record, but tests boxes only against the nodes of the hierarchy that cross the view. The cost grows with the objects in view, not with the size of the model.
-- Picking (B6) can walk the same hierarchy with a ray. Occlusion culling (B3) adds a test per spatial cluster before the buckets are filled. Highlight and ghost states (B5) extend the instance record.
+- Picking (B6) can walk the same hierarchy with a ray. Highlight and ghost states (B5) extend the instance record.
 - What an object looks like no longer depends only on its own state: its projected size and its previous level matter. `drawn_level` and `FrameStats` make that observable.
 - Meshes whose local frame is not the element's (a mesh built in world coordinates, for instance) get a coarse box aligned with the world rather than the element: still enclosing, only looser.
-- Occlusion culling is not part of this decision: objects hidden behind others are still drawn.
+- With occlusion culling, an object revealed by a moving camera can appear up to a few frames late (one or two at 60 fps on a GPU that keeps up, at most 4). Tests that compare pixels after a camera move turn occlusion culling off, or turn the camera in place.
+- Each frame draws up to 1,024 more small boxes, each between its own begin and end of query; the cost moves from drawing hidden objects to drawing their boxes. The walk of the clusters costs the CPU 0.1 to 0.4 ms on the reference model.
+- Results are kept per node of the hierarchy and distrusted wholesale on every edit, so a drag that moves objects every frame gets no occlusion culling until it stops.
 
 ## Alternatives considered
 
@@ -77,10 +95,16 @@ The sphere does not depend on the rotation, so turning an element does not chang
 - **Culling against bounding spheres only.** Cheaper per test, but long thin elements (beams, walls) have spheres far larger than their boxes, so fewer of them are culled.
 - **Discrete LOD from schema-declared coarse representations.** Out of scope for the MVP (spec "Out of scope"); a derived box needs nothing from the model.
 - **Switching levels without hysteresis.** Objects near a threshold flicker during a smooth orbit.
+- **Occlusion results read back in the same frame.** It needs a blocking wait for the GPU, which a browser forbids and which stalls the pipeline natively.
+- **Conditional rendering or GPU-driven culling** (a compute pass testing boxes against a depth pyramid and writing indirect draws). WebGPU has no conditional rendering; a depth pyramid needs compute and indirect draws everywhere, a larger change better made with the rest of a GPU-driven renderer.
+- **A software rasteriser of occluders on the CPU.** It needs hand-picked occluders and costs the CPU the time the 4 ms target leaves to the rest of the frame.
+- **Clusters by count alone, or a query per object.** By count alone, large occluders share a box with what they hide; per object, the queries of the reference model would outnumber its draw calls a thousandfold.
+- **Results kept per subtree with version stamps**, so an edit distrusts only the clusters it touched. Moving an occluder reveals clusters it does not touch, so the stamps alone would let them pop late; a sound version would need the region the occluder swept. Distrusting everything is exact and simple; edits come at user speed, except during drags.
 
 ## References
 
 - [Specification](../../specifications.md) §13 (VP-02), §14 (NFR-02 and the reference model).
 - [ADR 0020](0020-camera-relative-rendering.md): camera-relative rendering.
 - E. Catto, *Dynamic Bounding Volume Hierarchies*, GDC 2019, and the dynamic tree of Box2D.
+- O. Mattausch, J. Bittner, M. Wimmer, *CHC++: Coherent Hierarchical Culling Revisited*, Eurographics 2008.
 - Issue [#70](https://github.com/GuillaumeOj/BIMCraft/issues/70) and the feature spec of the 3D viewport epic.

@@ -25,6 +25,7 @@ mod camera;
 mod frustum;
 mod lod;
 mod mesh;
+mod occlusion;
 mod placement;
 mod renderer;
 mod transform;
