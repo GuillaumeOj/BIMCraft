@@ -1,6 +1,7 @@
 //! The CPU side of the renderer: the meshes and objects it holds, their bounds in a hierarchy,
 //! and the preparation of each frame, which culls (outside the view, hidden behind others, too
-//! small), chooses levels of detail, and writes the instance records and the occlusion queries (VP-02, `docs/dev/adr/0024-instancing-culling-and-level-of-detail.md`).
+//! small), chooses levels of detail, and writes the instance records and the occlusion queries
+//! (VP-02, `docs/dev/adr/0024-instancing-culling-and-level-of-detail.md`).
 //!
 //! Nothing here touches the GPU, so every decision is tested without a device.
 
@@ -269,6 +270,10 @@ impl World {
             .and_then(|&slot| self.slots.get_mut(slot as usize)?.as_mut())
             .ok_or(RenderError::UnknownObject(id))?;
         placement.validate()?;
+        if object.placement != placement {
+            // A turn can keep the bounds yet change what the object hides.
+            self.occlusion.invalidate();
+        }
         object.placement = placement;
         // Every object's mesh is in the world: removing a mesh removes its objects.
         if let Some(mesh) = self.meshes.get(&object.mesh) {
@@ -276,7 +281,6 @@ impl World {
             if object.bounds != bounds {
                 object.bounds = bounds;
                 self.bvh.update(object.leaf, bounds);
-                self.occlusion.invalidate();
             }
         }
         Ok(())
@@ -906,6 +910,30 @@ mod tests {
         let list = prepare_queried(&mut world, &ahead, 1024);
         assert_eq!(list.queries.len(), clusters);
         answer_behind_wall(&mut world, &list, 5.0);
+        assert_eq!(
+            prepare_queried(&mut world, &ahead, 1024)
+                .stats
+                .culled_occluded,
+            300
+        );
+        // Turning the wall half a turn keeps its bounds but may change what it hides: the next
+        // frame draws the cubes too.
+        let turned = Placement {
+            rotation: [[-1.0, 0.0, 0.0], [0.0, -1.0, 0.0], [0.0, 0.0, 1.0]],
+            translation: [0.0, 5.0, 0.0],
+        };
+        world.set_placement(wall, turned).unwrap();
+        let list = prepare_queried(&mut world, &ahead, 1024);
+        assert_eq!((list.stats.fine, list.stats.culled_occluded), (301, 0));
+        answer_behind_wall(&mut world, &list, 5.0);
+        assert_eq!(
+            prepare_queried(&mut world, &ahead, 1024)
+                .stats
+                .culled_occluded,
+            300
+        );
+        // Placing it where it already is changes nothing.
+        world.set_placement(wall, turned).unwrap();
         assert_eq!(
             prepare_queried(&mut world, &ahead, 1024)
                 .stats

@@ -244,12 +244,13 @@ impl Bvh {
         let bounds = self.node(leaf).bounds;
         let sibling = self.best_sibling(&bounds);
         let old_parent = self.node(sibling).parent;
+        // Refitted from its children below, once they are linked.
         let parent = self.allocate(Node {
-            bounds: bounds.union(&self.node(sibling).bounds),
+            bounds,
             parent: old_parent,
             children: [sibling, leaf],
-            height: self.node(sibling).height + 1,
-            leaves: self.node(sibling).leaves + 1,
+            height: 0,
+            leaves: 0,
             leaf_area: 0.0,
             item: NONE,
         });

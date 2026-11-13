@@ -134,9 +134,13 @@ impl Occlusion {
             })
         };
         if query && (result == Some(true) || grouped()) {
-            // Its children stay in view while it hides them, so their results stay trusted.
+            // Its children stay in view while it hides them, so their results stay trusted; a
+            // child not visited in the last frame starts a new run, as a visit would.
             for child in children.into_iter().flatten() {
                 if let Some(child) = self.states.get_mut(child as usize) {
+                    if child.last_in_view + 1 != frame {
+                        child.in_view_since = frame;
+                    }
                     child.last_in_view = frame;
                 }
             }
@@ -444,6 +448,34 @@ mod tests {
             walk(&mut occlusion),
             (vec![Descend, Skip, Leave], vec![1, 2])
         );
+    }
+
+    #[test]
+    fn a_hidden_parent_does_not_carry_its_children_across_a_break_in_view() {
+        use Step::{Descend, Leave, Skip};
+        let mut occlusion = Occlusion::default();
+        let view = view_from([0.0; 3]);
+        let (mut queries, mut records) = (Vec::new(), Vec::new());
+        // Cluster 1 found hidden, then out of view for a frame while its parent 0 is in view
+        // and found hidden on its own.
+        occlusion.begin_frame(3);
+        occlusion.visit(1, &BOX, None, true, true);
+        occlusion.select(8, &view, &mut queries, &mut records);
+        occlusion.record(1, 1, false);
+        occlusion.begin_frame(3);
+        assert_eq!(occlusion.visit(0, &BOX, Some([1, 2]), true, true), Descend);
+        assert_eq!(occlusion.visit(1, &BOX, None, false, true), Leave);
+        occlusion.record(2, 0, false);
+        // The parent is skipped: its children count as in view from this frame, not since
+        // before the break.
+        occlusion.begin_frame(3);
+        assert_eq!(occlusion.visit(0, &BOX, Some([1, 2]), true, true), Skip);
+        // Found visible: the walk goes down, and cluster 1, back in view after the break, is
+        // drawn until a new query answers.
+        occlusion.record(3, 0, true);
+        occlusion.begin_frame(3);
+        assert_eq!(occlusion.visit(0, &BOX, Some([1, 2]), true, true), Descend);
+        assert_eq!(occlusion.visit(1, &BOX, None, true, true), Leave);
     }
 
     #[test]

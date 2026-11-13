@@ -61,8 +61,8 @@ impl RenderSettings {
 impl Default for RenderSettings {
     /// Culling on; coarse below 24 px, where a 12-triangle box is indistinguishable from most
     /// building elements; hidden below 1 px; 25 % hysteresis, wider than the change in projected
-    /// size of one step of a smooth orbit or zoom; occlusion culling on, with up to
-    /// [`DEFAULT_OCCLUSION_QUERIES`] queries a frame.
+    /// size of one step of a smooth orbit or zoom; occlusion culling on, with up to 1,024
+    /// queries a frame.
     fn default() -> Self {
         Self {
             frustum_culling: true,
