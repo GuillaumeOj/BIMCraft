@@ -20,14 +20,23 @@ pub(crate) fn is_unit(normal: [f32; 3]) -> bool {
 }
 
 /// Whether the three columns of the column-major `rotation` are orthonormal within
-/// [`ROTATION_TOLERANCE`]; a reflection passes.
-pub(crate) fn is_orthonormal(rotation: &[f64; 9]) -> bool {
+/// [`ROTATION_TOLERANCE`] and the determinant is +1: a rigid placement, never a reflection.
+pub(crate) fn is_proper_rotation(rotation: &[f64; 9]) -> bool {
     let column = |i: usize| [rotation[3 * i], rotation[3 * i + 1], rotation[3 * i + 2]];
     let dot = |a: [f64; 3], b: [f64; 3]| a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
-    (0..3).all(|i| {
+    let cross = |a: [f64; 3], b: [f64; 3]| {
+        [
+            a[1] * b[2] - a[2] * b[1],
+            a[2] * b[0] - a[0] * b[2],
+            a[0] * b[1] - a[1] * b[0],
+        ]
+    };
+    // Orthonormal columns give a determinant of +1 or -1; the sign is what is left to check.
+    let orthonormal = (0..3).all(|i| {
         (0..=i).all(|j| {
             let expected = if i == j { 1.0 } else { 0.0 };
             (dot(column(i), column(j)) - expected).abs() <= ROTATION_TOLERANCE
         })
-    })
+    });
+    orthonormal && dot(cross(column(0), column(1)), column(2)) > 0.0
 }

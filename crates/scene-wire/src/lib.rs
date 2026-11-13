@@ -42,6 +42,9 @@ pub const HEADER_LEN: usize = 32;
 /// The largest delta, in bytes: what a GPU buffer and the webview accept comfortably.
 pub const MAX_DELTA_BYTES: usize = 256 << 20;
 
+/// Revisions stay below this (2^53), so the viewport holds them as JavaScript numbers.
+pub const REVISION_LIMIT: u64 = 1 << 53;
+
 /// The most vertices of a mesh (the same limit as the renderer's `MAX_MESH_VERTICES`).
 pub const MAX_MESH_VERTICES: usize = 1 << 24;
 

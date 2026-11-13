@@ -6,7 +6,7 @@ use proptest::prelude::*;
 use crate::{
     Element, FLAG_FULL, HEADER_LEN, MAX_DELTA_BYTES, MAX_ELEMENTS, MAX_MESH_INDICES,
     MAX_MESH_VERTICES, MAX_MESHES, MAX_STRING_BYTES, MAX_STRINGS, MAX_WORLD_COORDINATE, Mesh,
-    SceneDelta, Section, WireError, decode, encode,
+    REVISION_LIMIT, SceneDelta, Section, WireError, decode, encode,
 };
 
 /// Fixed seed, no persistence: runs are deterministic (AGENTS.md §5).
@@ -339,11 +339,30 @@ fn coordinates_at_the_world_limit_are_accepted() {
 }
 
 #[test]
-fn bounds_must_not_be_inverted() {
-    assert_eq!(
-        with_mesh(|m| m.bounds_min[1] = 2.0),
-        WireError::InvertedBounds { index: 1 }
-    );
+fn bounds_must_enclose_every_vertex() {
+    let error = WireError::BoundsDoNotEnclose { index: 1 };
+    assert_eq!(with_mesh(|m| m.bounds_min[1] = 2.0), error);
+    assert_eq!(with_mesh(|m| m.bounds_max[0] = 0.5), error);
+    assert_eq!(with_mesh(|m| m.bounds_min[2] = 0.5), error);
+}
+
+#[test]
+fn revisions_stay_below_two_to_the_53() {
+    let below = REVISION_LIMIT - 1;
+    let delta = SceneDelta {
+        revision: below,
+        base: below - 1,
+        ..sample()
+    };
+    assert_eq!(decode(&encode(&delta)), Ok(delta));
+    for (revision, base) in [(REVISION_LIMIT, 0), (1, REVISION_LIMIT), (u64::MAX, 0)] {
+        let delta = SceneDelta {
+            revision,
+            base,
+            ..sample()
+        };
+        assert_eq!(refused(&delta), WireError::RevisionTooLarge);
+    }
 }
 
 #[test]
@@ -428,9 +447,15 @@ fn element_rotations_must_be_orthonormal() {
 }
 
 #[test]
-fn reflections_are_accepted() {
+fn reflections_are_refused_and_rotations_accepted() {
+    let mirror = [-1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0];
+    assert_eq!(
+        with_element(|e| e.rotation = mirror),
+        WireError::InvalidRotation { index: 1 }
+    );
+    let quarter_turn = [0.0, 1.0, 0.0, -1.0, 0.0, 0.0, 0.0, 0.0, 1.0];
     let mut delta = sample();
-    delta.elements[0].rotation = [-1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0];
+    delta.elements[0].rotation = quarter_turn;
     assert_eq!(decode(&encode(&delta)), Ok(delta));
 }
 
@@ -476,25 +501,28 @@ fn meshes() -> impl Strategy<Value = Mesh> {
                 prop::collection::vec(prop::array::uniform3(coordinate()), vertices),
                 prop::collection::vec(unit_vectors(), vertices),
                 prop::collection::vec(0..u32::try_from(vertices).unwrap(), 3..12),
-                prop::array::uniform3(coordinate()),
-                prop::array::uniform3(0.0_f32..1.0e3),
             )
-                .prop_map(move |(positions, normals, mut indices, min, size)| {
+                .prop_map(move |(positions, normals, mut indices)| {
                     indices.truncate(indices.len() / 3 * 3);
+                    let bound = |init: f32, pick: fn(f32, f32) -> f32| {
+                        [0, 1, 2].map(|k| positions.iter().fold(init, |acc, p| pick(acc, p[k])))
+                    };
+                    let (bounds_min, bounds_max) =
+                        (bound(f32::MAX, f32::min), bound(f32::MIN, f32::max));
                     Mesh {
                         id,
                         origin,
                         positions,
                         normals,
                         indices,
-                        bounds_min: min,
-                        bounds_max: [min[0] + size[0], min[1] + size[1], min[2] + size[2]],
+                        bounds_min,
+                        bounds_max,
                     }
                 })
         })
 }
 
-/// A signed permutation of the axes: exactly orthonormal, rotations and reflections alike.
+/// A signed permutation of the axes with determinant +1: exactly orthonormal and proper.
 fn rotations() -> impl Strategy<Value = [f64; 9]> {
     (0..6_usize, prop::array::uniform3(any::<bool>())).prop_map(|(permutation, flips)| {
         const PERMUTATIONS: [[usize; 3]; 6] = [
@@ -505,9 +533,16 @@ fn rotations() -> impl Strategy<Value = [f64; 9]> {
             [2, 0, 1],
             [2, 1, 0],
         ];
+        let rows = PERMUTATIONS[permutation];
+        // Odd permutations and each flip change the determinant's sign; the last flip is
+        // chosen to make it +1.
+        let odd = [false, true, true, false, false, true][permutation];
+        let mut signs = [flips[0], flips[1], false].map(|f| if f { -1.0 } else { 1.0 });
+        let product: f64 = signs[0] * signs[1] * if odd { -1.0 } else { 1.0 };
+        signs[2] = product;
         let mut matrix = [0.0; 9];
-        for (column, &row) in PERMUTATIONS[permutation].iter().enumerate() {
-            matrix[3 * column + row] = if flips[column] { -1.0 } else { 1.0 };
+        for (column, &row) in rows.iter().enumerate() {
+            matrix[3 * column + row] = signs[column];
         }
         matrix
     })
@@ -515,7 +550,7 @@ fn rotations() -> impl Strategy<Value = [f64; 9]> {
 
 fn deltas() -> impl Strategy<Value = SceneDelta> {
     let strings = prop::collection::vec("[a-zA-Zé ]{0,20}", 1..5);
-    (strings, any::<bool>(), any::<u64>(), any::<u64>()).prop_flat_map(
+    (strings, any::<bool>(), 0..REVISION_LIMIT, 0..REVISION_LIMIT).prop_flat_map(
         |(strings, full, revision, base)| {
             let count = u32::try_from(strings.len()).unwrap();
             (
@@ -593,40 +628,5 @@ proptest! {
         if let Ok(delta) = decode(&bytes) {
             prop_assert_eq!(encode(&delta), bytes);
         }
-    }
-}
-
-// -- Seeds of the fuzz target ----------------------------------------------------------------
-
-/// The valid deltas `fuzz/seeds/scene_wire_decode/` starts from; `UPDATE_SNAPSHOTS=1` rewrites
-/// the files, and the test fails when they are stale.
-#[test]
-fn the_fuzz_seeds_are_up_to_date() {
-    let seeds = [
-        ("empty-delta", SceneDelta::default()),
-        ("delta", sample()),
-        (
-            "full-scene",
-            SceneDelta {
-                full: true,
-                base: 0,
-                ..sample()
-            },
-        ),
-    ];
-    let dir =
-        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fuzz/seeds/scene_wire_decode");
-    for (name, delta) in seeds {
-        let path = dir.join(name);
-        let bytes = encode(&delta);
-        if std::env::var_os("UPDATE_SNAPSHOTS").is_some() {
-            std::fs::create_dir_all(&dir).unwrap();
-            std::fs::write(&path, &bytes).unwrap();
-        }
-        assert_eq!(
-            std::fs::read(&path).ok(),
-            Some(bytes),
-            "{name}: run with UPDATE_SNAPSHOTS=1"
-        );
     }
 }

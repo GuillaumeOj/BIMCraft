@@ -1,10 +1,10 @@
 //! Reading a delta, input hostile.
 
-use crate::check::{in_world, is_orthonormal, is_unit, point_in_world};
+use crate::check::{in_world, is_proper_rotation, is_unit, point_in_world};
 use crate::{
     Element, FLAG_FULL, HEADER_LEN, MAGIC, MAX_DELTA_BYTES, MAX_ELEMENTS, MAX_MESH_INDICES,
-    MAX_MESH_VERTICES, MAX_MESHES, MAX_STRING_BYTES, MAX_STRINGS, Mesh, SceneDelta, Section,
-    VERSION, WireError,
+    MAX_MESH_VERTICES, MAX_MESHES, MAX_STRING_BYTES, MAX_STRINGS, Mesh, REVISION_LIMIT, SceneDelta,
+    Section, VERSION, WireError,
 };
 
 /// The size of the smallest added mesh: id, origin, counts, bounds (no vertices).
@@ -138,6 +138,9 @@ fn read_header(reader: &mut Reader<'_>, delta: &mut SceneDelta) -> Result<(), Wi
     delta.full = flags & FLAG_FULL != 0;
     delta.revision = reader.u64()?;
     delta.base = reader.u64()?;
+    if delta.revision >= REVISION_LIMIT || delta.base >= REVISION_LIMIT {
+        return Err(WireError::RevisionTooLarge);
+    }
     if reader.u64()? != 0 {
         return Err(WireError::ReservedNotZero);
     }
@@ -233,13 +236,10 @@ fn check_mesh(mesh: &Mesh, index: usize) -> Result<(), WireError> {
     {
         return Err(WireError::MeshCoordinate { index });
     }
-    if mesh
-        .bounds_min
-        .iter()
-        .zip(&mesh.bounds_max)
-        .any(|(lo, hi)| lo > hi)
-    {
-        return Err(WireError::InvertedBounds { index });
+    let encloses =
+        |p: &[f32; 3]| (0..3).all(|k| mesh.bounds_min[k] <= p[k] && p[k] <= mesh.bounds_max[k]);
+    if !mesh.positions.iter().all(encloses) {
+        return Err(WireError::BoundsDoNotEnclose { index });
     }
     if let Some(vertex) = mesh.normals.iter().position(|&n| !is_unit(n)) {
         return Err(WireError::InvalidNormal { index, vertex });
@@ -273,7 +273,7 @@ fn read_elements(reader: &mut Reader<'_>, strings: usize) -> Result<Vec<Element>
         if !element.translation.iter().all(|&c| in_world(c)) {
             return Err(WireError::ElementTranslation { index });
         }
-        if !is_orthonormal(&element.rotation) {
+        if !is_proper_rotation(&element.rotation) {
             return Err(WireError::InvalidRotation { index });
         }
         let in_range = |i: u32| usize::try_from(i).is_ok_and(|i| i < strings);

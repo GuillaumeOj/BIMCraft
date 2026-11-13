@@ -50,6 +50,9 @@ pub enum WireError {
     /// The reserved header field is not 0.
     #[error("the reserved header field is not 0")]
     ReservedNotZero,
+    /// A revision is 2^53 or more.
+    #[error("a revision is too large")]
+    RevisionTooLarge,
     /// A full delta applies to a base revision.
     #[error("a full delta has a base revision")]
     FullWithBase,
@@ -122,9 +125,9 @@ pub enum WireError {
         /// Position of the index in the mesh's index list.
         position: usize,
     },
-    /// The bounding box is inverted.
-    #[error("mesh {index} has an inverted bounding box")]
-    InvertedBounds {
+    /// The bounding box does not enclose every vertex.
+    #[error("mesh {index} has a bounding box that does not enclose its vertices")]
+    BoundsDoNotEnclose {
         /// Position of the mesh.
         index: usize,
     },
@@ -141,8 +144,8 @@ pub enum WireError {
         /// Position of the element.
         index: usize,
     },
-    /// The rotation of an element is not finite or not orthonormal.
-    #[error("element {index} has a rotation that is not orthonormal")]
+    /// The rotation of an element is not finite, not orthonormal or a reflection.
+    #[error("element {index} has a rotation that is not a proper orthonormal one")]
     InvalidRotation {
         /// Position of the element.
         index: usize,
