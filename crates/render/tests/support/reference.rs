@@ -17,7 +17,7 @@
 //! of the crate, which see the crate itself as `render`.
 
 use geom::{Point3, Vector3};
-use render::{Camera, MeshData, Placement, Projection};
+use render::{Camera, MeshData, ObjectId, Placement, Projection, Renderer};
 
 /// Where the building's corner lies, in metres: a national-grid offset.
 pub const ORIGIN: [f64; 3] = [2_500_000.0, 1_200_000.0, 0.0];
@@ -98,6 +98,23 @@ pub struct ReferenceModel {
     pub meshes: Vec<MeshData>,
     /// Index into `meshes`, placement and colour of each element.
     pub objects: Vec<(usize, Placement, [f32; 4])>,
+}
+
+impl ReferenceModel {
+    /// Adds the meshes and the objects to `renderer`; the ids of the objects, in order.
+    pub fn load(&self, renderer: &mut Renderer) -> Vec<ObjectId> {
+        let meshes: Vec<_> = self
+            .meshes
+            .iter()
+            .map(|mesh| renderer.add_mesh(mesh).unwrap())
+            .collect();
+        self.objects
+            .iter()
+            .map(|&(mesh, placement, color)| {
+                renderer.add_object(meshes[mesh], placement, color).unwrap()
+            })
+            .collect()
+    }
 }
 
 /// The kinds of elements, one mesh each.

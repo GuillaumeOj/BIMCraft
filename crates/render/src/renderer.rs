@@ -13,10 +13,11 @@ use std::collections::BTreeMap;
 
 use wgpu::util::DeviceExt as _;
 
+use crate::bounds::Aabb;
 use crate::lod::{DetailLevel, RenderSettings, has_coarse_level};
 use crate::transform::{Matrix, ViewFrame, projection_matrix};
 use crate::world::{
-    DrawList, FrameStats, INSTANCE_FLOATS, INSTANCE_STRIDE, MeshId, ObjectId, Unknown, World,
+    DrawList, FrameStats, INSTANCE_FLOATS, INSTANCE_STRIDE, MeshId, ObjectId, World,
 };
 use crate::{Camera, CameraError, MeshData, MeshError, Placement, PlacementError};
 
@@ -157,8 +158,6 @@ pub struct Renderer {
     pipeline: wgpu::RenderPipeline,
     frame_buffer: wgpu::Buffer,
     frame_bind_group: wgpu::BindGroup,
-    /// The most objects one frame can draw on this device.
-    max_objects: usize,
     /// The largest buffer and the widest texture of the device, which never change.
     max_buffer_size: u64,
     max_texture_side: u32,
@@ -222,13 +221,12 @@ impl Renderer {
             pipeline,
             frame_buffer,
             frame_bind_group,
-            max_objects: max_instances(limits.max_buffer_size),
             max_buffer_size: limits.max_buffer_size,
             max_texture_side: limits.max_texture_dimension_2d,
             instances: None,
             depth: None,
             meshes: BTreeMap::new(),
-            world: World::new(),
+            world: World::new(max_instances(limits.max_buffer_size)),
             draw_list: DrawList::default(),
         })
     }
@@ -246,11 +244,7 @@ impl Renderer {
     ///
     /// [`RenderError::InvalidSettings`] when [`RenderSettings::is_valid`] fails.
     pub fn set_settings(&mut self, settings: RenderSettings) -> Result<(), RenderError> {
-        if !settings.is_valid() {
-            return Err(RenderError::InvalidSettings);
-        }
-        self.world.set_settings(settings);
-        Ok(())
+        self.world.set_settings(settings)
     }
 
     /// Validates `mesh` and uploads it to the GPU, with its coarse level (its bounding box,
@@ -263,13 +257,14 @@ impl Renderer {
     pub fn add_mesh(&mut self, mesh: &MeshData) -> Result<MeshId, MeshError> {
         mesh.validate()?;
         let index_count = index_count(mesh, self.max_buffer_size)?;
-        let triangles = mesh.indices.len() / 3;
+        // A validated mesh has vertices.
+        let bounds = Aabb::of_local(mesh.origin, &mesh.positions).ok_or(MeshError::Empty)?;
         let fine = self.upload(mesh, index_count);
-        let coarse = has_coarse_level(triangles)
+        let coarse = has_coarse_level(mesh.indices.len() / 3)
             .then(|| mesh.bounding_box())
             .flatten()
             .map(|coarse| self.upload(&coarse, 36));
-        let id = self.world.add_mesh(mesh.origin, &mesh.positions, triangles);
+        let id = self.world.add_mesh(mesh.origin, bounds, coarse.is_some());
         self.meshes.insert(id, GpuMesh { fine, coarse });
         Ok(id)
     }
@@ -280,7 +275,7 @@ impl Renderer {
     ///
     /// [`RenderError::UnknownMesh`] when the mesh is not in the renderer.
     pub fn remove_mesh(&mut self, id: MeshId) -> Result<(), RenderError> {
-        self.world.remove_mesh(id).map_err(RenderError::from)?;
+        self.world.remove_mesh(id)?;
         self.meshes.remove(&id);
         Ok(())
     }
@@ -297,19 +292,7 @@ impl Renderer {
         placement: Placement,
         color: [f32; 4],
     ) -> Result<ObjectId, RenderError> {
-        if !self.world.has_mesh(mesh) {
-            return Err(RenderError::UnknownMesh(mesh));
-        }
-        placement.validate()?;
-        if !color.iter().all(|c| (0.0..=1.0).contains(c)) {
-            return Err(RenderError::InvalidColor);
-        }
-        if self.world.len() >= self.max_objects {
-            return Err(RenderError::TooManyObjects {
-                max: self.max_objects,
-            });
-        }
-        Ok(self.world.add_object(mesh, placement, color)?)
+        self.world.add_object(mesh, placement, color)
     }
 
     /// Moves an object.
@@ -318,12 +301,7 @@ impl Renderer {
     ///
     /// [`RenderError::UnknownObject`], or [`RenderError::Placement`] for an invalid placement.
     pub fn set_placement(&mut self, id: ObjectId, placement: Placement) -> Result<(), RenderError> {
-        // The id first, so an unknown object is reported as such whatever its placement.
-        if !self.world.has_object(id) {
-            return Err(RenderError::UnknownObject(id));
-        }
-        placement.validate()?;
-        Ok(self.world.set_placement(id, placement)?)
+        self.world.set_placement(id, placement)
     }
 
     /// Removes an object; its mesh stays.
@@ -332,7 +310,7 @@ impl Renderer {
     ///
     /// [`RenderError::UnknownObject`] when the object is not in the renderer.
     pub fn remove_object(&mut self, id: ObjectId) -> Result<(), RenderError> {
-        Ok(self.world.remove_object(id)?)
+        self.world.remove_object(id)
     }
 
     /// The level of detail the object was drawn at in the last prepared frame, or `None` when it
@@ -343,7 +321,7 @@ impl Renderer {
     ///
     /// [`RenderError::UnknownObject`] when the object is not in the renderer.
     pub fn drawn_level(&self, id: ObjectId) -> Result<Option<DetailLevel>, RenderError> {
-        Ok(self.world.drawn_level(id)?)
+        self.world.drawn_level(id)
     }
 
     /// Prepares a frame seen from `camera` on a target of `size` pixels, without drawing it:
@@ -523,8 +501,10 @@ impl Renderer {
         {
             instances.buffer.clone()
         } else {
-            // `max_objects` keeps the buffer within the device's largest buffer.
-            let capacity = count.next_power_of_two().min(self.max_objects as u64);
+            // The world holds at most `max_instances` objects, which fit the largest buffer.
+            let capacity = count
+                .next_power_of_two()
+                .min(max_instances(self.max_buffer_size) as u64);
             let buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
                 label: Some("render instances"),
                 size: capacity * INSTANCE_STRIDE,
@@ -579,8 +559,14 @@ impl Renderer {
                 continue;
             };
             let buffers = match bucket.level {
-                DetailLevel::Coarse => mesh.coarse.as_ref().unwrap_or(&mesh.fine),
                 DetailLevel::Fine => &mesh.fine,
+                // The world puts objects in a coarse bucket only for meshes with a coarse level.
+                DetailLevel::Coarse => {
+                    let Some(coarse) = &mesh.coarse else {
+                        continue;
+                    };
+                    coarse
+                }
             };
             pass.set_vertex_buffer(0, buffers.positions.slice(..));
             pass.set_vertex_buffer(1, buffers.normals.slice(..));
@@ -590,15 +576,6 @@ impl Renderer {
                 0,
                 bucket.first..bucket.first + bucket.count,
             );
-        }
-    }
-}
-
-impl From<Unknown> for RenderError {
-    fn from(unknown: Unknown) -> Self {
-        match unknown {
-            Unknown::Mesh(id) => Self::UnknownMesh(id),
-            Unknown::Object(id) => Self::UnknownObject(id),
         }
     }
 }

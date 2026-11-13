@@ -9,10 +9,10 @@ use std::collections::BTreeMap;
 use crate::bounds::Aabb;
 use crate::bvh::{Bvh, Leaf};
 use crate::frustum::Frustum;
-use crate::lod::{Detail, DetailLevel, RenderSettings, SizeScale, choose, has_coarse_level};
+use crate::lod::{Detail, DetailLevel, RenderSettings, SizeScale, choose};
 use crate::transform::{Matrix, ViewFrame, camera_relative_model_view};
 use crate::vector::{norm, sub};
-use crate::{Placement, Projection};
+use crate::{Placement, Projection, RenderError};
 
 /// Identifies a mesh stored in a [`Renderer`](crate::Renderer). Ids are never reused.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -99,8 +99,6 @@ struct Object {
     leaf: Leaf,
     /// What it showed in the last frame, `None` when it was out of view or is new.
     detail: Option<Detail>,
-    /// The level it was drawn at in the last frame.
-    drawn: Option<DetailLevel>,
 }
 
 /// The meshes and objects of a renderer, as the CPU sees them.
@@ -116,18 +114,16 @@ pub(crate) struct World {
     /// One bit per slot: whether the object is in view this frame.
     visible: Vec<u64>,
     settings: RenderSettings,
+    /// Whether the next frame chooses every level afresh, without hysteresis.
+    fresh: bool,
+    /// The most objects the renderer can draw in one frame.
+    max_objects: usize,
     next_id: u64,
 }
 
-/// Why the world refuses a request; the renderer turns it into its error.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum Unknown {
-    Mesh(MeshId),
-    Object(ObjectId),
-}
-
 impl World {
-    pub(crate) fn new() -> Self {
+    /// An empty world that holds at most `max_objects` objects.
+    pub(crate) fn new(max_objects: usize) -> Self {
         Self {
             meshes: BTreeMap::new(),
             slots: Vec::new(),
@@ -137,6 +133,8 @@ impl World {
             pending: Vec::new(),
             visible: Vec::new(),
             settings: RenderSettings::default(),
+            fresh: false,
+            max_objects,
             next_id: 0,
         }
     }
@@ -149,32 +147,26 @@ impl World {
         self.settings
     }
 
-    /// Changes the settings; every object takes its level afresh in the next frame.
-    pub(crate) fn set_settings(&mut self, settings: RenderSettings) {
-        self.settings = settings;
-        for object in self.slots.iter_mut().flatten() {
-            object.detail = None;
+    /// Changes the settings, once validated; every object takes its level afresh in the next
+    /// frame.
+    pub(crate) fn set_settings(&mut self, settings: RenderSettings) -> Result<(), RenderError> {
+        if !settings.is_valid() {
+            return Err(RenderError::InvalidSettings);
         }
+        self.settings = settings;
+        self.fresh = true;
+        Ok(())
     }
 
-    /// Adds a mesh of local `positions` around `origin`, with `triangles` triangles.
-    pub(crate) fn add_mesh(
-        &mut self,
-        origin: [f64; 3],
-        positions: &[[f32; 3]],
-        triangles: usize,
-    ) -> MeshId {
+    /// Adds a mesh whose vertices span `bounds` around `origin`, with a coarse level or not.
+    pub(crate) fn add_mesh(&mut self, origin: [f64; 3], bounds: Aabb, has_coarse: bool) -> MeshId {
         let id = MeshId(self.new_id());
-        let empty = Aabb {
-            min: origin,
-            max: origin,
-        };
         self.meshes.insert(
             id,
             MeshInfo {
                 origin,
-                bounds: Aabb::of_local(origin, positions).unwrap_or(empty),
-                has_coarse: has_coarse_level(triangles),
+                bounds,
+                has_coarse,
                 objects: Vec::new(),
             },
         );
@@ -182,8 +174,11 @@ impl World {
     }
 
     /// Removes a mesh and its objects.
-    pub(crate) fn remove_mesh(&mut self, id: MeshId) -> Result<(), Unknown> {
-        let mesh = self.meshes.remove(&id).ok_or(Unknown::Mesh(id))?;
+    pub(crate) fn remove_mesh(&mut self, id: MeshId) -> Result<(), RenderError> {
+        let mesh = self
+            .meshes
+            .remove(&id)
+            .ok_or(RenderError::UnknownMesh(id))?;
         for (object, slot) in mesh.objects {
             self.index.remove(&object);
             self.release(slot);
@@ -191,29 +186,36 @@ impl World {
         Ok(())
     }
 
-    pub(crate) fn has_mesh(&self, id: MeshId) -> bool {
-        self.meshes.contains_key(&id)
-    }
-
-    pub(crate) fn has_object(&self, id: ObjectId) -> bool {
-        self.index.contains_key(&id)
-    }
-
-    /// Places a mesh; the placement and the colour have been validated.
+    /// Places a mesh, after checking the mesh, the placement, the colour (linear RGBA, 0 to 1)
+    /// and the number of objects, in that order.
     pub(crate) fn add_object(
         &mut self,
         mesh: MeshId,
         placement: Placement,
         color: [f32; 4],
-    ) -> Result<ObjectId, Unknown> {
-        let local = self.meshes.get(&mesh).ok_or(Unknown::Mesh(mesh))?.bounds;
-        let id = ObjectId(self.new_id());
+    ) -> Result<ObjectId, RenderError> {
+        let info = self
+            .meshes
+            .get_mut(&mesh)
+            .ok_or(RenderError::UnknownMesh(mesh))?;
+        placement.validate()?;
+        if !color.iter().all(|c| (0.0..=1.0).contains(c)) {
+            return Err(RenderError::InvalidColor);
+        }
+        if self.index.len() >= self.max_objects {
+            return Err(RenderError::TooManyObjects {
+                max: self.max_objects,
+            });
+        }
+        let id = ObjectId(self.next_id);
+        self.next_id += 1;
+        let bounds = info.bounds.placed(&placement);
+        let slots = &mut self.slots;
         let slot = self.free.pop().unwrap_or_else(|| {
-            self.slots.push(None);
+            slots.push(None);
             // The renderer bounds the objects far below u32::MAX.
-            u32::try_from(self.slots.len() - 1).unwrap_or(u32::MAX)
+            u32::try_from(slots.len() - 1).unwrap_or(u32::MAX)
         });
-        let bounds = local.placed(&placement);
         let leaf = self.bvh.insert(bounds, slot);
         self.slots[slot as usize] = Some(Object {
             mesh,
@@ -222,41 +224,44 @@ impl World {
             bounds,
             leaf,
             detail: None,
-            drawn: None,
         });
         self.index.insert(id, slot);
-        if let Some(info) = self.meshes.get_mut(&mesh) {
-            // Ids grow, so pushing keeps the list in id order.
-            info.objects.push((id, slot));
-        }
+        // Ids grow, so pushing keeps the list in id order.
+        info.objects.push((id, slot));
         Ok(id)
     }
 
-    /// Moves an object; the placement has been validated.
+    /// Moves an object, after checking the object, then the placement.
     pub(crate) fn set_placement(
         &mut self,
         id: ObjectId,
         placement: Placement,
-    ) -> Result<(), Unknown> {
-        let slot = *self.index.get(&id).ok_or(Unknown::Object(id))?;
-        let object = self.slot_mut(slot).ok_or(Unknown::Object(id))?;
-        let mesh = object.mesh;
+    ) -> Result<(), RenderError> {
+        let object = self
+            .index
+            .get(&id)
+            .and_then(|&slot| self.slots.get_mut(slot as usize)?.as_mut())
+            .ok_or(RenderError::UnknownObject(id))?;
+        placement.validate()?;
         object.placement = placement;
-        let local = self.meshes.get(&mesh).ok_or(Unknown::Mesh(mesh))?.bounds;
-        let bounds = local.placed(&placement);
-        let object = self.slot_mut(slot).ok_or(Unknown::Object(id))?;
-        if object.bounds != bounds {
-            object.bounds = bounds;
-            let leaf = object.leaf;
-            self.bvh.update(leaf, bounds);
+        // Every object's mesh is in the world: removing a mesh removes its objects.
+        if let Some(mesh) = self.meshes.get(&object.mesh) {
+            let bounds = mesh.bounds.placed(&placement);
+            if object.bounds != bounds {
+                object.bounds = bounds;
+                self.bvh.update(object.leaf, bounds);
+            }
         }
         Ok(())
     }
 
     /// Removes an object.
-    pub(crate) fn remove_object(&mut self, id: ObjectId) -> Result<(), Unknown> {
-        let slot = self.index.remove(&id).ok_or(Unknown::Object(id))?;
-        let mesh = self.slot_mut(slot).map(|object| object.mesh);
+    pub(crate) fn remove_object(&mut self, id: ObjectId) -> Result<(), RenderError> {
+        let slot = self
+            .index
+            .remove(&id)
+            .ok_or(RenderError::UnknownObject(id))?;
+        let mesh = self.slots[slot as usize].as_ref().map(|object| object.mesh);
         if let Some(info) = mesh.and_then(|mesh| self.meshes.get_mut(&mesh))
             && let Ok(position) = info
                 .objects
@@ -269,11 +274,17 @@ impl World {
     }
 
     /// The level the object was drawn at in the last prepared frame; `None` when it was not drawn.
-    pub(crate) fn drawn_level(&self, id: ObjectId) -> Result<Option<DetailLevel>, Unknown> {
-        let slot = *self.index.get(&id).ok_or(Unknown::Object(id))?;
-        Ok(self.slots[slot as usize]
-            .as_ref()
-            .and_then(|object| object.drawn))
+    pub(crate) fn drawn_level(&self, id: ObjectId) -> Result<Option<DetailLevel>, RenderError> {
+        let object = self
+            .index
+            .get(&id)
+            .and_then(|&slot| self.slots.get(slot as usize)?.as_ref())
+            .ok_or(RenderError::UnknownObject(id))?;
+        let has_coarse = self
+            .meshes
+            .get(&object.mesh)
+            .is_some_and(|mesh| mesh.has_coarse);
+        Ok(object.detail.and_then(|detail| level(detail, has_coarse)))
     }
 
     /// Culls the objects, chooses their levels and writes the instance records of the frame
@@ -294,6 +305,7 @@ impl World {
             ..FrameStats::default()
         };
         let settings = self.settings;
+        let fresh = core::mem::take(&mut self.fresh);
         for (&mesh_id, mesh) in &self.meshes {
             let radius = mesh.bounds.radius();
             let fine_start = list.instances.len();
@@ -304,20 +316,14 @@ impl World {
                 };
                 if self.visible[slot as usize / 64] >> (slot % 64) & 1 == 0 {
                     object.detail = None;
-                    object.drawn = None;
                     list.stats.culled_frustum += 1;
                     continue;
                 }
                 let distance = norm(sub(object.bounds.centre(), view.eye));
-                let detail = choose(scale.pixels(radius, distance), object.detail, &settings);
+                let previous = if fresh { None } else { object.detail };
+                let detail = choose(scale.pixels(radius, distance), previous, &settings);
                 object.detail = Some(detail);
-                let level = match detail {
-                    Detail::Hidden => None,
-                    Detail::Coarse if mesh.has_coarse => Some(DetailLevel::Coarse),
-                    Detail::Coarse | Detail::Fine => Some(DetailLevel::Fine),
-                };
-                object.drawn = level;
-                let target = match level {
+                let target = match level(detail, mesh.has_coarse) {
                     None => {
                         list.stats.culled_small += 1;
                         continue;
@@ -347,25 +353,19 @@ impl World {
     fn find_visible(&mut self, view: &ViewFrame, projection: &Projection, size: [u32; 2]) {
         self.visible.clear();
         self.visible.resize(self.slots.len().div_ceil(64), 0);
-        let visible = &mut self.visible;
-        let mut mark = |slot: u32| visible[slot as usize / 64] |= 1 << (slot % 64);
-        if self.settings.frustum_culling {
-            let frustum = Frustum::new(view, projection, f64::from(size[0]) / f64::from(size[1]));
-            self.bvh.query(
-                &mut self.pending,
-                frustum.all_planes(),
-                |bounds, mask| frustum.classify(bounds, mask),
-                mark,
-            );
-        } else {
-            for slot in self.index.values() {
-                mark(*slot);
-            }
+        if !self.settings.frustum_culling {
+            // Free slots are marked too: the frame skips them anyway.
+            self.visible.fill(!0);
+            return;
         }
-    }
-
-    fn slot_mut(&mut self, slot: u32) -> Option<&mut Object> {
-        self.slots.get_mut(slot as usize)?.as_mut()
+        let visible = &mut self.visible;
+        let frustum = Frustum::new(view, projection, f64::from(size[0]) / f64::from(size[1]));
+        self.bvh.query(
+            &mut self.pending,
+            frustum.all_planes(),
+            |bounds, mask| frustum.classify(bounds, mask),
+            |slot| visible[slot as usize / 64] |= 1 << (slot % 64),
+        );
     }
 
     fn release(&mut self, slot: u32) {
@@ -379,6 +379,15 @@ impl World {
         let id = self.next_id;
         self.next_id += 1;
         id
+    }
+}
+
+/// The level an object of `detail` draws, depending on whether its mesh has a coarse level.
+fn level(detail: Detail, has_coarse: bool) -> Option<DetailLevel> {
+    match detail {
+        Detail::Hidden => None,
+        Detail::Coarse if has_coarse => Some(DetailLevel::Coarse),
+        Detail::Coarse | Detail::Fine => Some(DetailLevel::Fine),
     }
 }
 
@@ -428,7 +437,8 @@ mod tests {
         let corners: Vec<[f32; 3]> = (0..8)
             .map(|c| core::array::from_fn(|axis| if c >> axis & 1 == 0 { -0.5 } else { 0.5 }))
             .collect();
-        world.add_mesh(origin, &corners, triangles)
+        let bounds = Aabb::of_local(origin, &corners).unwrap();
+        world.add_mesh(origin, bounds, triangles > 12)
     }
 
     /// A camera at `eye` looking along +y.
@@ -462,7 +472,7 @@ mod tests {
 
     #[test]
     fn objects_sharing_a_mesh_are_one_bucket_in_id_order() {
-        let mut world = World::new();
+        let mut world = World::new(usize::MAX);
         let first = cube(&mut world, [0.0; 3], 12);
         let second = cube(&mut world, [0.0; 3], 12);
         let a = row(&mut world, first, 3);
@@ -503,7 +513,7 @@ mod tests {
     #[test]
     fn objects_behind_or_beside_the_camera_are_culled_far_from_the_origin() {
         let far = [1e7, -1e7, 50.0];
-        let mut world = World::new();
+        let mut world = World::new(usize::MAX);
         let mesh = cube(&mut world, far, 12);
         // 20 cubes from x = −20 to 18 m at 10 m ahead: the 90° view spans ±10 m there.
         let ahead = row(&mut world, mesh, 20);
@@ -520,10 +530,12 @@ mod tests {
         assert_eq!(world.drawn_level(ahead[10]), Ok(Some(DetailLevel::Fine)));
         // Without culling, everything in front of the camera is drawn, as is what is behind it:
         // the GPU clips it.
-        world.set_settings(RenderSettings {
-            frustum_culling: false,
-            ..RenderSettings::default()
-        });
+        world
+            .set_settings(RenderSettings {
+                frustum_culling: false,
+                ..RenderSettings::default()
+            })
+            .unwrap();
         let list = prepare(&mut world, far);
         assert_eq!((list.stats.fine, list.stats.culled_frustum), (21, 0));
     }
@@ -531,7 +543,7 @@ mod tests {
     #[test]
     fn levels_switch_with_distance_and_hysteresis() {
         use DetailLevel::{Coarse, Fine};
-        let mut world = World::new();
+        let mut world = World::new(usize::MAX);
         let detailed = cube(&mut world, [0.0; 3], 100);
         let simple = cube(&mut world, [0.0; 3], 12);
         let near = world
@@ -571,13 +583,13 @@ mod tests {
         let list = prepare(&mut world, [0.0, -90.0, 0.0]);
         assert_eq!((list.stats.culled_small, list.stats.draw_calls), (2, 0));
         // Changing the settings forgets the hysteresis: at 80 m the objects are 1.08 px.
-        world.set_settings(RenderSettings::default());
+        world.set_settings(RenderSettings::default()).unwrap();
         assert_eq!(level_at(&mut world, 80.0), (Some(Coarse), Some(Fine)));
     }
 
     #[test]
     fn an_object_leaving_the_view_takes_its_level_afresh_on_return() {
-        let mut world = World::new();
+        let mut world = World::new(usize::MAX);
         let mesh = cube(&mut world, [0.0; 3], 100);
         let object = world.add_object(mesh, Placement::IDENTITY, WHITE).unwrap();
         prepare(&mut world, [0.0, -3.7, 0.0]);
@@ -591,7 +603,7 @@ mod tests {
 
     #[test]
     fn moved_and_removed_objects_are_culled_where_they_are() {
-        let mut world = World::new();
+        let mut world = World::new(usize::MAX);
         let mesh = cube(&mut world, [0.0; 3], 12);
         let objects = row(&mut world, mesh, 4);
         assert_eq!(prepare(&mut world, [0.0; 3]).stats.fine, 4);
@@ -613,15 +625,15 @@ mod tests {
         );
         assert_eq!(
             world.remove_object(objects[1]),
-            Err(Unknown::Object(objects[1]))
+            Err(RenderError::UnknownObject(objects[1]))
         );
         assert_eq!(
             world.drawn_level(objects[1]),
-            Err(Unknown::Object(objects[1]))
+            Err(RenderError::UnknownObject(objects[1]))
         );
         assert_eq!(
             world.set_placement(objects[1], Placement::IDENTITY),
-            Err(Unknown::Object(objects[1]))
+            Err(RenderError::UnknownObject(objects[1]))
         );
         // A freed slot is reused by the next object, which draws in id order, last.
         let again = world
@@ -644,42 +656,78 @@ mod tests {
         // Removing the mesh removes its objects.
         world.remove_mesh(mesh).unwrap();
         assert_eq!(world.len(), 0);
-        assert!(!world.has_mesh(mesh));
-        assert_eq!(world.remove_mesh(mesh), Err(Unknown::Mesh(mesh)));
+        assert_eq!(world.remove_mesh(mesh), Err(RenderError::UnknownMesh(mesh)));
         assert_eq!(
             world.add_object(mesh, Placement::IDENTITY, WHITE),
-            Err(Unknown::Mesh(mesh))
+            Err(RenderError::UnknownMesh(mesh))
         );
         let list = prepare(&mut world, [0.0; 3]);
         assert_eq!((list.stats, list.buckets.len()), (FrameStats::default(), 0));
     }
 
     #[test]
-    fn only_meshes_of_more_than_12_triangles_draw_a_coarse_level() {
-        let mut world = World::new();
-        let meshes = [12, 13].map(|triangles| cube(&mut world, [0.0; 3], triangles));
-        let empty = world.add_mesh([1.0; 3], &[], 0);
-        for mesh in meshes.into_iter().chain([empty]) {
+    fn only_meshes_with_a_coarse_level_draw_one() {
+        let mut world = World::new(usize::MAX);
+        for triangles in [12, 13] {
+            let mesh = cube(&mut world, [0.0; 3], triangles);
             world
                 .add_object(mesh, Placement::from_translation([0.0, 10.0, 0.0]), WHITE)
                 .unwrap();
         }
-        // 8.7 px: coarse for the mesh of 13 triangles only; the empty mesh is a point, hidden.
+        // 8.7 px: coarse, but only the mesh of 13 triangles has a coarse level.
         let list = prepare(&mut world, [0.0; 3]);
+        assert_eq!((list.stats.fine, list.stats.coarse), (1, 1));
+    }
+
+    #[test]
+    fn objects_are_checked_mesh_first_and_counted() {
+        let mut world = World::new(1);
+        let mesh = cube(&mut world, [0.0; 3], 12);
+        let bad = Placement::from_translation([f64::NAN; 3]);
+        world.remove_mesh(mesh).unwrap();
         assert_eq!(
-            (list.stats.fine, list.stats.coarse, list.stats.culled_small),
-            (1, 1, 1)
+            world.add_object(mesh, bad, [2.0; 4]),
+            Err(RenderError::UnknownMesh(mesh))
+        );
+        let mesh = cube(&mut world, [0.0; 3], 12);
+        assert!(matches!(
+            world.add_object(mesh, bad, [2.0; 4]),
+            Err(RenderError::Placement(_))
+        ));
+        assert_eq!(
+            world.add_object(mesh, Placement::IDENTITY, [2.0; 4]),
+            Err(RenderError::InvalidColor)
+        );
+        let object = world.add_object(mesh, Placement::IDENTITY, WHITE).unwrap();
+        assert_eq!(
+            world.add_object(mesh, Placement::IDENTITY, WHITE),
+            Err(RenderError::TooManyObjects { max: 1 })
+        );
+        assert!(matches!(
+            world.set_placement(object, bad),
+            Err(RenderError::Placement(_))
+        ));
+        let bad_settings = RenderSettings {
+            hysteresis: 2.0,
+            ..RenderSettings::default()
+        };
+        assert_eq!(
+            world.set_settings(bad_settings),
+            Err(RenderError::InvalidSettings)
         );
     }
 
     /// The reference model in a world; the ids of its meshes, in the model's order.
     fn reference_world(storeys: u32) -> World {
         let model = crate::reference::building(storeys);
-        let mut world = World::new();
+        let mut world = World::new(usize::MAX);
         let meshes: Vec<MeshId> = model
             .meshes
             .iter()
-            .map(|mesh| world.add_mesh(mesh.origin, &mesh.positions, mesh.indices.len() / 3))
+            .map(|mesh| {
+                let bounds = Aabb::of_local(mesh.origin, &mesh.positions).unwrap();
+                world.add_mesh(mesh.origin, bounds, mesh.indices.len() > 36)
+            })
             .collect();
         for (mesh, placement, color) in model.objects {
             world.add_object(meshes[mesh], placement, color).unwrap();

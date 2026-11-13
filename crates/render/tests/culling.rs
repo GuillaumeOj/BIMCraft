@@ -120,14 +120,7 @@ fn objects_sharing_a_mesh_draw_in_one_call_the_same_pixels_as_separate_meshes() 
 fn frustum_culling_skips_objects_without_changing_a_pixel() {
     let mut renderer = renderer();
     let model = reference::building(3);
-    let meshes: Vec<_> = model
-        .meshes
-        .iter()
-        .map(|mesh| renderer.add_mesh(mesh).unwrap())
-        .collect();
-    for &(mesh, placement, color) in &model.objects {
-        renderer.add_object(meshes[mesh], placement, color).unwrap();
-    }
+    model.load(&mut renderer);
     // On the second storey, looking along the building, far from the world origin.
     let z = reference::STOREY_HEIGHT + 1.6;
     let at = |x: f64, y: f64| {

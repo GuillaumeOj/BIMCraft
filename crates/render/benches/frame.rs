@@ -41,18 +41,10 @@ fn load() -> Option<Loaded> {
     };
     let mut renderer = Renderer::new(&device, &queue, FORMAT).unwrap();
     let model = reference::building(reference::STOREYS);
-    let meshes: Vec<_> = model
-        .meshes
-        .iter()
-        .map(|mesh| renderer.add_mesh(mesh).unwrap())
-        .collect();
-    let objects = model
-        .objects
-        .iter()
-        .map(|&(mesh, placement, color)| {
-            let id = renderer.add_object(meshes[mesh], placement, color).unwrap();
-            (id, placement)
-        })
+    let ids = model.load(&mut renderer);
+    let objects = ids
+        .into_iter()
+        .zip(model.objects.iter().map(|&(_, placement, _)| placement))
         .collect();
     Some(Loaded {
         device,

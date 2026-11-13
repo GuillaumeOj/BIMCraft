@@ -18,6 +18,9 @@ const MARGIN: f64 = 1e-9;
 #[derive(Clone, Copy, Debug)]
 struct Plane {
     normal: [f64; 3],
+    /// The absolute values of the normal's components and its length, computed once per frame.
+    abs_normal: [f64; 3],
+    length: f64,
     offset: f64,
 }
 
@@ -74,9 +77,15 @@ impl Frustum {
         // `n · (V · r) = (Vᵀ · n) · r`: the world normal is the transposed view rotation applied
         // to the camera normal.
         let rows = &view.rotation;
-        let planes = camera_planes.map(|(normal, offset)| Plane {
-            normal: core::array::from_fn(|axis| (0..3).map(|k| rows[k][axis] * normal[k]).sum()),
-            offset,
+        let planes = camera_planes.map(|(normal, offset)| {
+            let normal: [f64; 3] =
+                core::array::from_fn(|axis| (0..3).map(|k| rows[k][axis] * normal[k]).sum());
+            Plane {
+                normal,
+                abs_normal: normal.map(f64::abs),
+                length: norm(normal),
+                offset,
+            }
         });
         Self {
             eye: view.eye,
@@ -95,6 +104,7 @@ impl Frustum {
     pub(crate) fn classify(&self, bounds: &Aabb, mask: u8) -> Overlap<u8> {
         let centre = sub(bounds.centre(), self.eye);
         let half = bounds.half_extents();
+        let extent = norm(centre) + norm(half);
         let mut crossing = 0;
         for (index, plane) in self.planes[..self.count].iter().enumerate() {
             let bit = 1 << index;
@@ -102,9 +112,8 @@ impl Frustum {
                 continue;
             }
             let distance = dot(plane.normal, centre) + plane.offset;
-            let reach = dot(plane.normal.map(f64::abs), half);
-            let margin =
-                MARGIN * (norm(plane.normal) * (norm(centre) + norm(half)) + plane.offset.abs());
+            let reach = dot(plane.abs_normal, half);
+            let margin = MARGIN * (plane.length * extent + plane.offset.abs());
             if distance + reach < -margin {
                 return Overlap::Outside;
             }
@@ -117,12 +126,6 @@ impl Frustum {
         } else {
             Overlap::Partial(crossing)
         }
-    }
-
-    /// Whether `bounds` is at least partly inside every plane.
-    #[cfg(test)]
-    pub(crate) fn sees(&self, bounds: &Aabb) -> bool {
-        !matches!(self.classify(bounds, self.all_planes()), Overlap::Outside)
     }
 }
 
@@ -145,6 +148,14 @@ mod tests {
             projection,
         };
         Frustum::new(&ViewFrame::new(&camera).unwrap(), &projection, aspect)
+    }
+
+    /// Whether `bounds` is at least partly inside every plane.
+    fn sees(frustum: &Frustum, bounds: &Aabb) -> bool {
+        !matches!(
+            frustum.classify(bounds, frustum.all_planes()),
+            Overlap::Outside
+        )
     }
 
     const PERSPECTIVE: Projection = Projection::Perspective {
@@ -189,7 +200,7 @@ mod tests {
             ];
             for (centre, inside) in cases {
                 let bounds = at(eye, centre, 0.001);
-                assert_eq!(frustum.sees(&bounds), inside, "{centre:?} from {eye:?}");
+                assert_eq!(sees(&frustum, &bounds), inside, "{centre:?} from {eye:?}");
             }
         }
     }
@@ -208,7 +219,11 @@ mod tests {
             ([0.0, 50.1, 0.0], false),
         ];
         for (centre, inside) in cases {
-            assert_eq!(frustum.sees(&at(eye, centre, 0.001)), inside, "{centre:?}");
+            assert_eq!(
+                sees(&frustum, &at(eye, centre, 0.001)),
+                inside,
+                "{centre:?}"
+            );
         }
     }
 

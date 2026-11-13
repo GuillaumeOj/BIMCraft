@@ -36,6 +36,10 @@ mod world;
 extern crate self as render;
 #[cfg(test)]
 #[path = "../tests/support/reference.rs"]
+#[allow(
+    dead_code,
+    reason = "loading into a Renderer serves the GPU tests and the benches"
+)]
 mod reference;
 
 pub use camera::{Camera, CameraError, Projection};
