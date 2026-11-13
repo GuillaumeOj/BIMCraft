@@ -18,3 +18,4 @@ interop-bcf
 api
 platform
 render
+core-ext

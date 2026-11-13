@@ -1,0 +1,19 @@
+[package]
+name = "core-ext"
+version = "0.0.0"
+description = "The public extension interfaces of the core, shared by disciplines and plugins (ARCH-03)."
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+core-model = { workspace = true }
+core-txn = { workspace = true }
+geom = { workspace = true }
+georef = { workspace = true }
+material = { workspace = true }
+schema = { workspace = true }
+
+[lints]
+workspace = true

@@ -42,5 +42,6 @@ Copy [`_template.md`](_template.md) and follow its comments.
 | [0021](0021-sweeps-and-revolutions.md) | Sweeps and revolutions | Accepted |
 | [0022](0022-face-triangulation.md) | Face triangulation | Accepted |
 | [0023](0023-incremental-tessellation.md) | Incremental tessellation | Accepted |
+| [0022](0022-discipline-extension-surface.md) | Discipline extension surface | Accepted |
 
 One decision predates this folder and stays in the specification: the web UI over an all-Rust UI ([specification §13](../../specifications.md#13-ui-and-rendering), "Decision record").
