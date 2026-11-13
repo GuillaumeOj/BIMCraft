@@ -34,10 +34,10 @@ Hover: amber outline. Selected: teal outline + tint, 3 px with a contrasting hal
 `B` → first corner (snap marker + label chip) → second corner (dashed rectangle with live "6.00 × 4.00 m") → height (pointer up/down or typed; Enter at once = 3.00 m) → block placed and selected, toast "Block placed · … · Undo". Tool stays armed; Esc or `V` returns to Select. Esc cancels one step at a time. Alt suspends snapping.
 
 ### 4 Move
-Direct: drag a selected element (unselected → selected first); ghost stays at the origin. Move tool (`M`, needs a selection): base point → target point with rubber-band line and distance chip; typed distance along the current direction (`2.5`, `2500mm`), Enter confirms. Snaps: endpoint, midpoint, edge, face, ground; Alt held suspends; `S` toggles. Result toast "Moved 1 element by 2.500 m · Undo". Refused move: toast "Can't move this element yet".
+Direct: drag a selected element (unselected → selected first); ghost stays at the origin. Move tool (`M`, needs a selection): base point → target point with rubber-band line and distance chip; typed distance along the current direction in metres (`2.5`; no unit suffix in the MVP, because letters are global shortcuts), Enter confirms. Snaps: endpoint, midpoint, edge, face, ground; Alt held suspends; `S` toggles. Result toast "Moved 1 element by 2.500 m · Undo". Refused move: toast "Can't move this element yet".
 
 ### 5 Clipping planes
-"Add plane on face…" arms a pick mode ("Click a face to cut at it · Esc to cancel"); click adds, plane tints cut faces like the section box. Flip, Remove, Clear all (toast with Undo that re-adds, view state only). Delete removes the focused row.
+"Add plane on face…" arms a pick mode ("Click a face to cut at it · Esc to cancel"); click adds, plane tints cut faces like the section box. Flip, Remove, Clear all (toast "Clipping planes cleared", no Undo: planes are view state, not model history). Delete removes the focused row.
 
 ### 6 Section box and visibility
 Alt+B toggles the box; Min/Max fields in the panel (Enter applies, Esc restores, min ≥ max shows "Minimum must be below maximum" and is not sent). Visibility popover: Enter/Space opens, tablist ←→, rows ↑↓ Space / Shift+Space, Esc closes and returns focus. `H`, `I`, `Alt+H` global.
@@ -45,7 +45,7 @@ Alt+B toggles the box; Min/Max fields in the panel (Enter applies, Esc restores,
 ### 7 States
 - **Empty**: grid and axes, "Nothing to see yet — Place a block to start your model", button "Place a block B", link to the guide.
 - **Loading**: spinner, "Loading the 3D view…", controls disabled; after 10 s "Still working…" + Cancel.
-- **No WebGPU**: "The 3D view isn't available on this computer"; what still works (plan, sections, schedules, editing); "Open the troubleshooting guide", "Go to the plan view".
+- **No WebGPU**: "The 3D view isn't available on this computer"; what still works (your project, its panels and editing); one button, "Open the troubleshooting guide".
 - **Device lost / scene rejected / out of memory**: "The 3D view stopped" + a one-line cause per `error.key`, "Reload view" (focused, `role="alert"`), "Copy details" (no model content). Reload = new `Viewport.create` + `scene(since: null)`. Second failure within 30 s adds "If it keeps happening, restart BIMCraft."
 
 ## Keyboard map (confirmed unless marked NEW)
@@ -71,7 +71,7 @@ Alt+B toggles the box; Min/Max fields in the panel (Enter applies, Esc restores,
 | Toggle snapping | `S` — **NEW** | global |
 | Visibility popover rows | ↑ ↓ Home End, Space hide, Shift+Space isolate | popover |
 
-Global shortcuts are quiet behind dialogs and inside text fields. `Alt+B` / `Alt+H` types a symbol on some macOS layouts inside text fields only; inside fields the shell already ignores shortcuts, so no change is proposed. Presets and Clear planes have no shortcut (menu / panel only) to keep the letter space free.
+Global shortcuts are quiet behind dialogs and inside text fields. The single-letter ones (`V`, `M`, `B`, `H`, `I`, `S`, `P`) must also be switchable off in the settings (WCAG 2.1.4 Character Key Shortcuts, part of the AA target). The shell matches `Alt+` shortcuts on `KeyboardEvent.code`, not `key`, because on macOS Option+letter produces a symbol as `key` even outside text fields. Presets and Clear planes have no shortcut (menu / panel only) to keep the letter space free.
 
 ## Proposed changes to `api-contract.md` §2 (lead decides; I do not edit it)
 
@@ -79,7 +79,7 @@ Global shortcuts are quiet behind dialogs and inside text fields. `Alt+B` / `Alt
 2. **Clip plane on a picked face is missing.** `clip_plane_add` needs a point and a normal that only the viewport knows (it picks on the CPU). Proposed: `ViewCommand { kind: "clip_plane_pick" }` arms a one-shot pick; the viewport adds the plane itself and reports it in `ViewState.clipPlanes`; Esc cancels. (Alternative: a `clip_plane_picked` event the UI turns into `clip_plane_add`. The first is simpler and keeps interaction in Rust, D5.) `tool_state.step` needs a `"pick_face"` value, or a new `Tool = "clip_plane"`.
 3. **Add a `ViewCommand { kind: "clip_plane_flip"; index: number }`**: Flip must not be remove + add (the row would move).
 4. **Add `view_state.snapping: boolean`** so the status bar shows the snap state after `S` / Alt (UI holds no state).
-5. **Announcement keys to add**: `view.preset`, `view.projection`, `selection.cleared`, `visibility.hidden`, `visibility.isolated`, `visibility.reset`, `clip_plane.added`, `clip_plane.flipped`, `clip_plane.removed`, `clip_plane.cleared`, `move.cancelled`, `place.height`. Strings below.
+5. **Announcement keys to add**: `view.preset`, `view.projection`, `visibility.hidden`, `visibility.isolated`, `visibility.reset`, `clip_plane.added`, `clip_plane.flipped`, `clip_plane.removed`, `clip_plane.cleared`, `move.cancelled`, `place.height`. Strings below.
 6. **`typed_distance` for place_block** carries only one number: width, depth and height are three successive values, each confirmed with Enter (not Tab). Confirm the Rust side treats each Enter as the next step.
 7. **`error.key`** gets no change; the UI maps the three keys to the strings below.
 
@@ -123,8 +123,8 @@ Numbers are formatted by the UI with the locale's decimal separator (FR: "2,5").
 | Loading | Loading the 3D view… | Chargement de la vue 3D… |
 | Loading, slow | Still working… | Toujours en cours… |
 | No WebGPU title | The 3D view isn't available on this computer | La vue 3D n'est pas disponible sur cet ordinateur |
-| No WebGPU body | BIMCraft draws 3D with your graphics card through a feature called WebGPU, and this computer doesn't offer it. Plan views, sections, schedules and editing still work. | BIMCraft affiche la 3D avec votre carte graphique grâce à WebGPU, que cet ordinateur ne propose pas. Les plans, coupes, nomenclatures et l'édition restent disponibles. |
-| No WebGPU buttons | Open the troubleshooting guide · Go to the plan view | Ouvrir le guide de dépannage · Aller au plan |
+| No WebGPU body | BIMCraft draws 3D with your graphics card through a feature called WebGPU, and this computer doesn't offer it. Your project, its panels and editing still work. | BIMCraft affiche la 3D avec votre carte graphique grâce à WebGPU, que cet ordinateur ne propose pas. Votre projet, ses panneaux et l'édition restent disponibles. |
+| No WebGPU button | Open the troubleshooting guide | Ouvrir le guide de dépannage |
 | Error title | The 3D view stopped | La vue 3D s'est arrêtée |
 | `device_lost` | The graphics card stopped responding. Your model is safe. | La carte graphique ne répond plus. Votre modèle est intact. |
 | `scene_rejected` | The view couldn't read the model data. Your model is safe. | La vue n'a pas pu lire les données du modèle. Votre modèle est intact. |
@@ -137,7 +137,7 @@ Numbers are formatted by the UI with the locale's decimal separator (FR: "2,5").
 | Move with no selection | Select something to move | Sélectionnez d'abord un élément à déplacer |
 | Clip pick hint | Click a face to cut at it · Esc to cancel | Cliquez sur une face pour couper à cet endroit · Échap pour annuler |
 | Clip max | Maximum 6 planes | 6 plans au maximum |
-| Planes cleared toast | Planes cleared · Undo | Plans supprimés · Annuler |
+| Planes cleared toast (no Undo) | Clipping planes cleared | Plans de coupe supprimés |
 | Box field error | Minimum must be below maximum | Le minimum doit être inférieur au maximum |
 | Section box hint | drag a handle or type values in the View panel · Shift for 100 mm steps | faites glisser une poignée ou saisissez des valeurs dans le panneau Vue · Maj pour des pas de 100 mm |
 | Snap off chip | Snap off | Accroche désactivée |
