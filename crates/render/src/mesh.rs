@@ -105,6 +105,56 @@ impl MeshData {
         check_normals(&self.normals)?;
         check_indices(&self.indices, self.positions.len())
     }
+
+    /// The coarse level of the mesh: its bounding box in its local coordinates, as 12 triangles
+    /// with four vertices and one outward normal per face, around the same origin. A mesh built
+    /// in the local frame of its element (spec D3) is aligned with that element, so the box is
+    /// the element's oriented bounding box. A flat mesh gives a box of zero thickness. `None`
+    /// for a mesh without positions.
+    #[must_use]
+    pub fn bounding_box(&self) -> Option<Self> {
+        let (first, rest) = self.positions.split_first()?;
+        let (mut min, mut max) = (*first, *first);
+        for position in rest {
+            for axis in 0..3 {
+                min[axis] = min[axis].min(position[axis]);
+                max[axis] = max[axis].max(position[axis]);
+            }
+        }
+        let mut positions = Vec::with_capacity(24);
+        let mut normals = Vec::with_capacity(24);
+        let mut indices = Vec::with_capacity(36);
+        for axis in 0..3 {
+            let (u, v) = ((axis + 1) % 3, (axis + 2) % 3);
+            for (side, sign) in [(min, -1.0_f32), (max, 1.0)] {
+                // Counter-clockwise seen from outside: (u, v) is right-handed with +axis.
+                let corners = [(min, min), (max, min), (max, max), (min, max)];
+                let first = u32::try_from(positions.len()).unwrap_or(0);
+                for (a, b) in corners {
+                    let mut corner = [0.0; 3];
+                    corner[axis] = side[axis];
+                    corner[u] = a[u];
+                    corner[v] = b[v];
+                    positions.push(corner);
+                    let mut normal = [0.0; 3];
+                    normal[axis] = sign;
+                    normals.push(normal);
+                }
+                let order = if sign > 0.0 {
+                    [0, 1, 2, 0, 2, 3]
+                } else {
+                    [0, 2, 1, 0, 3, 2]
+                };
+                indices.extend(order.map(|corner| first + corner));
+            }
+        }
+        Some(Self {
+            origin: self.origin,
+            positions,
+            normals,
+            indices,
+        })
+    }
 }
 
 fn check_normals(normals: &[[f32; 3]]) -> Result<(), MeshError> {
@@ -264,6 +314,47 @@ mod tests {
             normals: vec![UP; 3],
             indices: vec![0, 1, 2],
         }
+    }
+
+    #[test]
+    fn the_bounding_box_is_12_triangles_enclosing_the_vertices() {
+        let mesh = MeshData {
+            origin: [1e7, 2.0, 3.0],
+            positions: vec![[-1.0, 0.5, 0.0], [2.0, -0.5, 1.0], [0.0, 1.5, -3.0]],
+            normals: vec![UP; 3],
+            indices: vec![0, 1, 2],
+        };
+        let coarse = mesh.bounding_box().unwrap();
+        coarse.validate().unwrap();
+        assert_eq!(bits(coarse.origin), bits(mesh.origin));
+        assert_eq!((coarse.positions.len(), coarse.indices.len()), (24, 36));
+        let (min, max) = ([-1.0, -0.5, -3.0], [2.0, 1.5, 1.0]);
+        for corner in &coarse.positions {
+            assert!(corner.iter().zip(min.iter().zip(&max)).all(
+                |(c, (lo, hi)): (&f32, (&f32, &f32))| c.to_bits() == lo.to_bits()
+                    || c.to_bits() == hi.to_bits()
+            ));
+        }
+        for corner in [min, max] {
+            assert!(coarse.positions.contains(&corner));
+        }
+        // Each face's normal points away from the centre of the box.
+        let centre = [0.5_f32, 0.5, -1.0];
+        for (position, normal) in coarse.positions.iter().zip(&coarse.normals) {
+            let outward: f32 = (0..3).map(|a| (position[a] - centre[a]) * normal[a]).sum();
+            assert!(outward > 0.0);
+        }
+        // A flat mesh gives a box of zero thickness, still with unit normals.
+        let flat = triangle().bounding_box().unwrap();
+        flat.validate().unwrap();
+        assert!(flat.positions.iter().all(|p| p[2] == 0.0));
+        let empty = MeshData {
+            positions: Vec::new(),
+            normals: Vec::new(),
+            indices: Vec::new(),
+            ..triangle()
+        };
+        assert_eq!(empty.bounding_box(), None);
     }
 
     #[test]

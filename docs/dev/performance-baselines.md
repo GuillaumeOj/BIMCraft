@@ -1,6 +1,6 @@
 # Performance baselines
 
-Reference numbers to compare against when a hot path changes. Timings depend on the machine, so compare runs on the same machine and update this page in the pull request that moves a number. CI does not run the benchmarks ([quality.md](quality.md#benchmarks)); it does gate memory per object.
+Reference numbers to compare against when a hot path changes. Timings depend on the machine, so compare runs on the same machine and update this page in the pull request that moves a number. The CI of pull requests does not run the benchmarks; a weekly workflow keeps their output as an artefact ([quality.md](quality.md#benchmarks)). CI does gate memory per object.
 
 ## Attribute tables (CORE-05)
 
@@ -22,3 +22,31 @@ Remove includes returning the removed values. The insert figure was taken while 
 ### Memory (NFR-08)
 
 `Store::heap_bytes` after inserting the objects of the `memory_per_object_stays_within_budget` test in `crates/core-model`: **166 bytes per object** on 64-bit targets, about 16.6 MB for the 100,000 objects. Roughly 95 bytes are the values themselves, 28 the spare capacity of growing vectors and 43 the id index. The test fails above a budget of 200 bytes per object; raise it only with a reason in the pull request.
+
+## Frame preparation (VP-02, NFR-02)
+
+The CPU part of a frame of the renderer ([ADR 0024](adr/0024-instancing-culling-and-level-of-detail.md)): frustum culling through the hierarchy, the choice of each object's level of detail, and the writing of the instance records of the objects drawn. The model is the reference model of `crates/render/tests/support/reference.rs`: 10 storeys, 100,150 elements, 15 meshes, at a national-grid offset. The view is full HD (1920 × 1080) with a 60° vertical field of view and the default settings. NFR-02 leaves this work 4 ms of the 16.7 ms of a frame at 60 fps; the GPU gets the rest.
+
+### Method
+
+`cargo bench -p render --bench frame`, release profile:
+
+- `prepare/orbit` moves the camera 10° around the building at each iteration, 110 m from its axis and 45 m up.
+- `prepare/aerial` views the whole building from high above a corner.
+- `prepare/inside` stands on the sixth storey, looking along the building.
+- `update/move_100` moves 100 objects.
+- `gpu/frame` times a whole frame until the GPU is done, on a hardware adapter only.
+
+The benches need a GPU adapter to create the renderer, even though the `prepare` groups do not use the GPU. The `Benchmarks` workflow runs them weekly on lavapipe ([quality.md](quality.md#benchmarks)).
+
+### Reference numbers
+
+These numbers come from a timing probe, not from criterion: the agent sandbox that wrote this section has no GPU adapter, so `cargo bench` could not run there. The probe timed the same CPU path as `Renderer::prepare_frame` (camera validation, projection, culling, levels of detail and instance records), 200 frames per camera, in a release build. Apple Silicon Mac, Rust 1.98.1, macOS, 2026-11-14. Replace these numbers with the criterion medians at the next run on a machine with a GPU.
+
+| View | Median | 95th percentile | Objects drawn | Instance bytes |
+| --- | --- | --- | --- | --- |
+| Orbit | 1.82 ms | 2.36 ms | 98,150 | 7.85 MB |
+| Aerial | 1.90 ms | 2.37 ms | 98,150 (13,630 coarse) | 7.85 MB |
+| Inside | 1.35 ms | 1.76 ms | 70,226 (4,534 coarse) | 5.62 MB |
+
+Each object drawn costs one 80-byte instance record uploaded per frame. Without occlusion culling, the outside views draw everything except the 2,000 sprinkler heads, which are under a pixel.

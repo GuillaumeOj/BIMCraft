@@ -8,7 +8,7 @@ use crate::{
 };
 
 /// The size of the smallest added mesh: id, origin, counts, bounds (no vertices).
-const MESH_MIN_BYTES: usize = 8 + 24 + 4 + 4 + 24 + 24;
+const MESH_MIN_BYTES: usize = 8 + 24 + 4 + 4 + 12 + 12;
 /// The size of an element record.
 const ELEMENT_BYTES: usize = 16 + 8 + 72 + 24 + 4 + 4;
 
