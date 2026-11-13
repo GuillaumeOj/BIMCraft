@@ -1,0 +1,7 @@
+# The public extension interfaces of the core (ARCH-03): the only crates of the workspace a
+# disc-* crate may depend on, the same ones offered to plugins. One crate per line.
+# core-ext re-exports, by name, what an extension may use of the core; platform holds the traits
+# hosts implement. Checked by scripts/check-architecture.ts; rationale in
+# docs/dev/adr/0022-discipline-extension-surface.md.
+core-ext
+platform
