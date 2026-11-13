@@ -22,9 +22,9 @@ pub(crate) type Matrix = [[f32; 4]; 4];
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct ViewFrame {
     /// The world position of the camera, in metres.
-    eye: [f64; 3],
+    pub(crate) eye: [f64; 3],
     /// Rows: the right, up and backward axes of the camera in world coordinates.
-    rotation: Rotation,
+    pub(crate) rotation: Rotation,
 }
 
 impl ViewFrame {

@@ -19,17 +19,31 @@
 // ARCH-02: forbid, not deny, so nothing in this crate can opt out. See docs/dev/quality.md.
 #![forbid(clippy::disallowed_methods, clippy::disallowed_types)]
 
+mod bounds;
+mod bvh;
 mod camera;
+mod frustum;
+mod lod;
 mod mesh;
 mod placement;
 mod renderer;
 mod transform;
 mod vector;
+mod world;
+
+// The reference model of the tests and benches sees this crate as `render`.
+#[cfg(test)]
+extern crate self as render;
+#[cfg(test)]
+#[path = "../tests/support/reference.rs"]
+mod reference;
 
 pub use camera::{Camera, CameraError, Projection};
+pub use lod::{DetailLevel, RenderSettings};
 pub use mesh::{MAX_MESH_INDICES, MAX_MESH_VERTICES, MeshData, MeshError};
 pub use placement::{Placement, PlacementError};
-pub use renderer::{MeshId, ObjectId, RenderError, Renderer, headless_device};
+pub use renderer::{RenderError, Renderer, headless_device};
+pub use world::{FrameStats, MeshId, ObjectId};
 
 /// The largest magnitude of a world coordinate, in metres: of a mesh origin and its local
 /// positions, a placement translation, and the eye and target of a camera (its up vector is a
