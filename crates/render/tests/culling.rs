@@ -24,6 +24,8 @@ const EVERYTHING: RenderSettings = RenderSettings {
     coarse_below_px: 0.0,
     hide_below_px: 0.0,
     hysteresis: 0.0,
+    occlusion_culling: false,
+    occlusion_queries: 1,
 };
 
 /// Draws a frame of `size` and reads it back, with what it drew.

@@ -9,12 +9,18 @@
 //! free list, so no update allocates once the tree has grown.
 //!
 //! Queries walk the tree with a caller's test on each box ([`Bvh::query`]): the frustum test of
-//! the culling today, a ray test for picking tomorrow.
+//! the culling today, a ray test for picking tomorrow. Each node counts the leaves below it, so
+//! the tree also splits into *clusters* ([`Bvh::clusters`]): the highest compact nodes with at
+//! most a given number of leaves, which the occlusion culling tests as one box each.
 
 use crate::bounds::Aabb;
 
 /// The index of no node.
 const NONE: u32 = u32::MAX;
+
+/// How much larger than the boxes of its leaves together the surface of a node's box may be for
+/// the node to be compact: beyond, its box is mostly empty space.
+const SPREAD: f64 = 3.0;
 
 /// A leaf of the tree, as returned by [`Bvh::insert`]: valid until it is removed.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -30,6 +36,17 @@ pub(crate) enum Overlap<S> {
     Inside,
 }
 
+/// What a walk down to the clusters does with a node ([`Bvh::clusters`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Step {
+    /// Visit its children; for a cluster, the same as [`Step::Leave`].
+    Descend,
+    /// Report every item below it.
+    Skip,
+    /// Neither visit its children nor report its items.
+    Leave,
+}
+
 struct Node {
     bounds: Aabb,
     /// The parent, or the next free node of a free node.
@@ -38,6 +55,10 @@ struct Node {
     children: [u32; 2],
     /// 0 for a leaf.
     height: u32,
+    /// The leaves below the node, itself included for a leaf.
+    leaves: u32,
+    /// The surface areas of the boxes of its leaves, added up.
+    leaf_area: f64,
     /// The caller's item of a leaf.
     item: u32,
 }
@@ -45,6 +66,12 @@ struct Node {
 impl Node {
     fn is_leaf(&self) -> bool {
         self.children[0] == NONE
+    }
+
+    /// Whether its box is at most [`SPREAD`] times the boxes of its leaves together; always
+    /// true for a leaf.
+    fn is_compact(&self) -> bool {
+        self.is_leaf() || self.bounds.surface_area() <= SPREAD * self.leaf_area
     }
 }
 
@@ -74,6 +101,8 @@ impl Bvh {
             parent: NONE,
             children: [NONE; 2],
             height: 0,
+            leaves: 1,
+            leaf_area: bounds.surface_area(),
             item,
         });
         self.insert_leaf(leaf);
@@ -89,7 +118,9 @@ impl Bvh {
     /// Gives a leaf new bounds; the leaf keeps its handle.
     pub(crate) fn update(&mut self, Leaf(leaf): Leaf, bounds: Aabb) {
         self.remove_leaf(leaf);
-        self.node_mut(leaf).bounds = bounds;
+        let node = self.node_mut(leaf);
+        node.bounds = bounds;
+        node.leaf_area = bounds.surface_area();
         self.insert_leaf(leaf);
     }
 
@@ -120,6 +151,42 @@ impl Bvh {
                 }
             }
         }
+    }
+
+    /// Walks the tree from the root down to the clusters, calling `visit` on each node with its
+    /// index, its bounds and, above the clusters, its children; `visit` tells whether to go
+    /// down, to skip the subtree and report the item of each of its leaves to `found`, or to
+    /// leave the subtree alone. Every leaf is in exactly one cluster: a highest node with at most
+    /// `max_leaves` leaves whose box is compact, that is, of a surface area at most [`SPREAD`]
+    /// times that of the boxes of its leaves together. A box mostly made of empty space would
+    /// show where nothing is drawn. `pending` holds the nodes left to visit, as in
+    /// [`Bvh::query`].
+    pub(crate) fn clusters(
+        &mut self,
+        pending: &mut Vec<u32>,
+        max_leaves: u32,
+        mut visit: impl FnMut(u32, &Aabb, Option<[u32; 2]>) -> Step,
+        mut found: impl FnMut(u32),
+    ) {
+        pending.clear();
+        if self.root != NONE {
+            pending.push(self.root);
+        }
+        while let Some(index) = pending.pop() {
+            let node = self.node(index);
+            let children =
+                (node.leaves > max_leaves || !node.is_compact()).then_some(node.children);
+            match visit(index, &node.bounds, children) {
+                Step::Descend => pending.extend(children.into_iter().flatten()),
+                Step::Skip => self.report_all(index, &mut found),
+                Step::Leave => {}
+            }
+        }
+    }
+
+    /// The number of node indices in use or free: every index the tree hands out is below it.
+    pub(crate) fn node_capacity(&self) -> usize {
+        self.nodes.len()
     }
 
     /// Reports every item below `index`.
@@ -177,16 +244,20 @@ impl Bvh {
         let bounds = self.node(leaf).bounds;
         let sibling = self.best_sibling(&bounds);
         let old_parent = self.node(sibling).parent;
+        // Refitted from its children below, once they are linked.
         let parent = self.allocate(Node {
-            bounds: bounds.union(&self.node(sibling).bounds),
+            bounds,
             parent: old_parent,
             children: [sibling, leaf],
-            height: self.node(sibling).height + 1,
+            height: 0,
+            leaves: 0,
+            leaf_area: 0.0,
             item: NONE,
         });
         self.replace_child(old_parent, sibling, parent);
         self.node_mut(sibling).parent = parent;
         self.node_mut(leaf).parent = parent;
+        self.refit(parent);
         self.refit_from(old_parent);
     }
 
@@ -269,9 +340,13 @@ impl Bvh {
         let (first, second) = (self.node(first), self.node(second));
         let bounds = first.bounds.union(&second.bounds);
         let height = 1 + first.height.max(second.height);
+        let leaves = first.leaves + second.leaves;
+        let leaf_area = first.leaf_area + second.leaf_area;
         let node = self.node_mut(index);
         node.bounds = bounds;
         node.height = height;
+        node.leaves = leaves;
+        node.leaf_area = leaf_area;
     }
 
     /// Rotates the deeper child of `a` above it when the heights of its children differ by
@@ -319,6 +394,10 @@ impl Bvh {
     /// the right height, the free list and the
     /// tree share no node, and every item is reachable once. Returns the items found.
     #[cfg(test)]
+    #[expect(
+        clippy::float_cmp,
+        reason = "the areas are added up by the same operations, so they agree exactly"
+    )]
     fn check(&self) -> Vec<u32> {
         let mut items = Vec::new();
         let mut reachable = 0;
@@ -331,7 +410,8 @@ impl Bvh {
             reachable += 1;
             let node = self.node(index);
             if node.is_leaf() {
-                assert_eq!(node.height, 0);
+                assert_eq!((node.height, node.leaves), (0, 1));
+                assert_eq!(node.leaf_area, node.bounds.surface_area());
                 items.push(node.item);
                 continue;
             }
@@ -341,6 +421,8 @@ impl Bvh {
             }
             assert_eq!(node.bounds, first.bounds.union(&second.bounds));
             assert_eq!(node.height, 1 + first.height.max(second.height));
+            assert_eq!(node.leaves, first.leaves + second.leaves);
+            assert_eq!(node.leaf_area, first.leaf_area + second.leaf_area);
             stack.extend(node.children);
         }
         let mut free = 0;
@@ -439,6 +521,87 @@ mod tests {
         assert_eq!(tree.check().len(), 2);
     }
 
+    /// The clusters of at most `max` leaves, each as its sorted items, after checking that each
+    /// is the highest node that small. Sorted.
+    fn clusters(tree: &mut Bvh, max: u32) -> Vec<Vec<u32>> {
+        let mut nodes = Vec::new();
+        tree.clusters(
+            &mut Vec::new(),
+            max,
+            |index, _, children| {
+                if children.is_some() {
+                    return Step::Descend;
+                }
+                nodes.push(index);
+                Step::Leave
+            },
+            |_| unreachable!(),
+        );
+        let mut clusters = Vec::new();
+        for index in nodes {
+            let node = tree.node(index);
+            assert!(node.leaves <= max && node.is_compact());
+            if node.parent != NONE {
+                let parent = tree.node(node.parent);
+                assert!(parent.leaves > max || !parent.is_compact());
+            }
+            let mut items = Vec::new();
+            tree.report_all(index, &mut |item| items.push(item));
+            items.sort_unstable();
+            clusters.push(items);
+        }
+        clusters.sort();
+        clusters
+    }
+
+    #[test]
+    fn clusters_split_the_tree_into_small_neighbourhoods() {
+        let mut tree = Bvh::new();
+        assert!(clusters(&mut tree, 4).is_empty());
+        // A row of 4 cubes 2 m apart: one cluster, or one per cube.
+        for i in 0..4_u32 {
+            tree.insert(cube([f64::from(i) * 2.0, 0.0, 0.0], 1.0), i);
+        }
+        assert_eq!(clusters(&mut tree, 4), vec![vec![0, 1, 2, 3]]);
+        assert_eq!(clusters(&mut tree, 1).len(), 4);
+        // A cube far away is its own cluster, however many leaves a cluster may hold, and so is a
+        // wide plate between them: the boxes joining them would be mostly empty space.
+        tree.insert(cube([1000.0, 0.0, 0.0], 1.0), 4);
+        let plate = Aabb {
+            min: [-20.0, 30.0, -20.0],
+            max: [20.0, 30.2, 20.0],
+        };
+        tree.insert(plate, 5);
+        assert_eq!(
+            clusters(&mut tree, 100),
+            vec![vec![0, 1, 2, 3], vec![4], vec![5]]
+        );
+        // Only the clusters `visit` accepts report their items.
+        let mut found = Vec::new();
+        tree.clusters(
+            &mut Vec::new(),
+            100,
+            |_, bounds, children| match children {
+                Some(_) if bounds.max[0] < 500.0 => Step::Leave,
+                Some(_) => Step::Descend,
+                None if bounds.min[0] > 500.0 => Step::Skip,
+                None => Step::Leave,
+            },
+            |item| found.push(item),
+        );
+        assert_eq!(found, [4]);
+        // Skipping above the clusters reports every item below.
+        found.clear();
+        tree.clusters(
+            &mut Vec::new(),
+            100,
+            |_, _, _| Step::Skip,
+            |item| found.push(item),
+        );
+        found.sort_unstable();
+        assert_eq!(found, [0, 1, 2, 3, 4, 5]);
+    }
+
     #[derive(Clone, Debug)]
     enum Operation {
         Insert([f64; 3], f64),
@@ -504,7 +667,11 @@ mod tests {
                 }
                 let mut items = tree.check();
                 items.sort_unstable();
-                prop_assert_eq!(items, live.keys().copied().collect::<Vec<_>>());
+                prop_assert_eq!(&items, &live.keys().copied().collect::<Vec<_>>());
+                // The clusters partition the items.
+                let mut clustered: Vec<u32> = clusters(&mut tree, 8).concat();
+                clustered.sort_unstable();
+                prop_assert_eq!(clustered, items);
             }
         }
     }

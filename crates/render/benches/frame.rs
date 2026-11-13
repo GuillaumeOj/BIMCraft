@@ -3,11 +3,13 @@
 //! `docs/dev/performance-baselines.md`.
 //!
 //! - `prepare/*`: the CPU part of a frame, which `Renderer::prepare_frame` runs alone: frustum
-//!   culling through the hierarchy, levels of detail, and the instance records of the objects
-//!   drawn, in a full HD view. `prepare/orbit` moves the camera 10° around the building at each
-//!   iteration; NFR-02 leaves it 4 ms of the 16.7 ms of a frame at 60 fps.
+//!   culling through the hierarchy, the walk of the occlusion clusters, levels of detail, and the
+//!   instance records of the objects drawn, in a full HD view. `prepare/orbit` moves the camera
+//!   10° around the building at each iteration; NFR-02 leaves it 4 ms of the 16.7 ms of a frame
+//!   at 60 fps. `prepare/orbit_no_occlusion` is the same with occlusion culling off.
 //! - `update/move_100`: moving 100 objects, which updates the hierarchy.
-//! - `gpu/frame`: a whole frame, CPU and GPU, waiting for the GPU to finish. Only on a hardware
+//! - `gpu/frame` and `gpu/frame_no_occlusion`: a whole frame, CPU and GPU, waiting for the GPU
+//!   to finish, with occlusion culling on (its queries included) and off. Only on a hardware
 //!   adapter: a software one (lavapipe, WARP) measures the CPU running a rasteriser, not a GPU.
 
 // The benchmark reports why it skips a group, on the console like criterion itself.
@@ -19,7 +21,7 @@ mod reference;
 use std::hint::black_box;
 
 use criterion::{Criterion, criterion_group, criterion_main};
-use render::{ObjectId, Placement, Renderer, headless_device};
+use render::{ObjectId, Placement, RenderSettings, Renderer, headless_device};
 
 /// The colour format of the offscreen target of `gpu/frame`.
 const FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
@@ -64,12 +66,16 @@ fn bench_frame(criterion: &mut Criterion) {
     };
     let mut group = criterion.benchmark_group("prepare");
     let mut step = 0;
-    group.bench_function("orbit", |bench| {
-        bench.iter(|| {
-            step = (step + 1) % 36;
-            black_box(renderer.prepare_frame(&reference::orbit(step, 36), reference::VIEW))
+    for (name, occlusion_culling) in [("orbit", true), ("orbit_no_occlusion", false)] {
+        set_occlusion(&mut renderer, occlusion_culling);
+        group.bench_function(name, |bench| {
+            bench.iter(|| {
+                step = (step + 1) % 36;
+                black_box(renderer.prepare_frame(&reference::orbit(step, 36), reference::VIEW))
+            });
         });
-    });
+    }
+    set_occlusion(&mut renderer, true);
     for (name, camera) in [
         ("aerial", reference::aerial()),
         ("inside", reference::inside()),
@@ -118,17 +124,30 @@ fn bench_frame(criterion: &mut Criterion) {
     });
     let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
     let mut group = criterion.benchmark_group("gpu");
-    group.bench_function("frame", |bench| {
-        bench.iter(|| {
-            step = (step + 1) % 36;
-            let camera = reference::orbit(step, 36);
-            renderer
-                .render(&view, reference::VIEW, &camera, [1.0; 4])
-                .unwrap();
-            device.poll(wgpu::PollType::wait_indefinitely()).unwrap();
+    for (name, occlusion_culling) in [("frame", true), ("frame_no_occlusion", false)] {
+        set_occlusion(&mut renderer, occlusion_culling);
+        group.bench_function(name, |bench| {
+            bench.iter(|| {
+                step = (step + 1) % 36;
+                let camera = reference::orbit(step, 36);
+                renderer
+                    .render(&view, reference::VIEW, &camera, [1.0; 4])
+                    .unwrap();
+                device.poll(wgpu::PollType::wait_indefinitely()).unwrap();
+            });
         });
-    });
+    }
     group.finish();
+}
+
+/// The default settings, with occlusion culling on or off.
+fn set_occlusion(renderer: &mut Renderer, occlusion_culling: bool) {
+    renderer
+        .set_settings(RenderSettings {
+            occlusion_culling,
+            ..RenderSettings::default()
+        })
+        .unwrap();
 }
 
 criterion_group!(benches, bench_frame);

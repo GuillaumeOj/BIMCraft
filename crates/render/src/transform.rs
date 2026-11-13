@@ -146,7 +146,7 @@ fn to_f32(value: f64) -> f32 {
 }
 
 /// The 4×4 matrix `[rotation | translation]` in `f32`, column-major.
-fn to_gpu(rotation: &Rotation, translation: [f64; 3]) -> Matrix {
+pub(crate) fn to_gpu(rotation: &Rotation, translation: [f64; 3]) -> Matrix {
     core::array::from_fn(|column| {
         match column {
             3 => [translation[0], translation[1], translation[2], 1.0],

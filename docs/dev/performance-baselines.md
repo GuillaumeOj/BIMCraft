@@ -25,17 +25,17 @@ Remove includes returning the removed values. The insert figure was taken while 
 
 ## Frame preparation (VP-02, NFR-02)
 
-The CPU part of a frame of the renderer ([ADR 0024](adr/0024-instancing-culling-and-level-of-detail.md)): frustum culling through the hierarchy, the choice of each object's level of detail, and the writing of the instance records of the objects drawn. The model is the reference model of `crates/render/tests/support/reference.rs`: 10 storeys, 100,150 elements, 15 meshes, at a national-grid offset. The view is full HD (1920 × 1080) with a 60° vertical field of view and the default settings. NFR-02 leaves this work 4 ms of the 16.7 ms of a frame at 60 fps; the GPU gets the rest.
+The CPU part of a frame of the renderer ([ADR 0024](adr/0024-instancing-culling-and-level-of-detail.md)): frustum culling through the hierarchy, the walk of the occlusion clusters, the choice of each object's level of detail, and the writing of the instance records of the objects drawn. The model is the reference model of `crates/render/tests/support/reference.rs`: 10 storeys, 100,150 elements, 15 meshes, at a national-grid offset. The view is full HD (1920 × 1080) with a 60° vertical field of view and the default settings. NFR-02 leaves this work 4 ms of the 16.7 ms of a frame at 60 fps; the GPU gets the rest.
 
 ### Method
 
 `cargo bench -p render --bench frame`, release profile:
 
-- `prepare/orbit` moves the camera 10° around the building at each iteration, 110 m from its axis and 45 m up.
+- `prepare/orbit` moves the camera 10° around the building at each iteration, 110 m from its axis and 45 m up; `prepare/orbit_no_occlusion` does the same with occlusion culling off.
 - `prepare/aerial` views the whole building from high above a corner.
 - `prepare/inside` stands on the sixth storey, looking along the building.
 - `update/move_100` moves 100 objects.
-- `gpu/frame` times a whole frame until the GPU is done, on a hardware adapter only.
+- `gpu/frame` and `gpu/frame_no_occlusion` time a whole frame until the GPU is done, with occlusion culling on and off, on a hardware adapter only. Occlusion culling saves GPU time only there: `prepare` issues no queries, so its frames skip nothing.
 
 The benches need a GPU adapter to create the renderer, even though the `prepare` groups do not use the GPU. The `Benchmarks` workflow runs them weekly on lavapipe ([quality.md](quality.md#benchmarks)).
 
@@ -49,4 +49,14 @@ These numbers come from a timing probe, not from criterion: the agent sandbox th
 | Aerial | 1.90 ms | 2.37 ms | 98,150 (13,630 coarse) | 7.85 MB |
 | Inside | 1.35 ms | 1.76 ms | 70,226 (4,534 coarse) | 5.62 MB |
 
-Each object drawn costs one 80-byte instance record uploaded per frame. Without occlusion culling, the outside views draw everything except the 2,000 sprinkler heads, which are under a pixel.
+With occlusion culling on, the same probe, 2026-11-14 (B3), timed the walk of the 5,780 clusters on top of the rest, without any query result, so nothing was skipped. "No queries" is what `prepare_frame` does; "1,024 queries" also chooses the clusters to test and writes their boxes, as `render` does.
+
+| View | Occlusion off | On, no queries | On, 1,024 queries |
+| --- | --- | --- | --- |
+| Orbit | 1.78 ms | 2.15 ms | 2.03 ms |
+| Aerial | 1.86 ms | 2.04 ms | 2.22 ms |
+| Inside | 1.42 ms | 1.53 ms | 1.75 ms |
+
+Medians of 200 frames; the 95th percentiles stay under 2.5 ms. The frames that skip hidden clusters write fewer instance records, so they cost less than these. What occlusion culling saves on the GPU needs `gpu/frame` on a hardware adapter; no number yet.
+
+Each object drawn costs one 80-byte instance record uploaded per frame. Without occlusion culling, the outside views draw everything except the 2,000 sprinkler heads, which are under a pixel; with it, the elements behind the façades are skipped once the GPU has found them hidden.

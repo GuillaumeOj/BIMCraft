@@ -12,6 +12,9 @@ use crate::Projection;
 /// `coarse_below_px`, its coarse level (the mesh's bounding box, 12 triangles) below, and
 /// nothing below `hide_below_px`. To come back up, the size must exceed a threshold times
 /// `1 + hysteresis`, so an object near a threshold does not flicker between levels.
+///
+/// Occlusion culling skips the clusters of nearby objects that the GPU found hidden behind
+/// others in the previous frames; `occlusion_queries` bounds the boxes it tests per frame.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct RenderSettings {
     /// Whether objects outside the view are skipped. Turning it off changes no pixel, only the
@@ -26,36 +29,56 @@ pub struct RenderSettings {
     /// The share a projected size must exceed a threshold by to switch back to more detail,
     /// between 0 and 1.
     pub hysteresis: f64,
+    /// Whether clusters of objects found hidden behind others are skipped. The results of the
+    /// GPU come a frame or more late, so an object revealed by a moving camera can appear that
+    /// much late; turning it off draws every object in view.
+    pub occlusion_culling: bool,
+    /// The most clusters whose visibility a frame tests on the GPU, between 1 and
+    /// [`Self::MAX_OCCLUSION_QUERIES`].
+    pub occlusion_queries: u32,
 }
 
 impl RenderSettings {
     /// The largest threshold, in pixels: far wider than any screen.
     pub const MAX_THRESHOLD_PX: f64 = 1e5;
 
-    /// Checks that the thresholds are finite, between 0 and [`Self::MAX_THRESHOLD_PX`], and that
-    /// the hysteresis is between 0 and 1.
+    /// The most occlusion queries of a frame: the largest query set of WebGPU.
+    pub const MAX_OCCLUSION_QUERIES: u32 = wgpu::QUERY_SET_MAX_QUERIES;
+
+    /// Checks that the thresholds are finite, between 0 and [`Self::MAX_THRESHOLD_PX`], that
+    /// the hysteresis is between 0 and 1, and the occlusion queries between 1 and
+    /// [`Self::MAX_OCCLUSION_QUERIES`].
     #[must_use]
     pub fn is_valid(&self) -> bool {
         let threshold = 0.0..=Self::MAX_THRESHOLD_PX;
         threshold.contains(&self.coarse_below_px)
             && threshold.contains(&self.hide_below_px)
             && (0.0..=1.0).contains(&self.hysteresis)
+            && (1..=Self::MAX_OCCLUSION_QUERIES).contains(&self.occlusion_queries)
     }
 }
 
 impl Default for RenderSettings {
     /// Culling on; coarse below 24 px, where a 12-triangle box is indistinguishable from most
     /// building elements; hidden below 1 px; 25 % hysteresis, wider than the change in projected
-    /// size of one step of a smooth orbit or zoom.
+    /// size of one step of a smooth orbit or zoom; occlusion culling on, with up to 1,024
+    /// queries a frame.
     fn default() -> Self {
         Self {
             frustum_culling: true,
             coarse_below_px: 24.0,
             hide_below_px: 1.0,
             hysteresis: 0.25,
+            occlusion_culling: true,
+            occlusion_queries: DEFAULT_OCCLUSION_QUERIES,
         }
     }
 }
+
+/// The default budget of occlusion queries per frame: a sixth of the clusters of the reference
+/// model, hidden ones first. Once pulled up, a hidden region needs one query a frame, so the
+/// budget goes mostly to the visible clusters, which take turns.
+pub(crate) const DEFAULT_OCCLUSION_QUERIES: u32 = 1024;
 
 /// Which version of its mesh an object draws.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -160,6 +183,8 @@ mod tests {
         coarse_below_px: 20.0,
         hide_below_px: 2.0,
         hysteresis: 0.5,
+        occlusion_culling: true,
+        occlusion_queries: 16,
     };
 
     #[test]
@@ -171,6 +196,8 @@ mod tests {
             coarse_below_px: 0.0,
             hide_below_px: 0.0,
             hysteresis: 0.0,
+            occlusion_culling: false,
+            occlusion_queries: RenderSettings::MAX_OCCLUSION_QUERIES,
         };
         assert!(off.is_valid());
         for bad in [
@@ -196,6 +223,14 @@ mod tests {
             },
             RenderSettings {
                 hysteresis: -0.1,
+                ..SETTINGS
+            },
+            RenderSettings {
+                occlusion_queries: 0,
+                ..SETTINGS
+            },
+            RenderSettings {
+                occlusion_queries: RenderSettings::MAX_OCCLUSION_QUERIES + 1,
                 ..SETTINGS
             },
         ] {

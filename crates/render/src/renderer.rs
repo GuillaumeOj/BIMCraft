@@ -8,8 +8,15 @@
 //! (`docs/dev/adr/0024-instancing-culling-and-level-of-detail.md`). Depth is reverse-Z in a
 //! `Depth32Float` buffer, compared with `Greater` and cleared to 0
 //! (`docs/dev/adr/0020-camera-relative-rendering.md`).
+//!
+//! After the objects, the same pass tests the boxes of the clusters the world chose with
+//! occlusion queries, drawn without writing colour or depth. Their results are copied to a
+//! buffer mapped asynchronously, never waited for: a later frame reads them once the GPU has
+//! delivered them, which works the same in a browser, where nothing may block.
 
 use std::collections::BTreeMap;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicU8, Ordering};
 
 use wgpu::util::DeviceExt as _;
 
@@ -42,6 +49,42 @@ const VERTEX_STRIDE: u64 = 12;
 
 /// Bytes of an index.
 const INDEX_SIZE: u64 = 4;
+
+/// Bytes of the result of an occlusion query: a sample count.
+const QUERY_RESULT_SIZE: u64 = wgpu::QUERY_SIZE as u64;
+
+/// The most frames whose query results can be on their way back at once. When all are, a frame
+/// issues no queries: the results come late, never block.
+const MAX_READBACKS: usize = 3;
+
+/// The states of a [`Readback`], shared with the callback of its mapping.
+const IDLE: u8 = 0;
+const MAPPING: u8 = 1;
+const MAPPED: u8 = 2;
+const FAILED: u8 = 3;
+
+/// The corners of the unit cube `[-1, 1]³` that the query boxes are drawn from: bit 0 of the
+/// index is x, bit 1 y, bit 2 z.
+const UNIT_CUBE: [[f32; 3]; 8] = [
+    [-1.0, -1.0, -1.0],
+    [1.0, -1.0, -1.0],
+    [-1.0, 1.0, -1.0],
+    [1.0, 1.0, -1.0],
+    [-1.0, -1.0, 1.0],
+    [1.0, -1.0, 1.0],
+    [-1.0, 1.0, 1.0],
+    [1.0, 1.0, 1.0],
+];
+
+/// The 12 triangles of the unit cube, two per face.
+const UNIT_CUBE_INDICES: [u32; 36] = [
+    0, 2, 6, 0, 6, 4, // −x
+    1, 3, 7, 1, 7, 5, // +x
+    0, 1, 5, 0, 5, 4, // −y
+    2, 3, 7, 2, 7, 6, // +y
+    0, 1, 3, 0, 3, 2, // −z
+    4, 5, 7, 4, 7, 6, // +z
+];
 
 /// Why the renderer cannot do what it was asked. Messages never contain coordinates (SEC-03).
 #[derive(Clone, Debug, PartialEq, thiserror::Error)]
@@ -133,6 +176,27 @@ struct InstanceBuffer {
     capacity: u64,
 }
 
+/// The query set of the occlusion queries, the buffer it resolves into, and the instance records
+/// of the boxes tested, for up to `capacity` queries a frame. Clones share the GPU objects.
+#[derive(Clone)]
+struct Queries {
+    capacity: u32,
+    set: wgpu::QuerySet,
+    resolve: wgpu::Buffer,
+    boxes: wgpu::Buffer,
+}
+
+/// A buffer the results of one frame's queries are copied into, then mapped asynchronously.
+struct Readback {
+    buffer: wgpu::Buffer,
+    capacity: u32,
+    /// [`IDLE`], [`MAPPING`], [`MAPPED`] or [`FAILED`]: the mapping callback sets the last two.
+    state: Arc<AtomicU8>,
+    /// The frame that issued the queries, and the node of the cluster of each.
+    frame: u64,
+    nodes: Vec<u32>,
+}
+
 /// The depth buffer, recreated when the size of the target changes.
 struct DepthBuffer {
     view: wgpu::TextureView,
@@ -145,7 +209,8 @@ struct DepthBuffer {
 /// Objects placing the same mesh are drawn together by one instanced draw call. Each frame
 /// skips the objects outside the view, draws a 12-triangle box for the detailed objects that
 /// look small, and skips those smaller than about a pixel; [`RenderSettings`] tunes this, and
-/// [`FrameStats`] tells what a frame drew.
+/// [`FrameStats`] tells what a frame drew. Clusters of objects that the GPU found hidden behind
+/// others in the previous frames are skipped (occlusion culling).
 ///
 /// The host creates the device, the queue and the target (a window surface, a browser canvas or
 /// an offscreen texture); the renderer only records and submits its pass. Input is validated
@@ -156,6 +221,11 @@ pub struct Renderer {
     queue: wgpu::Queue,
     color_format: wgpu::TextureFormat,
     pipeline: wgpu::RenderPipeline,
+    /// Draws the query boxes: depth tested, nothing written.
+    query_pipeline: wgpu::RenderPipeline,
+    unit_cube: MeshBuffers,
+    queries: Option<Queries>,
+    readbacks: Vec<Readback>,
     frame_buffer: wgpu::Buffer,
     frame_bind_group: wgpu::BindGroup,
     /// The largest buffer and the widest texture of the device, which never change.
@@ -212,13 +282,24 @@ impl Renderer {
                 resource: frame_buffer.as_entire_binding(),
             }],
         });
-        let pipeline = create_pipeline(device, &frame_layout, color_format);
+        let pipeline = create_pipeline(device, &frame_layout, color_format, Pass::Opaque);
+        let query_pipeline = create_pipeline(device, &frame_layout, color_format, Pass::Query);
+        let unit_cube = upload_buffers(
+            device,
+            &UNIT_CUBE,
+            &[[0.0, 0.0, 1.0]; 8],
+            &UNIT_CUBE_INDICES,
+        );
         let limits = device.limits();
         Ok(Self {
             device: device.clone(),
             queue: queue.clone(),
             color_format,
             pipeline,
+            query_pipeline,
+            unit_cube,
+            queries: None,
+            readbacks: Vec::new(),
             frame_buffer,
             frame_bind_group,
             max_buffer_size: limits.max_buffer_size,
@@ -259,11 +340,14 @@ impl Renderer {
         let index_count = index_count(mesh, self.max_buffer_size)?;
         // A validated mesh has vertices.
         let bounds = Aabb::of_local(mesh.origin, &mesh.positions).ok_or(MeshError::Empty)?;
-        let fine = self.upload(mesh, index_count);
-        let coarse = has_coarse_level(mesh.indices.len() / 3)
+        let upload = |mesh: &MeshData| {
+            upload_buffers(&self.device, &mesh.positions, &mesh.normals, &mesh.indices)
+        };
+        let fine = upload(mesh);
+        let coarse = has_coarse_level(index_count as usize / 3)
             .then(|| mesh.bounding_box())
             .flatten()
-            .map(|coarse| self.upload(&coarse, 36));
+            .map(|coarse| upload(&coarse));
         let id = self.world.add_mesh(mesh.origin, bounds, coarse.is_some());
         self.meshes.insert(id, GpuMesh { fine, coarse });
         Ok(id)
@@ -314,8 +398,8 @@ impl Renderer {
     }
 
     /// The level of detail the object was drawn at in the last prepared frame, or `None` when it
-    /// was not drawn (outside the view, smaller than the small-feature threshold, or no frame
-    /// prepared since it was added).
+    /// was not drawn (outside the view, hidden behind others, smaller than the small-feature
+    /// threshold, or no frame prepared since it was added).
     ///
     /// # Errors
     ///
@@ -327,7 +411,8 @@ impl Renderer {
     /// Prepares a frame seen from `camera` on a target of `size` pixels, without drawing it:
     /// culls the objects, chooses their levels of detail and computes their instance records,
     /// all on the CPU. [`Renderer::render`] does this before drawing; on its own, it measures
-    /// or checks those decisions.
+    /// or checks those decisions. It uses the occlusion results already delivered but issues no
+    /// queries, since it draws nothing.
     ///
     /// # Errors
     ///
@@ -339,11 +424,16 @@ impl Renderer {
         size: [u32; 2],
     ) -> Result<FrameStats, RenderError> {
         self.check_size(size)?;
-        self.prepare(camera, size).map(|_| self.draw_list.stats)
+        self.prepare(camera, size, 0).map(|_| self.draw_list.stats)
     }
 
     /// Draws the objects into `target`, seen from `camera`, over the `clear` colour (linear
     /// RGBA), submits the pass to the queue, and tells what the frame drew.
+    ///
+    /// The frame skips the clusters that delivered occlusion results found hidden, and tests
+    /// others for the next frames. Results arrive when the host's event loop lets wgpu run the
+    /// mapping callbacks (a browser does it by itself; natively, any `Device::poll`, which this
+    /// method also calls without waiting).
     ///
     /// `target` must view a single-sampled 2D texture of the renderer's device and format, with
     /// one mip level and one layer, `size` pixels wide and high, usable as a render attachment.
@@ -367,13 +457,15 @@ impl Renderer {
         if !clear.iter().all(|c| c.is_finite()) {
             return Err(RenderError::InvalidClearColor);
         }
-        let projection = self.prepare(camera, size)?;
+        let budget = self.collect_occlusion();
+        let projection = self.prepare(camera, size, budget)?;
         self.queue.write_buffer(
             &self.frame_buffer,
             0,
             bytemuck::cast_slice(&frame_uniform(&projection)),
         );
         let instances = self.upload_instances();
+        let queries = self.upload_queries();
         let depth = self.depth_view(size);
         let mut encoder = self
             .device
@@ -406,54 +498,207 @@ impl Renderer {
                     stencil_ops: None,
                 }),
                 timestamp_writes: None,
-                occlusion_query_set: None,
+                occlusion_query_set: queries.as_ref().map(|queries| &queries.set),
                 multiview_mask: None,
             });
             if let Some(instances) = &instances {
                 self.draw(&mut pass, instances);
             }
+            if let Some(queries) = &queries {
+                self.draw_queries(&mut pass, &queries.boxes);
+            }
         }
+        let readback = queries.and_then(|queries| self.copy_results(&mut encoder, &queries));
         self.queue.submit([encoder.finish()]);
+        if let Some(index) = readback {
+            self.map_results(index);
+        }
         Ok(self.draw_list.stats)
     }
 
-    /// Validates the camera and prepares the draw list; returns the projection matrix.
-    fn prepare(&mut self, camera: &Camera, size: [u32; 2]) -> Result<Matrix, RenderError> {
+    /// Reads the query results the GPU has delivered into the world, frees their buffers, and
+    /// returns how many queries this frame may issue: none when every readback buffer is still
+    /// on its way back, otherwise as many as the settings allow.
+    fn collect_occlusion(&mut self) -> usize {
+        // Without waiting: runs the callbacks of the mappings that are done (natively; a browser
+        // runs them by itself).
+        drop(self.device.poll(wgpu::PollType::Poll));
+        for readback in &mut self.readbacks {
+            match readback.state.load(Ordering::Acquire) {
+                MAPPED => {
+                    let bytes = readback.nodes.len() as u64 * QUERY_RESULT_SIZE;
+                    if let Ok(view) = readback.buffer.get_mapped_range(..bytes) {
+                        let (results, _) = view.as_chunks::<8>();
+                        for (&node, result) in readback.nodes.iter().zip(results) {
+                            let samples = u64::from_ne_bytes(*result);
+                            self.world
+                                .record_occlusion(readback.frame, node, samples != 0);
+                        }
+                    }
+                    readback.buffer.unmap();
+                    readback.state.store(IDLE, Ordering::Release);
+                }
+                FAILED => readback.state.store(IDLE, Ordering::Release),
+                _ => {}
+            }
+        }
+        // The world bounds the queries by the settings; here, only a free buffer matters.
+        if self.free_readback().is_some() {
+            usize::MAX
+        } else {
+            0
+        }
+    }
+
+    /// Writes the boxes of the frame's queries; returns the query resources, or `None` when the
+    /// frame tests no cluster.
+    fn upload_queries(&mut self) -> Option<Queries> {
+        let count = u32::try_from(self.draw_list.queries.len()).ok()?;
+        if count == 0 {
+            return None;
+        }
+        let queries = match self.queries.take() {
+            Some(queries) if queries.capacity >= count => queries,
+            _ => {
+                // The budget bounds the count; sizing for it avoids a new set at each change.
+                let capacity = self.world.settings().occlusion_queries.max(count);
+                Queries {
+                    capacity,
+                    set: self.device.create_query_set(&wgpu::QuerySetDescriptor {
+                        label: Some("render occlusion"),
+                        ty: wgpu::QueryType::Occlusion,
+                        count: capacity,
+                    }),
+                    resolve: self.device.create_buffer(&wgpu::BufferDescriptor {
+                        label: Some("render occlusion resolve"),
+                        size: u64::from(capacity) * QUERY_RESULT_SIZE,
+                        usage: wgpu::BufferUsages::QUERY_RESOLVE | wgpu::BufferUsages::COPY_SRC,
+                        mapped_at_creation: false,
+                    }),
+                    boxes: self.device.create_buffer(&wgpu::BufferDescriptor {
+                        label: Some("render occlusion boxes"),
+                        size: u64::from(capacity) * INSTANCE_STRIDE,
+                        usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+                        mapped_at_creation: false,
+                    }),
+                }
+            }
+        };
+        self.queue
+            .write_buffer(&queries.boxes, 0, self.draw_list.query_bytes());
+        self.queries = Some(queries.clone());
+        Some(queries)
+    }
+
+    /// One occlusion query per box, after every object is drawn.
+    fn draw_queries(&self, pass: &mut wgpu::RenderPass<'_>, boxes: &wgpu::Buffer) {
+        pass.set_pipeline(&self.query_pipeline);
+        // A frame that draws no object has not bound the frame uniform yet.
+        pass.set_bind_group(0, &self.frame_bind_group, &[]);
+        pass.set_vertex_buffer(0, self.unit_cube.positions.slice(..));
+        pass.set_vertex_buffer(1, self.unit_cube.normals.slice(..));
+        pass.set_vertex_buffer(2, boxes.slice(..));
+        pass.set_index_buffer(self.unit_cube.indices.slice(..), wgpu::IndexFormat::Uint32);
+        for index in 0..self.draw_list.queries.len() {
+            // The budget keeps the count within u32.
+            let index = u32::try_from(index).unwrap_or(u32::MAX);
+            pass.begin_occlusion_query(index);
+            pass.draw_indexed(0..self.unit_cube.index_count, 0, index..index + 1);
+            pass.end_occlusion_query();
+        }
+    }
+
+    /// The first idle readback buffer, or the index of a new one when fewer than
+    /// [`MAX_READBACKS`] exist; `None` when all are on their way back.
+    fn free_readback(&self) -> Option<usize> {
+        self.readbacks
+            .iter()
+            .position(|readback| readback.state.load(Ordering::Acquire) == IDLE)
+            .or_else(|| (self.readbacks.len() < MAX_READBACKS).then_some(self.readbacks.len()))
+    }
+
+    /// Resolves the frame's queries and copies their results into a free readback buffer, made
+    /// as large as the query set when it is smaller; returns its index. The frame issued
+    /// queries only because [`Renderer::free_readback`] found one.
+    fn copy_results(
+        &mut self,
+        encoder: &mut wgpu::CommandEncoder,
+        queries: &Queries,
+    ) -> Option<usize> {
+        let index = self.free_readback()?;
+        if self
+            .readbacks
+            .get(index)
+            .is_none_or(|readback| readback.capacity < queries.capacity)
+        {
+            let readback = Readback {
+                buffer: self.device.create_buffer(&wgpu::BufferDescriptor {
+                    label: Some("render occlusion readback"),
+                    size: u64::from(queries.capacity) * QUERY_RESULT_SIZE,
+                    usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
+                    mapped_at_creation: false,
+                }),
+                capacity: queries.capacity,
+                state: Arc::new(AtomicU8::new(IDLE)),
+                frame: 0,
+                nodes: Vec::new(),
+            };
+            if index < self.readbacks.len() {
+                self.readbacks[index] = readback;
+            } else {
+                self.readbacks.push(readback);
+            }
+        }
+        let readback = &mut self.readbacks[index];
+        // The budget keeps the count within u32.
+        let count = u32::try_from(self.draw_list.queries.len()).unwrap_or(u32::MAX);
+        encoder.resolve_query_set(&queries.set, 0..count, &queries.resolve, 0);
+        encoder.copy_buffer_to_buffer(
+            &queries.resolve,
+            0,
+            &readback.buffer,
+            0,
+            u64::from(count) * QUERY_RESULT_SIZE,
+        );
+        readback.frame = self.draw_list.frame;
+        // The world clears the list at the next frame: take it rather than copy it.
+        core::mem::swap(&mut readback.nodes, &mut self.draw_list.queries);
+        Some(index)
+    }
+
+    /// Maps a readback buffer once its copy is submitted; its callback marks it mapped.
+    fn map_results(&self, index: usize) {
+        let readback = &self.readbacks[index];
+        let bytes = readback.nodes.len() as u64 * QUERY_RESULT_SIZE;
+        readback.state.store(MAPPING, Ordering::Release);
+        let state = Arc::clone(&readback.state);
+        readback
+            .buffer
+            .map_async(wgpu::MapMode::Read, ..bytes, move |result| {
+                let done = if result.is_ok() { MAPPED } else { FAILED };
+                state.store(done, Ordering::Release);
+            });
+    }
+
+    /// Validates the camera and prepares the draw list with at most `query_budget` occlusion
+    /// queries; returns the projection matrix.
+    fn prepare(
+        &mut self,
+        camera: &Camera,
+        size: [u32; 2],
+        query_budget: usize,
+    ) -> Result<Matrix, RenderError> {
         let view = ViewFrame::new(camera)?;
         let projection =
             projection_matrix(&camera.projection, f64::from(size[0]) / f64::from(size[1]))?;
-        self.world
-            .prepare(&view, &camera.projection, size, &mut self.draw_list);
+        self.world.prepare(
+            &view,
+            &camera.projection,
+            size,
+            query_budget,
+            &mut self.draw_list,
+        );
         Ok(projection)
-    }
-
-    fn upload(&self, mesh: &MeshData, index_count: u32) -> MeshBuffers {
-        let buffer = |label, contents: &[u8], usage| {
-            self.device
-                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                    label: Some(label),
-                    contents,
-                    usage,
-                })
-        };
-        MeshBuffers {
-            positions: buffer(
-                "render mesh positions",
-                bytemuck::cast_slice(&mesh.positions),
-                wgpu::BufferUsages::VERTEX,
-            ),
-            normals: buffer(
-                "render mesh normals",
-                bytemuck::cast_slice(&mesh.normals),
-                wgpu::BufferUsages::VERTEX,
-            ),
-            indices: buffer(
-                "render mesh indices",
-                bytemuck::cast_slice(&mesh.indices),
-                wgpu::BufferUsages::INDEX,
-            ),
-            index_count,
-        }
     }
 
     fn check_size(&self, size: [u32; 2]) -> Result<(), RenderError> {
@@ -580,6 +825,41 @@ impl Renderer {
     }
 }
 
+/// Uploads the vertices and indices of a mesh, validated or built by the renderer.
+fn upload_buffers(
+    device: &wgpu::Device,
+    positions: &[[f32; 3]],
+    normals: &[[f32; 3]],
+    indices: &[u32],
+) -> MeshBuffers {
+    let buffer = |label, contents: &[u8], usage| {
+        device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some(label),
+            contents,
+            usage,
+        })
+    };
+    MeshBuffers {
+        positions: buffer(
+            "render mesh positions",
+            bytemuck::cast_slice(positions),
+            wgpu::BufferUsages::VERTEX,
+        ),
+        normals: buffer(
+            "render mesh normals",
+            bytemuck::cast_slice(normals),
+            wgpu::BufferUsages::VERTEX,
+        ),
+        indices: buffer(
+            "render mesh indices",
+            bytemuck::cast_slice(indices),
+            wgpu::BufferUsages::INDEX,
+        ),
+        // Validation bounds the indices of a mesh within u32.
+        index_count: u32::try_from(indices.len()).unwrap_or(u32::MAX),
+    }
+}
+
 /// The number of indices of a validated mesh, when its buffers fit the device's largest buffer of
 /// `max` bytes.
 fn index_count(mesh: &MeshData, max: u64) -> Result<u32, MeshError> {
@@ -612,11 +892,23 @@ fn is_renderable(format: wgpu::TextureFormat, features: wgpu::Features) -> bool 
             .contains(wgpu::TextureUsages::RENDER_ATTACHMENT)
 }
 
+/// What a pipeline draws.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Pass {
+    /// The objects: depth tested and written, colour written.
+    Opaque,
+    /// The boxes of the occlusion queries: depth tested with `GreaterEqual`, so a box at the
+    /// depth of what it holds still counts as visible; nothing written.
+    Query,
+}
+
 fn create_pipeline(
     device: &wgpu::Device,
     frame_layout: &wgpu::BindGroupLayout,
     color_format: wgpu::TextureFormat,
+    pass: Pass,
 ) -> wgpu::RenderPipeline {
+    let query = pass == Pass::Query;
     let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: Some("render shader"),
         source: wgpu::ShaderSource::Wgsl(include_str!("shader.wgsl").into()),
@@ -641,7 +933,11 @@ fn create_pipeline(
     };
     let instance = instance_attributes();
     device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-        label: Some("render opaque"),
+        label: Some(if query {
+            "render query"
+        } else {
+            "render opaque"
+        }),
         layout: Some(&layout),
         vertex: wgpu::VertexState {
             module: &shader,
@@ -665,9 +961,13 @@ fn create_pipeline(
         },
         depth_stencil: Some(wgpu::DepthStencilState {
             format: DEPTH_FORMAT,
-            depth_write_enabled: Some(true),
+            depth_write_enabled: Some(!query),
             // Reverse-Z: nearer is larger.
-            depth_compare: Some(wgpu::CompareFunction::Greater),
+            depth_compare: Some(if query {
+                wgpu::CompareFunction::GreaterEqual
+            } else {
+                wgpu::CompareFunction::Greater
+            }),
             stencil: wgpu::StencilState::default(),
             bias: wgpu::DepthBiasState::default(),
         }),
@@ -680,7 +980,11 @@ fn create_pipeline(
             targets: &[Some(wgpu::ColorTargetState {
                 format: color_format,
                 blend: None,
-                write_mask: wgpu::ColorWrites::ALL,
+                write_mask: if query {
+                    wgpu::ColorWrites::empty()
+                } else {
+                    wgpu::ColorWrites::ALL
+                },
             })],
         }),
         multiview_mask: None,

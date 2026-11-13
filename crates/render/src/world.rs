@@ -1,15 +1,17 @@
 //! The CPU side of the renderer: the meshes and objects it holds, their bounds in a hierarchy,
-//! and the preparation of each frame, which culls, chooses levels of detail and writes the
-//! instance records (VP-02, `docs/dev/adr/0024-instancing-culling-and-level-of-detail.md`).
+//! and the preparation of each frame, which culls (outside the view, hidden behind others, too
+//! small), chooses levels of detail, and writes the instance records and the occlusion queries
+//! (VP-02, `docs/dev/adr/0024-instancing-culling-and-level-of-detail.md`).
 //!
 //! Nothing here touches the GPU, so every decision is tested without a device.
 
 use std::collections::BTreeMap;
 
 use crate::bounds::Aabb;
-use crate::bvh::{Bvh, Leaf};
+use crate::bvh::{Bvh, Leaf, Overlap};
 use crate::frustum::Frustum;
 use crate::lod::{Detail, DetailLevel, RenderSettings, SizeScale, choose};
+use crate::occlusion::{CLUSTER_LEAVES, Occlusion, beyond_near_plane};
 use crate::transform::{Matrix, ViewFrame, camera_relative_model_view};
 use crate::vector::{norm, sub};
 use crate::{Placement, Projection, RenderError};
@@ -39,6 +41,8 @@ pub struct FrameStats {
     pub objects: usize,
     /// Objects outside the view.
     pub culled_frustum: usize,
+    /// Objects in view whose cluster the previous frames found hidden behind others.
+    pub culled_occluded: usize,
     /// Objects in view but smaller than the small-feature threshold.
     pub culled_small: usize,
     /// Objects drawn with their mesh.
@@ -47,6 +51,9 @@ pub struct FrameStats {
     pub coarse: usize,
     /// Instanced draw calls: one per mesh and level drawn.
     pub draw_calls: usize,
+    /// Clusters whose visibility the frame tests on the GPU, at most
+    /// [`RenderSettings::occlusion_queries`].
+    pub occlusion_queries: usize,
 }
 
 /// A run of instances drawn by one instanced draw call: `count` records from `first`, all
@@ -67,6 +74,11 @@ pub(crate) struct DrawList {
     /// [`INSTANCE_FLOATS`] values per drawn object, ordered by bucket.
     pub(crate) instances: Vec<f32>,
     pub(crate) stats: FrameStats,
+    /// The nodes of the clusters to test after drawing, the instance records of their boxes, and
+    /// the number of the frame that tests them.
+    pub(crate) queries: Vec<u32>,
+    pub(crate) query_instances: Vec<f32>,
+    pub(crate) frame: u64,
     /// The coarse instances of the mesh being written, appended after its fine ones.
     coarse: Vec<f32>,
 }
@@ -75,6 +87,11 @@ impl DrawList {
     /// Bytes of the instance records.
     pub(crate) fn instance_bytes(&self) -> &[u8] {
         bytemuck::cast_slice(&self.instances)
+    }
+
+    /// Bytes of the instance records of the occlusion query boxes.
+    pub(crate) fn query_bytes(&self) -> &[u8] {
+        bytemuck::cast_slice(&self.query_instances)
     }
 }
 
@@ -113,6 +130,11 @@ pub(crate) struct World {
     pending: Vec<(u32, u8)>,
     /// One bit per slot: whether the object is in view this frame.
     visible: Vec<u64>,
+    /// One bit per slot: whether the object's cluster is skipped as hidden this frame.
+    occluded: Vec<u64>,
+    occlusion: Occlusion,
+    /// The nodes the cluster walk has left to visit.
+    clusters: Vec<u32>,
     settings: RenderSettings,
     /// Whether the next frame chooses every level afresh, without hysteresis.
     fresh: bool,
@@ -132,6 +154,9 @@ impl World {
             bvh: Bvh::new(),
             pending: Vec::new(),
             visible: Vec::new(),
+            occluded: Vec::new(),
+            occlusion: Occlusion::default(),
+            clusters: Vec::new(),
             settings: RenderSettings::default(),
             fresh: false,
             max_objects,
@@ -155,6 +180,7 @@ impl World {
         }
         self.settings = settings;
         self.fresh = true;
+        self.occlusion.invalidate();
         Ok(())
     }
 
@@ -217,6 +243,7 @@ impl World {
             u32::try_from(slots.len() - 1).unwrap_or(u32::MAX)
         });
         let leaf = self.bvh.insert(bounds, slot);
+        self.occlusion.invalidate();
         self.slots[slot as usize] = Some(Object {
             mesh,
             placement,
@@ -243,6 +270,10 @@ impl World {
             .and_then(|&slot| self.slots.get_mut(slot as usize)?.as_mut())
             .ok_or(RenderError::UnknownObject(id))?;
         placement.validate()?;
+        if object.placement != placement {
+            // A turn can keep the bounds yet change what the object hides.
+            self.occlusion.invalidate();
+        }
         object.placement = placement;
         // Every object's mesh is in the world: removing a mesh removes its objects.
         if let Some(mesh) = self.meshes.get(&object.mesh) {
@@ -287,21 +318,32 @@ impl World {
         Ok(object.detail.and_then(|detail| level(detail, has_coarse)))
     }
 
+    /// Records the result of the occlusion query that the frame numbered `frame` issued for the
+    /// cluster at `node`: whether any sample of its box passed the depth test.
+    pub(crate) fn record_occlusion(&mut self, frame: u64, node: u32, visible: bool) {
+        self.occlusion.record(frame, node, visible);
+    }
+
     /// Culls the objects, chooses their levels and writes the instance records of the frame
-    /// seen through `view` and a validated `projection`, on a target of `size` pixels.
+    /// seen through `view` and a validated `projection`, on a target of `size` pixels, with at
+    /// most `query_budget` occlusion queries.
     pub(crate) fn prepare(
         &mut self,
         view: &ViewFrame,
         projection: &Projection,
         size: [u32; 2],
+        query_budget: usize,
         list: &mut DrawList,
     ) {
-        self.find_visible(view, projection, size);
+        let frustum = Frustum::new(view, projection, f64::from(size[0]) / f64::from(size[1]));
+        self.find_visible(&frustum);
+        self.find_occluded(&frustum, view, projection, query_budget, list);
         let scale = SizeScale::new(projection, size[1]);
         list.buckets.clear();
         list.instances.clear();
         list.stats = FrameStats {
             objects: self.len(),
+            occlusion_queries: list.queries.len(),
             ..FrameStats::default()
         };
         let settings = self.settings;
@@ -314,9 +356,14 @@ impl World {
                 let Some(object) = self.slots[slot as usize].as_mut() else {
                     continue;
                 };
-                if self.visible[slot as usize / 64] >> (slot % 64) & 1 == 0 {
+                if !has_bit(&self.visible, slot) {
                     object.detail = None;
                     list.stats.culled_frustum += 1;
+                    continue;
+                }
+                if has_bit(&self.occluded, slot) {
+                    object.detail = None;
+                    list.stats.culled_occluded += 1;
                     continue;
                 }
                 let distance = norm(sub(object.bounds.centre(), view.eye));
@@ -350,26 +397,62 @@ impl World {
     }
 
     /// Sets the bit of every object in view, or of every object without frustum culling.
-    fn find_visible(&mut self, view: &ViewFrame, projection: &Projection, size: [u32; 2]) {
-        self.visible.clear();
-        self.visible.resize(self.slots.len().div_ceil(64), 0);
+    fn find_visible(&mut self, frustum: &Frustum) {
+        clear_bits(&mut self.visible, self.slots.len());
         if !self.settings.frustum_culling {
             // Free slots are marked too: the frame skips them anyway.
             self.visible.fill(!0);
             return;
         }
         let visible = &mut self.visible;
-        let frustum = Frustum::new(view, projection, f64::from(size[0]) / f64::from(size[1]));
         self.bvh.query(
             &mut self.pending,
             frustum.all_planes(),
             |bounds, mask| frustum.classify(bounds, mask),
-            |slot| visible[slot as usize / 64] |= 1 << (slot % 64),
+            |slot| set_bit(visible, slot),
         );
+    }
+
+    /// Sets the bit of every object whose cluster the previous frames found hidden, and chooses
+    /// the clusters in view to test after drawing, when occlusion culling is on.
+    fn find_occluded(
+        &mut self,
+        frustum: &Frustum,
+        view: &ViewFrame,
+        projection: &Projection,
+        query_budget: usize,
+        list: &mut DrawList,
+    ) {
+        clear_bits(&mut self.occluded, self.slots.len());
+        list.queries.clear();
+        list.query_instances.clear();
+        if !self.settings.occlusion_culling {
+            return;
+        }
+        list.frame = self.occlusion.begin_frame(self.bvh.node_capacity());
+        let occlusion = &mut self.occlusion;
+        let occluded = &mut self.occluded;
+        self.bvh.clusters(
+            &mut self.clusters,
+            CLUSTER_LEAVES,
+            |node, bounds, children| {
+                let in_view = !matches!(
+                    frustum.classify(bounds, frustum.all_planes()),
+                    Overlap::Outside
+                );
+                let query = in_view && beyond_near_plane(view, projection, bounds);
+                occlusion.visit(node, bounds, children, in_view, query)
+            },
+            |slot| set_bit(occluded, slot),
+        );
+        let budget = query_budget.min(self.settings.occlusion_queries as usize);
+        self.occlusion
+            .select(budget, view, &mut list.queries, &mut list.query_instances);
     }
 
     fn release(&mut self, slot: u32) {
         if let Some(object) = self.slots.get_mut(slot as usize).and_then(Option::take) {
+            self.occlusion.invalidate();
             self.bvh.remove(object.leaf);
             self.free.push(slot);
         }
@@ -380,6 +463,20 @@ impl World {
         self.next_id += 1;
         id
     }
+}
+
+/// Makes `bits` one cleared bit per slot, for `slots` slots.
+fn clear_bits(bits: &mut Vec<u64>, slots: usize) {
+    bits.clear();
+    bits.resize(slots.div_ceil(64), 0);
+}
+
+fn set_bit(bits: &mut [u64], slot: u32) {
+    bits[slot as usize / 64] |= 1 << (slot % 64);
+}
+
+fn has_bit(bits: &[u64], slot: u32) -> bool {
+    bits[slot as usize / 64] >> (slot % 64) & 1 == 1
 }
 
 /// The level an object of `detail` draws, depending on whether its mesh has a coarse level.
@@ -420,6 +517,7 @@ mod tests {
 
     use super::*;
     use crate::Camera;
+    use crate::occlusion::MAX_AGE;
 
     const WHITE: [f32; 4] = [1.0; 4];
 
@@ -454,7 +552,7 @@ mod tests {
 
     fn prepare(world: &mut World, eye: [f64; 3]) -> DrawList {
         let mut list = DrawList::default();
-        world.prepare(&view_from(eye), &PERSPECTIVE, SIZE, &mut list);
+        world.prepare(&view_from(eye), &PERSPECTIVE, SIZE, 0, &mut list);
         list
     }
 
@@ -717,6 +815,222 @@ mod tests {
         );
     }
 
+    /// A camera at `eye` looking along `direction`, z up.
+    fn view_towards(eye: [f64; 3], direction: [f64; 3]) -> ViewFrame {
+        let camera = Camera {
+            eye: Point3::new(eye[0], eye[1], eye[2]),
+            target: Point3::new(
+                eye[0] + direction[0],
+                eye[1] + direction[1],
+                eye[2] + direction[2],
+            ),
+            up: Vector3::new(0.0, 0.0, 1.0),
+            projection: PERSPECTIVE,
+        };
+        ViewFrame::new(&camera).unwrap()
+    }
+
+    /// Prepares a frame with up to `budget` occlusion queries.
+    fn prepare_queried(world: &mut World, view: &ViewFrame, budget: usize) -> DrawList {
+        let mut list = DrawList::default();
+        world.prepare(view, &PERSPECTIVE, SIZE, budget, &mut list);
+        assert_eq!(list.stats.occlusion_queries, list.queries.len());
+        assert_eq!(
+            list.query_instances.len(),
+            list.queries.len() * INSTANCE_FLOATS
+        );
+        list
+    }
+
+    /// Answers the queries of a frame as a GPU would behind a wall that fills the view at
+    /// `depth` metres: a box is visible when its nearest point is not behind the wall.
+    fn answer_behind_wall(world: &mut World, list: &DrawList, depth: f64) {
+        for (record, &node) in list
+            .query_instances
+            .as_chunks::<INSTANCE_FLOATS>()
+            .0
+            .iter()
+            .zip(&list.queries)
+        {
+            // Column 3 holds the centre relative to the eye; row 2 of each column is the
+            // backward axis, the opposite of depth.
+            let centre = -f64::from(record[14]);
+            let reach: f64 = (0..3)
+                .map(|column| f64::from(record[column * 4 + 2]).abs())
+                .sum();
+            world.record_occlusion(list.frame, node, centre - reach <= depth);
+        }
+    }
+
+    /// A wall 12 m wide and high, 5 m ahead of the origin across the +y view, which it fills,
+    /// and 300 cubes 30 m ahead behind it; the wall's id.
+    fn walled_world() -> (World, ObjectId) {
+        let mut world = World::new(usize::MAX);
+        let wall_bounds = Aabb {
+            min: [-6.0, -0.1, -6.0],
+            max: [6.0, 0.1, 6.0],
+        };
+        let wall_mesh = world.add_mesh([0.0; 3], wall_bounds, false);
+        let wall = world
+            .add_object(
+                wall_mesh,
+                Placement::from_translation([0.0, 5.0, 0.0]),
+                WHITE,
+            )
+            .unwrap();
+        let mesh = cube(&mut world, [0.0; 3], 12);
+        for i in 0..20_u32 {
+            for j in 0..15_u32 {
+                let at = [f64::from(i) * 2.0 - 19.0, 30.0, f64::from(j) * 2.0 - 14.0];
+                world
+                    .add_object(mesh, Placement::from_translation(at), WHITE)
+                    .unwrap();
+            }
+        }
+        (world, wall)
+    }
+
+    #[test]
+    fn clusters_found_hidden_are_skipped_until_something_may_reveal_them() {
+        let (mut world, wall) = walled_world();
+        let ahead = view_from([0.0; 3]);
+        // The first frame draws everything and tests every cluster: the cubes need three.
+        let list = prepare_queried(&mut world, &ahead, 1024);
+        assert_eq!((list.stats.fine, list.stats.culled_occluded), (301, 0));
+        let clusters = list.queries.len();
+        assert!(clusters >= 3, "{clusters}");
+        answer_behind_wall(&mut world, &list, 5.0);
+        // Then only the wall is drawn, and the hidden clusters are tested again, several at
+        // once through the nodes above them.
+        let list = prepare_queried(&mut world, &ahead, 1024);
+        assert_eq!((list.stats.fine, list.stats.culled_occluded), (1, 300));
+        assert_eq!(list.instances.len(), INSTANCE_FLOATS);
+        assert_eq!(world.drawn_level(wall), Ok(Some(DetailLevel::Fine)));
+        assert!(list.queries.len() < clusters, "{}", list.queries.len());
+        // A budget of one query a frame goes to a hidden cluster; none keeps the last results.
+        assert_eq!(prepare_queried(&mut world, &ahead, 1).queries.len(), 1);
+        let list = prepare_queried(&mut world, &ahead, 0);
+        assert_eq!((list.stats.culled_occluded, list.queries.len()), (300, 0));
+        // Results expire after MAX_AGE frames without a new query.
+        for _ in 0..MAX_AGE {
+            prepare_queried(&mut world, &ahead, 0);
+        }
+        assert_eq!(
+            prepare_queried(&mut world, &ahead, 0).stats.culled_occluded,
+            0
+        );
+        let list = prepare_queried(&mut world, &ahead, 1024);
+        assert_eq!(list.queries.len(), clusters);
+        answer_behind_wall(&mut world, &list, 5.0);
+        assert_eq!(
+            prepare_queried(&mut world, &ahead, 1024)
+                .stats
+                .culled_occluded,
+            300
+        );
+        // Turning the wall half a turn keeps its bounds but may change what it hides: the next
+        // frame draws the cubes too.
+        let turned = Placement {
+            rotation: [[-1.0, 0.0, 0.0], [0.0, -1.0, 0.0], [0.0, 0.0, 1.0]],
+            translation: [0.0, 5.0, 0.0],
+        };
+        world.set_placement(wall, turned).unwrap();
+        let list = prepare_queried(&mut world, &ahead, 1024);
+        assert_eq!((list.stats.fine, list.stats.culled_occluded), (301, 0));
+        answer_behind_wall(&mut world, &list, 5.0);
+        assert_eq!(
+            prepare_queried(&mut world, &ahead, 1024)
+                .stats
+                .culled_occluded,
+            300
+        );
+        // Placing it where it already is changes nothing.
+        world.set_placement(wall, turned).unwrap();
+        assert_eq!(
+            prepare_queried(&mut world, &ahead, 1024)
+                .stats
+                .culled_occluded,
+            300
+        );
+        // Moving the wall away may reveal the cubes: the next frame draws them all.
+        world
+            .set_placement(wall, Placement::from_translation([0.0, 50.0, 0.0]))
+            .unwrap();
+        let list = prepare_queried(&mut world, &ahead, 1024);
+        assert_eq!((list.stats.fine, list.stats.culled_occluded), (301, 0));
+    }
+
+    #[test]
+    fn clusters_newly_in_view_are_drawn_the_same_frame() {
+        let (mut world, _) = walled_world();
+        let ahead = view_from([0.0; 3]);
+        let list = prepare_queried(&mut world, &ahead, 1024);
+        answer_behind_wall(&mut world, &list, 5.0);
+        assert_eq!(
+            prepare_queried(&mut world, &ahead, 1024)
+                .stats
+                .culled_occluded,
+            300
+        );
+        // Looking the other way, then back: the cubes come back into view, and are drawn at once
+        // although their clusters were hidden two frames before.
+        let behind = prepare_queried(&mut world, &view_towards([0.0; 3], [0.0, -1.0, 0.0]), 1024);
+        assert_eq!(
+            (behind.stats.culled_frustum, behind.queries.len()),
+            (301, 0)
+        );
+        let list = prepare_queried(&mut world, &ahead, 1024);
+        assert_eq!((list.stats.fine, list.stats.culled_occluded), (301, 0));
+        // New objects are drawn the frame they are added, even inside a hidden cluster.
+        answer_behind_wall(&mut world, &list, 5.0);
+        assert_eq!(
+            prepare_queried(&mut world, &ahead, 1024)
+                .stats
+                .culled_occluded,
+            300
+        );
+        let mesh = cube(&mut world, [0.0; 3], 12);
+        world
+            .add_object(mesh, Placement::from_translation([0.0, 31.0, 0.0]), WHITE)
+            .unwrap();
+        let list = prepare_queried(&mut world, &ahead, 1024);
+        assert_eq!((list.stats.fine, list.stats.culled_occluded), (302, 0));
+    }
+
+    #[test]
+    fn without_occlusion_culling_nothing_is_queried_or_skipped() {
+        let (mut world, _) = walled_world();
+        let ahead = view_from([0.0; 3]);
+        let list = prepare_queried(&mut world, &ahead, 1024);
+        answer_behind_wall(&mut world, &list, 5.0);
+        let off = RenderSettings {
+            occlusion_culling: false,
+            ..RenderSettings::default()
+        };
+        world.set_settings(off).unwrap();
+        let list = prepare_queried(&mut world, &ahead, 1024);
+        assert_eq!(
+            (
+                list.stats.fine,
+                list.stats.culled_occluded,
+                list.queries.len()
+            ),
+            (301, 0, 0)
+        );
+        // The settings bound the queries of a frame, whatever the renderer allows.
+        world
+            .set_settings(RenderSettings {
+                occlusion_queries: 2,
+                ..RenderSettings::default()
+            })
+            .unwrap();
+        assert_eq!(prepare_queried(&mut world, &ahead, 1024).queries.len(), 2);
+        // A camera inside the wall's box tests nothing across the near plane.
+        let inside = view_from([0.0, 5.0, 0.0]);
+        let list = prepare_queried(&mut world, &inside, 1024);
+        assert!(list.queries.len() <= 2);
+    }
+
     /// The reference model in a world; the ids of its meshes, in the model's order.
     fn reference_world(storeys: u32) -> World {
         let model = crate::reference::building(storeys);
@@ -738,10 +1052,20 @@ mod tests {
     fn reference_frame(world: &mut World, camera: &Camera) -> FrameStats {
         let mut list = DrawList::default();
         let view = ViewFrame::new(camera).unwrap();
-        world.prepare(&view, &camera.projection, crate::reference::VIEW, &mut list);
+        world.prepare(
+            &view,
+            &camera.projection,
+            crate::reference::VIEW,
+            0,
+            &mut list,
+        );
         let stats = list.stats;
         assert_eq!(
-            stats.culled_frustum + stats.culled_small + stats.fine + stats.coarse,
+            stats.culled_frustum
+                + stats.culled_occluded
+                + stats.culled_small
+                + stats.fine
+                + stats.coarse,
             stats.objects
         );
         assert_eq!(
@@ -758,6 +1082,45 @@ mod tests {
         assert_eq!(model.meshes.len(), 15);
         // About 10,000 per storey.
         assert_eq!(crate::reference::building(1).objects.len(), 10_015);
+    }
+
+    /// The clusters of the reference model, and the queries of its first frames with the default
+    /// budget. Pinned: a change in them is a change in what occlusion culling tests.
+    #[test]
+    fn reference_clusters_and_queries() {
+        use crate::reference::{aerial, inside};
+        let mut world = reference_world(crate::reference::STOREYS);
+        let mut clusters = 0;
+        world.bvh.clusters(
+            &mut Vec::new(),
+            CLUSTER_LEAVES,
+            |_, _, children| {
+                if children.is_some() {
+                    return crate::bvh::Step::Descend;
+                }
+                clusters += 1;
+                crate::bvh::Step::Leave
+            },
+            |_| {},
+        );
+        let mut queries = |camera: &Camera| {
+            let mut list = DrawList::default();
+            let view = ViewFrame::new(camera).unwrap();
+            world.prepare(
+                &view,
+                &camera.projection,
+                crate::reference::VIEW,
+                usize::MAX,
+                &mut list,
+            );
+            list.queries.len()
+        };
+        // More clusters are in view than the default budget tests in one frame: the queries
+        // rotate between them, hidden ones first.
+        assert_eq!(
+            (clusters, queries(&aerial()), queries(&inside())),
+            (5_780, 1_024, 1_024)
+        );
     }
 
     /// Culling and levels of the reference model from fixed cameras. The counts are pinned:
