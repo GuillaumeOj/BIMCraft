@@ -8,15 +8,15 @@ All lengths are metres, angles radians, coordinates the project's world frame (z
 
 ### Tauri command `scene`
 
-- Arguments: `{ since: number | null }`: the revision of the last delta the caller applied, or `null` for a full scene.
+- Arguments: `{ since: number | null }`: the revision of the last delta the caller applied, or `null` for a full scene. Revisions stay below 2^53 so a JavaScript `number` holds them exactly (a `bigint` cannot cross the JSON-based Tauri arguments).
 - Returns: raw bytes (`tauri::ipc::Response`), an `ArrayBuffer` in JavaScript: one **scene delta** (below).
-- When `since` is unknown to the host (another document, a revision it no longer keeps), the host answers with a full scene (`flags.full = 1`); the viewport then drops everything it has. The host keeps only the current revision: any `since` other than the current one gets a full scene, and `since` equal to the current revision gets an empty delta. (Simple and correct; a delta log is a later optimisation.)
+- When `since` is unknown to the host (another document, a revision it no longer keeps), the host answers with a full scene (`flags.full = 1`); the viewport then drops everything it has. The host keeps a change log of the last 256 revisions (the ids of the elements and meshes each revision added, changed or removed, never geometry) and builds the delta from the current scene: `since` equal to the current revision gets an empty delta, a `since` inside the log gets the union of the changes after it, and any other `since` (older than the log, or unknown) gets a full scene. Without the log every edit would resend the whole scene, defeating GEO-05 and NFR-03.
 - The UI calls it at start (`since: null`) and after each `model.changed` notification, serialised: one call in flight at a time; a notification during a call schedules one more call afterwards.
 - Errors: a JSON-RPC-style error string for a closed document; never coordinates or model content.
 
 ### Binary format `scene-wire` version 1
 
-Little-endian throughout. Every section length is checked against the buffer before reading; the decoder rejects trailing bytes, unknown versions, counts above the limits, non-finite floats, out-of-range indices, and values outside the ranges of ADR 0020 (`MAX_WORLD_COORDINATE` = 10⁹ m, unit normals, orthonormal rotations). Limits (constants in `scene-wire`, tested at the boundary): 256 MiB per delta, 2²⁴ vertices and 3·2²⁴ indices per mesh (as `render`), 2²⁰ meshes, 2²² elements, 2¹⁶ strings of at most 256 bytes (UTF-8).
+Little-endian throughout. Every section length is checked against the buffer before reading; the decoder rejects trailing bytes, unknown versions, counts above the limits, non-finite floats, out-of-range indices, and values outside the ranges of ADR 0020 (`MAX_WORLD_COORDINATE` = 10⁹ m, unit normals, proper orthonormal rotations). Limits (constants in `scene-wire`, tested at the boundary): 256 MiB per delta, 2²⁴ vertices and 3·2²⁴ indices per mesh (as `render`), 2²⁰ meshes, 2²² elements, 2¹⁶ strings of at most 256 bytes (UTF-8).
 
 ```
 Header (32 bytes)
@@ -53,7 +53,7 @@ Elements section (added or changed elements)
   per element:
     id         [u8; 16]
     mesh       u64       a mesh id sent in this delta or earlier
-    rotation   [f64; 9]  column-major, orthonormal (reflections allowed)
+    rotation   [f64; 9]  column-major, orthonormal, determinant +1 (a rigid placement, D3)
     translation [f64; 3]
     category   u32       index into the strings section
     discipline u32       index into the strings section
@@ -83,9 +83,9 @@ export class Viewport {
   free(): void;
 
   /** Applies one scene delta (bytes from the `scene` command). Returns the revision now held. */
-  applyScene(bytes: Uint8Array): bigint;
+  applyScene(bytes: Uint8Array): number;
   /** The revision held, or null before the first delta (the `since` of the next `scene` call). */
-  revision(): bigint | null;
+  revision(): number | null;
 
   /** Canvas size changes (CSS pixels and device pixel ratio). */
   resize(width: number, height: number, devicePixelRatio: number): void;
