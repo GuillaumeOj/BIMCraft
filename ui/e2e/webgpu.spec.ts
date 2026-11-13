@@ -60,6 +60,7 @@ test("WebGPU renders a triangle to an offscreen texture", async ({ page }) => {
     const offset = 256 * row + 4 * (size / 2);
     const rgba = Array.from(new Uint8Array(readback.getMappedRange()).slice(offset, offset + 4));
     readback.unmap();
+    device.destroy();
     return rgba;
   });
 
