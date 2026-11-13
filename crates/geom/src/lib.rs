@@ -47,6 +47,12 @@
 //! into an offset of the section from the element's axis (GEO-13); failures are a
 //! [`LocationError`].
 //!
+//! [`Solid::tessellate`] turns a solid into a [`TriangleMesh`] for display (GEO-05): each face
+//! is triangulated from its own vertices with the exact predicates, into `n + 2h − 2` triangles
+//! for `n` vertices and `h` holes, flat-shaded with its outward unit normal and counterclockwise
+//! seen from outside. Failures name the face in a [`TessellationError`]: an exact face never
+//! fails, but a face simple only within the tolerance may, valid or not (ADR 0022).
+//!
 //! [`Profile::shear_centre`] computes the shear centre of any profile with finite elements, for
 //! the location point of profile-based members; failures are a [`ShearCentreError`].
 
@@ -61,6 +67,7 @@ mod point;
 mod predicates;
 mod profile;
 mod section;
+mod tessellate;
 mod tolerance;
 mod vector;
 
@@ -82,4 +89,5 @@ pub use predicates::{
 };
 pub use profile::{ArcDirection, Edge, LoopId, MAX_PROFILE_EDGES, Profile, ProfileError};
 pub use section::{MAX_MESH_NODES, ShearCentreError};
+pub use tessellate::{TessellationError, TriangleMesh};
 pub use tolerance::{ARC_CHORD_TOLERANCE, LINEAR_TOLERANCE, MERGE_CHAIN_WIDTH, MODEL_EXTENT};

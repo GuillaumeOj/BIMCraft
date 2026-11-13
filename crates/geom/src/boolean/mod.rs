@@ -57,6 +57,7 @@ mod classify;
 mod collar;
 mod error;
 mod face;
+pub(crate) use face::Projection;
 mod intersect;
 mod merge;
 mod planar;

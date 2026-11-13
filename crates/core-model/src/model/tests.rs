@@ -268,6 +268,7 @@ fn starts_empty_and_rejects_invalid_schemas() {
     let model = Model::new(&namespace()).unwrap();
     assert!(model.is_empty());
     assert_eq!(model.len(), 0);
+    assert_eq!(model.namespace(), &namespace());
     let mut invalid = namespace();
     invalid.version = 0;
     assert!(matches!(
