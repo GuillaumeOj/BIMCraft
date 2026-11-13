@@ -104,33 +104,110 @@ export function checkExtensionSurface(crates: Crate[], surface: Set<string>, wor
   return [...missing, ...forbidden];
 }
 
-const stripComments = (source: string): string => source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*/g, "");
+// String and char literals are matched whole, so a `//` or `/*` inside one starts no comment.
+const TOKEN = /r(#*)"[\s\S]*?"\1|"(?:\\[\s\S]|[^\\"])*"|'(?:\\(?:u\{[0-9a-fA-F]*\}|.)|[^\\'\n])'|\/\/[^\n]*|\/\*/y;
 
-/** Why a `pub use` statement would leak more than the items it names, if it does. */
+/** Where the block comment opened at `start` ends: Rust block comments nest. */
+const blockCommentEnd = (source: string, start: number): number => {
+  let depth = 0;
+  let i = start;
+  while (i < source.length) {
+    if (source.startsWith("/*", i)) {
+      depth += 1;
+      i += 2;
+    } else if (source.startsWith("*/", i)) {
+      depth -= 1;
+      i += 2;
+      if (depth === 0) return i;
+    } else {
+      i += 1;
+    }
+  }
+  return i;
+};
+
+const stripComments = (source: string): string => {
+  let code = "";
+  let i = 0;
+  while (i < source.length) {
+    TOKEN.lastIndex = i;
+    const token = TOKEN.exec(source)?.[0];
+    if (token === undefined) {
+      code += source[i];
+      i += 1;
+    } else if (token === "/*") {
+      i = blockCommentEnd(source, i);
+    } else {
+      if (!token.startsWith("//")) code += token;
+      i += token.length;
+    }
+  }
+  return code;
+};
+
+/** The items of a braced use group, split at its top-level commas. */
+const groupItems = (group: string): string[] => {
+  const items: string[] = [];
+  let depth = 0;
+  let start = 0;
+  [...group].forEach((char, index) => {
+    if (char === "{") depth += 1;
+    else if (char === "}") depth -= 1;
+    else if (char === "," && depth === 0) {
+      items.push(group.slice(start, index));
+      start = index + 1;
+    }
+  });
+  items.push(group.slice(start));
+  return items.map((item) => item.trim()).filter(Boolean);
+};
+
+/** Why a `pub use` tree would leak more than the items it names, if it does. */
 const leak = (tree: string): string | undefined => {
   if (tree.includes("*")) return "a glob";
-  const path = tree.replace(/^::/, "").trim();
-  // `x`, `x as y`, `{x, y}` or `x::{self}` re-export a whole crate (or module).
-  if (/^\{/.test(path) || /^\w+(\s+as\s+\w+)?$/.test(path) || /\bself\b(?!\s*::)/.test(path)) {
-    return "a whole crate";
+  const path = tree.trim().replace(/^::/, "").trim();
+  // `{x, y::Z}`: each top-level item is a tree of its own.
+  if (path.startsWith("{") && path.endsWith("}")) {
+    return groupItems(path.slice(1, -1))
+      .map((item) => leak(item))
+      .find((what) => what !== undefined);
   }
+  // `x`, `x as y` or `x::{self}` re-export a whole crate (or module).
+  if (/^\w+(\s+as\s+\w+)?$/.test(path) || /\bself\b(?!\s*::)/.test(path)) return "a whole crate";
   return undefined;
 };
 
-/** ARCH-03: the façade names each item it re-exports, so the surface is exactly what it lists. */
-export function checkFacade(root: string, crate: Crate): Issue[] {
-  const file = join(crate.dir, "src/lib.rs");
-  if (!existsSync(join(root, file))) return [{ file: crate.dir, message: `${FACADE} has no src/lib.rs to check` }];
-  const source = stripComments(readFileSync(join(root, file), "utf8"));
-  const statements = [...source.matchAll(/\bpub\s+use\s+([^;]+);/g)].map((m) => m[1] ?? "");
-  const leaks = [
-    ...(/\bpub\s+extern\s+crate\b/.test(source) ? ["a whole crate"] : []),
-    ...statements.flatMap((tree) => leak(tree) ?? []),
+/** Every leak of one source file, each kind once. */
+const leaksOf = (source: string): string[] => {
+  const code = stripComments(source);
+  const statements = [...code.matchAll(/\bpub\s+use\s+([^;]+);/g)].map((m) => m[1] ?? "");
+  return [
+    ...new Set([
+      ...(/\bpub\s+extern\s+crate\b/.test(code) ? ["a whole crate"] : []),
+      ...statements.flatMap((tree) => leak(tree) ?? []),
+    ]),
   ];
-  return [...new Set(leaks)].map((what) => ({
-    file,
-    message: `${FACADE} re-exports ${what}; name each item of the extension surface instead (ARCH-03)`,
-  }));
+};
+
+/**
+ * ARCH-03: the façade names each item it re-exports, so the surface is exactly what it lists.
+ * Every source file is read, as a `pub mod` declared out of line re-exports what its file does.
+ */
+export function checkFacade(root: string, crate: Crate): Issue[] {
+  const src = join(crate.dir, "src");
+  if (!existsSync(join(root, src, "lib.rs"))) {
+    return [{ file: crate.dir, message: `${FACADE} has no src/lib.rs to check` }];
+  }
+  const files = readdirSync(join(root, src), { recursive: true, encoding: "utf8" })
+    .filter((path) => path.endsWith(".rs"))
+    .sort()
+    .map((path) => join(src, path));
+  return files.flatMap((file) =>
+    leaksOf(readFileSync(join(root, file), "utf8")).map((what) => ({
+      file,
+      message: `${FACADE} re-exports ${what}; name each item of the extension surface instead (ARCH-03)`,
+    })),
+  );
 }
 
 const forbidsLints = (source: string): boolean => {

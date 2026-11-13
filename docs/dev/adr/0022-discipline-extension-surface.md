@@ -23,7 +23,7 @@ No `disc-*` crate exists yet, so the rule can be put in place before the first o
 - a crate whose package name starts with `disc-` has a path dependency, in any section (normal, dev, build, target-specific) and under any rename, that is not in the list;
 - a `disc-*` crate depends on another `disc-*` crate, even a listed one: a plugin cannot link a discipline either;
 - a listed crate does not exist in `crates/`;
-- the `core-ext` crate root, comments stripped, re-exports a glob (`pub use x::*`) or a whole crate (`pub use x;`, `pub use x as y;`, `pub use {x, y};`, `pub use x::{self, …}`, `pub extern crate x;`), which would leak everything public in it.
+- any source file of `core-ext` (`src/**/*.rs`, so an out-of-line module counts), comments stripped as Rust does, re-exports a glob (`pub use x::*`) or a whole crate (`pub use x;`, `pub use x as y;`, `pub use {x, y::Z};`, `pub use x::{self, …}`, `pub extern crate x;`), which would leak everything public in it. A braced group of named items (`pub use {x::A, y::B};`) is accepted.
 
 Rust only lets a crate name what its manifest declares, so the manifest check covers every import without parsing `use` paths. Registry dependencies (serde, thiserror…) are out of scope: ARCH-03 is about the core, and `cargo deny` covers the rest.
 
@@ -48,11 +48,13 @@ Not re-exported at all: `persist`, the `interop-*` crates, `analysis`, `docgen`,
 
 The check sees crate re-exports, not module ones: `pub use core_model::units;` would pass it and leak a module. The surface test and review cover that case, and the façade names `units` items one by one.
 
+A façade re-exports types, not a subset of their methods. `Model::store` returns the `&Store` that project files save (ADR 0016), so an extension holding a `Model` can still read the attribute tables, and clone them, without naming `Store`. It cannot write them back into the document, which only runs commands. Hiding `store` from extensions means changing `core-model`'s API, which `persist` relies on; that is left to a follow-up issue rather than this change.
+
 How a discipline registers commands with `api::Registry`, a layer above, is settled when the first discipline lands; `core-ext` grows then.
 
 ### Coverage
 
-`core-ext` compiles to no code, so `cargo llvm-cov` finds no file to measure and its 0/0 line ratio fails any `--fail-under-lines`. `scripts/check-all.sh coverage` now runs each critical crate's tests once, then reads the summary: a crate with no instrumented file is reported as having nothing to cover; every other critical crate is still held to 98 %. The test that guards the façade is `tests/surface.rs`, which fails to build when an item disappears.
+`core-ext` compiles to no code, so `cargo llvm-cov` finds no file to measure and its 0/0 line ratio fails any `--fail-under-lines`. `scripts/check-all.sh coverage` treats `core-ext`, by name, the other way round: it runs its tests and then requires the report to hold no file at all, so the façade fails the gate the day it gains code that could go untested. Every other critical crate keeps the plain 98 % gate, so a crate whose coverage data went missing still fails. The test that guards the façade is `tests/surface.rs`, which fails to build when an item disappears.
 
 ## Consequences
 

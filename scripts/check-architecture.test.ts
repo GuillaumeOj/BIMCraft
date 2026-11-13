@@ -292,6 +292,32 @@ pub mod model {
     expect(facade(lib)).toEqual([]);
   });
 
+  test("accepts a braced group of named items", () => {
+    expect(facade("pub use {core_model::Model, ::geom::{Point2, Path as P}};\npub use ::{schema::Value};\n")).toEqual(
+      [],
+    );
+  });
+
+  test("strips comments as Rust does: nested blocks, never inside a string or char literal", () => {
+    const lib = `/* outer /* inner */ pub use core_model::*; */
+const URL: &str = "https://example.org/*"; const C: char = '"';
+pub use core_model; // "*/
+`;
+    expect(facade(lib).map((i) => i.message)).toEqual([message("a whole crate")]);
+    expect(facade("pub use a::B;\n/* unterminated pub use c::*;\n")).toEqual([]);
+  });
+
+  test("reads every source file, as an out-of-line module re-exports what its file does", () => {
+    const root = repo({
+      "crates/core-ext/src/lib.rs": "pub mod model;\n",
+      "crates/core-ext/src/model.rs": "pub use ::core_model::{EntityId, Model};\n",
+      "crates/core-ext/src/geometry/mod.rs": "pub use ::geom::*;\n",
+    });
+    expect(checkFacade(root, crate("core-ext"))).toEqual([
+      { file: "crates/core-ext/src/geometry/mod.rs", message: message("a glob") },
+    ]);
+  });
+
   test("rejects a glob re-export, at any depth", () => {
     for (const lib of ["pub use core_model::*;", "pub mod m {\n    pub use ::geom::{Point2, path::*};\n}"]) {
       expect(facade(lib)).toEqual([{ file: "crates/core-ext/src/lib.rs", message: message("a glob") }]);
