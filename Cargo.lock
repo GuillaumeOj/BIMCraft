@@ -3463,6 +3463,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "scene-wire"
+version = "0.0.0"
+dependencies = [
+ "proptest",
+ "thiserror 2.0.21",
+]
+
+[[package]]
 name = "schema"
 version = "0.0.0"
 dependencies = [
