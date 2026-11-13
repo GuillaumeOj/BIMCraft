@@ -16,3 +16,4 @@ interop-dxf
 interop-bcf
 host-desktop
 core-ext
+scene-wire
