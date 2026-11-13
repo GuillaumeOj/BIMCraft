@@ -87,7 +87,15 @@ check_coverage() {
     cargo llvm-cov --workspace --all-features --locked --fail-under-lines 90 --lcov --output-path lcov.info
   for crate in $(existing_crates scripts/critical-crates.txt); do
     in_scope "$crate" || continue
-    cargo llvm-cov --package "$crate" --all-features --locked --fail-under-lines 98
+    cargo llvm-cov --package "$crate" --all-features --locked --no-report
+    # A crate made only of re-exports (core-ext, ARCH-03) compiles to no code: llvm-cov reports
+    # no file at all, and its 0/0 ratio fails any threshold. Such a crate has nothing to cover;
+    # every crate with code still meets 98 %.
+    if cargo llvm-cov report --package "$crate" --json --summary-only | grep -q '"files":\[\]'; then
+      echo "$crate: no executable code, nothing to cover"
+    else
+      cargo llvm-cov report --package "$crate" --fail-under-lines 98
+    fi
   done
 }
 
