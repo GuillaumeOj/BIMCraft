@@ -3307,6 +3307,7 @@ name = "render"
 version = "0.0.0"
 dependencies = [
  "bytemuck",
+ "criterion",
  "geom",
  "libm",
  "pollster",
