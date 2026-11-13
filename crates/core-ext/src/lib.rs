@@ -9,7 +9,7 @@
 //! `scripts/check-architecture.ts` rejects any other core dependency in a `disc-*` manifest, and
 //! any glob or whole-crate re-export here. `tests/surface.rs` names every item, so changing the
 //! surface is always a deliberate, reviewed edit. Decisions:
-//! `docs/dev/adr/0022-discipline-extension-surface.md`.
+//! `docs/dev/adr/0024-discipline-extension-surface.md`.
 //!
 //! This crate builds for native targets and `wasm32-unknown-unknown` (ARCH-01) and never touches
 //! the platform directly (ARCH-02).

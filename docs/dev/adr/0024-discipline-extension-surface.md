@@ -1,4 +1,4 @@
-# 0022. Discipline extension surface
+# 0024. Discipline extension surface
 
 - Status: Accepted
 - Requirements: ARCH-03 (also ARCH-01, ARCH-02, ARCH-04)

@@ -89,9 +89,9 @@ check_coverage() {
     in_scope "$crate" || continue
     if [ "$crate" = core-ext ]; then
       # The façade of ARCH-03 holds re-exports only and compiles to no code: llvm-cov finds no file
-      # and fails any threshold on 0/0 lines. Require it to stay that way instead (ADR 0022).
+      # and fails any threshold on 0/0 lines. Require it to stay that way instead (ADR 0024).
       cargo llvm-cov --package "$crate" --all-features --locked --json --summary-only | grep -q '"files":\[\]' || {
-        echo "check-all: core-ext tests failed, or it holds code; it must hold re-exports only (ADR 0022)" >&2
+        echo "check-all: core-ext tests failed, or it holds code; it must hold re-exports only (ADR 0024)" >&2
         exit 1
       }
     else
