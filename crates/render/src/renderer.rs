@@ -177,7 +177,8 @@ struct InstanceBuffer {
 }
 
 /// The query set of the occlusion queries, the buffer it resolves into, and the instance records
-/// of the boxes tested, for up to `capacity` queries a frame.
+/// of the boxes tested, for up to `capacity` queries a frame. Clones share the GPU objects.
+#[derive(Clone)]
 struct Queries {
     capacity: u32,
     set: wgpu::QuerySet,
@@ -497,18 +498,17 @@ impl Renderer {
                     stencil_ops: None,
                 }),
                 timestamp_writes: None,
-                occlusion_query_set: queries.as_ref().map(|(set, ..)| set),
+                occlusion_query_set: queries.as_ref().map(|queries| &queries.set),
                 multiview_mask: None,
             });
             if let Some(instances) = &instances {
                 self.draw(&mut pass, instances);
             }
-            if let Some((_, _, boxes)) = &queries {
-                self.draw_queries(&mut pass, boxes);
+            if let Some(queries) = &queries {
+                self.draw_queries(&mut pass, &queries.boxes);
             }
         }
-        let readback =
-            queries.map(|(set, resolve, _)| self.copy_results(&mut encoder, &set, &resolve));
+        let readback = queries.and_then(|queries| self.copy_results(&mut encoder, &queries));
         self.queue.submit([encoder.finish()]);
         if let Some(index) = readback {
             self.map_results(index);
@@ -517,8 +517,8 @@ impl Renderer {
     }
 
     /// Reads the query results the GPU has delivered into the world, frees their buffers, and
-    /// returns how many queries this frame may issue: none when occlusion culling is off or every
-    /// readback buffer is still on its way back.
+    /// returns how many queries this frame may issue: none when every readback buffer is still
+    /// on its way back, otherwise as many as the settings allow.
     fn collect_occlusion(&mut self) -> usize {
         // Without waiting: runs the callbacks of the mappings that are done (natively; a browser
         // runs them by itself).
@@ -542,22 +542,17 @@ impl Renderer {
                 _ => {}
             }
         }
-        let settings = self.world.settings();
-        let free = self.readbacks.len() < MAX_READBACKS
-            || self
-                .readbacks
-                .iter()
-                .any(|readback| readback.state.load(Ordering::Acquire) == IDLE);
-        if settings.occlusion_culling && free {
-            settings.occlusion_queries as usize
+        // The world bounds the queries by the settings; here, only a free buffer matters.
+        if self.free_readback().is_some() {
+            usize::MAX
         } else {
             0
         }
     }
 
-    /// Writes the boxes of the frame's queries; returns the query set, the resolve buffer and
-    /// the box buffer, or `None` when the frame tests no cluster.
-    fn upload_queries(&mut self) -> Option<(wgpu::QuerySet, wgpu::Buffer, wgpu::Buffer)> {
+    /// Writes the boxes of the frame's queries; returns the query resources, or `None` when the
+    /// frame tests no cluster.
+    fn upload_queries(&mut self) -> Option<Queries> {
         let count = u32::try_from(self.draw_list.queries.len()).ok()?;
         if count == 0 {
             return None;
@@ -591,13 +586,8 @@ impl Renderer {
         };
         self.queue
             .write_buffer(&queries.boxes, 0, self.draw_list.query_bytes());
-        let handles = (
-            queries.set.clone(),
-            queries.resolve.clone(),
-            queries.boxes.clone(),
-        );
-        self.queries = Some(queries);
-        Some(handles)
+        self.queries = Some(queries.clone());
+        Some(queries)
     }
 
     /// One occlusion query per box, after every object is drawn.
@@ -618,48 +608,37 @@ impl Renderer {
         }
     }
 
-    /// Resolves the frame's queries and copies their results into an idle readback buffer,
-    /// created when none is; returns its index. [`Renderer::collect_occlusion`] made sure one
-    /// is idle or can be created.
+    /// The first idle readback buffer, or the index of a new one when fewer than
+    /// [`MAX_READBACKS`] exist; `None` when all are on their way back.
+    fn free_readback(&self) -> Option<usize> {
+        self.readbacks
+            .iter()
+            .position(|readback| readback.state.load(Ordering::Acquire) == IDLE)
+            .or_else(|| (self.readbacks.len() < MAX_READBACKS).then_some(self.readbacks.len()))
+    }
+
+    /// Resolves the frame's queries and copies their results into a free readback buffer, made
+    /// as large as the query set when it is smaller; returns its index. The frame issued
+    /// queries only because [`Renderer::free_readback`] found one.
     fn copy_results(
         &mut self,
         encoder: &mut wgpu::CommandEncoder,
-        set: &wgpu::QuerySet,
-        resolve: &wgpu::Buffer,
-    ) -> usize {
-        let nodes = &self.draw_list.queries;
-        // The budget keeps the count within u32.
-        let count = u32::try_from(nodes.len()).unwrap_or(u32::MAX);
-        let bytes = u64::from(count) * QUERY_RESULT_SIZE;
-        let index = self
-            .readbacks
-            .iter()
-            .position(|readback| {
-                readback.state.load(Ordering::Acquire) == IDLE && readback.capacity >= count
-            })
-            .or_else(|| {
-                self.readbacks
-                    .iter()
-                    .position(|readback| readback.state.load(Ordering::Acquire) == IDLE)
-            })
-            .unwrap_or(self.readbacks.len());
+        queries: &Queries,
+    ) -> Option<usize> {
+        let index = self.free_readback()?;
         if self
             .readbacks
             .get(index)
-            .is_none_or(|readback| readback.capacity < count)
+            .is_none_or(|readback| readback.capacity < queries.capacity)
         {
-            let capacity = self
-                .queries
-                .as_ref()
-                .map_or(count, |queries| queries.capacity);
             let readback = Readback {
                 buffer: self.device.create_buffer(&wgpu::BufferDescriptor {
                     label: Some("render occlusion readback"),
-                    size: u64::from(capacity) * QUERY_RESULT_SIZE,
+                    size: u64::from(queries.capacity) * QUERY_RESULT_SIZE,
                     usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
                     mapped_at_creation: false,
                 }),
-                capacity,
+                capacity: queries.capacity,
                 state: Arc::new(AtomicU8::new(IDLE)),
                 frame: 0,
                 nodes: Vec::new(),
@@ -671,11 +650,20 @@ impl Renderer {
             }
         }
         let readback = &mut self.readbacks[index];
-        encoder.resolve_query_set(set, 0..count, resolve, 0);
-        encoder.copy_buffer_to_buffer(resolve, 0, &readback.buffer, 0, bytes);
+        // The budget keeps the count within u32.
+        let count = u32::try_from(self.draw_list.queries.len()).unwrap_or(u32::MAX);
+        encoder.resolve_query_set(&queries.set, 0..count, &queries.resolve, 0);
+        encoder.copy_buffer_to_buffer(
+            &queries.resolve,
+            0,
+            &readback.buffer,
+            0,
+            u64::from(count) * QUERY_RESULT_SIZE,
+        );
         readback.frame = self.draw_list.frame;
-        readback.nodes.clone_from(nodes);
-        index
+        // The world clears the list at the next frame: take it rather than copy it.
+        core::mem::swap(&mut readback.nodes, &mut self.draw_list.queries);
+        Some(index)
     }
 
     /// Maps a readback buffer once its copy is submitted; its callback marks it mapped.

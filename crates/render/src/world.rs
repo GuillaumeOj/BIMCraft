@@ -356,12 +356,12 @@ impl World {
                 let Some(object) = self.slots[slot as usize].as_mut() else {
                     continue;
                 };
-                if self.visible[slot as usize / 64] >> (slot % 64) & 1 == 0 {
+                if !has_bit(&self.visible, slot) {
                     object.detail = None;
                     list.stats.culled_frustum += 1;
                     continue;
                 }
-                if self.occluded[slot as usize / 64] >> (slot % 64) & 1 == 1 {
+                if has_bit(&self.occluded, slot) {
                     object.detail = None;
                     list.stats.culled_occluded += 1;
                     continue;
@@ -398,8 +398,7 @@ impl World {
 
     /// Sets the bit of every object in view, or of every object without frustum culling.
     fn find_visible(&mut self, frustum: &Frustum) {
-        self.visible.clear();
-        self.visible.resize(self.slots.len().div_ceil(64), 0);
+        clear_bits(&mut self.visible, self.slots.len());
         if !self.settings.frustum_culling {
             // Free slots are marked too: the frame skips them anyway.
             self.visible.fill(!0);
@@ -410,7 +409,7 @@ impl World {
             &mut self.pending,
             frustum.all_planes(),
             |bounds, mask| frustum.classify(bounds, mask),
-            |slot| visible[slot as usize / 64] |= 1 << (slot % 64),
+            |slot| set_bit(visible, slot),
         );
     }
 
@@ -424,8 +423,7 @@ impl World {
         query_budget: usize,
         list: &mut DrawList,
     ) {
-        self.occluded.clear();
-        self.occluded.resize(self.slots.len().div_ceil(64), 0);
+        clear_bits(&mut self.occluded, self.slots.len());
         list.queries.clear();
         list.query_instances.clear();
         if !self.settings.occlusion_culling {
@@ -445,7 +443,7 @@ impl World {
                 let query = in_view && beyond_near_plane(view, projection, bounds);
                 occlusion.visit(node, bounds, children, in_view, query)
             },
-            |slot| occluded[slot as usize / 64] |= 1 << (slot % 64),
+            |slot| set_bit(occluded, slot),
         );
         let budget = query_budget.min(self.settings.occlusion_queries as usize);
         self.occlusion
@@ -465,6 +463,20 @@ impl World {
         self.next_id += 1;
         id
     }
+}
+
+/// Makes `bits` one cleared bit per slot, for `slots` slots.
+fn clear_bits(bits: &mut Vec<u64>, slots: usize) {
+    bits.clear();
+    bits.resize(slots.div_ceil(64), 0);
+}
+
+fn set_bit(bits: &mut [u64], slot: u32) {
+    bits[slot as usize / 64] |= 1 << (slot % 64);
+}
+
+fn has_bit(bits: &[u64], slot: u32) -> bool {
+    bits[slot as usize / 64] >> (slot % 64) & 1 == 1
 }
 
 /// The level an object of `detail` draws, depending on whether its mesh has a coarse level.

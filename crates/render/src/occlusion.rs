@@ -49,6 +49,16 @@ struct NodeState {
     last_in_view: u64,
 }
 
+impl NodeState {
+    /// Notes the node in view in `frame`; a break since the last frame in view starts a new run.
+    fn mark_in_view(&mut self, frame: u64) {
+        if self.last_in_view + 1 != frame {
+            self.in_view_since = frame;
+        }
+        self.last_in_view = frame;
+    }
+}
+
 /// A node that can be tested this frame: a cluster, or a node above them.
 #[derive(Clone, Copy, Debug)]
 struct Candidate {
@@ -114,10 +124,7 @@ impl Occlusion {
         let Some(state) = self.states.get_mut(node as usize) else {
             return Step::Descend;
         };
-        if state.last_in_view + 1 != frame {
-            state.in_view_since = frame;
-        }
-        state.last_in_view = frame;
+        state.mark_in_view(frame);
         let state = *state;
         let result = self.trusted_result(&state);
         let grouped = || {
@@ -133,37 +140,26 @@ impl Occlusion {
                 })
             })
         };
-        if query && (result == Some(true) || grouped()) {
-            // Its children stay in view while it hides them, so their results stay trusted; a
-            // child not visited in the last frame starts a new run, as a visit would.
+        let skipped = query && (result == Some(true) || grouped());
+        if skipped {
+            // Its children stay in view while it hides them, so their results stay trusted.
             for child in children.into_iter().flatten() {
                 if let Some(child) = self.states.get_mut(child as usize) {
-                    if child.last_in_view + 1 != frame {
-                        child.in_view_since = frame;
-                    }
-                    child.last_in_view = frame;
+                    child.mark_in_view(frame);
                 }
             }
-            self.candidates.push(Candidate {
-                node,
-                bounds: *bounds,
-                skipped: true,
-                queried: state.queried,
-            });
-            return Step::Skip;
-        }
-        if children.is_some() {
+        } else if children.is_some() {
             return Step::Descend;
         }
         if query {
             self.candidates.push(Candidate {
                 node,
                 bounds: *bounds,
-                skipped: false,
+                skipped,
                 queried: state.queried,
             });
         }
-        Step::Leave
+        if skipped { Step::Skip } else { Step::Leave }
     }
 
     /// Whether the last result found the node hidden, when that result can be trusted: issued
