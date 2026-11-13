@@ -50,7 +50,7 @@ pub struct Element {
     pub id: [u8; 16],
     /// A mesh id sent in this delta or earlier.
     pub mesh: u64,
-    /// Column-major rotation, orthonormal (reflections allowed).
+    /// Column-major rotation: orthonormal with determinant +1, never a reflection.
     pub rotation: [f64; 9],
     /// Translation, in metres.
     pub translation: [f64; 3],

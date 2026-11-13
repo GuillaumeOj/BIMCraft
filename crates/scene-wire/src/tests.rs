@@ -97,6 +97,14 @@ fn the_header_is_32_bytes_and_the_empty_delta_holds_five_counts() {
 }
 
 #[test]
+fn the_encoder_allocates_exactly_what_it_writes() {
+    for delta in [sample(), SceneDelta::default()] {
+        let bytes = encode(&delta);
+        assert_eq!(bytes.capacity(), bytes.len());
+    }
+}
+
+#[test]
 fn what_decodes_encodes_back_to_the_same_bytes() {
     let bytes = encode(&sample());
     assert_eq!(encode(&decode(&bytes).unwrap()), bytes);
@@ -339,6 +347,18 @@ fn coordinates_at_the_world_limit_are_accepted() {
 }
 
 #[test]
+fn a_lone_empty_mesh_is_reported_as_empty_not_truncated() {
+    let mut delta = SceneDelta {
+        meshes: vec![triangle(1)],
+        ..SceneDelta::default()
+    };
+    delta.meshes[0].positions.clear();
+    delta.meshes[0].normals.clear();
+    delta.meshes[0].indices.clear();
+    assert_eq!(refused(&delta), WireError::EmptyMesh { index: 0 });
+}
+
+#[test]
 fn bounds_must_enclose_every_vertex() {
     let error = WireError::BoundsDoNotEnclose { index: 1 };
     assert_eq!(with_mesh(|m| m.bounds_min[1] = 2.0), error);
@@ -443,6 +463,15 @@ fn element_rotations_must_be_orthonormal() {
     assert_eq!(
         with_element(|e| e.rotation = [1.0, 0.0, 0.0, 0.6, 0.8, 0.0, 0.0, 0.0, 1.0]),
         error
+    );
+}
+
+#[test]
+fn rotations_are_orthonormal_to_the_precision_of_the_renderer() {
+    // 1e-8 off: far below the old 1e-6 tolerance, but the renderer's placement refuses it.
+    assert_eq!(
+        with_element(|e| e.rotation[0] = 1.0 + 1e-8),
+        WireError::InvalidRotation { index: 1 }
     );
 }
 

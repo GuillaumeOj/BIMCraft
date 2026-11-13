@@ -72,5 +72,6 @@ pub const MAX_WORLD_COORDINATE: f64 = 1e9;
 pub const NORMAL_LENGTH_TOLERANCE: f64 = 1e-3;
 
 /// How far from orthonormal the columns of a rotation may be: the rounding of a rotation
-/// computed in `f64` is smaller by many orders of magnitude.
-pub const ROTATION_TOLERANCE: f64 = 1e-6;
+/// computed in `f64` is smaller by many orders of magnitude. The same value as the renderer's
+/// `ORTHONORMAL_TOLERANCE`, so a delta this crate accepts is never refused when placed.
+pub const ROTATION_TOLERANCE: f64 = 1e-9;

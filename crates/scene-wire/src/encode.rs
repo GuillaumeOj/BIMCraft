@@ -1,6 +1,6 @@
 //! Writing a delta.
 
-use crate::{FLAG_FULL, MAGIC, SceneDelta, VERSION};
+use crate::{FLAG_FULL, HEADER_LEN, MAGIC, SceneDelta, VERSION};
 
 /// Writes `delta` in the version 1 format.
 ///
@@ -10,7 +10,7 @@ use crate::{FLAG_FULL, MAGIC, SceneDelta, VERSION};
 /// reader accepts. The host builds its deltas from meshes already validated.
 #[must_use]
 pub fn encode(delta: &SceneDelta) -> Vec<u8> {
-    let mut out = Vec::new();
+    let mut out = Vec::with_capacity(encoded_len(delta));
     out.extend_from_slice(&MAGIC);
     out.extend_from_slice(&VERSION.to_le_bytes());
     out.extend_from_slice(&(if delta.full { FLAG_FULL } else { 0 }).to_le_bytes());
@@ -75,4 +75,24 @@ fn floats<T: Copy, const W: usize>(out: &mut Vec<u8>, values: &[T], to_bytes: fn
     for &value in values {
         out.extend_from_slice(&to_bytes(value));
     }
+}
+
+/// The size of the bytes [`encode`] writes, so the buffer is allocated once: a delta may hold
+/// hundreds of megabytes, which growing by doubling would copy several times.
+fn encoded_len(delta: &SceneDelta) -> usize {
+    let strings: usize = delta.strings.iter().map(|s| 2 + s.len()).sum();
+    let meshes: usize = delta
+        .meshes
+        .iter()
+        .map(|m| {
+            8 + 24 + 4 + 4 + 12 * (m.positions.len() + m.normals.len()) + 4 * m.indices.len() + 24
+        })
+        .sum();
+    HEADER_LEN
+        + 5 * 4
+        + strings
+        + meshes
+        + 8 * delta.removed_meshes.len()
+        + 128 * delta.elements.len()
+        + 16 * delta.removed_elements.len()
 }
