@@ -1,5 +1,20 @@
 import { defineConfig, devices } from "@playwright/test";
 
+// WebGPU for the 3D viewport specs. Chromium's Dawn uses Metal on macOS, so it needs no adapter flag.
+// Elsewhere there is no graphics card (CI), so it falls back to SwiftShader, a software Vulkan.
+const webgpuArgs = [
+  "--enable-unsafe-webgpu",
+  "--ignore-gpu-blocklist",
+  ...(process.platform === "darwin"
+    ? []
+    : [
+        "--enable-features=Vulkan",
+        "--use-webgpu-adapter=swiftshader",
+        "--enable-unsafe-swiftshader",
+        "--use-angle=swiftshader",
+      ]),
+];
+
 export default defineConfig({
   testDir: "e2e",
   forbidOnly: true,
@@ -12,5 +27,15 @@ export default defineConfig({
     port: 4173,
     reuseExistingServer: !process.env["CI"],
   },
-  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
+  projects: [
+    {
+      name: "chromium",
+      // `channel: "chromium"` selects the full browser in its new headless mode: the old headless shell has no WebGPU.
+      use: {
+        ...devices["Desktop Chrome"],
+        channel: "chromium",
+        launchOptions: { args: webgpuArgs },
+      },
+    },
+  ],
 });
