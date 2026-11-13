@@ -11,30 +11,32 @@ All strings in the new boards are French (UI-04). The French strings come from `
 
 ## Boards → flows → files
 
-| Board | Flow (brief) | What it shows | Light | Dark |
-| --- | --- | --- | --- | --- |
-| 3.21 | 1 Navigate | Canvas focus ring ("Vue 3D"), view-controls cluster, **View presets** menu open (Iso sud-ouest has keyboard focus; Perspective is ticked; P is shown on both projection items), tooltip "Tout cadrer F", first-time hint card ("J’ai compris" / "Ne plus afficher") | `3.21-navigate-light.png` | `3.21-navigate-dark.png` |
-| 3.22 | 2 Select | Two blocks selected (outline, halo and tint), one hovered (amber outline), hover name chip, status "2 éléments sélectionnés · Échap pour effacer" | `3.22-select-light.png` | `3.22-select-dark.png` |
-| 3.23a | 3 Place a block | Block tool active: first corner placed, footprint preview, **Sol** (ground) snap marker and chip, live size "6,00 × 4,00 m", typed field "Longueur 6 m ↵" | `3.23a-place-block-corners-light.png` | `3.23a-place-block-corners-dark.png` |
-| 3.23b | 3 Place a block | Height step: ghost box, height handle, live chip, typed field "Hauteur 3 m ↵" | `3.23b-place-block-height-light.png` | `3.23b-place-block-height-dark.png` |
-| 3.23c | 3 Place a block | Block placed and selected, toast with undo "Bloc placé · 6,00 × 4,00 × 3,00 m · Annuler"; the tool stays armed | `3.23c-place-block-placed-light.png` | `3.23c-place-block-placed-dark.png` |
-| 3.24a | 4 Move | Move tool: base point → target point, rubber band, origin ghost, typed field "Distance 2,5 m ↵", live chip "2,500 m" | `3.24a-move-tool-typed-light.png` | `3.24a-move-tool-typed-dark.png` |
-| 3.24b | 4 Move | Direct drag with Select: **Milieu** (midpoint) snap marker and chip, origin ghost, live distance "4,000 m" | `3.24b-move-drag-snap-light.png` | `3.24b-move-drag-snap-dark.png` |
-| 3.24c | 4 Move | Result: toast with undo "1 élément déplacé de 2,500 m · Annuler" | `3.24c-move-done-undo-light.png` | `3.24c-move-done-undo-dark.png` |
-| 3.25a | 5 Clipping planes | Pick mode: hint "Cliquez sur une face pour couper à cet endroit · Échap pour annuler", face preview with **Face** marker, pressed "Choisir une face…" button, plane 1 already cutting (tinted cut face, dashed plane outline, arrow showing the normal) | `3.25a-clip-plane-pick-light.png` | `3.25a-clip-plane-pick-dark.png` |
-| 3.25b | 5 Clipping planes | Two planes in the View panel ("2 sur 6"), one row per plane (Flip, Remove), keyboard focus on Plan 2, "Ajouter sur une face…", "Tout supprimer" | `3.25b-clip-planes-panel-light.png` | `3.25b-clip-planes-panel-dark.png` |
-| 3.26 | 6 Section box and visibility | Section box with handles (+X moved, value chip), **Min/Max fields** in the View panel (Max X focused, Min Z in error: "Le minimum doit être inférieur au maximum"), visibility popover operable from the keyboard (focused row, tablist, shortcut footer) | `3.26-section-box-visibility-keyboard-light.png` | `3.26-section-box-visibility-keyboard-dark.png` |
-| 3.27a | 7 States | Empty project: grid, axes, "Rien à afficher pour l’instant", "Placer un bloc B", link to the guide | `3.27a-state-empty-light.png` | `3.27a-state-empty-dark.png` |
-| 3.27b | 7 States | Loading, slow (after 10 s): spinner, "Toujours en cours…", indeterminate bar, "Annuler", controls disabled | `3.27b-state-loading-light.png` | `3.27b-state-loading-dark.png` |
-| 3.27c | 7 States | No WebGPU: plain-language card with only "Ouvrir le guide de dépannage" (no plan view, section or schedule mentioned) | `3.27c-state-no-webgpu-light.png` | `3.27c-state-no-webgpu-dark.png` |
-| 3.27d | 7 States | Device lost: alert card, "Recharger la vue" (focused), "Copier les détails", and the second-failure line "Si le problème persiste, redémarrez BIMCraft." | `3.27d-state-device-lost-light.png` | `3.27d-state-device-lost-dark.png` |
-| 3.28 | All (spec) | Overlay spec: the 5 snap markers on light, dark, dark-material and saturated backgrounds; selection, hover, ghost and cut samples; chips; typed field; every toast (move refused, move without selection, planes cleared with no Undo, 6-plane limit); swatches of the viewport tokens | `3.28-overlays-tokens-light.png` | `3.28-overlays-tokens-dark.png` |
-| 3.1 (amended) | 6 Section box | See [Changes to 3.1 and 3.2](#changes-to-31-and-32) | `3.1-section-box-amended-light.png` | `3.1-section-box-amended-dark.png` |
-| 3.2 (amended) | 6 Visibility | See [Changes to 3.1 and 3.2](#changes-to-31-and-32) | `3.2-visibility-isolate-amended-light.png` | `3.2-visibility-isolate-amended-dark.png` |
+Each board is exported twice: `<file>-light.png` and `<file>-dark.png`.
+
+| Board | Flow (brief) | What it shows | File |
+| --- | --- | --- | --- |
+| 3.21 | 1 Navigate | Canvas focus ring ("Vue 3D"), view-controls cluster, **View presets** menu open (Iso sud-ouest has keyboard focus; Perspective is ticked; P is shown on both projection items), tooltip "Tout cadrer F", first-time hint card ("J’ai compris" / "Ne plus afficher") | `3.21-navigate` |
+| 3.22 | 2 Select | Two blocks selected (outline, halo and tint), one hovered (amber outline), hover name chip, status "2 éléments sélectionnés · Échap pour effacer" | `3.22-select` |
+| 3.23a | 3 Place a block | Block tool active: first corner placed, footprint preview, **Sol** (ground) snap marker and chip, live size "6,00 × 4,00 m", typed field "Longueur 6 m ↵" | `3.23a-place-block-corners` |
+| 3.23b | 3 Place a block | Height step: ghost box, height handle, live chip, typed field "Hauteur 3 m ↵" | `3.23b-place-block-height` |
+| 3.23c | 3 Place a block | Block placed and selected, toast with undo "Bloc placé · 6,00 × 4,00 × 3,00 m · Annuler"; the tool stays armed | `3.23c-place-block-placed` |
+| 3.24a | 4 Move | Move tool: base point → target point, rubber band, origin ghost, typed field "Distance 2,5 m ↵", live chip "2,500 m" | `3.24a-move-tool-typed` |
+| 3.24b | 4 Move | Direct drag with Select: **Milieu** (midpoint) snap marker and chip, origin ghost, live distance "4,000 m" | `3.24b-move-drag-snap` |
+| 3.24c | 4 Move | Result: toast with undo "1 élément déplacé de 2,500 m · Annuler" | `3.24c-move-done-undo` |
+| 3.25a | 5 Clipping planes | Pick mode: hint "Cliquez sur une face pour couper à cet endroit · Échap pour annuler", face preview with **Face** marker, pressed "Choisir une face…" button, plane 1 already cutting (tinted cut face, dashed plane outline, arrow showing the normal) | `3.25a-clip-plane-pick` |
+| 3.25b | 5 Clipping planes | Two planes in the View panel ("2 sur 6"), one row per plane (Flip, Remove), keyboard focus on Plan 2, "Ajouter sur une face…", "Tout supprimer" | `3.25b-clip-planes-panel` |
+| 3.26 | 6 Section box and visibility | Section box with handles (+X moved, value chip), **Min/Max fields** in the View panel (Max X focused, Min Z in error: "Le minimum doit être inférieur au maximum"), visibility popover operable from the keyboard (focused row, tablist, shortcut footer) | `3.26-section-box-visibility-keyboard` |
+| 3.27a | 7 States | Empty project: grid, axes, "Rien à afficher pour l’instant", "Placer un bloc B", link to the guide | `3.27a-state-empty` |
+| 3.27b | 7 States | Loading, slow (after 10 s): spinner, "Toujours en cours…", indeterminate bar, "Annuler", controls disabled | `3.27b-state-loading` |
+| 3.27c | 7 States | No WebGPU: plain-language card with only "Ouvrir le guide de dépannage" (no plan view, section or schedule mentioned) | `3.27c-state-no-webgpu` |
+| 3.27d | 7 States | Device lost: alert card, "Recharger la vue" (focused), "Copier les détails", and the second-failure line "Si le problème persiste, redémarrez BIMCraft." | `3.27d-state-device-lost` |
+| 3.28 | All (spec) | Overlay spec: the 5 snap markers on light, dark, dark-material and saturated backgrounds; selection, hover, ghost and cut samples; chips; typed field; every toast (move refused, move without selection, planes cleared with no Undo, 6-plane limit); swatches of the viewport tokens | `3.28-overlays-tokens` |
+| 3.1 (amended) | 6 Section box | See [Changes to 3.1 and 3.2](#changes-to-31-and-32) | `3.1-section-box-amended` |
+| 3.2 (amended) | 6 Visibility | See [Changes to 3.1 and 3.2](#changes-to-31-and-32) | `3.2-visibility-isolate-amended` |
 
 ## New `Mode` variables (viewport colours)
 
-They are in the `Mode` collection, so each one has a Light and a Dark value. The CSS names are those of `variable.export` (format `css`), which the frontend reads as tokens and sends to `setTheme`.
+They are in the `Mode` collection, so each one has a Light and a Dark value. The CSS names are those of `variable.export` (format `css`); the frontend reads them as tokens. Only six of them fit `setTheme` today (see [Open points](#open-points-for-the-frontend-not-blocking)).
 
 | Variable | CSS custom property | Light | Dark | Use |
 | --- | --- | --- | --- | --- |
@@ -102,7 +104,7 @@ The boards reuse the existing Brand guide components: `UI / Toast with undo`, `U
 
 ## UI decisions beyond the UX notes
 
-- **Move tool in the tool bar.** UX gives Move a shortcut (`M`) but no place. Select, Move and Block now open the tool bar, followed by the Architecture tools (Wall, Slab…). Block still comes right after the selection tools, as UX asked, and Move sits with Select because both apply in every discipline.
+- **Move tool in the tool bar.** UX gives Move a shortcut (`M`) but no place. Select, Move and Block now open the tool bar, followed by the Architecture tools (Wall, Slab…). UX asked for Block right after Select; it now comes right after Move, still before Wall, and Move sits with Select because both apply in every discipline. Block is therefore outside the Architecture group.
 - **View-controls cluster** (bottom right), left to right: Zoom fit `F`, Zoom to selection `Shift+F`, View presets ▾ (icon only, tooltip and `aria-label` "Vues prédéfinies"), Perspective | Parallèle segmented toggle `P`, Orbit, Pan, Full screen. The old "1:100" scale is gone, because a perspective 3D view has no drawing scale. Zoom to selection is shown disabled (40 % opacity) when nothing is selected (3.27a).
 - **View panel order:** Caméra (Projection, Vue depuis), Boîte de coupe, Plans de coupe, Visibilité. A collapsed section shows its state on the right ("Désactivée", "Aucun", "2 sur 6", "Tout est visible"), and the title tag names the active cut ("Boîte de coupe active", "Plans de coupe").
 - **Hover name chip:** the hovered element's name is shown next to the pointer (3.22), in the chip style. The screen reader still doesn't hear hover (UX).
@@ -132,10 +134,29 @@ The boards reuse the existing Brand guide components: `UI / Toast with undo`, `U
 | Section box help | Metres · Enter applies · Esc restores · Tab: next field | Mètres · Entrée applique · Échap rétablit · Tab : champ suivant |
 | Popover footer | ↑ ↓ move · Space hide · Shift+Space isolate · Esc close | ↑ ↓ parcourir · Espace masquer · Maj+Espace isoler · Échap fermer |
 | Popover tags | Isolated · Hidden | Isolé · Masqué |
-| Status bar | No selection · No elements · Loading… · 3D view unavailable · 3D view stopped · 2 clipping planes active | Aucune sélection · Aucun élément · Chargement… · Vue 3D indisponible · Vue 3D arrêtée · 2 plans de coupe actifs |
+| Status bar | No selection | Aucune sélection |
+| | No elements | Aucun élément |
+| | Loading… | Chargement… |
+| | 3D view unavailable | Vue 3D indisponible |
+| | 3D view stopped | Vue 3D arrêtée |
+| | 2 clipping planes active | 2 plans de coupe actifs |
+| | Block · second corner · Snap on | Bloc · second angle · Accroche activée |
+| | Block · height · footprint {w} × {d} m | Bloc · hauteur · emprise {w} × {d} m |
+| | Clipping plane · choose a face | Plan de coupe · choisir une face |
+| | Section box · 1 face moved | Boîte de coupe · 1 face déplacée |
+| | 1 element selected · Snap on | 1 élément sélectionné · Accroche activée |
 | Empty state link | Guide: place a block → | Guide : placer un bloc → |
+| Canvas chips | Height {h} m | Hauteur {h} m |
+| | Face · horizontal plane at {z} m | Face · plan horizontal à {z} m |
+| | Max X {value} m | Max X {value} m |
+| Clip plane row detail | Normal +X · x = {value} m | Normale +X · x = {value} m |
+| Clip pick cancel | Cancel Esc | Annuler Échap |
+| View panel title tags | Section box on · Clipping planes · Isolated | Boîte de coupe active · Plans de coupe · Isolé |
+| View panel collapsed states | Off · None · {n} of 6 · Everything visible | Désactivée · Aucun · {n} sur 6 · Tout est visible |
 
 ## Open points for the frontend (not blocking)
 
 - **No keyboard picking** in the MVP (UX gap): keyboard users select from the project tree. Nothing in the canvas shows a keyboard cursor.
-- The `Snap` icon is ready for a status-bar snapping toggle once `view_state.snapping` exists (UX proposal 4 in `ux-notes.md`).
+- The status bar shows the snapping state ("Accroche activée", 3.23a, 3.24a, 3.24b) from `view_state.snapping`, which is in `api-contract.md` §2; the `Snap` icon is ready for a status-bar snapping toggle.
+- **`setTheme` carries fewer colours than the boards use.** `ViewportTheme` has six `"#RRGGBB"` fields: `background` ← `vp-bg`, `selection` ← `vp-select`, `hover` ← `vp-hover`, `snap` ← `vp-snap`, `preview` ← `vp-ghost`, `cut` ← `vp-cut`. It has no slot for `vp-shade-1/2/3` (default material, which the dark boards change), `vp-halo`, `vp-select-tint` or `vp-ghost-tint`, and no alpha for the tints (`vp-cut` is a colour at 22 %/28 %). Until the lead extends the contract, the dark boards' material and halo cannot be rendered as drawn.
+- **Block footprint labels.** The contract types three values (width, depth, height); the boards show only the first one ("Longueur") and the height. The second footprint value needs its own label and hint.
