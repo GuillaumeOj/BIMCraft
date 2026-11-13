@@ -16,7 +16,7 @@ All lengths are metres, angles radians, coordinates the project's world frame (z
 
 ### Binary format `scene-wire` version 1
 
-Little-endian throughout. Every section length is checked against the buffer before reading; the decoder rejects trailing bytes, unknown versions, counts above the limits, non-finite floats, out-of-range indices, and values outside the ranges of ADR 0020 (`MAX_WORLD_COORDINATE` = 10⁹ m, unit normals, proper orthonormal rotations). Limits (constants in `scene-wire`, tested at the boundary): 256 MiB per delta, 2²⁴ vertices and 3·2²⁴ indices per mesh (as `render`), 2²⁰ meshes, 2²² elements, 2¹⁶ strings of at most 256 bytes (UTF-8).
+Little-endian throughout. Every section length is checked against the buffer before reading; the decoder rejects trailing bytes, unknown versions, counts above the limits, non-finite floats, out-of-range indices, and values outside the ranges of ADR 0020 (`MAX_WORLD_COORDINATE` = 10⁹ m, unit normals, proper orthonormal rotations, mesh bounds that enclose every vertex of the mesh). Limits (constants in `scene-wire`, tested at the boundary): 256 MiB per delta, 2²⁴ vertices and 3·2²⁴ indices per mesh (as `render`), 2²⁰ meshes, 2²² elements, 2¹⁶ strings of at most 256 bytes (UTF-8).
 
 ```
 Header (32 bytes)
@@ -41,7 +41,7 @@ Meshes section (added meshes; a mesh is immutable once sent)
     positions  [f32; 3 * vertex_count]
     normals    [f32; 3 * vertex_count]   unit length (flat shading)
     indices    [u32; index_count]
-    bounds_min [f32; 3]  local bounding box, for culling and LOD
+    bounds_min [f32; 3]  local bounding box, for culling and LOD; the decoder checks it encloses every position
     bounds_max [f32; 3]
 
 Removed meshes
@@ -101,7 +101,7 @@ export class Viewport {
   onEvent(listener: (event: ViewportEvent) => void): void;
 }
 
-type ViewportOptions = { theme: ViewportTheme; locale: "en" | "fr" };      // locale: for announcement keys only
+type ViewportOptions = { theme: ViewportTheme };      // announcements are keys: the UI translates them
 type ViewportTheme = { background: string; selection: string; hover: string; snap: string; preview: string; cut: string }; // "#RRGGBB"
 
 type Tool = "select" | "move" | "place_block";
@@ -178,10 +178,10 @@ Registered in `crates/api` (descriptor, `api.schema.json`, `protocol.gen.ts` reg
 elements.move
   params: { ids: EntityId[], translation: [number, number, number] }
   result: null
-  errors: refused { reason: "unknown_element" | "not_movable" | "out_of_range" | "empty" }
+  errors: refused { reason: "unknown_element" | "not_movable" | "out_of_range" | "empty" | "too_many" }
 ```
 
 - One transaction named "Move" (undoable as one step, CORE-06), one `model.changed` notification.
-- `ids`: 1 to 10 000 distinct elements, each with a placement the command knows how to translate (`Block` now; walls and the rest join as they arrive). Any invalid id refuses the whole command, nothing changes.
+- `ids`: 1 to 10 000 distinct elements (more: refused `too_many`; the UI shows its own string, it never splits a move), each with a placement the command knows how to translate (`Block` now; walls and the rest join as they arrive). Any invalid id refuses the whole command, nothing changes.
 - `translation`: finite, each component within ±10⁶ m; the resulting location within `MAX_WORLD_COORDINATE`.
 - Placing a block uses the existing `model.create` with entity `Block` and its attributes (`location`, `rotation`, `size_x`, `size_y`, `size_z`), transaction named "Place block". The exact attribute encoding of `location` is fixed by B4's plan and copied here before F1 starts.
