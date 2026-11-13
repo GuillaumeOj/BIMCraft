@@ -43,5 +43,6 @@ Copy [`_template.md`](_template.md) and follow its comments.
 | [0022](0022-face-triangulation.md) | Face triangulation | Accepted |
 | [0023](0023-incremental-tessellation.md) | Incremental tessellation | Accepted |
 | [0024](0024-discipline-extension-surface.md) | Discipline extension surface | Accepted |
+| [0024](0024-instancing-culling-and-level-of-detail.md) | Instancing, culling and level of detail | Accepted |
 
 One decision predates this folder and stays in the specification: the web UI over an all-Rust UI ([specification §13](../../specifications.md#13-ui-and-rendering), "Decision record").
