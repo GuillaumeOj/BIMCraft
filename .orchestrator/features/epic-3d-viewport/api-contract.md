@@ -118,7 +118,9 @@ type ViewCommand =
   | { kind: "section_box"; enabled: boolean }
   | { kind: "section_box_extents"; min: [number, number, number]; max: [number, number, number] }
   | { kind: "section_box_fit_selection" } | { kind: "section_box_reset" }
+  | { kind: "clip_plane_pick" }                           // arms a one-shot face pick; the viewport adds the plane itself; Esc cancels
   | { kind: "clip_plane_add"; point: [number, number, number]; normal: [number, number, number] }
+  | { kind: "clip_plane_flip"; index: number }
   | { kind: "clip_plane_remove"; index: number } | { kind: "clip_planes_clear" }
   | { kind: "cut_faces"; style: "tinted" | "none" }
   | { kind: "hide"; target: VisibilityTarget } | { kind: "show"; target: VisibilityTarget }
@@ -130,7 +132,7 @@ type VisibilityTarget =
 type ViewportEvent =
   | { kind: "selection"; ids: string[] }
   | { kind: "hover"; id: string | null }
-  | { kind: "tool_state"; tool: Tool; step: "idle" | "base_point" | "target_point" | "first_corner" | "second_corner" | "height" }
+  | { kind: "tool_state"; tool: Tool; step: "idle" | "base_point" | "target_point" | "first_corner" | "second_corner" | "height" | "pick_face" }
   | { kind: "announce"; key: AnnouncementKey; values: Record<string, string | number> } // UI translates the key (UI-04)
   | { kind: "intent"; intent: Intent }
   | { kind: "view_state"; state: ViewState }              // after every view command or handle drag (throttled)
@@ -138,7 +140,15 @@ type ViewportEvent =
 
 type AnnouncementKey =
   | "snap.endpoint" | "snap.midpoint" | "snap.edge" | "snap.face" | "snap.ground"
-  | "selection.count" | "move.distance" | "place.size" | "section_box.face_moved";
+  | "selection.count" | "selection.cleared"
+  | "move.distance" | "move.cancelled" | "place.size" | "place.height"
+  | "view.preset" | "view.projection"
+  | "visibility.hidden" | "visibility.isolated" | "visibility.reset"
+  | "clip_plane.added" | "clip_plane.flipped" | "clip_plane.removed" | "clip_plane.cleared"
+  | "section_box.face_moved";
+// Values are raw numbers (metres) and names; the UI formats them for the locale (FR "2,5").
+// The viewport throttles announcements (one per 500 ms of frames; the snap kind only when it changes).
+// EN/FR strings: design/ux-notes.md.
 
 type Intent =
   | { kind: "move"; ids: string[]; translation: [number, number, number] }
@@ -146,6 +156,8 @@ type Intent =
 
 type ViewState = {
   projection: "perspective" | "parallel";
+  snapping: boolean;                       // false after `S` or while Alt is held
+  tool: Tool;
   categories: { name: string; count: number; hidden: boolean; isolated: boolean }[];
   disciplines: { name: string; count: number; hidden: boolean; isolated: boolean }[];
   isolating: boolean;
@@ -156,7 +168,7 @@ type ViewState = {
 };
 ```
 
-Keyboard inside the focused canvas (handled in Rust; the UI documents them and shows them in tooltips): arrows orbit, Shift+arrows pan, `+`/`-` zoom, `F` zoom fit, `Shift+F` zoom to selection, `Esc` cancel, digits and `.` start a typed distance, `Enter` confirms, `Tab`/`Shift+Tab` leave the canvas (never trapped). Global shortcuts (outside the canvas too, handled by the UI and sent as commands): `M` move, `B` place block, `V` select tool, `H` hide selection, `I` isolate selection, `Alt+H` reset visibility, `Alt+B` section box on/off. The UX task confirms or amends these before F1 starts; the shell's shortcut rules (quiet behind dialogs) apply.
+Keyboard inside the focused canvas (handled in Rust; the UI documents them and shows them in tooltips): arrows orbit, Shift+arrows pan, `+`/`-` zoom, `F` zoom fit, `Shift+F` zoom to selection, `Esc` cancel, digits and `.` start a typed distance, `Enter` confirms, `Tab`/`Shift+Tab` leave the canvas (never trapped). Placing a block takes three successive typed values (width, depth, height), each confirmed with `Enter` (each `typed_distance` or Enter advances one step; never Tab). Global shortcuts (outside the canvas too, handled by the UI and sent as commands): `V` select tool, `M` move, `B` place block, `H` hide selection, `I` isolate selection, `Alt+H` reset visibility, `Alt+B` section box on/off, `P` toggle projection, `S` toggle snapping. Confirmed by the UX notes (`design/ux-notes.md`, keyboard map); the shell's shortcut rules (quiet behind dialogs) apply.
 
 ## 3. JSON-RPC command `elements.move`
 
