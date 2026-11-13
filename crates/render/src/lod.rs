@@ -7,7 +7,8 @@ use crate::Projection;
 /// The settings of the culling and of the level of detail of a [`Renderer`](crate::Renderer).
 ///
 /// The *projected size* of an object is the diameter, in pixels of the target's height, of the
-/// sphere that encloses its world bounding box. An object draws its fine mesh above
+/// sphere that encloses its mesh's local bounding box, around the box's placed centre: turning
+/// an object does not change it. An object draws its fine mesh above
 /// `coarse_below_px`, its coarse level (the mesh's bounding box, 12 triangles) below, and
 /// nothing below `hide_below_px`. To come back up, the size must exceed a threshold times
 /// `1 + hysteresis`, so an object near a threshold does not flicker between levels.
@@ -63,6 +64,12 @@ pub enum DetailLevel {
     Coarse,
     /// The mesh itself.
     Fine,
+}
+
+/// Whether a mesh of `triangles` triangles gets a coarse level: a box (12 triangles) or less is
+/// its own coarse level.
+pub(crate) fn has_coarse_level(triangles: usize) -> bool {
+    triangles > 12
 }
 
 /// What an object shows, less detailed first.

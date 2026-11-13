@@ -9,7 +9,7 @@ use std::collections::BTreeMap;
 use crate::bounds::Aabb;
 use crate::bvh::{Bvh, Leaf};
 use crate::frustum::Frustum;
-use crate::lod::{Detail, DetailLevel, RenderSettings, SizeScale, choose};
+use crate::lod::{Detail, DetailLevel, RenderSettings, SizeScale, choose, has_coarse_level};
 use crate::transform::{Matrix, ViewFrame, camera_relative_model_view};
 use crate::vector::{norm, sub};
 use crate::{Placement, Projection};
@@ -111,6 +111,8 @@ pub(crate) struct World {
     free: Vec<u32>,
     index: BTreeMap<ObjectId, u32>,
     bvh: Bvh,
+    /// The nodes a frustum query has left to classify, with their plane masks.
+    pending: Vec<(u32, u8)>,
     /// One bit per slot: whether the object is in view this frame.
     visible: Vec<u64>,
     settings: RenderSettings,
@@ -132,6 +134,7 @@ impl World {
             free: Vec::new(),
             index: BTreeMap::new(),
             bvh: Bvh::new(),
+            pending: Vec::new(),
             visible: Vec::new(),
             settings: RenderSettings::default(),
             next_id: 0,
@@ -171,7 +174,7 @@ impl World {
             MeshInfo {
                 origin,
                 bounds: Aabb::of_local(origin, positions).unwrap_or(empty),
-                has_coarse: triangles > 12,
+                has_coarse: has_coarse_level(triangles),
                 objects: Vec::new(),
             },
         );
@@ -190,6 +193,10 @@ impl World {
 
     pub(crate) fn has_mesh(&self, id: MeshId) -> bool {
         self.meshes.contains_key(&id)
+    }
+
+    pub(crate) fn has_object(&self, id: ObjectId) -> bool {
+        self.index.contains_key(&id)
     }
 
     /// Places a mesh; the placement and the colour have been validated.
@@ -345,6 +352,7 @@ impl World {
         if self.settings.frustum_culling {
             let frustum = Frustum::new(view, projection, f64::from(size[0]) / f64::from(size[1]));
             self.bvh.query(
+                &mut self.pending,
                 frustum.all_planes(),
                 |bounds, mask| frustum.classify(bounds, mask),
                 mark,

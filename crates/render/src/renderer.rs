@@ -13,7 +13,7 @@ use std::collections::BTreeMap;
 
 use wgpu::util::DeviceExt as _;
 
-use crate::lod::{DetailLevel, RenderSettings};
+use crate::lod::{DetailLevel, RenderSettings, has_coarse_level};
 use crate::transform::{Matrix, ViewFrame, projection_matrix};
 use crate::world::{
     DrawList, FrameStats, INSTANCE_FLOATS, INSTANCE_STRIDE, MeshId, ObjectId, Unknown, World,
@@ -265,9 +265,9 @@ impl Renderer {
         let index_count = index_count(mesh, self.max_buffer_size)?;
         let triangles = mesh.indices.len() / 3;
         let fine = self.upload(mesh, index_count);
-        let coarse = mesh
-            .bounding_box()
-            .filter(|_| triangles > 12)
+        let coarse = has_coarse_level(triangles)
+            .then(|| mesh.bounding_box())
+            .flatten()
             .map(|coarse| self.upload(&coarse, 36));
         let id = self.world.add_mesh(mesh.origin, &mesh.positions, triangles);
         self.meshes.insert(id, GpuMesh { fine, coarse });
@@ -319,7 +319,9 @@ impl Renderer {
     /// [`RenderError::UnknownObject`], or [`RenderError::Placement`] for an invalid placement.
     pub fn set_placement(&mut self, id: ObjectId, placement: Placement) -> Result<(), RenderError> {
         // The id first, so an unknown object is reported as such whatever its placement.
-        self.world.drawn_level(id)?;
+        if !self.world.has_object(id) {
+            return Err(RenderError::UnknownObject(id));
+        }
         placement.validate()?;
         Ok(self.world.set_placement(id, placement)?)
     }

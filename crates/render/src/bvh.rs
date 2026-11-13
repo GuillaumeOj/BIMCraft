@@ -53,7 +53,7 @@ pub(crate) struct Bvh {
     nodes: Vec<Node>,
     root: u32,
     free: u32,
-    /// The nodes visited by a query, kept to avoid an allocation per query.
+    /// The nodes below an [`Overlap::Inside`] box, kept to avoid an allocation per query.
     stack: Vec<u32>,
 }
 
@@ -96,13 +96,16 @@ impl Bvh {
     /// Calls `found` with the item of every leaf that `classify` does not put outside, starting
     /// from `state` at the root. A child is classified with the state its parent's
     /// [`Overlap::Partial`] gave; below an [`Overlap::Inside`], nothing more is classified.
+    /// `pending` holds the nodes left to classify: the caller keeps it between queries, so a
+    /// query allocates nothing once it has grown.
     pub(crate) fn query<S: Copy>(
         &mut self,
+        pending: &mut Vec<(u32, S)>,
         state: S,
         mut classify: impl FnMut(&Aabb, S) -> Overlap<S>,
         mut found: impl FnMut(u32),
     ) {
-        let mut pending = Vec::new();
+        pending.clear();
         if self.root != NONE {
             pending.push((self.root, state));
         }
@@ -379,6 +382,7 @@ mod tests {
     fn overlapping(tree: &mut Bvh, region: &Aabb) -> Vec<u32> {
         let mut found = Vec::new();
         tree.query(
+            &mut Vec::new(),
             (),
             |bounds, ()| {
                 if !region.overlaps(bounds) {
