@@ -131,11 +131,11 @@ impl Visibility {
             return false;
         };
         ids.retain(|&id| held(id));
-        if ids.is_empty() {
+        let ended = ids.is_empty();
+        if ended {
             self.isolation = None;
-            return true;
         }
-        false
+        ended
     }
 }
 
