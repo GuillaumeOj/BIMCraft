@@ -1,4 +1,4 @@
-import { useEffect, useEffectEvent, useRef, useState } from "react";
+import { useCallback, useEffect, useEffectEvent, useRef, useState } from "react";
 import { hasDrawableElements, moveElements, moveRefusal, placeBlock, useApi } from "../api";
 import { useI18n } from "../i18n/I18nProvider";
 import type { MessageKey } from "../i18n/i18n";
@@ -6,19 +6,22 @@ import { useShellState } from "../shell/ShellState";
 import { announcementText, formatMetres, previewText } from "./format";
 import { NavigationHint } from "./HintCard";
 import { EmptyCard, FailedCard, LoadingCard, UnavailableCard } from "./StateCards";
-import { type ViewportShortcut, viewportShortcut } from "./shortcuts";
+import { isTextEntry, type ViewportShortcut, viewportShortcut } from "./shortcuts";
 import { Toolbar } from "./Toolbar";
 import type {
   Intent,
   PreviewLabel,
-  Projection,
   Tool,
   ToolStep,
   ViewCommand,
   ViewportEvent,
+  ViewState,
 } from "./types";
 import { type Phase, useViewportSession } from "./useViewportSession";
 import { ViewControls } from "./ViewControls";
+import { IDLE_REPORT, usePublishViewReport } from "./ViewportBridge";
+import { VISIBILITY_TRIGGER, VisibilityPopover } from "./VisibilityPopover";
+import { changedFaces, isolatedNames, type SectionBox } from "./viewState";
 import "./viewport.css";
 
 /** The steps that show a hint above the tool bar. */
@@ -28,7 +31,29 @@ const HINTS: Partial<Record<ToolStep, MessageKey>> = {
   height: "viewport.hint.height",
   base_point: "viewport.hint.base_point",
   target_point: "viewport.hint.target_point",
+  pick_face: "viewport.hint.pick_face",
 };
+
+/** What the viewport reports until its first change: nothing hidden, no cut, perspective. */
+const INITIAL_VIEW: ViewState = {
+  projection: "perspective",
+  snapping: true,
+  tool: "select",
+  categories: [],
+  disciplines: [],
+  isolating: false,
+  hiddenSelection: 0,
+  sectionBox: null,
+  clipPlanes: [],
+  cutFaces: "tinted",
+};
+
+/** The commands that give the section box a new starting point: moves are counted from it. */
+const REBASES = new Set<ViewCommand["kind"]>([
+  "section_box",
+  "section_box_reset",
+  "section_box_fit_selection",
+]);
 
 /** Pointers lower than this above the bottom edge get their chip above them: the band of the tool bar and the hint. */
 const BOTTOM_BAND = 150;
@@ -67,14 +92,21 @@ export function ViewportView() {
   const [selection, setSelection] = useState<readonly string[]>([]);
   const [tool, setTool] = useState<Tool>("select");
   const [step, setStep] = useState<ToolStep>("idle");
-  const [projection, setProjection] = useState<Projection>("perspective");
-  const [snapping, setSnapping] = useState(true);
+  const [view, setView] = useState(INITIAL_VIEW);
+  const [facesMoved, setFacesMoved] = useState(0);
+  const [visibilityOpen, setVisibilityOpen] = useState(false);
   const [announcement, setAnnouncement] = useState({ text: "", serial: 0 });
   // Unknown (null) until the model was first asked: neither the empty card nor the hint shows.
   const [empty, setEmpty] = useState<boolean | null>(null);
   // Which value the pointer chip names: the hint bar follows it while the depth is typed.
   const [labelKey, setLabelKey] = useState<PreviewLabel["key"] | null>(null);
   const chip = useRef<HTMLDivElement>(null);
+  // Which faces of the section box moved since it last got a starting point, and the box before.
+  const moved = useRef(new Set<number>());
+  const lastBox = useRef<SectionBox | null>(null);
+  const rebase = useRef(false);
+  const lastView = useRef<ViewState | null>(null);
+  const { projection, snapping } = view;
 
   const chipText = (label: PreviewLabel) =>
     label.typed === null
@@ -92,9 +124,7 @@ export function ViewportView() {
         setStep(event.step);
         break;
       case "view_state":
-        setProjection(event.state.projection);
-        setSnapping(event.state.snapping);
-        setTool(event.state.tool);
+        onViewState(event.state);
         break;
       case "announce":
         setAnnouncement((previous) => ({
@@ -116,10 +146,50 @@ export function ViewportView() {
   };
 
   const session = useViewportSession(onEvent);
-  const { phase, handle, feed, sceneLoaded, sceneVersion } = session;
+  const { phase, handle, feed, sceneLoaded, sceneVersion, canvasRef } = session;
   const ready = phase.kind === "ready";
 
-  const command = (value: ViewCommand) => handle.current?.command(value);
+  const command = useCallback(
+    (value: ViewCommand) => {
+      if (REBASES.has(value.kind)) rebase.current = true;
+      handle.current?.command(value);
+    },
+    [handle],
+  );
+
+  // Hints are toasts: they come once, when the state they explain begins.
+  function onViewState(next: ViewState) {
+    const before = lastView.current;
+    lastView.current = next;
+    setView(next);
+    setTool(next.tool);
+    trackFaces(next.sectionBox);
+    if (before === null) return;
+    if (next.sectionBox?.enabled === true && before.sectionBox?.enabled !== true) {
+      notify(t("viewport.hint.section"));
+    }
+    if (next.isolating && !before.isolating) {
+      const names = [...isolatedNames(next.categories), ...isolatedNames(next.disciplines)];
+      notify(
+        t("viewport.hint.isolate", {
+          names: names.length > 0 ? names.join(", ") : t("viewport.hint.isolateSelection"),
+        }),
+      );
+    }
+  }
+
+  // "N faces moved": the faces whose position changed since the box was switched on or reset.
+  function trackFaces(box: SectionBox | null) {
+    const before = lastBox.current;
+    lastBox.current = box;
+    if (box === null || !box.enabled || before === null || !before.enabled || rebase.current) {
+      moved.current.clear();
+    } else {
+      for (const face of changedFaces(before, box)) moved.current.add(face);
+    }
+    if (box?.enabled === true) rebase.current = false;
+    setFacesMoved(moved.current.size);
+  }
 
   const chooseTool = (next: Tool) => {
     if (next === "move" && selection.length === 0) {
@@ -193,22 +263,54 @@ export function ViewportView() {
     };
   }, [api, sceneVersion]);
 
+  const hideOrIsolate = (kind: "hide" | "isolate") => {
+    if (selection.length === 0) {
+      notify(t("viewport.toast.noSelectionVisibility"));
+      return;
+    }
+    command({ kind, target: { by: "selection" } });
+  };
+
   // Reads this render's state; the listener below stays subscribed across renders.
   const onShortcut = useEffectEvent((shortcut: ViewportShortcut) => {
-    if (shortcut === "projection") {
-      command({
-        kind: "projection",
-        projection: projection === "perspective" ? "parallel" : "perspective",
-      });
-    } else if (shortcut === "snapping") {
-      command({ kind: "snapping", enabled: !snapping });
-    } else {
-      chooseTool(shortcut);
+    switch (shortcut) {
+      case "projection":
+        command({
+          kind: "projection",
+          projection: projection === "perspective" ? "parallel" : "perspective",
+        });
+        break;
+      case "snapping":
+        command({ kind: "snapping", enabled: !snapping });
+        break;
+      case "hide":
+      case "isolate":
+        hideOrIsolate(shortcut);
+        break;
+      case "reset_visibility":
+        command({ kind: "reset_visibility" });
+        break;
+      case "section_box":
+        command({ kind: "section_box", enabled: view.sectionBox?.enabled !== true });
+        break;
+      default:
+        chooseTool(shortcut);
     }
   });
 
-  // V, M, B, P and S, outside the canvas too; quiet behind a modal dialog and in text fields.
-  const { canvasRef } = session;
+  // Esc ends a pending face pick, then an isolate, from outside the canvas too (inside it, the
+  // viewport takes the key). Whatever else uses Esc (a popover, a field, a dialog) goes first.
+  const cancellable = view.isolating || step === "pick_face";
+  const onEscape = useEffectEvent((event: KeyboardEvent) => {
+    if (event.key !== "Escape" || event.defaultPrevented || event.target === canvasRef.current) {
+      return;
+    }
+    if (event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return;
+    if (event.target instanceof HTMLElement && isTextEntry(event.target)) return;
+    command({ kind: "cancel" });
+  });
+
+  // V, M, B, P, S, H, I and Alt+H, Alt+B, outside the canvas too; quiet behind a modal dialog and in text fields.
   useEffect(() => {
     if (!ready || modalOpen) return;
     const onKeyDown = (event: KeyboardEvent) => {
@@ -221,6 +323,26 @@ export function ViewportView() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [ready, modalOpen, singleKeys, canvasRef]);
 
+  useEffect(() => {
+    if (!ready || modalOpen || !cancellable) return;
+    window.addEventListener("keydown", onEscape);
+    return () => window.removeEventListener("keydown", onEscape);
+  }, [ready, modalOpen, cancellable]);
+
+  // The View panel sits beside the view: it renders this report and sends commands through it.
+  const publish = usePublishViewReport();
+  const selectionCount = selection.length;
+  useEffect(() => {
+    publish(ready ? { view, step, selectionCount, facesMoved, send: command } : IDLE_REPORT);
+    return () => publish(IDLE_REPORT);
+  }, [publish, ready, view, step, selectionCount, facesMoved, command]);
+
+  // Esc and a press outside close the popover; the focus goes back to the button that opened it.
+  const closeVisibility = useCallback(() => {
+    setVisibilityOpen(false);
+    document.querySelector<HTMLElement>(`[${VISIBILITY_TRIGGER}]`)?.focus();
+  }, []);
+
   const hint =
     step === "second_corner" && labelKey === "place.depth" ? "viewport.hint.depth" : HINTS[step];
   const status = statusText(t, {
@@ -229,6 +351,10 @@ export function ViewportView() {
     empty: empty === true,
     count: selection.length,
     snapping,
+    pickingFace: step === "pick_face",
+    facesMoved: view.sectionBox?.enabled === true ? facesMoved : 0,
+    isolated: view.isolating ? isolatedLabel(view, t("viewport.hint.isolateSelection")) : null,
+    planes: view.clipPlanes.length,
   });
 
   return (
@@ -263,11 +389,23 @@ export function ViewportView() {
       <p className="vp-status" id="vp-status">
         {status}
       </p>
+      {visibilityOpen && ready && (
+        <VisibilityPopover
+          view={view}
+          hasSelection={selection.length > 0}
+          onCommand={command}
+          onIsolateSelection={() => hideOrIsolate("isolate")}
+          onHideSelection={() => hideOrIsolate("hide")}
+          onClose={closeVisibility}
+        />
+      )}
       <ViewControls
         projection={projection}
         empty={empty !== false}
         hasSelection={selection.length > 0}
         disabled={!ready}
+        visibilityOpen={visibilityOpen}
+        onVisibility={() => setVisibilityOpen((open) => !open)}
         onCommand={command}
       />
       <div className="visually-hidden" role="status" aria-live="polite">
@@ -277,23 +415,60 @@ export function ViewportView() {
   );
 }
 
+type Translate = (key: MessageKey, params?: Record<string, number | string>) => string;
+
 type StatusInput = {
   phase: Phase["kind"];
   sceneLoaded: boolean;
   empty: boolean;
   count: number;
   snapping: boolean;
+  pickingFace: boolean;
+  facesMoved: number;
+  /** The names of what is isolated, or null when nothing is. */
+  isolated: string | null;
+  planes: number;
 };
 
-/** The status bar text: the state of the view, else the selection and the snapping state. */
-function statusText(
-  t: (key: MessageKey, params?: Record<string, number>) => string,
-  { phase, sceneLoaded, empty, count, snapping }: StatusInput,
-): string {
+/** The names of the isolated groups, or `fallback` when the selection is isolated. */
+function isolatedLabel(view: ViewState, fallback: string): string {
+  const names = [...isolatedNames(view.categories), ...isolatedNames(view.disciplines)];
+  return names.length > 0 ? names.join(", ") : fallback;
+}
+
+/** The status of what the user is doing to the view while nothing is selected, or null. */
+function activityStatus(
+  t: Translate,
+  { facesMoved, isolated, planes }: Pick<StatusInput, "facesMoved" | "isolated" | "planes">,
+): string | null {
+  if (facesMoved > 0) {
+    return t(facesMoved === 1 ? "viewport.status.section.one" : "viewport.status.section.other", {
+      count: facesMoved,
+    });
+  }
+  if (isolated !== null) return t("viewport.status.isolated", { names: isolated });
+  if (planes > 0) {
+    return t(planes === 1 ? "viewport.status.planes.one" : "viewport.status.planes.other", {
+      count: planes,
+    });
+  }
+  return null;
+}
+
+/**
+ * The status bar text: the state of the view, then what is being done to it (picking a face,
+ * moving the section box, isolating, clipping) while nothing is selected, else the selection and
+ * the snapping state.
+ */
+function statusText(t: Translate, input: StatusInput): string {
+  const { phase, sceneLoaded, empty, count, snapping } = input;
   if (phase === "unavailable") return t("viewport.status.unavailable");
   if (phase === "failed") return t("viewport.status.stopped");
   if (phase === "loading" || !sceneLoaded) return t("viewport.status.loading");
   if (empty) return t("viewport.status.empty");
+  if (input.pickingFace) return t("viewport.status.pickFace");
+  const activity = count === 0 ? activityStatus(t, input) : null;
+  if (activity !== null) return activity;
   const selected =
     count === 0
       ? t("viewport.status.none")

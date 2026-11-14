@@ -6,12 +6,14 @@ import { LocationDialog } from "../georef/LocationDialog";
 import { useI18n } from "../i18n/I18nProvider";
 import { LanguageSelect } from "../i18n/LanguageSelect";
 import { MaterialsDialog } from "../materials/MaterialsDialog";
+import { ViewPanel } from "../viewport/ViewPanel";
+import { ViewportBridgeProvider } from "../viewport/ViewportBridge";
 import { ViewportView } from "../viewport/ViewportView";
 import { useShellState } from "./ShellState";
 import { SingleKeysToggle } from "./SingleKeysToggle";
 import "./shell.css";
 
-const RIGHT_PANELS = ["properties", "history", "coordinates"] as const;
+const RIGHT_PANELS = ["properties", "history", "coordinates", "view"] as const;
 type RightPanel = (typeof RIGHT_PANELS)[number];
 
 /**
@@ -168,89 +170,91 @@ export function Shell() {
         <SingleKeysToggle />
         <LanguageSelect />
       </header>
-      <div className="workspace">
-        <section
-          className="panel panel-left"
-          aria-labelledby={`${ids}-project`}
-          data-region
-          tabIndex={-1}
-        >
-          <h2 className="panel-header" id={`${ids}-project`}>
-            {t("panel.project")}
-          </h2>
-          <p className="empty">{t("panel.projectEmpty")}</p>
-        </section>
-        {/* After Project so that the DOM order is the visual and F6 order. */}
-        <main
-          id={`${ids}-viewport`}
-          className="viewport"
-          aria-label={t("shell.viewport")}
-          ref={viewport}
-          data-region
-          tabIndex={-1}
-        >
-          <ViewportView />
-        </main>
-        <section
-          className="panel panel-right"
-          aria-labelledby={tabId(rightPanel)}
-          data-region
-          tabIndex={-1}
-        >
-          <div className="panel-header" role="tablist">
-            {RIGHT_PANELS.map((panel) => (
-              <button
-                key={panel}
-                type="button"
-                role="tab"
-                id={tabId(panel)}
-                className="panel-tab"
-                aria-selected={panel === rightPanel}
-                aria-controls={`${ids}-tabpanel`}
-                tabIndex={panel === rightPanel ? 0 : -1}
-                ref={(element) => {
-                  tabs.current[panel] = element;
-                }}
-                onClick={() => setRightPanel(panel)}
-                onKeyDown={onTabKeyDown}
-              >
-                {t(`panel.${panel}`)}
-              </button>
-            ))}
-          </div>
-          <div id={`${ids}-tabpanel`} role="tabpanel" aria-labelledby={tabId(rightPanel)}>
-            {rightPanel === "coordinates" ? (
-              <CoordinatesPanel />
-            ) : (
-              <p className="empty">{t(`panel.${rightPanel}Empty`)}</p>
-            )}
-          </div>
-        </section>
-        {consoleOpen && (
+      <ViewportBridgeProvider>
+        <div className="workspace">
           <section
-            className="panel panel-console"
-            aria-labelledby={`${ids}-console`}
-            ref={consoleRef}
+            className="panel panel-left"
+            aria-labelledby={`${ids}-project`}
             data-region
             tabIndex={-1}
           >
-            <div className="panel-header">
-              <h2 id={`${ids}-console`}>{t("panel.console")}</h2>
-              <button
-                type="button"
-                className="ghost-button"
-                aria-label={t("panel.closeConsole")}
-                onClick={() => setConsoleOpen(false)}
-              >
-                <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
-                  <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.5" />
-                </svg>
-              </button>
-            </div>
-            <p className="empty">{t("panel.consoleEmpty")}</p>
+            <h2 className="panel-header" id={`${ids}-project`}>
+              {t("panel.project")}
+            </h2>
+            <p className="empty">{t("panel.projectEmpty")}</p>
           </section>
-        )}
-      </div>
+          {/* After Project so that the DOM order is the visual and F6 order. */}
+          <main
+            id={`${ids}-viewport`}
+            className="viewport"
+            aria-label={t("shell.viewport")}
+            ref={viewport}
+            data-region
+            tabIndex={-1}
+          >
+            <ViewportView />
+          </main>
+          <section
+            className="panel panel-right"
+            aria-labelledby={tabId(rightPanel)}
+            data-region
+            tabIndex={-1}
+          >
+            <div className="panel-header" role="tablist">
+              {RIGHT_PANELS.map((panel) => (
+                <button
+                  key={panel}
+                  type="button"
+                  role="tab"
+                  id={tabId(panel)}
+                  className="panel-tab"
+                  aria-selected={panel === rightPanel}
+                  aria-controls={`${ids}-tabpanel`}
+                  tabIndex={panel === rightPanel ? 0 : -1}
+                  ref={(element) => {
+                    tabs.current[panel] = element;
+                  }}
+                  onClick={() => setRightPanel(panel)}
+                  onKeyDown={onTabKeyDown}
+                >
+                  {t(`panel.${panel}`)}
+                </button>
+              ))}
+            </div>
+            <div id={`${ids}-tabpanel`} role="tabpanel" aria-labelledby={tabId(rightPanel)}>
+              {rightPanel === "coordinates" && <CoordinatesPanel />}
+              {rightPanel === "view" && <ViewPanel />}
+              {(rightPanel === "properties" || rightPanel === "history") && (
+                <p className="empty">{t(`panel.${rightPanel}Empty`)}</p>
+              )}
+            </div>
+          </section>
+          {consoleOpen && (
+            <section
+              className="panel panel-console"
+              aria-labelledby={`${ids}-console`}
+              ref={consoleRef}
+              data-region
+              tabIndex={-1}
+            >
+              <div className="panel-header">
+                <h2 id={`${ids}-console`}>{t("panel.console")}</h2>
+                <button
+                  type="button"
+                  className="ghost-button"
+                  aria-label={t("panel.closeConsole")}
+                  onClick={() => setConsoleOpen(false)}
+                >
+                  <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+                    <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.5" />
+                  </svg>
+                </button>
+              </div>
+              <p className="empty">{t("panel.consoleEmpty")}</p>
+            </section>
+          )}
+        </div>
+      </ViewportBridgeProvider>
       {dialogOpen && <LocationDialog />}
       {materialsOpen && (
         <MaterialsDialog

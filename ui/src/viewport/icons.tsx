@@ -59,3 +59,65 @@ export const WarningIcon = () => (
     <path d="M8 6.5v3.5M8 11.5v.01" stroke="currentColor" strokeWidth="1.5" />
   </svg>
 );
+
+/** An eye: the element group is shown; with a stroke across it, hidden. */
+export const EyeIcon = ({ hidden }: { hidden: boolean }) => (
+  <svg
+    width="16"
+    height="16"
+    viewBox="0 0 16 16"
+    fill="none"
+    stroke="currentColor"
+    aria-hidden="true"
+  >
+    <path d="M1.5 8S4 3.5 8 3.5 14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8z" strokeLinejoin="round" />
+    <circle cx="8" cy="8" r="2" />
+    {hidden && <path d="M3 13L13 3" strokeWidth="1.5" />}
+  </svg>
+);
+
+export const FlipIcon = () => (
+  <svg
+    width="16"
+    height="16"
+    viewBox="0 0 16 16"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.5"
+    aria-hidden="true"
+  >
+    <path
+      d="M2.5 5.5h10M10 3l2.5 2.5L10 8M13.5 10.5h-10M6 8l-2.5 2.5L6 13"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+
+export const RemoveIcon = () => (
+  <svg
+    width="16"
+    height="16"
+    viewBox="0 0 16 16"
+    fill="none"
+    stroke="currentColor"
+    aria-hidden="true"
+  >
+    <path
+      d="M3 4.5h10M6.5 4.5V3h3v1.5M4.5 4.5l.6 8.5h5.8l.6-8.5M7 7v4M9 7v4"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+
+export const ClipPlaneIcon = () => (
+  <svg
+    width="16"
+    height="16"
+    viewBox="0 0 16 16"
+    fill="none"
+    stroke="currentColor"
+    aria-hidden="true"
+  >
+    <path d="M2.5 6L8 3l5.5 3L8 9z M2.5 6v4.5L8 13.5l5.5-3V6" strokeLinejoin="round" />
+  </svg>
+);

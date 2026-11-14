@@ -5,6 +5,7 @@ import { SINGLE_KEYS_STORAGE_KEY } from "../shell/ShellState";
 import { fakeCore } from "../test-support/fakeCore";
 import { fakeViewport } from "../test-support/fakeViewport";
 import { renderWithCore } from "../test-support/render";
+import { group, viewState } from "../test-support/viewState";
 import { HINT_STORAGE_KEY } from "./HintCard";
 import type { ViewportHandle, ViewportModule } from "./types";
 import { ViewportView } from "./ViewportView";
@@ -592,5 +593,79 @@ describe("Navigation hint", () => {
     unmount();
     await ready();
     expect(screen.queryByRole("region", { name: "Moving around the model" })).toBeNull();
+  });
+});
+
+describe("section box and visibility shortcuts", () => {
+  it("hides and isolates the selection with H and I, and asks for a selection first", async () => {
+    const { viewport, user } = await ready();
+    await user.keyboard("h");
+    expect(await screen.findByText("Select something to hide or isolate")).toBeVisible();
+    expect(viewport.commands).toEqual([]);
+    viewport.emit({ kind: "selection", ids: [BLOCK] });
+    await user.keyboard("hi");
+    expect(viewport.commands).toEqual([
+      { kind: "hide", target: { by: "selection" } },
+      { kind: "isolate", target: { by: "selection" } },
+    ]);
+  });
+
+  it("resets visibility with Alt+H and toggles the section box with Alt+B, even with single keys off", async () => {
+    localStorage.setItem(SINGLE_KEYS_STORAGE_KEY, "off");
+    const { viewport, user } = await ready();
+    await user.keyboard("{Alt>}h{/Alt}");
+    await user.keyboard("{Alt>}b{/Alt}");
+    expect(viewport.commands).toEqual([
+      { kind: "reset_visibility" },
+      { kind: "section_box", enabled: true },
+    ]);
+    viewport.emit({
+      kind: "view_state",
+      state: viewState({ sectionBox: { enabled: true, min: [0, 0, 0], max: [1, 1, 1] } }),
+    });
+    await user.keyboard("{Alt>}b{/Alt}");
+    expect(viewport.commands.at(-1)).toEqual({ kind: "section_box", enabled: false });
+    // Shift makes it another chord, and a text field keeps its keys.
+    await user.keyboard("{Alt>}{Shift>}b{/Shift}{/Alt}");
+    const field = document.createElement("input");
+    document.body.append(field);
+    field.focus();
+    await user.keyboard("{Alt>}h{/Alt}");
+    expect(viewport.commands).toHaveLength(3);
+    field.remove();
+  });
+
+  it("ends an isolate with Escape from outside the canvas, once, and leaves the canvas to the viewport", async () => {
+    const { viewport, user } = await ready();
+    viewport.emit({ kind: "view_state", state: viewState() });
+    await user.keyboard("{Escape}");
+    expect(viewport.commands).toEqual([]);
+
+    viewport.emit({
+      kind: "view_state",
+      state: viewState({ isolating: true, categories: [group("Structure", { isolated: true })] }),
+    });
+    screen.getByRole("application", { name: "3D view" }).focus();
+    await user.keyboard("{Escape}");
+    expect(viewport.commands).toEqual([]);
+    (document.activeElement as HTMLElement).blur();
+    await user.keyboard("{Escape}");
+    expect(viewport.commands).toEqual([{ kind: "cancel" }]);
+    await user.keyboard("{Shift>}{Escape}{/Shift}");
+    expect(viewport.commands).toHaveLength(1);
+
+    const field = document.createElement("input");
+    document.body.append(field);
+    field.focus();
+    await user.keyboard("{Escape}");
+    expect(viewport.commands).toHaveLength(1);
+    field.remove();
+  });
+
+  it("cancels a pending face pick with Escape too", async () => {
+    const { viewport, user } = await ready();
+    viewport.emit({ kind: "tool_state", tool: "select", step: "pick_face" });
+    await user.keyboard("{Escape}");
+    expect(viewport.commands).toEqual([{ kind: "cancel" }]);
   });
 });
