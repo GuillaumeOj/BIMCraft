@@ -213,6 +213,39 @@ fn clipping_is_camera_relative_far_from_the_origin() {
 }
 
 #[test]
+fn an_object_wholly_clipped_away_costs_no_draw() {
+    let mut fixture = Fixture::new();
+    fixture.add_cube(1.0, [-1.0, 0.0, 0.0], RED);
+    fixture.add_cube(1.0, [1.0, 0.0, 0.0], GREEN);
+    let draw = |fixture: &mut Fixture| {
+        fixture
+            .renderer
+            .render(
+                &fixture.target.view,
+                fixture.target.size,
+                &camera(PERSPECTIVE),
+                CLEAR,
+            )
+            .unwrap()
+    };
+    assert_eq!(draw(&mut fixture).fine, 2);
+    // x = 0 removes the east cube, which is entirely beyond it.
+    let plane = ClipPlane {
+        point: [0.0; 3],
+        normal: [1.0, 0.0, 0.0],
+    };
+    fixture
+        .renderer
+        .set_clip(Clip::new(&[plane], CutFaces::Tinted).unwrap());
+    let stats = draw(&mut fixture);
+    assert_eq!((stats.fine, stats.culled_frustum), (1, 1));
+    // The green cube is not on the frame; the red one is.
+    let frame = Frame(fixture.target.read(&fixture.device, &fixture.queue));
+    assert_eq!(frame.pixel(column(1.0), SIZE / 2), CLEAR_BYTES);
+    assert!(frame.pixel(column(-1.0), SIZE / 2)[0] > 200);
+}
+
+#[test]
 fn hidden_objects_are_not_drawn_until_shown_again() {
     let mut fixture = Fixture::new();
     let cube = fixture.add_cube(1.0, [0.0; 3], RED);

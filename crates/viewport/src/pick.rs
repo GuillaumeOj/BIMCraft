@@ -13,15 +13,17 @@ use crate::sink::SceneSink;
 use crate::view::{Ray, View};
 
 /// Which elements and points may be picked or snapped to: hidden elements and clipped-away
-/// points never are. Everything is, until visibility and clipping arrive (VP-03).
+/// points never are (the view's gate, `interaction/sectioning.rs`).
 pub(crate) trait Pickable {
     fn pickable(&self, element: ElementId, point: Vec3) -> bool;
 }
 
-/// Everything may be picked.
+/// Everything may be picked: the tests of picking and snapping.
+#[cfg(test)]
 #[derive(Clone, Copy, Debug, Default)]
 pub(crate) struct Everything;
 
+#[cfg(test)]
 impl Pickable for Everything {
     fn pickable(&self, _element: ElementId, _point: Vec3) -> bool {
         true

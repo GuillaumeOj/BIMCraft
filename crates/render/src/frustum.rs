@@ -8,6 +8,7 @@
 use crate::Projection;
 use crate::bounds::Aabb;
 use crate::bvh::Overlap;
+use crate::clip::{ClipPlane, MAX_CLIP_PLANES};
 use crate::transform::ViewFrame;
 use crate::vector::{dot, norm, sub};
 
@@ -15,7 +16,10 @@ use crate::vector::{dot, norm, sub};
 /// the rounding of the plane and of the bounds, so culling never removes a visible pixel.
 const MARGIN: f64 = 1e-9;
 
-#[derive(Clone, Copy, Debug)]
+/// The view volume's planes, then the clipping planes.
+const MAX_PLANES: usize = 6 + MAX_CLIP_PLANES;
+
+#[derive(Clone, Copy, Debug, Default)]
 struct Plane {
     normal: [f64; 3],
     /// The absolute values of the normal's components and its length, computed once per frame.
@@ -76,8 +80,19 @@ pub(crate) fn camera_planes(
 #[derive(Clone, Debug)]
 pub(crate) struct Frustum {
     eye: [f64; 3],
-    planes: [Plane; 6],
+    planes: [Plane; MAX_PLANES],
     count: usize,
+}
+
+impl Plane {
+    fn new(normal: [f64; 3], offset: f64) -> Self {
+        Self {
+            normal,
+            abs_normal: normal.map(f64::abs),
+            length: norm(normal),
+            offset,
+        }
+    }
 }
 
 impl Frustum {
@@ -100,16 +115,12 @@ impl Frustum {
         // `n · (V · r) = (Vᵀ · n) · r`: the world normal is the transposed view rotation applied
         // to the camera normal.
         let rows = &view.rotation;
-        let planes = camera_planes.map(|(normal, offset)| {
+        let mut planes = [Plane::default(); MAX_PLANES];
+        for (slot, (normal, offset)) in planes.iter_mut().zip(camera_planes) {
             let normal: [f64; 3] =
                 core::array::from_fn(|axis| (0..3).map(|k| rows[k][axis] * normal[k]).sum());
-            Plane {
-                normal,
-                abs_normal: normal.map(f64::abs),
-                length: norm(normal),
-                offset,
-            }
-        });
+            *slot = Plane::new(normal, offset);
+        }
         Self {
             eye: view.eye,
             planes,
@@ -117,14 +128,28 @@ impl Frustum {
         }
     }
 
+    /// The same frustum cut by clipping planes: what a plane removes lies outside it, so a box
+    /// entirely on the removed side is culled with its whole subtree. At most
+    /// [`MAX_CLIP_PLANES`] planes count.
+    pub(crate) fn with_clip(mut self, clip: &[ClipPlane]) -> Self {
+        for plane in clip.iter().take(MAX_CLIP_PLANES) {
+            // A point q relative to the eye is kept when n · (q + eye − P) ≤ 0.
+            let normal = plane.normal.map(|v| -v);
+            let offset = dot(plane.normal, sub(plane.point, self.eye));
+            self.planes[self.count] = Plane::new(normal, offset);
+            self.count += 1;
+        }
+        self
+    }
+
     /// The mask of every plane, the state a query starts from.
-    pub(crate) fn all_planes(&self) -> u8 {
+    pub(crate) fn all_planes(&self) -> u32 {
         (1 << self.count) - 1
     }
 
     /// Where `bounds` lies, testing only the planes of `mask`: outside one of them, inside all
     /// of them, or across some, with the mask of the planes it crosses.
-    pub(crate) fn classify(&self, bounds: &Aabb, mask: u8) -> Overlap<u8> {
+    pub(crate) fn classify(&self, bounds: &Aabb, mask: u32) -> Overlap<u32> {
         let centre = sub(bounds.centre(), self.eye);
         let half = bounds.half_extents();
         let extent = norm(centre) + norm(half);
@@ -226,6 +251,31 @@ mod tests {
                 assert_eq!(sees(&frustum, &bounds), inside, "{centre:?} from {eye:?}");
             }
         }
+    }
+
+    #[test]
+    fn clipping_planes_cull_what_they_remove_far_from_the_origin() {
+        let eye = [1e7, 1e7, 0.0];
+        let plane = ClipPlane {
+            point: [eye[0] + 2.0, eye[1], 0.0],
+            normal: [1.0, 0.0, 0.0],
+        };
+        let clipped = frustum(eye, PERSPECTIVE, 1.0).with_clip(&[plane]);
+        let cases = [
+            ([1.0, 10.0, 0.0], true),
+            ([1.8, 10.0, 0.0], true),
+            ([3.0, 10.0, 0.0], false),
+            ([-3.0, 10.0, 0.0], true),
+        ];
+        for (centre, inside) in cases {
+            assert_eq!(sees(&clipped, &at(eye, centre, 0.5)), inside, "{centre:?}");
+        }
+        // Past the budget, planes are ignored rather than overflowing the array.
+        let many = [plane; MAX_CLIP_PLANES + 3];
+        assert_eq!(
+            frustum(eye, PERSPECTIVE, 1.0).with_clip(&many).count,
+            5 + MAX_CLIP_PLANES
+        );
     }
 
     #[test]

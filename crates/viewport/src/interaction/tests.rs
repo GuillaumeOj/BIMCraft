@@ -7,6 +7,8 @@ use crate::event::{Preset, ProjectionMode};
 use crate::math::norm;
 use crate::test_support::{Call, FakeSink, cubes, element, id};
 
+mod sectioning;
+
 const SIZE: [f64; 2] = [400.0, 300.0];
 const NONE: Modifiers = Modifiers {
     shift: false,
@@ -876,11 +878,17 @@ fn presets_and_projections_are_announced_and_mirrored() {
         announced(&mut viewport, &events),
         [AnnouncementKey::ViewProjection]
     );
-    assert!(events.contains(&ViewportEvent::ViewState(ViewState {
-        projection: ProjectionMode::Parallel,
-        snapping: true,
-        tool: Tool::Select,
-    })));
+    let state = events
+        .iter()
+        .find_map(|event| match event {
+            ViewportEvent::ViewState(state) => Some(state),
+            _ => None,
+        })
+        .expect("a view state");
+    assert_eq!(
+        (state.projection, state.snapping, state.tool),
+        (ProjectionMode::Parallel, true, Tool::Select)
+    );
 }
 
 #[test]

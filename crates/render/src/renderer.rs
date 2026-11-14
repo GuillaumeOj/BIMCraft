@@ -865,6 +865,7 @@ impl Renderer {
         self.world.prepare(
             &view,
             &camera.projection,
+            self.clip.planes(),
             size,
             query_budget,
             &mut self.draw_list,

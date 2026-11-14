@@ -9,6 +9,7 @@ use std::collections::BTreeMap;
 
 use crate::bounds::Aabb;
 use crate::bvh::{Bvh, Leaf, Overlap};
+use crate::clip::ClipPlane;
 use crate::frustum::Frustum;
 use crate::lod::{Detail, DetailLevel, RenderSettings, SizeScale, choose};
 use crate::occlusion::{CLUSTER_LEAVES, Occlusion, beyond_near_plane};
@@ -98,6 +99,20 @@ pub(crate) struct DrawList {
 }
 
 impl DrawList {
+    /// Empties the frame, keeping its allocations, for a world of `objects` objects.
+    fn begin(&mut self, objects: usize) {
+        self.buckets.clear();
+        self.instances.clear();
+        self.ghosts.clear();
+        self.ghost_buckets.clear();
+        self.boxes = (0, 0);
+        self.stats = FrameStats {
+            objects,
+            occlusion_queries: self.queries.len(),
+            ..FrameStats::default()
+        };
+    }
+
     /// Bytes of the instance records.
     pub(crate) fn instance_bytes(&self) -> &[u8] {
         bytemuck::cast_slice(&self.instances)
@@ -150,7 +165,7 @@ pub(crate) struct World {
     ghosts: usize,
     bvh: Bvh,
     /// The nodes a frustum query has left to classify, with their plane masks.
-    pending: Vec<(u32, u8)>,
+    pending: Vec<(u32, u32)>,
     /// One bit per slot: whether the object is in view this frame.
     visible: Vec<u64>,
     /// One bit per slot: whether the object's cluster is skipped as hidden this frame.
@@ -410,24 +425,17 @@ impl World {
         &mut self,
         view: &ViewFrame,
         projection: &Projection,
+        clip: &[ClipPlane],
         size: [u32; 2],
         query_budget: usize,
         list: &mut DrawList,
     ) {
-        let frustum = Frustum::new(view, projection, f64::from(size[0]) / f64::from(size[1]));
+        let frustum =
+            Frustum::new(view, projection, f64::from(size[0]) / f64::from(size[1])).with_clip(clip);
         self.find_visible(&frustum);
         self.find_occluded(&frustum, view, projection, query_budget, list);
         let scale = SizeScale::new(projection, size[1]);
-        list.buckets.clear();
-        list.instances.clear();
-        list.ghosts.clear();
-        list.ghost_buckets.clear();
-        list.boxes = (0, 0);
-        list.stats = FrameStats {
-            objects: self.len(),
-            occlusion_queries: list.queries.len(),
-            ..FrameStats::default()
-        };
+        list.begin(self.len());
         let settings = self.settings;
         let fresh = core::mem::take(&mut self.fresh);
         for (&mesh_id, mesh) in &self.meshes {
@@ -707,7 +715,7 @@ mod tests {
 
     fn prepare(world: &mut World, eye: [f64; 3]) -> DrawList {
         let mut list = DrawList::default();
-        world.prepare(&view_from(eye), &PERSPECTIVE, SIZE, 0, &mut list);
+        world.prepare(&view_from(eye), &PERSPECTIVE, &[], SIZE, 0, &mut list);
         list
     }
 
@@ -721,6 +729,33 @@ mod tests {
                     .unwrap()
             })
             .collect()
+    }
+
+    #[test]
+    fn objects_wholly_on_the_removed_side_of_a_plane_cost_no_draw() {
+        let mut world = World::new(16);
+        let mesh = cube(&mut world, [0.0; 3], 12);
+        row(&mut world, mesh, 5);
+        // The row spans x = −5 … 3; the plane x = 0 removes what is east of it.
+        let plane = ClipPlane {
+            point: [0.0; 3],
+            normal: [1.0, 0.0, 0.0],
+        };
+        let mut list = DrawList::default();
+        world.prepare(
+            &view_from([0.0; 3]),
+            &PERSPECTIVE,
+            &[plane],
+            SIZE,
+            0,
+            &mut list,
+        );
+        let kept = list.stats.fine;
+        assert!(kept > 0 && kept < 5, "{kept}");
+        assert_eq!(list.stats.fine + list.stats.culled_frustum, 5);
+        assert_eq!(list.instances.len(), kept * INSTANCE_FLOATS);
+        let all = prepare(&mut world, [0.0; 3]);
+        assert_eq!(all.stats.fine, 5);
     }
 
     #[test]
@@ -1077,7 +1112,7 @@ mod tests {
     /// Prepares a frame with up to `budget` occlusion queries.
     fn prepare_queried(world: &mut World, view: &ViewFrame, budget: usize) -> DrawList {
         let mut list = DrawList::default();
-        world.prepare(view, &PERSPECTIVE, SIZE, budget, &mut list);
+        world.prepare(view, &PERSPECTIVE, &[], SIZE, budget, &mut list);
         assert_eq!(list.stats.occlusion_queries, list.queries.len());
         assert_eq!(
             list.query_instances.len(),
@@ -1299,6 +1334,7 @@ mod tests {
         world.prepare(
             &view,
             &camera.projection,
+            &[],
             crate::reference::VIEW,
             0,
             &mut list,
@@ -1353,6 +1389,7 @@ mod tests {
             world.prepare(
                 &view,
                 &camera.projection,
+                &[],
                 crate::reference::VIEW,
                 usize::MAX,
                 &mut list,

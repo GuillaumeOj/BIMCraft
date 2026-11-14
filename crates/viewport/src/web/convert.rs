@@ -3,12 +3,12 @@
 //! error for the caller, never a panic.
 
 use js_sys::{Array, Object, Reflect};
-use render::{Rgb, Theme};
+use render::{ClipPlane, CutFaces, Rgb, Theme};
 use wasm_bindgen::{JsCast, JsError, JsValue};
 
 use crate::{
-    Announcement, ElementId, Intent, Preset, PreviewLabel, ProjectionMode, Tool, ToolStep, Value,
-    ViewCommand, ViewState, ViewportEvent,
+    Announcement, ElementId, Intent, NameState, Preset, PreviewLabel, ProjectionMode, Tool,
+    ToolStep, Value, ViewCommand, ViewState, ViewportEvent, VisibilityTarget,
 };
 
 pub(super) type Parsed<T> = Result<T, JsError>;
@@ -16,6 +16,11 @@ pub(super) type Parsed<T> = Result<T, JsError>;
 /// The most ids one `select` command may carry: far above any real selection, so a hostile call
 /// cannot make the viewport allocate without bound.
 const MAX_IDS: u32 = 1 << 20;
+
+/// The most names one visibility command may carry, and the longest name: the categories and
+/// disciplines of a schema are a few dozen short words.
+const MAX_NAMES: u32 = 4096;
+const MAX_NAME_LEN: usize = 256;
 
 /// The highest value JavaScript holds exactly as a number.
 const MAX_SAFE: f64 = 9_007_199_254_740_991.0;
@@ -126,8 +131,90 @@ pub(super) fn parse_command(value: &JsValue) -> Parsed<ViewCommand> {
         "cancel" => Ok(ViewCommand::Cancel),
         "typed_distance" => number(&field(value, "metres")?).map(ViewCommand::TypedDistance),
         "snapping" => boolean(value, "enabled").map(ViewCommand::Snapping),
-        // The section box, clipping planes and visibility commands of the contract come with VP-03.
-        _ => Err(bad("unsupported view command")),
+        _ => parse_sectioning_command(&kind, value),
+    }
+}
+
+/// A three-number array: a point or a vector, in metres.
+fn vec3(value: &JsValue) -> Parsed<[f64; 3]> {
+    if !Array::is_array(value) || Array::from(value).length() != 3 {
+        return Err(bad("expected three numbers"));
+    }
+    let array = Array::from(value);
+    Ok([
+        number(&array.get(0))?,
+        number(&array.get(1))?,
+        number(&array.get(2))?,
+    ])
+}
+
+/// A position in a list, from a number.
+#[expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "checked to be a whole number in 0..=u32::MAX just before"
+)]
+fn index(object: &JsValue) -> Parsed<usize> {
+    let value = number(&field(object, "index")?)?;
+    if value < 0.0 || value.fract() != 0.0 || value > f64::from(u32::MAX) {
+        return Err(bad("expected a position"));
+    }
+    Ok(value as usize)
+}
+
+fn names(value: &JsValue) -> Parsed<Vec<String>> {
+    if !Array::is_array(value) || Array::from(value).length() > MAX_NAMES {
+        return Err(bad("expected a list of names"));
+    }
+    Array::from(value)
+        .iter()
+        .map(|name| {
+            name.as_string()
+                .filter(|name| name.len() <= MAX_NAME_LEN)
+                .ok_or_else(|| bad("expected a short name"))
+        })
+        .collect()
+}
+
+fn visibility_target(object: &JsValue) -> Parsed<VisibilityTarget> {
+    let target = field(object, "target")?;
+    match text(&target, "by")?.as_str() {
+        "category" => names(&field(&target, "names")?).map(VisibilityTarget::Categories),
+        "discipline" => names(&field(&target, "names")?).map(VisibilityTarget::Disciplines),
+        "selection" => Ok(VisibilityTarget::Selection),
+        _ => Err(bad("unknown visibility target")),
+    }
+}
+
+/// The section box, clipping plane and visibility commands (VP-03).
+fn parse_sectioning_command(kind: &str, value: &JsValue) -> Parsed<ViewCommand> {
+    match kind {
+        "section_box" => boolean(value, "enabled").map(ViewCommand::SectionBox),
+        "section_box_extents" => Ok(ViewCommand::SectionBoxExtents {
+            min: vec3(&field(value, "min")?)?,
+            max: vec3(&field(value, "max")?)?,
+        }),
+        "section_box_fit_selection" => Ok(ViewCommand::SectionBoxFitSelection),
+        "section_box_reset" => Ok(ViewCommand::SectionBoxReset),
+        "clip_plane_pick" => Ok(ViewCommand::ClipPlanePick),
+        "clip_plane_add" => Ok(ViewCommand::ClipPlaneAdd {
+            point: vec3(&field(value, "point")?)?,
+            normal: vec3(&field(value, "normal")?)?,
+        }),
+        "clip_plane_flip" => index(value).map(ViewCommand::ClipPlaneFlip),
+        "clip_plane_remove" => index(value).map(ViewCommand::ClipPlaneRemove),
+        "clip_planes_clear" => Ok(ViewCommand::ClipPlanesClear),
+        "cut_faces" => match text(value, "style")?.as_str() {
+            "tinted" => Ok(ViewCommand::CutFaces(CutFaces::Tinted)),
+            "none" => Ok(ViewCommand::CutFaces(CutFaces::None)),
+            _ => Err(bad("unknown cut faces style")),
+        },
+        "hide" => visibility_target(value).map(ViewCommand::Hide),
+        "show" => visibility_target(value).map(ViewCommand::Show),
+        "isolate" => visibility_target(value).map(ViewCommand::Isolate),
+        "end_isolate" => Ok(ViewCommand::EndIsolate),
+        "reset_visibility" => Ok(ViewCommand::ResetVisibility),
+        _ => Err(bad("unknown view command")),
     }
 }
 
@@ -185,7 +272,7 @@ fn num(v: f64) -> JsValue {
     JsValue::from_f64(v)
 }
 
-fn vec3(v: [f64; 3]) -> JsValue {
+fn vec3_js(v: [f64; 3]) -> JsValue {
     Array::of3(&num(v[0]), &num(v[1]), &num(v[2])).into()
 }
 
@@ -212,6 +299,7 @@ fn step_name(step: ToolStep) -> &'static str {
         ToolStep::FirstCorner => "first_corner",
         ToolStep::SecondCorner => "second_corner",
         ToolStep::Height => "height",
+        ToolStep::PickFace => "pick_face",
     }
 }
 
@@ -264,7 +352,7 @@ fn intent(intent: &Intent) -> JsValue {
         } => object(vec![
             ("kind", "move".into()),
             ("ids", ids(moved)),
-            ("translation", vec3(*translation)),
+            ("translation", vec3_js(*translation)),
         ]),
         Intent::PlaceBlock {
             location,
@@ -272,27 +360,75 @@ fn intent(intent: &Intent) -> JsValue {
             size,
         } => object(vec![
             ("kind", "place_block".into()),
-            ("location", vec3(*location)),
+            ("location", vec3_js(*location)),
             ("rotation", num(*rotation)),
-            ("size", vec3(*size)),
+            ("size", vec3_js(*size)),
         ]),
     }
 }
 
-/// The part of the view state the viewport holds so far; the lists of VP-03 are empty and the
-/// cut faces tinted until it lands, so the shape is the contract's.
-fn view_state(state: ViewState) -> JsValue {
+fn name_states(states: &[NameState]) -> JsValue {
+    states
+        .iter()
+        .map(|state| {
+            object(vec![
+                ("name", state.name.as_str().into()),
+                ("count", num(count(state.count))),
+                ("hidden", state.hidden.into()),
+                ("isolated", state.isolated.into()),
+            ])
+        })
+        .collect::<Array>()
+        .into()
+}
+
+fn count(n: usize) -> f64 {
+    u32::try_from(n).map_or(f64::MAX, f64::from)
+}
+
+fn clip_plane(plane: &ClipPlane) -> JsValue {
+    object(vec![
+        ("point", vec3_js(plane.point)),
+        ("normal", vec3_js(plane.normal)),
+    ])
+}
+
+fn view_state(state: &ViewState) -> JsValue {
     object(vec![
         ("projection", state.projection.name().into()),
         ("snapping", state.snapping.into()),
         ("tool", tool_name(state.tool).into()),
-        ("categories", Array::new().into()),
-        ("disciplines", Array::new().into()),
-        ("isolating", false.into()),
-        ("hiddenSelection", num(0.0)),
-        ("sectionBox", JsValue::NULL),
-        ("clipPlanes", Array::new().into()),
-        ("cutFaces", "tinted".into()),
+        ("categories", name_states(&state.categories)),
+        ("disciplines", name_states(&state.disciplines)),
+        ("isolating", state.isolating.into()),
+        ("hiddenSelection", num(count(state.hidden_selection))),
+        (
+            "sectionBox",
+            state.section_box.map_or(JsValue::NULL, |section| {
+                object(vec![
+                    ("enabled", section.enabled.into()),
+                    ("min", vec3_js(section.min)),
+                    ("max", vec3_js(section.max)),
+                ])
+            }),
+        ),
+        (
+            "clipPlanes",
+            state
+                .clip_planes
+                .iter()
+                .map(clip_plane)
+                .collect::<Array>()
+                .into(),
+        ),
+        (
+            "cutFaces",
+            match state.cut_faces {
+                CutFaces::None => "none",
+                _ => "tinted",
+            }
+            .into(),
+        ),
     ])
 }
 
@@ -320,7 +456,7 @@ pub(super) fn event(event: &ViewportEvent) -> JsValue {
         }
         ViewportEvent::ViewState(state) => object(vec![
             ("kind", "view_state".into()),
-            ("state", view_state(*state)),
+            ("state", view_state(state)),
         ]),
         ViewportEvent::PreviewLabel(shown) => object(vec![
             ("kind", "preview_label".into()),
