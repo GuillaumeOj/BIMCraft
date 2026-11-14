@@ -12,6 +12,7 @@ core-model = { workspace = true }
 core-txn = { workspace = true }
 georef = { workspace = true }
 material = { workspace = true }
+scene-wire = { workspace = true }
 schema = { workspace = true, optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
