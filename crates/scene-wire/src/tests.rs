@@ -6,7 +6,8 @@ use proptest::prelude::*;
 use crate::{
     Element, FLAG_FULL, HEADER_LEN, MAX_DELTA_BYTES, MAX_ELEMENTS, MAX_MESH_INDICES,
     MAX_MESH_VERTICES, MAX_MESHES, MAX_STRING_BYTES, MAX_STRINGS, MAX_WORLD_COORDINATE, Mesh,
-    REVISION_LIMIT, SceneDelta, Section, WireError, decode, encode,
+    REVISION_LIMIT, SceneDelta, Section, WireError, decode, encode, mesh_is_valid,
+    placement_is_valid,
 };
 
 /// Fixed seed, no persistence: runs are deterministic (AGENTS.md §5).
@@ -693,4 +694,22 @@ proptest! {
             prop_assert_eq!(encode(&delta), bytes);
         }
     }
+}
+
+#[test]
+fn the_validity_checks_agree_with_the_decoder() {
+    assert!(mesh_is_valid(&triangle(1)));
+    let mut beyond = triangle(1);
+    beyond.positions[1][0] = 2e9;
+    beyond.bounds_max[0] = 2e9;
+    assert!(!mesh_is_valid(&beyond));
+    let mut empty = triangle(1);
+    empty.indices.clear();
+    assert!(!mesh_is_valid(&empty));
+
+    assert!(placement_is_valid(&IDENTITY, &[1.0, 2.0, 3.0]));
+    assert!(!placement_is_valid(&IDENTITY, &[2e9, 0.0, 0.0]));
+    let mut reflection = IDENTITY;
+    reflection[8] = -1.0;
+    assert!(!placement_is_valid(&reflection, &[0.0; 3]));
 }

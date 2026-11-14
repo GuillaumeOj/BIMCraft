@@ -243,6 +243,7 @@ fn a_solid_that_cannot_be_tessellated_still_depends_on_what_its_generator_read()
         Ok(Generated {
             solids: vec![untriangulable_solid()],
             inputs: BTreeSet::from([id(99)]),
+            ..Generated::default()
         })
     });
     let mut h = Harness::with_generators(generators, View::new("body", 100), Calls::default());

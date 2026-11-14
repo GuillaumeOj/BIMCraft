@@ -5,9 +5,12 @@ use crate::{FLAG_FULL, HEADER_LEN, MAGIC, SceneDelta, VERSION};
 /// Writes `delta` in the version 1 format.
 ///
 /// The writer does not validate: a delta [`decode`](crate::decode) would refuse (a string over
-/// 256 bytes, a mesh whose normals are fewer than its positions…) is written so that the
-/// decoder refuses it too; counts and lengths that do not fit their field saturate, which no
-/// reader accepts. The host builds its deltas from meshes already validated.
+/// 256 bytes, an index out of range…) is written so that the decoder refuses it too; counts and
+/// lengths that do not fit their field saturate, which no reader accepts. The exception is a mesh
+/// with fewer normals than positions: the writer writes the normals it has, so what follows
+/// shifts and is read as something else, which the decoder may or may not refuse. Callers give
+/// every position a normal, as the host does. The host builds its deltas from meshes already
+/// validated.
 #[must_use]
 pub fn encode(delta: &SceneDelta) -> Vec<u8> {
     let mut out = Vec::with_capacity(encoded_len(delta));

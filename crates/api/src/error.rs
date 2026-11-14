@@ -2,7 +2,7 @@
 
 use core_txn::{CommandError, HistoryError};
 
-use crate::{BuildUpsError, MaterialsError, Version};
+use crate::{BuildUpsError, ElementsError, MaterialsError, Version};
 
 /// Why a descriptor could not be registered.
 #[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
@@ -52,6 +52,9 @@ pub enum ApiError {
     /// A georeference command or query failed; see [`GeorefError`].
     #[error(transparent)]
     Georef(#[from] GeorefError),
+    /// An element command was refused; see [`ElementsError`].
+    #[error(transparent)]
+    Elements(#[from] ElementsError),
     /// A build-up command or query failed; see [`BuildUpsError`].
     #[error(transparent)]
     BuildUps(BuildUpsError),

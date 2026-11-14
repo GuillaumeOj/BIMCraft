@@ -52,6 +52,8 @@ export interface Commands {
   "buildups.duplicate": { params: { buildup: EntityId; id: EntityId; name: string }; result: { id: EntityId; layers: Array<EntityId> } };
   /** Renames a build-up and replaces its layers; layers it names keep their identity. */
   "buildups.update": { params: { buildup: EntityId; description?: string | null; layers?: Array<BuildUpLayerInput>; name?: string; usage?: BuildUpUsage }; result: { layers: Array<EntityId> } };
+  /** Moves elements by a translation, as one undo step. */
+  "elements.move": { params: { ids: Array<EntityId>; translation: [number, number, number] }; result: null };
   /** Removes the project's georeference. */
   "georef.clear": { params: Record<string, never>; result: Record<string, never> };
   /** Sets the project's georeference. */

@@ -22,7 +22,8 @@ mod error;
 #[cfg(test)]
 mod tests;
 
-pub use decode::decode;
+pub use check::placement_is_valid;
+pub use decode::{decode, mesh_is_valid};
 pub use delta::{Element, Mesh, SceneDelta};
 pub use encode::encode;
 pub use error::{Section, WireError};

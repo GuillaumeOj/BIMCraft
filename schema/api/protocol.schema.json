@@ -1311,6 +1311,53 @@
         },
         "type": "object"
       },
+      "elements.move": {
+        "description": "Moves elements by a translation, as one undo step.",
+        "properties": {
+          "name": {
+            "const": "elements.move"
+          },
+          "params": {
+            "additionalProperties": false,
+            "properties": {
+              "ids": {
+                "items": {
+                  "$ref": "#/$defs/EntityId"
+                },
+                "type": "array"
+              },
+              "translation": {
+                "items": false,
+                "minItems": 3,
+                "prefixItems": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ],
+                "type": "array"
+              }
+            },
+            "required": [
+              "ids",
+              "translation"
+            ],
+            "type": "object"
+          },
+          "result": {
+            "type": "null"
+          },
+          "version": {
+            "const": "1.0.0"
+          }
+        },
+        "type": "object"
+      },
       "georef.clear": {
         "description": "Removes the project's georeference.",
         "properties": {
@@ -2194,6 +2241,43 @@
             "none"
           ],
           "type": "string"
+        },
+        "Block": {
+          "additionalProperties": false,
+          "description": "A generic box the user places in the model: the first element the viewport can draw. It stands on its location, a point at the centre of its base, and is turned about the vertical axis. It is exported as an IFC building element proxy.",
+          "properties": {
+            "location": {
+              "description": "The centre of the base: three lengths, x, y and z, in the project's world frame. The generator refuses any other number of values.\n\nIn m.",
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            "rotation": {
+              "default": 0.0,
+              "description": "Angle from the x-axis of the world to the x-axis of the block, counter-clockwise seen from above.\n\nIn rad.",
+              "type": "number"
+            },
+            "size_x": {
+              "description": "Extent along the block's own x-axis. Positive.\n\nIn m.",
+              "type": "number"
+            },
+            "size_y": {
+              "description": "Extent along the block's own y-axis. Positive.\n\nIn m.",
+              "type": "number"
+            },
+            "size_z": {
+              "description": "Height, from the base up. Positive.\n\nIn m.",
+              "type": "number"
+            }
+          },
+          "required": [
+            "location",
+            "size_x",
+            "size_y",
+            "size_z"
+          ],
+          "type": "object"
         },
         "BuildUpUsage": {
           "description": "What a build-up is for: layers of a wall run from the exterior face in, layers of a slab from the top face down (ADR 0010).",
@@ -3578,7 +3662,7 @@
       },
       "$id": "urn:bimcraft:schema:core",
       "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "description": "Objects of the `core` schema, version 3.",
+      "description": "Objects of the `core` schema, version 4.",
       "title": "BIMCraft `core` schema"
     },
     "queries": {

@@ -5,9 +5,11 @@ use std::sync::{Mutex, PoisonError};
 use api::jsonrpc::{Handled, Server};
 use api::{RegistryError, Session};
 use core_model::{Model, ModelError};
-use core_txn::Origin;
+use core_txn::{ChangeEvent, Origin};
 use schema::Namespace;
 use schema_gen::{Source, parse_sources};
+
+use crate::scene_channel::SceneChannel;
 
 /// The definition files of `schema/core`, embedded so that the program needs nothing beside it.
 /// A test checks them against the directory, as `schema_gen::load_dir` reads it.
@@ -15,6 +17,10 @@ pub(crate) const CORE_SCHEMA: &[(&str, &str)] = &[
     (
         "namespace.toml",
         include_str!("../../../schema/core/namespace.toml"),
+    ),
+    (
+        "entities/block.toml",
+        include_str!("../../../schema/core/entities/block.toml"),
     ),
     (
         "entities/material.toml",
@@ -85,18 +91,25 @@ pub enum OpenError {
     Registry(#[from] RegistryError),
 }
 
+/// What the document lock guards: the server and the scene kept current from its changes.
+struct Open {
+    server: Server,
+    scene: SceneChannel,
+}
+
 /// One open document and the JSON-RPC server the window reaches it through. Every message it
 /// handles comes from the window, so its origin is always [`Origin::Ui`].
 pub struct DocumentHost {
-    server: Mutex<Server>,
+    open: Mutex<Open>,
 }
 
 impl DocumentHost {
     /// Hosts the document `server` serves.
     #[must_use]
     pub fn new(server: Server) -> Self {
+        let scene = SceneChannel::new(server.session().document().model());
         Self {
-            server: Mutex::new(server),
+            open: Mutex::new(Open { server, scene }),
         }
     }
 
@@ -114,9 +127,50 @@ impl DocumentHost {
     pub fn handle(&self, message: &str) -> Handled {
         // Handling never panics on bad input (API-03); if a defect did, later messages are still
         // answered rather than all failing on the poisoned lock.
-        let mut server = self.server.lock().unwrap_or_else(PoisonError::into_inner);
-        server.handle(message.as_bytes(), &Origin::Ui)
+        let mut open = self.open.lock().unwrap_or_else(PoisonError::into_inner);
+        let handled = open.server.handle(message.as_bytes(), &Origin::Ui);
+        let events: Vec<ChangeEvent> = handled
+            .notifications
+            .iter()
+            .filter_map(|notification| change_of(notification))
+            .collect();
+        if !events.is_empty() {
+            let Open { server, scene } = &mut *open;
+            scene.apply(&events, server.session().document().model());
+        }
+        handled
     }
+
+    /// The scene delta, encoded, for a viewport that holds revision `since` (`None`: nothing).
+    /// The full scene when the host cannot tell what changed since.
+    ///
+    /// # Errors
+    ///
+    /// [`SceneTooLarge`] when the encoded delta exceeds what the viewport's decoder accepts: the
+    /// host reports it rather than send bytes that would be refused.
+    pub fn scene(&self, since: Option<u64>) -> Result<Vec<u8>, SceneTooLarge> {
+        self.scene_within(since, scene_wire::MAX_DELTA_BYTES)
+    }
+
+    fn scene_within(&self, since: Option<u64>, max_bytes: usize) -> Result<Vec<u8>, SceneTooLarge> {
+        let open = self.open.lock().unwrap_or_else(PoisonError::into_inner);
+        let bytes = scene_wire::encode(&open.scene.delta(since));
+        if bytes.len() > max_bytes {
+            return Err(SceneTooLarge);
+        }
+        Ok(bytes)
+    }
+}
+
+/// The scene delta is larger than the viewport accepts. It carries no model content (SEC-03).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
+#[error("the scene is too large to send to the viewport")]
+pub struct SceneTooLarge;
+
+/// The change a `model.changed` notification carries.
+fn change_of(notification: &str) -> Option<ChangeEvent> {
+    let message: serde_json::Value = serde_json::from_str(notification).ok()?;
+    serde_json::from_value(message.get("params")?.clone()).ok()
 }
 
 #[cfg(test)]

@@ -11,11 +11,14 @@ publish = false
 core-model = { workspace = true }
 core-txn = { workspace = true }
 geom = { workspace = true }
+libm = { workspace = true }
 schema = { workspace = true }
+scene-wire = { workspace = true }
 thiserror = { workspace = true }
 
 [dev-dependencies]
 proptest = { workspace = true }
+schema-gen = { workspace = true }
 
 [lints]
 workspace = true

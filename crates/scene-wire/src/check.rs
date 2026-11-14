@@ -50,3 +50,10 @@ pub(crate) fn is_proper_rotation(rotation: &[f64; 9]) -> bool {
     // Orthonormal columns give a determinant of +1 or -1; the sign is what is left to check.
     orthonormal(&column) && orthonormal(&row) && dot(cross(column(0), column(1)), column(2)) > 0.0
 }
+
+/// Whether [`decode`](crate::decode) accepts an element placed by `rotation` and `translation`: a
+/// proper rotation, and a translation within the world.
+#[must_use]
+pub fn placement_is_valid(rotation: &[f64; 9], translation: &[f64; 3]) -> bool {
+    translation.iter().all(|&c| in_world(c)) && is_proper_rotation(rotation)
+}

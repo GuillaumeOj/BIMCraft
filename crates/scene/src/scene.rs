@@ -192,7 +192,14 @@ impl Scene {
         };
         self.dirty.insert(id);
         let (inputs, outcome) = match self.generate(model, id, &representation.generator) {
-            Ok(Generated { solids, inputs }) => (Some(inputs), mesh_of(&solids)),
+            Ok(Generated {
+                solids,
+                placement,
+                inputs,
+            }) => (
+                Some(inputs),
+                mesh_of(&solids).map(|mesh| ElementMesh { placement, ..mesh }),
+            ),
             Err(error) => (None, Err(error)),
         };
         // The inputs a failed generator read are unknown: keep the ones it read before, so
