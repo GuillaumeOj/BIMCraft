@@ -1,7 +1,16 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "main",
-  "description": "The main window: the API command and its notification events, nothing else.",
+  "description": "The main window: the API command and its notification events, and opening the user guide in the system browser, nothing else.",
   "windows": ["main"],
-  "permissions": ["allow-api", "core:event:allow-listen", "core:event:allow-unlisten"]
+  "permissions": [
+    "allow-api",
+    "core:event:allow-listen",
+    "core:event:allow-unlisten",
+    {
+      "identifier": "opener:allow-open-url",
+      "allow": [{ "url": "https://github.com/GuillaumeOj/BIMCraft/blob/main/docs/user/*" }],
+      "deny": [{ "url": "*..*" }, { "url": "*%2[eE]*" }]
+    }
+  ]
 }
