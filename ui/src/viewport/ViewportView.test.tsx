@@ -166,6 +166,33 @@ describe("ViewportView", () => {
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
+  it("ignores what a stopped viewport reports after Reload: only the live one can stop the view", async () => {
+    const core = fakeCore();
+    core.blocks.add(BLOCK);
+    core.setSceneRevision(3);
+    const first = fakeViewport();
+    const second = fakeViewport();
+    const modules = [first.module, second.module];
+    loader.load = async () => modules.shift() ?? second.module;
+    const { user } = renderWithCore(<ViewportView />, core);
+    await waitFor(() => expect(first.applied).toEqual([3]));
+
+    first.emit({ kind: "error", key: "device_lost" });
+    await screen.findByRole("alert");
+    await user.click(screen.getByRole("button", { name: "Reload view" }));
+    await waitFor(() => expect(second.applied).toEqual([3]));
+
+    // The first viewport reports once more, late: the healthy second one must go on.
+    first.emit({ kind: "error", key: "device_lost" });
+    first.emit({ kind: "selection", ids: [BLOCK] });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(second.free).not.toHaveBeenCalled();
+    expect(status()).not.toHaveTextContent("1 element selected");
+  });
+
   it("adds the restart advice when the view stops twice within 30 s", async () => {
     const { viewport, user } = await ready();
     viewport.emit({ kind: "error", key: "out_of_memory" });

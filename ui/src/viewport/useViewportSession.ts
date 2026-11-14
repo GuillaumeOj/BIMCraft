@@ -53,6 +53,8 @@ export function useViewportSession(onEvent: (event: ViewportEvent) => void): Vie
   const listener = useRef(onEvent);
   const stopCurrent = useRef<(() => void) | null>(null);
   const lastFailure = useRef<number | null>(null);
+  // Counts the viewports started: what an older one reports after a newer one began is stale.
+  const generation = useRef(0);
   // A new viewport waits until the previous one freed its GPU surface on the same page.
   const previous = useRef<Promise<void>>(Promise.resolve());
   const [attempt, setAttempt] = useState(0);
@@ -82,6 +84,13 @@ export function useViewportSession(onEvent: (event: ViewportEvent) => void): Vie
   useEffect(() => {
     const canvas = canvasRef.current;
     if (canvas === null) return;
+    generation.current += 1;
+    const mine = generation.current;
+    const stale = () => generation.current !== mine;
+    // A failure stops the session it belongs to, never a newer one that replaced it.
+    const failMine = (reason: FailureReason) => {
+      if (!stale()) fail(reason);
+    };
     let stopped = false;
     let release: () => void = () => undefined;
     const prior = previous.current;
@@ -118,7 +127,8 @@ export function useViewportSession(onEvent: (event: ViewportEvent) => void): Vie
       handle.current = viewport;
       viewport.onEvent((event) => {
         // Later, not now: the viewport cannot be freed from inside its own call.
-        if (event.kind === "error") queueMicrotask(() => fail(event.key));
+        if (stale()) return;
+        if (event.kind === "error") queueMicrotask(() => failMine(event.key));
         else listener.current(event);
       });
       observer = new ResizeObserver(() => {
@@ -140,7 +150,7 @@ export function useViewportSession(onEvent: (event: ViewportEvent) => void): Vie
           },
           revision: () => viewport.revision(),
         },
-        (failure) => fail(failure.kind === "fetch" ? "scene_unavailable" : "scene_rejected"),
+        (failure) => failMine(failure.kind === "fetch" ? "scene_unavailable" : "scene_rejected"),
       );
       setPhase({ kind: "ready" });
     };
@@ -153,13 +163,17 @@ export function useViewportSession(onEvent: (event: ViewportEvent) => void): Vie
         stop();
         setPhase({ kind: "unavailable" });
       } else if (opened.kind === "failed") {
-        fail(opened.reason);
+        failMine(opened.reason);
       } else {
         attach(opened.viewport);
       }
     };
     void start();
-    return stop;
+    return () => {
+      // Whatever this session still reports is stale from now on, whether a new one follows or not.
+      generation.current += 1;
+      stop();
+    };
   }, [api, attempt, fail]);
 
   const reload = useCallback(() => setAttempt((count) => count + 1), []);
