@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { hasDrawableElements, moveElements, moveRefusal, placeBlock, useApi } from "../api";
 import { useI18n } from "../i18n/I18nProvider";
 import type { MessageKey } from "../i18n/i18n";
@@ -193,9 +193,8 @@ export function ViewportView() {
     };
   }, [api, sceneVersion]);
 
-  // The shortcut handler of this render; the listener below stays subscribed across renders.
-  const onShortcut = useRef<(shortcut: ViewportShortcut) => void>(() => undefined);
-  onShortcut.current = (shortcut) => {
+  // Reads this render's state; the listener below stays subscribed across renders.
+  const onShortcut = useEffectEvent((shortcut: ViewportShortcut) => {
     if (shortcut === "projection") {
       command({
         kind: "projection",
@@ -206,7 +205,7 @@ export function ViewportView() {
     } else {
       chooseTool(shortcut);
     }
-  };
+  });
 
   // V, M, B, P and S, outside the canvas too; quiet behind a modal dialog and in text fields.
   const { canvasRef } = session;
@@ -216,7 +215,7 @@ export function ViewportView() {
       const shortcut = viewportShortcut(event, { singleKeys, canvas: canvasRef.current });
       if (shortcut === null) return;
       event.preventDefault();
-      onShortcut.current(shortcut);
+      onShortcut(shortcut);
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);

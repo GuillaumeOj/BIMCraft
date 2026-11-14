@@ -46,7 +46,7 @@ export function NavigationHint() {
         <button type="button" className="button button-primary" onClick={gotIt}>
           {t("viewport.hintCard.gotIt")}
         </button>
-        <button type="button" className="ghost-button" onClick={never}>
+        <button type="button" className="button" onClick={never}>
           {t("viewport.hintCard.never")}
         </button>
       </div>

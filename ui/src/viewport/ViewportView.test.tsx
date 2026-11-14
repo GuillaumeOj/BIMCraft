@@ -31,7 +31,6 @@ beforeEach(() => {
       disconnect() {}
     },
   );
-  sessionStorage.clear();
 });
 
 afterEach(() => {
@@ -580,15 +579,18 @@ describe("Navigation hint", () => {
     expect(localStorage.getItem(HINT_STORAGE_KEY)).toBe("hidden");
   });
 
-  it("stays shown when the storage cannot be used", async () => {
+  it("stays hidden for the session when the storage cannot be used", async () => {
     vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
       throw new Error("blocked");
     });
     vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
       throw new Error("blocked");
     });
-    const { user } = await ready();
+    const { user, unmount } = await ready();
     await user.click(await screen.findByRole("button", { name: "Don’t show again" }));
+    expect(screen.queryByRole("region", { name: "Moving around the model" })).toBeNull();
+    unmount();
+    await ready();
     expect(screen.queryByRole("region", { name: "Moving around the model" })).toBeNull();
   });
 });

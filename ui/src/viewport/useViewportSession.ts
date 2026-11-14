@@ -58,7 +58,9 @@ export function useViewportSession(onEvent: (event: ViewportEvent) => void): Vie
   const [attempt, setAttempt] = useState(0);
   const [phase, setPhase] = useState<Phase>({ kind: "loading" });
   const [slow, setSlow] = useState(false);
+  // Only grows, so each delta is a new value even across a reload; `sceneLoaded` is per attempt.
   const [sceneVersion, setSceneVersion] = useState(0);
+  const [sceneLoaded, setSceneLoaded] = useState(false);
 
   useEffect(() => {
     listener.current = onEvent;
@@ -91,7 +93,7 @@ export function useViewportSession(onEvent: (event: ViewportEvent) => void): Vie
     let created: ViewportHandle | null = null;
 
     setPhase({ kind: "loading" });
-    setSceneVersion(0);
+    setSceneLoaded(false);
     setSlow(false);
     // Runs until the first scene is drawn: a stalled scene fetch offers Cancel too.
     const slowTimer = setTimeout(() => setSlow(true), SLOW_LOADING_MS);
@@ -131,6 +133,8 @@ export function useViewportSession(onEvent: (event: ViewportEvent) => void): Vie
           applyScene: (bytes) => {
             const revision = viewport.applyScene(bytes);
             clearTimeout(slowTimer);
+            setSlow(false);
+            setSceneLoaded(true);
             setSceneVersion((version) => version + 1);
             return revision;
           },
@@ -167,7 +171,7 @@ export function useViewportSession(onEvent: (event: ViewportEvent) => void): Vie
     canvasKey: attempt,
     handle,
     feed,
-    sceneLoaded: sceneVersion > 0,
+    sceneLoaded,
     sceneVersion,
     slow,
     reload,
