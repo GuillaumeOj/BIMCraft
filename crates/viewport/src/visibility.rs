@@ -123,12 +123,19 @@ impl Visibility {
         matches!(&self.isolation, Some(Isolation::Disciplines(n)) if n.contains(name))
     }
 
-    /// Forgets elements the scene no longer holds.
-    pub(crate) fn retain_elements(&mut self, held: impl Fn(ElementId) -> bool) {
+    /// Forgets elements the scene no longer holds. An isolation left with no element ends, since
+    /// it would show an empty scene; returns whether it did.
+    pub(crate) fn retain_elements(&mut self, held: impl Fn(ElementId) -> bool) -> bool {
         self.hidden_elements.retain(|&id| held(id));
-        if let Some(Isolation::Elements(ids)) = &mut self.isolation {
-            ids.retain(|&id| held(id));
+        let Some(Isolation::Elements(ids)) = &mut self.isolation else {
+            return false;
+        };
+        ids.retain(|&id| held(id));
+        if ids.is_empty() {
+            self.isolation = None;
+            return true;
         }
+        false
     }
 }
 
@@ -200,8 +207,11 @@ mod tests {
         let mut v = Visibility::default();
         v.hide(&Target::Elements(vec![id(1), id(2)]));
         v.isolate(&Target::Elements(vec![id(3), id(4)]));
-        v.retain_elements(|e| e == id(2) || e == id(3));
+        assert!(!v.retain_elements(|e| e == id(2) || e == id(3)));
         assert_eq!(v.hidden_element_count(), 1);
         assert!(v.visible(id(3), "x", "y") && !v.visible(id(4), "x", "y"));
+        assert!(v.retain_elements(|e| e == id(2)));
+        assert!(!v.is_isolating() && v.visible(id(4), "x", "y"));
+        assert!(!v.retain_elements(|_| false));
     }
 }

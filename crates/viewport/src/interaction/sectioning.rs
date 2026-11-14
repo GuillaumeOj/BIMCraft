@@ -367,7 +367,8 @@ impl<S: SceneSink> Viewport<S> {
     /// `recreated` elements, whose objects forgot), drops hidden ones from the selection and the
     /// hover, and refreshes the panels' lists of categories and disciplines.
     pub(super) fn visibility_changed(&mut self, recreated: &BTreeSet<ElementId>) {
-        self.sect
+        let isolation_ended = self
+            .sect
             .visibility
             .retain_elements(|id| self.cache.contains(id));
         let mut hidden = BTreeSet::new();
@@ -427,6 +428,9 @@ impl<S: SceneSink> Viewport<S> {
         self.states.retain(|id, _| !self.sect.hidden.contains(id));
         if changed {
             self.sect.version += 1;
+        }
+        if isolation_ended {
+            self.say(AnnouncementKey::VisibilityReset, Vec::new());
         }
         self.dirty = true;
     }
