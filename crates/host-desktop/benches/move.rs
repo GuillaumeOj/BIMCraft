@@ -47,12 +47,16 @@ fn reference_model() -> Model {
 fn move_one_block(c: &mut Criterion) {
     let model = reference_model();
     let host = DocumentHost::new(Server::new(Session::new(model)).unwrap());
-    let mut seen = Some(scene_wire::decode(&host.scene(None)).unwrap().revision);
+    let mut seen = Some(
+        scene_wire::decode(&host.scene(None).unwrap())
+            .unwrap()
+            .revision,
+    );
     let mut direction = 1.0_f64;
     // The measured path really moves the element and sends one placement: no mesh.
     let probe = host.handle(&request(50_000, 1.0));
     assert_eq!(probe.notifications.len(), 1);
-    let delta = scene_wire::decode(&host.scene(seen)).unwrap();
+    let delta = scene_wire::decode(&host.scene(seen).unwrap()).unwrap();
     assert_eq!((delta.elements.len(), delta.meshes.len()), (1, 0));
     seen = Some(delta.revision);
     c.bench_function("move/one_block_in_100k", |b| {
@@ -60,7 +64,7 @@ fn move_one_block(c: &mut Criterion) {
             direction = -direction;
             let handled = host.handle(&request(50_000, direction));
             assert_eq!(handled.notifications.len(), 1);
-            let bytes = host.scene(seen);
+            let bytes = host.scene(seen).unwrap();
             seen = Some(bytes_revision(&bytes));
             black_box(bytes)
         });

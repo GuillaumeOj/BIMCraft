@@ -217,3 +217,119 @@ fn the_identity_placement_leaves_points_alone() {
     let moved = Placement::about_z(0.0, [1.0, 1.0, 1.0]).apply([1.0, 2.0, 3.0]);
     assert!((moved[0] - 2.0).abs() + (moved[1] - 3.0).abs() + (moved[2] - 4.0).abs() < 1e-12);
 }
+
+/// A model whose `Block` is defined by `block.toml` with `from` replaced by `to`: the schema's
+/// type check stops the core definition from storing the values the generator still has to
+/// refuse, as a plugin schema or a future version could.
+fn model_with(from: &str, to: &str) -> Model {
+    let definition = include_str!("../../../../schema/core/entities/block.toml");
+    assert!(definition.contains(from), "{from} is not in the definition");
+    let sources = [
+        Source {
+            path: "namespace.toml".into(),
+            contents: include_str!("../../../../schema/core/namespace.toml").into(),
+        },
+        Source {
+            path: "entities/block.toml".into(),
+            contents: definition.replacen(from, to, 1),
+        },
+    ];
+    Model::new(&parse_sources(&sources).unwrap()).unwrap()
+}
+
+fn create(model: &mut Model, values: Vec<(&str, AttributeValue)>) -> EntityId {
+    let id = EntityId::new(1);
+    model.insert(id, "Block", values).unwrap();
+    id
+}
+
+fn real(v: f64) -> AttributeValue {
+    AttributeValue::Real(v)
+}
+
+#[test]
+fn values_of_another_type_are_invalid_input() {
+    let sizes = || {
+        vec![
+            ("size_x", real(1.0)),
+            ("size_y", real(1.0)),
+            ("size_z", real(1.0)),
+        ]
+    };
+    // A location that is not a list.
+    let mut model = model_with("value = \"list:quantity:length\"", "value = \"text\"");
+    let mut values = sizes();
+    values.push(("location", AttributeValue::Text("here".into())));
+    let id = create(&mut model, values);
+    assert_eq!(
+        block_body(&model, id).unwrap_err(),
+        GeneratorError::InvalidInput
+    );
+    // A list of something else than lengths.
+    let mut model = model_with("value = \"list:quantity:length\"", "value = \"list:text\"");
+    let mut values = sizes();
+    values.push((
+        "location",
+        AttributeValue::List(vec![AttributeValue::Text("x".into()); 3]),
+    ));
+    let id = create(&mut model, values);
+    assert_eq!(
+        block_body(&model, id).unwrap_err(),
+        GeneratorError::InvalidInput
+    );
+    // A size that is not a number, and a rotation that is not.
+    for (attribute, from) in [
+        ("size_x", "name = \"size_x\"\nvalue = \"quantity:length\""),
+        (
+            "rotation",
+            "value = \"quantity:plane_angle\"\ndefault = 0.0",
+        ),
+    ] {
+        let to = from
+            .replace("quantity:length", "text")
+            .replace("quantity:plane_angle\"\ndefault = 0.0", "text\"");
+        let mut model = model_with(from, &to);
+        let mut values: Vec<_> = sizes()
+            .into_iter()
+            .filter(|(n, _)| *n != attribute)
+            .collect();
+        values.push(("location", reals(&[0.0; 3])));
+        values.push((attribute, AttributeValue::Text("wide".into())));
+        let id = create(&mut model, values);
+        assert_eq!(
+            block_body(&model, id).unwrap_err(),
+            GeneratorError::InvalidInput,
+            "{attribute}"
+        );
+    }
+}
+
+#[test]
+fn an_unset_rotation_is_zero_and_an_unset_size_is_missing() {
+    // Without the schema's default, an unset rotation is still read as no rotation.
+    let mut model = model_with("default = 0.0\n", "");
+    let values = vec![
+        ("location", reals(&[1.0, 2.0, 3.0])),
+        ("size_x", real(1.0)),
+        ("size_y", real(1.0)),
+        ("size_z", real(1.0)),
+    ];
+    let id = create(&mut model, values);
+    let placement = block_body(&model, id).unwrap().placement;
+    assert_eq!(placement, Placement::about_z(0.0, [1.0, 2.0, 3.0]));
+    // Where a size is optional, leaving it out lacks an input.
+    let mut model = model_with(
+        "name = \"size_x\"\nvalue = \"quantity:length\"\nrequired = true",
+        "name = \"size_x\"\nvalue = \"quantity:length\"",
+    );
+    let values = vec![
+        ("location", reals(&[0.0; 3])),
+        ("size_y", real(1.0)),
+        ("size_z", real(1.0)),
+    ];
+    let id = create(&mut model, values);
+    assert_eq!(
+        block_body(&model, id).unwrap_err(),
+        GeneratorError::MissingInput
+    );
+}

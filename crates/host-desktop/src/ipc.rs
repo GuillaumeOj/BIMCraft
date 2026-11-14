@@ -38,8 +38,12 @@ pub const SCENE_COMMAND: &str = "scene";
 // Tauri hands commands their arguments by value.
 #[allow(clippy::needless_pass_by_value)]
 #[tauri::command(async)]
-fn scene(host: State<'_, DocumentHost>, since: Option<u64>) -> tauri::ipc::Response {
-    tauri::ipc::Response::new(host.scene(since))
+fn scene(
+    host: State<'_, DocumentHost>,
+    since: Option<u64>,
+) -> Result<tauri::ipc::Response, String> {
+    let bytes = host.scene(since).map_err(|error| error.to_string())?;
+    Ok(tauri::ipc::Response::new(bytes))
 }
 
 /// `builder` serving `host` to its windows.

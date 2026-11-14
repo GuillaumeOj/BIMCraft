@@ -22,7 +22,7 @@ mod storage;
 
 pub use clock::SystemClock;
 pub use compute::ProcessCompute;
-pub use document::{DocumentHost, OpenError, core_namespace};
+pub use document::{DocumentHost, OpenError, SceneTooLarge, core_namespace};
 pub use executor::{ExecutorError, RayonExecutor};
 pub use scene_channel::{LOG_LENGTH, SceneChannel};
 pub use storage::FileStorage;

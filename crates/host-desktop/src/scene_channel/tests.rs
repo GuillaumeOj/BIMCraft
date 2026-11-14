@@ -66,7 +66,7 @@ fn history(host: &DocumentHost, method: &str) {
 }
 
 fn delta(host: &DocumentHost, since: Option<u64>) -> SceneDelta {
-    decode(&host.scene(since)).unwrap()
+    decode(&host.scene(since).unwrap()).unwrap()
 }
 
 fn element_ids(delta: &SceneDelta) -> Vec<u128> {

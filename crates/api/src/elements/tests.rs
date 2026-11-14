@@ -253,3 +253,18 @@ fn every_reason_has_a_distinct_stable_name() {
     .collect();
     assert_eq!(reasons.len(), 5);
 }
+
+#[test]
+fn the_history_shows_a_creation_as_model_create_and_a_move_as_model_batch() {
+    let mut s = session();
+    add_block(&mut s, 1, [0.0; 3]);
+    call(&mut s, "elements.move", move_params(&[id(1)], [1.0; 3])).unwrap();
+    let state = call(&mut s, "history.state", json!({})).unwrap().result;
+    let names: Vec<&str> = state["entries"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|entry| entry["command"].as_str().unwrap())
+        .collect();
+    assert_eq!(names, ["model.create", "model.batch"]);
+}

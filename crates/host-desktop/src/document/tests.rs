@@ -30,3 +30,13 @@ fn a_poisoned_lock_does_not_stop_the_document() {
     let handled = host.handle(r#"{"jsonrpc":"2.0","id":1,"method":"history.state","params":{}}"#);
     assert!(handled.response.is_some());
 }
+
+#[test]
+fn a_scene_delta_the_viewport_would_refuse_is_an_error_not_bytes() {
+    let host = DocumentHost::open_new().unwrap();
+    let bytes = host.scene(None).unwrap();
+    // At the limit it is sent; one byte under the limit of the decoder it is not.
+    assert_eq!(host.scene_within(None, bytes.len()), Ok(bytes.clone()));
+    assert_eq!(host.scene_within(None, bytes.len() - 1), Err(SceneTooLarge));
+    assert!(!SceneTooLarge.to_string().is_empty());
+}

@@ -77,12 +77,12 @@ fn three_blocks() -> DocumentHost {
 #[test]
 fn the_empty_scene_fixture_is_current() {
     let host = DocumentHost::open_new().unwrap();
-    assert_committed("scene-empty.bin", &host.scene(None));
+    assert_committed("scene-empty.bin", &host.scene(None).unwrap());
 }
 
 #[test]
 fn the_blocks_fixture_is_current() {
-    let bytes = three_blocks().scene(None);
+    let bytes = three_blocks().scene(None).unwrap();
     let delta: SceneDelta = decode(&bytes).unwrap();
     assert_eq!(
         (delta.full, delta.elements.len(), delta.meshes.len()),
@@ -94,13 +94,13 @@ fn the_blocks_fixture_is_current() {
 #[test]
 fn the_move_fixture_is_current() {
     let host = three_blocks();
-    let revision = decode(&host.scene(None)).unwrap().revision;
+    let revision = decode(&host.scene(None).unwrap()).unwrap().revision;
     call(
         &host,
         "elements.move",
         &json!({ "ids": [format!("{:032x}", 2)], "translation": [0.0, 3.0, 0.0] }),
     );
-    let bytes = host.scene(Some(revision));
+    let bytes = host.scene(Some(revision)).unwrap();
     let delta = decode(&bytes).unwrap();
     assert_eq!(
         (delta.full, delta.base, delta.revision),

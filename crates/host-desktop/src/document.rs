@@ -143,11 +143,29 @@ impl DocumentHost {
 
     /// The scene delta, encoded, for a viewport that holds revision `since` (`None`: nothing).
     /// The full scene when the host cannot tell what changed since.
-    pub fn scene(&self, since: Option<u64>) -> Vec<u8> {
+    ///
+    /// # Errors
+    ///
+    /// [`SceneTooLarge`] when the encoded delta exceeds what the viewport's decoder accepts: the
+    /// host reports it rather than send bytes that would be refused.
+    pub fn scene(&self, since: Option<u64>) -> Result<Vec<u8>, SceneTooLarge> {
+        self.scene_within(since, scene_wire::MAX_DELTA_BYTES)
+    }
+
+    fn scene_within(&self, since: Option<u64>, max_bytes: usize) -> Result<Vec<u8>, SceneTooLarge> {
         let open = self.open.lock().unwrap_or_else(PoisonError::into_inner);
-        scene_wire::encode(&open.scene.delta(since))
+        let bytes = scene_wire::encode(&open.scene.delta(since));
+        if bytes.len() > max_bytes {
+            return Err(SceneTooLarge);
+        }
+        Ok(bytes)
     }
 }
+
+/// The scene delta is larger than the viewport accepts. It carries no model content (SEC-03).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
+#[error("the scene is too large to send to the viewport")]
+pub struct SceneTooLarge;
 
 /// The change a `model.changed` notification carries.
 fn change_of(notification: &str) -> Option<ChangeEvent> {
