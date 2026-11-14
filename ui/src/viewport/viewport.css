@@ -271,7 +271,7 @@
   position: absolute;
   top: 12px;
   right: 324px;
-  z-index: 2;
+  z-index: var(--bc-z-menu);
   box-sizing: border-box;
   width: min(300px, calc(100% - 24px));
   padding: 10px 12px 12px;
