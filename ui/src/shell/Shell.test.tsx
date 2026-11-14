@@ -1,8 +1,11 @@
 import { screen, within } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { fakeCore } from "../test-support/fakeCore";
 import { renderWithCore } from "../test-support/render";
 import { Shell } from "./Shell";
+
+// The 3D view stays loading: its own tests cover it (viewport/ViewportView.test.tsx).
+vi.mock("../viewport/module", () => ({ loadViewportModule: () => new Promise(() => undefined) }));
 
 // jsdom reports an English system language (navigator.languages is ["en-US", "en"]).
 function renderShell() {
@@ -65,7 +68,7 @@ describe("Shell", () => {
     expect(region("Console")).toBeInTheDocument();
   });
 
-  it("switches the right panel between its three tabs with the arrow keys", async () => {
+  it("switches the right panel between its four tabs with the arrow keys", async () => {
     const user = renderShell();
     const properties = screen.getByRole("tab", { name: "Properties" });
     expect(properties).toHaveAttribute("aria-selected", "true");
@@ -80,13 +83,16 @@ describe("Shell", () => {
     const coordinates = screen.getByRole("tab", { name: "Coordinates" });
     expect(coordinates).toHaveFocus();
     await user.keyboard("{ArrowRight}");
+    const view = screen.getByRole("tab", { name: "View" });
+    expect(view).toHaveFocus();
+    await user.keyboard("{ArrowRight}");
     expect(properties).toHaveFocus();
     await user.keyboard("{ArrowLeft}");
-    expect(coordinates).toHaveFocus();
+    expect(view).toHaveFocus();
     await user.keyboard("{Home}");
     expect(properties).toHaveFocus();
     await user.keyboard("{End}");
-    expect(coordinates).toHaveFocus();
+    expect(view).toHaveFocus();
     await user.click(history);
     expect(history).toHaveAttribute("aria-selected", "true");
   });

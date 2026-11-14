@@ -1,7 +1,12 @@
+import { useI18n } from "../i18n/I18nProvider";
+import { shortcutProps } from "./shortcut";
+
 type Option<V extends string> = { value: V; label: string };
 
 type SegmentedToggleProps<V extends string> = {
   label: string;
+  /** The key that switches between the options, named on each button. */
+  shortcut?: string | undefined;
   value: V;
   options: readonly Option<V>[];
   onChange: (value: V) => void;
@@ -10,10 +15,12 @@ type SegmentedToggleProps<V extends string> = {
 /** Exclusive choices side by side (decimal degrees or DMS; all, walls or slabs). */
 export function SegmentedToggle<V extends string>({
   label,
+  shortcut,
   value,
   options,
   onChange,
 }: SegmentedToggleProps<V>) {
+  const { t } = useI18n();
   return (
     <fieldset className="segmented">
       <legend className="visually-hidden">{label}</legend>
@@ -22,6 +29,7 @@ export function SegmentedToggle<V extends string>({
           key={option.value}
           type="button"
           aria-pressed={option.value === value}
+          {...(shortcut === undefined ? {} : shortcutProps(t, option.label, shortcut))}
           onClick={() => onChange(option.value)}
         >
           {option.label}

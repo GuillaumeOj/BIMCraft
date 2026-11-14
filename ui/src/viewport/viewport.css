@@ -1,0 +1,518 @@
+/* The 3D view: boards 3.21–3.28 of the FigCraft design. The canvas fills the viewport slot; the
+   tool bar, the status and the view controls float in the band under the side panels. */
+/* Toasts float above the tool bar and the hint while the 3D view is on screen. */
+:root:has(.vp) {
+  --bc-toast-bottom: 120px;
+}
+
+.vp {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background: var(--bc-vp-bg);
+}
+
+.vp-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  /* The viewport handles touch gestures itself. */
+  touch-action: none;
+}
+
+/* A 2 px inside ring (board 3.21): the canvas fills the slot, so an outside one would be clipped. */
+.vp-canvas:focus-visible {
+  outline: 2px solid var(--bc-verdigris);
+  outline-offset: -2px;
+}
+
+/* Without a running view the canvas shows only the background (rule 3 of design/README.md). */
+.vp-inactive .vp-canvas {
+  visibility: hidden;
+}
+
+.vp-chip {
+  position: absolute;
+  top: 0;
+  left: 0;
+  padding: 3px 8px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  color: var(--bc-vp-chip-ink);
+  background: var(--bc-vp-chip);
+  pointer-events: none;
+  /* Beside the pointer, not under it. */
+  margin: 12px 0 0 12px;
+}
+
+/* A typed value reads as a field (board 3.28, "Champ saisi"): users see where their typing goes. */
+.vp-chip-typed {
+  color: var(--bc-ink);
+  background: var(--bc-surface);
+  border-color: var(--bc-verdigris);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--bc-verdigris) 35%, transparent);
+}
+
+.vp-card {
+  position: absolute;
+  display: grid;
+  gap: 10px;
+  justify-items: start;
+  max-width: 420px;
+  padding: 20px 24px;
+  color: var(--bc-ink);
+  background: var(--bc-surface);
+  border: 1px solid var(--bc-line);
+  border-radius: 12px;
+  box-shadow: var(--bc-shadow);
+}
+
+.vp-card p {
+  margin: 0;
+  color: var(--bc-ink-2);
+  line-height: 1.4;
+}
+
+.vp-card a {
+  color: var(--bc-verdigris);
+}
+
+.vp-card a.button {
+  text-decoration: none;
+}
+
+.vp-card-centre {
+  top: 30%;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.vp-card-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.vp-card-error .vp-card-title svg {
+  color: var(--bc-danger);
+}
+
+.vp-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.vp-spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--bc-line);
+  border-top-color: var(--bc-verdigris);
+  border-radius: 50%;
+  animation: vp-spin 0.9s linear infinite;
+}
+
+@keyframes vp-spin {
+  to {
+    transform: rotate(1turn);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vp-spinner {
+    animation: none;
+  }
+}
+
+.vp-hint-card {
+  left: 290px;
+  bottom: 140px;
+}
+
+.vp-hint-card dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 6px 24px;
+  margin: 0;
+}
+
+.vp-hint-card dl > div {
+  display: contents;
+}
+
+.vp-hint-card dt {
+  color: var(--bc-ink-2);
+}
+
+.vp-hint-card dd {
+  margin: 0;
+}
+
+.vp-bottom {
+  position: absolute;
+  left: 50%;
+  bottom: 12px;
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  transform: translateX(-50%);
+}
+
+.vp-hint {
+  margin: 0;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--bc-ink);
+  background: var(--bc-surface);
+  border: 1px solid var(--bc-line);
+  max-width: 600px;
+  text-align: center;
+}
+
+.vp-toolbar,
+.vp-controls,
+.vp-status {
+  background: var(--bc-surface);
+  border: 1px solid var(--bc-line);
+  border-radius: 10px;
+  box-shadow: var(--bc-shadow);
+}
+
+.vp-toolbar {
+  display: flex;
+  gap: 2px;
+  padding: 4px;
+}
+
+.vp-tool {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  min-width: 52px;
+  padding: 6px 4px 4px;
+  font: inherit;
+  font-size: 11px;
+  color: var(--bc-ink-2);
+  background: none;
+  border: 0;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.vp-tool:hover {
+  background: var(--bc-hover);
+}
+
+.vp-tool[aria-pressed="true"] {
+  color: var(--bc-on-verdigris);
+  background: var(--bc-verdigris);
+}
+
+.vp-tool:disabled {
+  color: var(--bc-muted);
+  background: none;
+  cursor: default;
+}
+
+.vp-status {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  margin: 0;
+  padding: 8px 12px;
+  color: var(--bc-ink);
+}
+
+.vp-controls {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 6px;
+}
+
+.vp-controls .segmented {
+  margin: 0;
+}
+
+.vp-icon-button {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  color: var(--bc-ink-2);
+  background: none;
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.vp-icon-button:hover {
+  background: var(--bc-hover);
+}
+
+.vp-icon-button[aria-disabled="true"] {
+  color: var(--bc-muted);
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* The Visibility popover (board 3.2): top right of the view, beside the View panel. */
+.vp-popover {
+  position: absolute;
+  top: 12px;
+  right: 324px;
+  z-index: var(--bc-z-menu);
+  box-sizing: border-box;
+  width: min(300px, calc(100% - 24px));
+  padding: 10px 12px 12px;
+  color: var(--bc-ink);
+  background: var(--bc-surface);
+  border: 1px solid var(--bc-line);
+  border-radius: 12px;
+  box-shadow: var(--bc-shadow);
+}
+
+.vp-popover-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.vp-popover-head .segmented {
+  margin: 0;
+}
+
+.vp-popover-title {
+  font-weight: 600;
+}
+
+.vp-popover-empty {
+  margin: 12px 0;
+  color: var(--bc-ink-2);
+}
+
+.vp-rows {
+  margin: 8px 0;
+  padding: 0;
+  list-style: none;
+}
+
+.vp-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-sizing: border-box;
+  width: 100%;
+  padding: 6px 8px;
+  font: inherit;
+  color: var(--bc-ink);
+  text-align: left;
+  background: none;
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.vp-row:hover {
+  background: var(--bc-hover);
+}
+
+.vp-row[aria-checked="false"] {
+  color: var(--bc-muted);
+}
+
+.vp-row[data-isolated="true"] {
+  background: var(--bc-selected);
+}
+
+.vp-row-name {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.vp-tag {
+  flex: none;
+  font-size: 12px;
+  color: var(--bc-ink-2);
+}
+
+.vp-tag-on {
+  padding: 2px 8px;
+  color: var(--bc-ink);
+  background: var(--bc-selected);
+  border-radius: 6px;
+}
+
+.vp-popover-keys {
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: var(--bc-ink-2);
+}
+
+.vp-popover-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.vp-popover-actions kbd,
+.view-check kbd {
+  margin-left: 8px;
+  padding: 0 4px;
+  font: inherit;
+  font-size: 11px;
+  color: var(--bc-ink-2);
+  border: 1px solid var(--bc-line);
+  border-radius: 4px;
+}
+
+.vp-popover :focus-visible,
+.view-panel :focus-visible {
+  outline: 2px solid var(--bc-verdigris);
+  outline-offset: 1px;
+}
+
+/* The View panel: sections of the right panel, rows that wrap rather than clip (French runs 25 % longer). */
+.view-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  padding: 4px 8px 8px;
+}
+
+.view-title h3 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.view-panel .disclosure {
+  margin-top: 0;
+  border-top: 1px solid var(--bc-line);
+  padding: 4px 8px;
+}
+
+.view-section {
+  display: grid;
+  gap: 8px;
+  padding: 4px 0 8px 18px;
+}
+
+.view-row {
+  display: grid;
+  grid-template-columns: 6em 1fr;
+  align-items: center;
+  gap: 8px;
+}
+
+.view-row .select,
+.view-section select {
+  min-width: 0;
+  padding: 4px 6px;
+  font: inherit;
+  color: var(--bc-ink);
+  background: var(--bc-surface);
+  border: 1px solid var(--bc-field-line);
+  border-radius: 6px;
+}
+
+.view-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.view-check input {
+  margin: 0;
+  accent-color: var(--bc-verdigris);
+}
+
+.view-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.view-empty {
+  padding: 0;
+}
+
+.view-facts {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+}
+
+.view-fact {
+  display: grid;
+  grid-template-columns: 8em 1fr;
+  gap: 8px;
+}
+
+.view-facts dt {
+  color: var(--bc-ink-2);
+}
+
+.view-facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.extent-grid {
+  display: grid;
+  grid-template-columns: 1.5em 1fr 1fr;
+  align-items: center;
+  gap: 6px;
+}
+
+.extent-head {
+  font-size: 12px;
+  color: var(--bc-ink-2);
+}
+
+.extent-field {
+  min-width: 0;
+}
+
+.extent-field input {
+  min-width: 0;
+  text-align: right;
+}
+
+.plane-rows {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.plane-row {
+  display: grid;
+  grid-template-columns: auto auto 1fr auto auto;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 4px;
+  border-radius: 6px;
+}
+
+.plane-detail {
+  min-width: 0;
+  font-size: 12px;
+  color: var(--bc-ink-2);
+  overflow-wrap: anywhere;
+}

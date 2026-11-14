@@ -155,7 +155,7 @@
 .menu {
   position: absolute;
   right: 0;
-  z-index: 5;
+  z-index: var(--bc-z-menu);
   display: grid;
   min-width: 160px;
   margin: 4px 0 0;
@@ -164,6 +164,11 @@
   border: 1px solid var(--bc-line);
   border-radius: 8px;
   box-shadow: var(--bc-shadow);
+}
+
+.menu-up {
+  bottom: 100%;
+  margin: 0 0 4px;
 }
 
 .menu button {

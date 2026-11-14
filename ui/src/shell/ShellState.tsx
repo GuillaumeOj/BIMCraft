@@ -10,6 +10,7 @@ import {
 } from "react";
 import { historyDepth, undoLastStep, useApi } from "../api";
 import { useI18n } from "../i18n/I18nProvider";
+import { readStored, writeStored } from "../ui/storage";
 
 /** Something the toast can undo: runs the undo, and rejects when it cannot. */
 type Undo = () => Promise<void>;
@@ -26,7 +27,21 @@ export type ShellState = {
    * as long as the step it announces is the last one of the history.
    */
   notify: (message: string, options?: { undoable?: boolean }) => void;
+  /**
+   * Whether single-key shortcuts (V, M, B…) work outside the focused 3D view. Users can turn
+   * them off (WCAG 2.1.4); the choice is kept between sessions.
+   */
+  singleKeys: boolean;
+  setSingleKeys: (enabled: boolean) => void;
 };
+
+/** Where the single-key shortcuts choice is kept. */
+export const SINGLE_KEYS_STORAGE_KEY = "bimcraft.singleKeyShortcuts";
+
+// Without storage, the shortcuts stay on and a choice lasts only for this session.
+const readSingleKeys = () => readStored(SINGLE_KEYS_STORAGE_KEY) !== "off";
+const writeSingleKeys = (enabled: boolean) =>
+  writeStored(SINGLE_KEYS_STORAGE_KEY, enabled ? null : "off");
 
 // A toast with Undo stays longer: the user needs time to reach the button.
 const TOAST_MS = 5000;
@@ -44,6 +59,11 @@ export function ShellStateProvider({ children }: { children: ReactNode }) {
   const { t } = useI18n();
   const [modals, setModals] = useState(0);
   const [toast, setToast] = useState<Toast | null>(null);
+  const [singleKeys, setSingleKeysState] = useState(readSingleKeys);
+  const setSingleKeys = useCallback((enabled: boolean) => {
+    writeSingleKeys(enabled);
+    setSingleKeysState(enabled);
+  }, []);
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const counter = useRef(0);
   // The depth of the history right after the step the toast announces.
@@ -103,8 +123,8 @@ export function ShellStateProvider({ children }: { children: ReactNode }) {
   };
 
   const value = useMemo<ShellState>(
-    () => ({ modalOpen: modals > 0, registerModal, notify }),
-    [modals, registerModal, notify],
+    () => ({ modalOpen: modals > 0, registerModal, notify, singleKeys, setSingleKeys }),
+    [modals, registerModal, notify, singleKeys, setSingleKeys],
   );
 
   return (

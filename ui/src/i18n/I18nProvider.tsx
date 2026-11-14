@@ -7,6 +7,7 @@ import {
   useMemo,
   useState,
 } from "react";
+import { readStored, writeStored } from "../ui/storage";
 import {
   asLanguage,
   type Language,
@@ -30,24 +31,9 @@ export type I18n = {
 
 const I18nContext = createContext<I18n | null>(null);
 
-// Storage can be missing or throw (private windows, blocked site data); the choice then lasts
-// only for this session.
-function readOverride(): Language | null {
-  try {
-    return asLanguage(localStorage.getItem(OVERRIDE_STORAGE_KEY));
-  } catch {
-    return null;
-  }
-}
-
-function writeOverride(override: Language | null) {
-  try {
-    if (override === null) localStorage.removeItem(OVERRIDE_STORAGE_KEY);
-    else localStorage.setItem(OVERRIDE_STORAGE_KEY, override);
-  } catch {
-    // Not remembered; see readOverride.
-  }
-}
+// Without storage, the choice lasts only for this session.
+const readOverride = (): Language | null => asLanguage(readStored(OVERRIDE_STORAGE_KEY));
+const writeOverride = (override: Language | null) => writeStored(OVERRIDE_STORAGE_KEY, override);
 
 /** Provides the interface language: the manual override if set, else the system language. */
 export function I18nProvider({ children }: { children: ReactNode }) {
