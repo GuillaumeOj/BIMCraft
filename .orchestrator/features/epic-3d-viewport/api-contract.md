@@ -136,7 +136,18 @@ type ViewportEvent =
   | { kind: "announce"; key: AnnouncementKey; values: Record<string, string | number> } // UI translates the key (UI-04)
   | { kind: "intent"; intent: Intent }
   | { kind: "view_state"; state: ViewState }              // after every view command or handle drag (throttled)
+  | { kind: "preview_label"; label: PreviewLabel | null }   // emitted only when it changes; null hides it
   | { kind: "error"; key: "device_lost" | "scene_rejected" | "out_of_memory" };
+
+// The chip next to the cursor during a move or a placement ("2,500 m", "6,00 × 4,00 m"): the
+// renderer draws no text, so the UI draws it at `at` (CSS px from the canvas's top left),
+// positioned through a ref, never through React state. `typed` is the raw typed buffer, if any.
+type PreviewLabel = {
+  at: [number, number];
+  key: "move.distance" | "place.size" | "place.height";
+  values: Record<string, number>;          // metres
+  typed: string | null;
+};
 
 type AnnouncementKey =
   | "snap.endpoint" | "snap.midpoint" | "snap.edge" | "snap.face" | "snap.ground"
