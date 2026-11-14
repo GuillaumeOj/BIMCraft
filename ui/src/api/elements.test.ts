@@ -1,16 +1,16 @@
 import { describe, expect, it } from "vitest";
 import { ApiClient, type Transport } from "./client";
-import { moveElements, moveRefusal, placeBlock } from "./elements";
+import { hasDrawableElements, moveElements, moveRefusal, placeBlock } from "./elements";
 import { ApiError } from "./jsonrpc";
 
 /** A transport that records the requests and answers null. */
-function recorder() {
+function recorder(result: unknown = null) {
   const sent: { method: string; params: unknown }[] = [];
   const transport: Transport = {
     async send(message) {
       const { id, method, params } = JSON.parse(message);
       sent.push({ method, params });
-      return JSON.stringify({ jsonrpc: "2.0", id, result: null });
+      return JSON.stringify({ jsonrpc: "2.0", id, result });
     },
     listen: async () => () => undefined,
   };
@@ -64,5 +64,17 @@ describe("placeBlock", () => {
         },
       },
     ]);
+  });
+});
+
+describe("hasDrawableElements", () => {
+  it("asks for one block and tells whether there is one", async () => {
+    const empty = recorder({ items: [], next: null });
+    await expect(hasDrawableElements(empty.client)).resolves.toBe(false);
+    expect(empty.sent).toEqual([
+      { method: "model.list_objects", params: { entity: "Block", limit: 1 } },
+    ]);
+    const full = recorder({ items: ["1".padStart(32, "0")], next: null });
+    await expect(hasDrawableElements(full.client)).resolves.toBe(true);
   });
 });

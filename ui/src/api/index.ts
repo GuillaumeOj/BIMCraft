@@ -18,6 +18,7 @@ export {
 export { ApiClient, type Transport } from "./client";
 export {
   type BlockPlacement,
+  hasDrawableElements,
   type MoveRefusal,
   moveElements,
   moveRefusal,

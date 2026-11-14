@@ -482,7 +482,8 @@
 .toast-region {
   position: fixed;
   left: 50%;
-  bottom: 24px;
+  /* Above the 3D view's tool bar and hint. */
+  bottom: 120px;
   z-index: 30;
   transform: translateX(-50%);
 }

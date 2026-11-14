@@ -6,6 +6,7 @@ import { LocationDialog } from "../georef/LocationDialog";
 import { useI18n } from "../i18n/I18nProvider";
 import { LanguageSelect } from "../i18n/LanguageSelect";
 import { MaterialsDialog } from "../materials/MaterialsDialog";
+import { ViewportView } from "../viewport/ViewportView";
 import { useShellState } from "./ShellState";
 import "./shell.css";
 
@@ -185,7 +186,9 @@ export function Shell() {
           ref={viewport}
           data-region
           tabIndex={-1}
-        />
+        >
+          <ViewportView />
+        </main>
         <section
           className="panel panel-right"
           aria-labelledby={tabId(rightPanel)}

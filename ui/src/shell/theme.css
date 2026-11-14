@@ -20,6 +20,16 @@
   --bc-on-danger: #ffffff;
   /* Borders of form fields: --bc-line is only 1.46:1, below the 3:1 of WCAG 1.4.11. */
   --bc-field-line: #858b94;
+  /* 3D view colours (the `color/vp-*` variables): handed to the viewport module as its theme. */
+  --bc-vp-bg: #f4f5f6;
+  --bc-vp-select: #0f6b5e;
+  --bc-vp-hover: #b25e00;
+  --bc-vp-snap: #b4137b;
+  --bc-vp-halo: #ffffff;
+  --bc-vp-ghost: #5c6470;
+  --bc-vp-cut: #b4410a;
+  --bc-vp-chip: #1b1d21;
+  --bc-vp-chip-ink: #ffffff;
   --bc-shadow: 0 4px 16px rgb(0 0 0 / 10%);
   --bc-font: "IBM Plex Sans", system-ui, sans-serif;
 }
@@ -41,6 +51,15 @@
     --bc-warn-tint: #3d2a1a;
     --bc-on-danger: #1c1e21;
     --bc-field-line: #7a8089;
+    --bc-vp-bg: #16181b;
+    --bc-vp-select: #4db6a3;
+    --bc-vp-hover: #f5b04a;
+    --bc-vp-snap: #ff7ad0;
+    --bc-vp-halo: #0b0c0e;
+    --bc-vp-ghost: #9aa3ae;
+    --bc-vp-cut: #fdba74;
+    --bc-vp-chip: #e6e7e9;
+    --bc-vp-chip-ink: #1b1d21;
     --bc-shadow: 0 4px 16px rgb(0 0 0 / 40%);
   }
 }

@@ -1,6 +1,17 @@
+import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
 
 export default defineConfig({
+  resolve: {
+    // The viewport bindings are built from Rust (scripts/build-viewport.sh); unit tests use a stub,
+    // so they run, and run the same, with or without the build.
+    alias: [
+      {
+        find: /^\.\/pkg\/viewport\.js$/,
+        replacement: fileURLToPath(new URL("src/test-support/viewportPkg.ts", import.meta.url)),
+      },
+    ],
+  },
   test: {
     environment: "jsdom",
     include: ["src/**/*.test.{ts,tsx}"],
