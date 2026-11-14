@@ -1,4 +1,4 @@
-import { readChange, readResponse, request } from "./jsonrpc";
+import { readChange, readResponse, request, TransportError } from "./jsonrpc";
 import type { ChangeEvent, Commands, Queries } from "./protocol.gen";
 
 /** Carries JSON-RPC messages to the core and back (API-04): Tauri's IPC in the desktop window. */
@@ -7,6 +7,11 @@ export interface Transport {
   send(message: string): Promise<string | null>;
   /** Calls `onMessage` with each notification from the core; resolves to the unsubscribe call. */
   listen(onMessage: (message: string) => void): Promise<() => void>;
+  /**
+   * Fetches the scene delta after revision `since` (`null`: the full scene) as raw bytes, through
+   * the binary scene channel (api-contract.md §1). A transport without the channel leaves it out.
+   */
+  scene?(since: number | null): Promise<ArrayBuffer>;
 }
 
 /**
@@ -44,6 +49,17 @@ export class ApiClient {
       const event = readChange(message);
       if (event !== null) listener(event);
     });
+  }
+
+  /**
+   * The scene delta after revision `since` (`null`: the full scene), as bytes the viewport reads.
+   * Rejects with a `TransportError` when the call fails or the transport has no scene channel.
+   */
+  scene(since: number | null): Promise<ArrayBuffer> {
+    if (this.#transport.scene === undefined) {
+      return Promise.reject(new TransportError("this transport has no scene channel"));
+    }
+    return this.#transport.scene(since);
   }
 
   async #call(method: string, params: unknown): Promise<unknown> {
