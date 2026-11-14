@@ -421,4 +421,19 @@ fn malformed_meshes_are_refused() {
     let mut far = triangle(vec![0, 1, 2], 3);
     far.mesh.positions[0] = Point3::new(f64::NAN, 0.0, 0.0);
     assert!(wire_mesh(&far).is_none(), "not finite");
+    let mut wide = triangle(vec![0, 1, 2], 3);
+    wide.mesh.positions[1] = Point3::new(5e9, 0.0, 0.0);
+    assert!(wire_mesh(&wide).is_none(), "beyond the world extent");
+    let mut flat = triangle(vec![0, 1, 2], 3);
+    flat.mesh.normals[0] = Vector3::new(0.0, 0.0, 0.0);
+    assert!(wire_mesh(&flat).is_none(), "not a unit normal");
+}
+
+#[test]
+fn a_block_wider_than_the_world_does_not_spoil_the_delta() {
+    let host = DocumentHost::open_new().unwrap();
+    place_block(&host, 1, [0.0, 0.0, 0.0], [1.0, 1.0, 1.0]);
+    place_block(&host, 2, [0.0, 0.0, 0.0], [5e9, 1.0, 1.0]);
+    let full = delta(&host, None);
+    assert_eq!(element_ids(&full), [1]);
 }

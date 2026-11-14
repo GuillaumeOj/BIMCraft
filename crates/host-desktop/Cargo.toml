@@ -13,11 +13,11 @@ core-model = { workspace = true }
 core-txn = { workspace = true }
 platform = { workspace = true }
 rayon = { workspace = true }
+schema = { workspace = true }
+schema-gen = { workspace = true }
 scene = { workspace = true }
 scene-wire = { workspace = true }
 serde_json = { workspace = true }
-schema = { workspace = true }
-schema-gen = { workspace = true }
 tempfile = { workspace = true }
 tauri = { workspace = true }
 thiserror = { workspace = true }
@@ -35,7 +35,6 @@ tauri = { workspace = true, features = ["test"] }
 [target.'cfg(not(target_family = "wasm"))'.dev-dependencies]
 criterion = { workspace = true }
 
-# Test fixture: a stand-in solver that the compute tests start as a child process.
 # Only the criterion harness benches; libtest would reject criterion's options.
 [lib]
 bench = false
@@ -44,6 +43,7 @@ bench = false
 name = "move"
 harness = false
 
+# Test fixture: a stand-in solver that the compute tests start as a child process.
 [[bin]]
 name = "test-solver"
 test = false

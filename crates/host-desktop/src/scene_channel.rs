@@ -359,27 +359,10 @@ fn id_bytes(id: EntityId) -> [u8; 16] {
     id.get().to_le_bytes()
 }
 
-/// A rotation the decoder accepts: finite, orthonormal columns, determinant +1; a translation
-/// within the world extent. Generators build theirs from an angle, so this only guards against
-/// a defect or a hostile model.
+/// A placement the decoder accepts: a proper rotation and a translation within the world extent.
+/// Generators build theirs from an angle, so this only guards against a defect or a hostile model.
 fn placement_is_valid(placement: &Placement) -> bool {
-    const TOLERANCE: f64 = 1e-9;
-    let r = &placement.rotation;
-    let dot = |a: usize, b: usize| r[a] * r[b] + r[a + 1] * r[b + 1] + r[a + 2] * r[b + 2];
-    let determinant = r[0] * (r[4] * r[8] - r[7] * r[5]) - r[3] * (r[1] * r[8] - r[7] * r[2])
-        + r[6] * (r[1] * r[5] - r[4] * r[2]);
-    r.iter().all(|v| v.is_finite())
-        && (dot(0, 0) - 1.0).abs() < TOLERANCE
-        && (dot(3, 3) - 1.0).abs() < TOLERANCE
-        && (dot(6, 6) - 1.0).abs() < TOLERANCE
-        && dot(0, 3).abs() < TOLERANCE
-        && dot(0, 6).abs() < TOLERANCE
-        && dot(3, 6).abs() < TOLERANCE
-        && (determinant - 1.0).abs() < TOLERANCE
-        && placement
-            .translation
-            .iter()
-            .all(|v| v.is_finite() && v.abs() <= MAX_WORLD_COORDINATE)
+    scene_wire::placement_is_valid(&placement.rotation, &placement.translation)
 }
 
 /// The mesh in render's shape: `f32` positions around the `f64` centre of the bounding box
@@ -447,7 +430,7 @@ fn wire_mesh(mesh: &scene::ElementMesh) -> Option<Mesh> {
         .map(|n| [n.x as f32, n.y as f32, n.z as f32])
         .collect();
     let (bounds_min, bounds_max) = bounds(&positions);
-    Some(Mesh {
+    let mesh = Mesh {
         id: 0,
         origin,
         positions,
@@ -455,7 +438,10 @@ fn wire_mesh(mesh: &scene::ElementMesh) -> Option<Mesh> {
         indices: source.indices.clone(),
         bounds_min,
         bounds_max,
-    })
+    };
+    // One element the decoder refuses (a size beyond the world extent, a degenerate face) would
+    // make the whole delta unreadable: the check is the decoder's own.
+    scene_wire::mesh_is_valid(&mesh).then_some(mesh)
 }
 
 /// The box that encloses the `f32` positions exactly (the decoder checks it).

@@ -31,7 +31,11 @@ pub fn register(generators: &mut Generators) {
 /// world extent, or a value is not finite.
 pub fn block_body(model: &Model, block: EntityId) -> Result<Generated, GeneratorError> {
     let location = location_of(model, block)?;
-    let rotation = real(model, block, "rotation").unwrap_or(0.0);
+    // Unset is the default; a value of another type is as invalid as it is for the sizes.
+    let rotation = match real(model, block, "rotation") {
+        Err(GeneratorError::MissingInput) => 0.0,
+        other => other?,
+    };
     let size = [
         real(model, block, "size_x")?,
         real(model, block, "size_y")?,

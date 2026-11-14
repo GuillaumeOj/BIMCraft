@@ -174,11 +174,12 @@ fn location(model: &Model, id: EntityId, attribute: &str) -> Result<[f64; 3], El
     };
     let reals: Vec<f64> = items
         .iter()
-        .filter_map(|item| match item.plain() {
+        .map(|item| match item.plain() {
             AttributeValue::Real(v) => Some(*v),
             _ => None,
         })
-        .collect();
+        .collect::<Option<_>>()
+        .ok_or(ElementsError::NotMovable)?;
     <[f64; 3]>::try_from(reals).map_err(|_| ElementsError::NotMovable)
 }
 

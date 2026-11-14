@@ -225,6 +225,15 @@ fn vec3s(bytes: &[u8]) -> Vec<[f32; 3]> {
         .collect()
 }
 
+/// Whether [`decode`] accepts `mesh`: not empty, every coordinate and bound finite and within the
+/// world, bounds that enclose the positions, unit normals, whole triangles that index the
+/// vertices. A host checks the meshes it builds with it, so one bad element never makes a whole
+/// delta unreadable.
+#[must_use]
+pub fn mesh_is_valid(mesh: &Mesh) -> bool {
+    check_mesh(mesh, 0).is_ok()
+}
+
 fn check_mesh(mesh: &Mesh, index: usize) -> Result<(), WireError> {
     if mesh.positions.is_empty() || mesh.indices.is_empty() {
         return Err(WireError::EmptyMesh { index });
