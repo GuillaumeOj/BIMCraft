@@ -68,7 +68,7 @@ describe("Shell", () => {
     expect(region("Console")).toBeInTheDocument();
   });
 
-  it("switches the right panel between its three tabs with the arrow keys", async () => {
+  it("switches the right panel between its four tabs with the arrow keys", async () => {
     const user = renderShell();
     const properties = screen.getByRole("tab", { name: "Properties" });
     expect(properties).toHaveAttribute("aria-selected", "true");
@@ -83,13 +83,16 @@ describe("Shell", () => {
     const coordinates = screen.getByRole("tab", { name: "Coordinates" });
     expect(coordinates).toHaveFocus();
     await user.keyboard("{ArrowRight}");
+    const view = screen.getByRole("tab", { name: "View" });
+    expect(view).toHaveFocus();
+    await user.keyboard("{ArrowRight}");
     expect(properties).toHaveFocus();
     await user.keyboard("{ArrowLeft}");
-    expect(coordinates).toHaveFocus();
+    expect(view).toHaveFocus();
     await user.keyboard("{Home}");
     expect(properties).toHaveFocus();
     await user.keyboard("{End}");
-    expect(coordinates).toHaveFocus();
+    expect(view).toHaveFocus();
     await user.click(history);
     expect(history).toHaveAttribute("aria-selected", "true");
   });

@@ -5,6 +5,7 @@ import { SINGLE_KEYS_STORAGE_KEY } from "../shell/ShellState";
 import { fakeCore } from "../test-support/fakeCore";
 import { fakeViewport } from "../test-support/fakeViewport";
 import { renderWithCore } from "../test-support/render";
+import { group, viewState } from "../test-support/viewState";
 import { HINT_STORAGE_KEY } from "./HintCard";
 import type { ViewportHandle, ViewportModule } from "./types";
 import { ViewportView } from "./ViewportView";
@@ -58,6 +59,9 @@ async function ready(options: Parameters<typeof setUp>[0] = {}) {
   const setup = await setUp(options);
   await waitFor(() => expect(setup.viewport.applied).toEqual([3]));
   await waitFor(() => expect(status()).not.toHaveTextContent("Loading"));
+  // The viewport counts what it draws, by category; an empty model has none.
+  if ((options.blocks ?? [BLOCK]).length > 0)
+    setup.viewport.emit({ kind: "view_state", state: viewState() });
   return setup;
 }
 
@@ -326,18 +330,7 @@ describe("ViewportView tools", () => {
     ]);
     viewport.emit({
       kind: "view_state",
-      state: {
-        projection: "parallel",
-        snapping: false,
-        tool: "select",
-        categories: [],
-        disciplines: [],
-        isolating: false,
-        hiddenSelection: 0,
-        sectionBox: null,
-        clipPlanes: [],
-        cutFaces: "tinted",
-      },
+      state: viewState({ projection: "parallel", snapping: false }),
     });
     expect(status()).toHaveTextContent("1 element selected · Esc to clear · Snap off");
     await user.keyboard("ps");
@@ -531,6 +524,54 @@ describe("ViewportView feedback", () => {
     core.failNext("elements.move", new ApiError(-32602, "invalid params"));
     move();
     expect(await screen.findByText("The move failed. Try again.")).toBeVisible();
+    core.failNext("elements.move", new ApiError(-32000, "refused", { reason: "out_of_range" }));
+    move();
+    expect(
+      await screen.findByText("This move would take the element too far from the project origin."),
+    ).toBeVisible();
+    core.failNext("elements.move", new ApiError(-32000, "refused", { reason: "unknown_element" }));
+    move();
+    expect(
+      await screen.findByText("This element no longer exists. It may have been deleted."),
+    ).toBeVisible();
+  });
+
+  it("says why a move was refused, in French", async () => {
+    localStorage.setItem("bimcraft.language", "fr");
+    const { core, viewport } = await ready();
+    const move = () =>
+      viewport.emit({
+        kind: "intent",
+        intent: { kind: "move", ids: [BLOCK], translation: [1, 0, 0] },
+      });
+    core.failNext("elements.move", new ApiError(-32000, "refused", { reason: "out_of_range" }));
+    move();
+    expect(
+      await screen.findByText(
+        "Ce déplacement amènerait l’élément trop loin de l’origine du projet.",
+      ),
+    ).toBeVisible();
+    core.failNext("elements.move", new ApiError(-32000, "refused", { reason: "unknown_element" }));
+    move();
+    expect(
+      await screen.findByText("Cet élément n’existe plus. Il a peut-être été supprimé."),
+    ).toBeVisible();
+    localStorage.removeItem("bimcraft.language");
+  });
+
+  it("derives the empty state from the categories the viewport reports, not from the model", async () => {
+    const { core, viewport } = await ready();
+    expect(screen.queryByRole("heading", { name: "Nothing to see yet" })).toBeNull();
+    viewport.emit({
+      kind: "view_state",
+      state: viewState({ categories: [group("Block")].map((g) => ({ ...g, count: 0 })) }),
+    });
+    expect(await screen.findByRole("heading", { name: "Nothing to see yet" })).toBeVisible();
+    viewport.emit({ kind: "view_state", state: viewState() });
+    await waitFor(() =>
+      expect(screen.queryByRole("heading", { name: "Nothing to see yet" })).toBeNull(),
+    );
+    expect(core.calls.some((call) => call.method === "model.list_objects")).toBe(false);
   });
 
   it("places the block of an intent, offers Undo and selects it once the view has it", async () => {
@@ -547,6 +588,8 @@ describe("ViewportView feedback", () => {
       expect(viewport.commands).toContainEqual({ kind: "select", ids: [id ?? ""] }),
     );
     expect(viewport.applied.at(-1)).toBe(4);
+    // The viewport now draws the block.
+    viewport.emit({ kind: "view_state", state: viewState() });
     await waitFor(() => expect(screen.queryByText("Nothing to see yet")).not.toBeInTheDocument());
   });
 
@@ -592,5 +635,79 @@ describe("Navigation hint", () => {
     unmount();
     await ready();
     expect(screen.queryByRole("region", { name: "Moving around the model" })).toBeNull();
+  });
+});
+
+describe("section box and visibility shortcuts", () => {
+  it("hides and isolates the selection with H and I, and asks for a selection first", async () => {
+    const { viewport, user } = await ready();
+    await user.keyboard("h");
+    expect(await screen.findByText("Select something to hide or isolate")).toBeVisible();
+    expect(viewport.commands).toEqual([]);
+    viewport.emit({ kind: "selection", ids: [BLOCK] });
+    await user.keyboard("hi");
+    expect(viewport.commands).toEqual([
+      { kind: "hide", target: { by: "selection" } },
+      { kind: "isolate", target: { by: "selection" } },
+    ]);
+  });
+
+  it("resets visibility with Alt+H and toggles the section box with Alt+B, even with single keys off", async () => {
+    localStorage.setItem(SINGLE_KEYS_STORAGE_KEY, "off");
+    const { viewport, user } = await ready();
+    await user.keyboard("{Alt>}h{/Alt}");
+    await user.keyboard("{Alt>}b{/Alt}");
+    expect(viewport.commands).toEqual([
+      { kind: "reset_visibility" },
+      { kind: "section_box", enabled: true },
+    ]);
+    viewport.emit({
+      kind: "view_state",
+      state: viewState({ sectionBox: { enabled: true, min: [0, 0, 0], max: [1, 1, 1] } }),
+    });
+    await user.keyboard("{Alt>}b{/Alt}");
+    expect(viewport.commands.at(-1)).toEqual({ kind: "section_box", enabled: false });
+    // Shift makes it another chord, and a text field keeps its keys.
+    await user.keyboard("{Alt>}{Shift>}b{/Shift}{/Alt}");
+    const field = document.createElement("input");
+    document.body.append(field);
+    field.focus();
+    await user.keyboard("{Alt>}h{/Alt}");
+    expect(viewport.commands).toHaveLength(3);
+    field.remove();
+  });
+
+  it("ends an isolate with Escape from outside the canvas, once, and leaves the canvas to the viewport", async () => {
+    const { viewport, user } = await ready();
+    viewport.emit({ kind: "view_state", state: viewState() });
+    await user.keyboard("{Escape}");
+    expect(viewport.commands).toEqual([]);
+
+    viewport.emit({
+      kind: "view_state",
+      state: viewState({ isolating: true, categories: [group("Structure", { isolated: true })] }),
+    });
+    screen.getByRole("application", { name: "3D view" }).focus();
+    await user.keyboard("{Escape}");
+    expect(viewport.commands).toEqual([]);
+    (document.activeElement as HTMLElement).blur();
+    await user.keyboard("{Escape}");
+    expect(viewport.commands).toEqual([{ kind: "cancel" }]);
+    await user.keyboard("{Shift>}{Escape}{/Shift}");
+    expect(viewport.commands).toHaveLength(1);
+
+    const field = document.createElement("input");
+    document.body.append(field);
+    field.focus();
+    await user.keyboard("{Escape}");
+    expect(viewport.commands).toHaveLength(1);
+    field.remove();
+  });
+
+  it("cancels a pending face pick with Escape too", async () => {
+    const { viewport, user } = await ready();
+    viewport.emit({ kind: "tool_state", tool: "select", step: "pick_face" });
+    await user.keyboard("{Escape}");
+    expect(viewport.commands).toEqual([{ kind: "cancel" }]);
   });
 });

@@ -18,6 +18,8 @@
 - [Navigate the 3D view](navigate-the-3d-view.md)
 - [Select and move elements](select-and-move-elements.md)
 - [Place a block](place-a-block.md)
+- [Cut the model with a section box](cut-the-model-with-a-section-box.md)
+- [Hide and isolate elements](hide-and-isolate-elements.md)
 
 # Site and location
 
@@ -34,6 +36,8 @@
 - [Se déplacer dans la vue 3D](navigate-the-3d-view.fr.md)
 - [Sélectionner et déplacer des éléments](select-and-move-elements.fr.md)
 - [Placer un bloc](place-a-block.fr.md)
+- [Couper le modèle avec une boîte de coupe](cut-the-model-with-a-section-box.fr.md)
+- [Masquer et isoler des éléments](hide-and-isolate-elements.fr.md)
 - [Définir la localisation du projet](set-up-the-project-location.fr.md)
 - [Lire et saisir des coordonnées](read-and-enter-coordinates.fr.md)
 - [Gérer les matériaux du projet](manage-project-materials.fr.md)

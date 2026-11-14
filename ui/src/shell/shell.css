@@ -99,17 +99,17 @@
   min-height: 0;
 }
 
-/* Under the floating panels, whatever their order in the document. */
+/* Under the floating panels, whatever their order in the document. No z-index: a stacking
+   context here would keep the menus and popovers of the 3D view below the panels. */
 .viewport {
   position: absolute;
   inset: 0;
-  z-index: 0;
   background: var(--bc-paper);
 }
 
 .panel {
   position: absolute;
-  z-index: 1;
+  z-index: var(--bc-z-panel);
   display: flex;
   flex-direction: column;
   padding: 0 6px 8px;

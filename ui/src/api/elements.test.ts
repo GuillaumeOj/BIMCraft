@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { ApiClient, type Transport } from "./client";
-import { hasDrawableElements, moveElements, moveRefusal, placeBlock } from "./elements";
+import { moveElements, moveRefusal, placeBlock } from "./elements";
 import { ApiError } from "./jsonrpc";
 
 /** A transport that records the requests and answers null. */
@@ -64,17 +64,5 @@ describe("placeBlock", () => {
         },
       },
     ]);
-  });
-});
-
-describe("hasDrawableElements", () => {
-  it("asks for one block and tells whether there is one", async () => {
-    const empty = recorder({ items: [], next: null });
-    await expect(hasDrawableElements(empty.client)).resolves.toBe(false);
-    expect(empty.sent).toEqual([
-      { method: "model.list_objects", params: { entity: "Block", limit: 1 } },
-    ]);
-    const full = recorder({ items: ["1".padStart(32, "0")], next: null });
-    await expect(hasDrawableElements(full.client)).resolves.toBe(true);
   });
 });

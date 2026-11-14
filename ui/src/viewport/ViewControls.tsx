@@ -4,8 +4,9 @@ import { useShellState } from "../shell/ShellState";
 import { ActionMenu } from "../ui/ActionMenu";
 import { SegmentedToggle } from "../ui/SegmentedToggle";
 import { shortcutProps } from "../ui/shortcut";
-import { PresetsIcon, ZoomFitIcon, ZoomSelectionIcon } from "./icons";
+import { EyeIcon, PresetsIcon, ZoomFitIcon, ZoomSelectionIcon } from "./icons";
 import type { Preset, Projection, ViewCommand } from "./types";
+import { VISIBILITY_POPOVER_ID, VISIBILITY_TRIGGER } from "./VisibilityPopover";
 
 const PRESETS: readonly Preset[] = [
   "top",
@@ -25,6 +26,9 @@ type Props = {
   empty: boolean;
   hasSelection: boolean;
   disabled: boolean;
+  /** Whether the Visibility popover is open. */
+  visibilityOpen: boolean;
+  onVisibility: () => void;
   onCommand: (command: ViewCommand) => void;
 };
 
@@ -32,7 +36,15 @@ type Props = {
  * The view-controls cluster, bottom right (board 3.21): zoom fit, zoom to selection, the preset
  * views menu and the projection toggle. Each button names its shortcut.
  */
-export function ViewControls({ projection, empty, hasSelection, disabled, onCommand }: Props) {
+export function ViewControls({
+  projection,
+  empty,
+  hasSelection,
+  disabled,
+  visibilityOpen,
+  onVisibility,
+  onCommand,
+}: Props) {
   const { t } = useI18n();
   const { singleKeys } = useShellState();
   return (
@@ -65,6 +77,20 @@ export function ViewControls({ projection, empty, hasSelection, disabled, onComm
       >
         <PresetsIcon />
       </ActionMenu>
+      <button
+        type="button"
+        className="vp-icon-button"
+        {...{ [VISIBILITY_TRIGGER]: "" }}
+        aria-label={t("viewport.visibility.title")}
+        title={t("viewport.visibility.title")}
+        aria-haspopup="dialog"
+        aria-controls={visibilityOpen ? VISIBILITY_POPOVER_ID : undefined}
+        aria-expanded={visibilityOpen}
+        disabled={disabled}
+        onClick={onVisibility}
+      >
+        <EyeIcon hidden={false} />
+      </button>
       <SegmentedToggle<Projection>
         label={t("viewport.projection")}
         shortcut={singleKeys ? "P" : undefined}

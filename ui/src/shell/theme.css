@@ -2,6 +2,9 @@
    them against WCAG 2.2 AA, so keep every value a #rrggbb literal. */
 :root {
   color-scheme: light dark;
+  /* Layers of the shell: panels float over the 3D view, and menus and popovers over the panels. */
+  --bc-z-panel: 1;
+  --bc-z-menu: 5;
   --bc-paper: #fbfbfa;
   --bc-surface: #ffffff;
   --bc-raised: #f4f5f6;

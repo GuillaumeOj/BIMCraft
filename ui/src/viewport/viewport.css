@@ -265,3 +265,254 @@
   opacity: 0.6;
   cursor: default;
 }
+
+/* The Visibility popover (board 3.2): top right of the view, beside the View panel. */
+.vp-popover {
+  position: absolute;
+  top: 12px;
+  right: 324px;
+  z-index: var(--bc-z-menu);
+  box-sizing: border-box;
+  width: min(300px, calc(100% - 24px));
+  padding: 10px 12px 12px;
+  color: var(--bc-ink);
+  background: var(--bc-surface);
+  border: 1px solid var(--bc-line);
+  border-radius: 12px;
+  box-shadow: var(--bc-shadow);
+}
+
+.vp-popover-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.vp-popover-head .segmented {
+  margin: 0;
+}
+
+.vp-popover-title {
+  font-weight: 600;
+}
+
+.vp-popover-empty {
+  margin: 12px 0;
+  color: var(--bc-ink-2);
+}
+
+.vp-rows {
+  margin: 8px 0;
+  padding: 0;
+  list-style: none;
+}
+
+.vp-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-sizing: border-box;
+  width: 100%;
+  padding: 6px 8px;
+  font: inherit;
+  color: var(--bc-ink);
+  text-align: left;
+  background: none;
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.vp-row:hover {
+  background: var(--bc-hover);
+}
+
+.vp-row[aria-checked="false"] {
+  color: var(--bc-muted);
+}
+
+.vp-row[data-isolated="true"] {
+  background: var(--bc-selected);
+}
+
+.vp-row-name {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.vp-tag {
+  flex: none;
+  font-size: 12px;
+  color: var(--bc-ink-2);
+}
+
+.vp-tag-on {
+  padding: 2px 8px;
+  color: var(--bc-ink);
+  background: var(--bc-selected);
+  border-radius: 6px;
+}
+
+.vp-popover-keys {
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: var(--bc-ink-2);
+}
+
+.vp-popover-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.vp-popover-actions kbd,
+.view-check kbd {
+  margin-left: 8px;
+  padding: 0 4px;
+  font: inherit;
+  font-size: 11px;
+  color: var(--bc-ink-2);
+  border: 1px solid var(--bc-line);
+  border-radius: 4px;
+}
+
+.vp-popover :focus-visible,
+.view-panel :focus-visible {
+  outline: 2px solid var(--bc-verdigris);
+  outline-offset: 1px;
+}
+
+/* The View panel: sections of the right panel, rows that wrap rather than clip (French runs 25 % longer). */
+.view-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  padding: 4px 8px 8px;
+}
+
+.view-title h3 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.view-panel .disclosure {
+  margin-top: 0;
+  border-top: 1px solid var(--bc-line);
+  padding: 4px 8px;
+}
+
+.view-section {
+  display: grid;
+  gap: 8px;
+  padding: 4px 0 8px 18px;
+}
+
+.view-row {
+  display: grid;
+  grid-template-columns: 6em 1fr;
+  align-items: center;
+  gap: 8px;
+}
+
+.view-row .select,
+.view-section select {
+  min-width: 0;
+  padding: 4px 6px;
+  font: inherit;
+  color: var(--bc-ink);
+  background: var(--bc-surface);
+  border: 1px solid var(--bc-field-line);
+  border-radius: 6px;
+}
+
+.view-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.view-check input {
+  margin: 0;
+  accent-color: var(--bc-verdigris);
+}
+
+.view-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.view-empty {
+  padding: 0;
+}
+
+.view-facts {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+}
+
+.view-fact {
+  display: grid;
+  grid-template-columns: 8em 1fr;
+  gap: 8px;
+}
+
+.view-facts dt {
+  color: var(--bc-ink-2);
+}
+
+.view-facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.extent-grid {
+  display: grid;
+  grid-template-columns: 1.5em 1fr 1fr;
+  align-items: center;
+  gap: 6px;
+}
+
+.extent-head {
+  font-size: 12px;
+  color: var(--bc-ink-2);
+}
+
+.extent-field {
+  min-width: 0;
+}
+
+.extent-field input {
+  min-width: 0;
+  text-align: right;
+}
+
+.plane-rows {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.plane-row {
+  display: grid;
+  grid-template-columns: auto auto 1fr auto auto;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 4px;
+  border-radius: 6px;
+}
+
+.plane-detail {
+  min-width: 0;
+  font-size: 12px;
+  color: var(--bc-ink-2);
+  overflow-wrap: anywhere;
+}
