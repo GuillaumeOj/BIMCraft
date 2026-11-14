@@ -1,0 +1,24 @@
+[package]
+name = "viewport"
+version = "0.0.0"
+description = "Interaction of the 3D viewport: scene cache, camera, picking, snapping and tools."
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+geom = { workspace = true }
+libm = { workspace = true }
+render = { workspace = true }
+scene-wire = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+pollster = { workspace = true }
+proptest = { workspace = true }
+# The GPU test creates its own offscreen target.
+wgpu = { workspace = true }
+
+[lints]
+workspace = true

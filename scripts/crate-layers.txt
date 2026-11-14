@@ -8,5 +8,5 @@ georef material scene analysis docgen interop-ifc interop-dxf interop-bcf
 core-ext
 disc-arch disc-struct disc-mep disc-thermal
 api
-render host-desktop host-web plugin-host mcp-server
+render viewport host-desktop host-web plugin-host mcp-server
 desktop-app
