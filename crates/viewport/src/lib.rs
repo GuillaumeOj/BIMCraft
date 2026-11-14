@@ -35,6 +35,8 @@ mod snap;
 mod test_support;
 mod typed;
 mod view;
+#[cfg(target_arch = "wasm32")]
+mod web;
 
 pub use cache::SceneError;
 pub use event::{

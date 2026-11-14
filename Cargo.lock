@@ -4706,12 +4706,16 @@ name = "viewport"
 version = "0.0.0"
 dependencies = [
  "geom",
+ "js-sys",
  "libm",
  "pollster",
  "proptest",
  "render",
  "scene-wire",
  "thiserror 2.0.21",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
  "wgpu",
 ]
 
