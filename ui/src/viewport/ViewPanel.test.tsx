@@ -243,68 +243,90 @@ describe("View panel", () => {
       expect(sent(viewport)).toContainEqual({ kind: "cut_faces", style: "tinted" });
     });
 
-    it("tags the panel and the section, and the status counts the faces moved since the box began", async () => {
+    /** The viewport announces a dragged face, then reports the box it left behind. */
+    const drag = async (
+      viewport: Awaited<ReturnType<typeof setUp>>["viewport"],
+      changes: Partial<{ min: number[]; max: number[] }>,
+    ) => {
+      await viewport.emit({
+        kind: "announce",
+        key: "section_box.face_moved",
+        values: { value: 5 },
+      });
+      await viewport.emit({ kind: "view_state", state: viewState({ sectionBox: box(changes) }) });
+    };
+    const status = () => document.getElementById("vp-status");
+
+    it("tags the panel and the section, and the status counts the faces dragged since the box began", async () => {
       const { viewport } = await setUp();
-      const status = () => document.getElementById("vp-status");
       await viewport.emit({ kind: "view_state", state: viewState({ sectionBox: box() }) });
       expect(screen.getByText("Section box active")).toBeInTheDocument();
       expect(screen.getByRole("button", { name: /Section box.*On/ })).toBeInTheDocument();
       expect(status()).toHaveTextContent("No selection");
 
-      await viewport.emit({
-        kind: "view_state",
-        state: viewState({ sectionBox: box({ max: [5, 5, 3] }) }),
-      });
+      await drag(viewport, { max: [5, 5, 3] });
       expect(status()).toHaveTextContent("Section box · 1 face moved");
       // The same face again is still one face.
-      await viewport.emit({
-        kind: "view_state",
-        state: viewState({ sectionBox: box({ max: [6, 5, 3] }) }),
-      });
+      await drag(viewport, { max: [6, 5, 3] });
       expect(status()).toHaveTextContent("Section box · 1 face moved");
-      await viewport.emit({
-        kind: "view_state",
-        state: viewState({ sectionBox: box({ min: [-1, -3, 0], max: [6, 5, 3] }) }),
-      });
+      await drag(viewport, { min: [-1, -3, 0], max: [6, 5, 3] });
       expect(status()).toHaveTextContent("Section box · 2 faces moved");
     });
 
-    it("starts a new count at Reset and Fit to selection, and when the box is switched off", async () => {
+    it("starts again at 0 when Reset, Fit to selection or a typed extent changes the box, and counts only drags after", async () => {
       const { viewport, user } = await setUp();
-      const status = () => document.getElementById("vp-status");
+      await viewport.emit({ kind: "view_state", state: viewState({ sectionBox: box() }) });
+      await viewport.emit({ kind: "selection", ids: [BLOCK] });
+      await viewport.emit({ kind: "selection", ids: [] });
+      await drag(viewport, { max: [5, 5, 3] });
+      expect(status()).toHaveTextContent("1 face moved");
+
+      // Reset: the count is 0, and the box the viewport then reports is not a drag.
+      await user.click(screen.getByRole("button", { name: "Reset" }));
+      expect(status()).toHaveTextContent("No selection · Snap on");
+      await viewport.emit({ kind: "view_state", state: viewState({ sectionBox: box() }) });
+      expect(status()).toHaveTextContent("No selection · Snap on");
+
+      // A typed extent: the same.
+      await drag(viewport, { max: [5, 5, 3] });
+      expect(status()).toHaveTextContent("1 face moved");
+      await user.clear(field("Max Y"));
+      await user.type(field("Max Y"), "9{Enter}");
+      expect(status()).toHaveTextContent("No selection · Snap on");
+      await viewport.emit({
+        kind: "view_state",
+        state: viewState({ sectionBox: box({ max: [5, 9, 3] }) }),
+      });
+      expect(status()).toHaveTextContent("No selection · Snap on");
+
+      // Fit to selection: the same, and a drag afterwards counts again.
+      await viewport.emit({ kind: "selection", ids: [BLOCK] });
+      await user.click(screen.getByRole("button", { name: "Fit to selection" }));
+      await viewport.emit({
+        kind: "view_state",
+        state: viewState({ sectionBox: box({ min: [0, 0, 0], max: [1, 1, 1] }) }),
+      });
+      await viewport.emit({ kind: "selection", ids: [] });
+      expect(status()).toHaveTextContent("No selection · Snap on");
+      await drag(viewport, { min: [0, 0, 0], max: [2, 1, 1] });
+      expect(status()).toHaveTextContent("Section box · 1 face moved");
+    });
+
+    it("counts nothing when the box changes without a drag, and nothing once it is switched off", async () => {
+      const { viewport } = await setUp();
       await viewport.emit({ kind: "view_state", state: viewState({ sectionBox: box() }) });
       await viewport.emit({
         kind: "view_state",
         state: viewState({ sectionBox: box({ max: [5, 5, 3] }) }),
       });
-      expect(status()).toHaveTextContent("1 face moved");
-      await user.click(screen.getByRole("button", { name: "Reset" }));
       expect(status()).toHaveTextContent("No selection · Snap on");
-
-      await viewport.emit({
-        kind: "view_state",
-        state: viewState({ sectionBox: box({ max: [6, 5, 3] }) }),
-      });
+      await drag(viewport, { max: [6, 5, 3] });
       expect(status()).toHaveTextContent("1 face moved");
       await viewport.emit({
         kind: "view_state",
         state: viewState({ sectionBox: box({ enabled: false }) }),
       });
       expect(status()).toHaveTextContent("No selection · Snap on");
-    });
-
-    it("counts a face dragged after a Reset that changed nothing", async () => {
-      const { viewport, user } = await setUp();
-      const status = () => document.getElementById("vp-status");
-      await viewport.emit({ kind: "view_state", state: viewState({ sectionBox: box() }) });
-      // The viewport already had this box, so it reports no new state for the Reset.
-      await user.click(screen.getByRole("button", { name: "Reset" }));
-      await viewport.emit({
-        kind: "view_state",
-        state: viewState({ sectionBox: box({ max: [5, 5, 3] }) }),
-      });
-      expect(status()).toHaveTextContent("Section box · 1 face moved");
-      expect(field("Max X")).toHaveValue("5.000");
     });
 
     it("shows the hint as a toast when the box is switched on, not at first sight", async () => {

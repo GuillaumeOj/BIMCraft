@@ -45,30 +45,45 @@ const MOVE_FAILURES: Record<MoveRefusal | "failed", MessageKey> = {
 };
 
 /**
- * "N faces moved": which faces of the section box changed position since it was switched on or
- * last reset, read from the successive states the viewport reports.
+ * "N faces moved": which faces of the section box the user dragged since it was switched on or
+ * last changed from the panel. A change of the box counts only while the viewport announces a
+ * dragged face, so what Fit to selection, Reset or a typed extent does to the box is not counted.
  */
 function useFacesMoved() {
   const moved = useRef(new Set<number>());
   const lastBox = useRef<SectionBox | null>(null);
+  const dragging = useRef(false);
   const [facesMoved, setFacesMoved] = useState(0);
   const trackFaces = useCallback((box: SectionBox | null) => {
     const before = lastBox.current;
     lastBox.current = box;
     if (box === null || !box.enabled || before === null || !before.enabled) {
       moved.current.clear();
-    } else {
+      dragging.current = false;
+    } else if (dragging.current) {
       for (const face of changedFaces(before, box)) moved.current.add(face);
     }
     setFacesMoved(moved.current.size);
   }, []);
-  // A new box starts a new count; what the viewport then changes is counted from its next state.
+  /** The viewport announced a dragged face: the changes of the box that follow are drags. */
+  const dragged = useCallback(() => {
+    dragging.current = true;
+  }, []);
+  /** The panel changed the box: the count starts again, and what follows is not a drag. */
   const resetFaces = useCallback(() => {
     moved.current.clear();
+    dragging.current = false;
     setFacesMoved(0);
   }, []);
-  return { facesMoved, trackFaces, resetFaces };
+  return { facesMoved, trackFaces, dragged, resetFaces };
 }
+
+/** The commands that change the section box other than by a drag of a face. */
+const BOX_CHANGES = new Set<ViewCommand["kind"]>([
+  "section_box_reset",
+  "section_box_fit_selection",
+  "section_box_extents",
+]);
 
 /** Whether the viewport draws no element at all. */
 const isEmpty = (view: ViewState) => view.categories.every((category) => category.count === 0);
@@ -164,7 +179,7 @@ export function ViewportView() {
   const [tool, setTool] = useState<Tool>("select");
   const [step, setStep] = useState<ToolStep>("idle");
   const [view, setView] = useState(INITIAL_VIEW);
-  const { facesMoved, trackFaces, resetFaces } = useFacesMoved();
+  const { facesMoved, trackFaces, dragged, resetFaces } = useFacesMoved();
   const [visibilityOpen, setVisibilityOpen] = useState(false);
   const [announcement, setAnnouncement] = useState({ text: "", serial: 0 });
   // Which value the pointer chip names: the hint bar follows it while the depth is typed.
@@ -194,6 +209,7 @@ export function ViewportView() {
         onViewState(event.state);
         break;
       case "announce":
+        if (event.key === "section_box.face_moved") dragged();
         setAnnouncement((previous) => ({
           text: announcementText(t, language, event.key, event.values),
           serial: previous.serial + 1,
@@ -222,9 +238,7 @@ export function ViewportView() {
 
   const command = useCallback(
     (value: ViewCommand) => {
-      if (value.kind === "section_box_reset" || value.kind === "section_box_fit_selection") {
-        resetFaces();
-      }
+      if (BOX_CHANGES.has(value.kind)) resetFaces();
       handle.current?.command(value);
     },
     [handle, resetFaces],
