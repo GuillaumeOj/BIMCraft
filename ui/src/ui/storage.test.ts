@@ -31,4 +31,22 @@ describe("readStored / writeStored", () => {
     writeStored("bimcraft.test", null);
     expect(readStored("bimcraft.test")).toBeNull();
   });
+
+  it("keeps a choice whose write failed even when reading still works", () => {
+    writeStored("bimcraft.test", "old");
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new Error("quota");
+    });
+    vi.spyOn(Storage.prototype, "removeItem").mockImplementation(() => {
+      throw new Error("quota");
+    });
+    writeStored("bimcraft.test", "new");
+    expect(readStored("bimcraft.test")).toBe("new");
+    writeStored("bimcraft.test", null);
+    expect(readStored("bimcraft.test")).toBeNull();
+    vi.restoreAllMocks();
+    // Storage works again: a successful write replaces what memory kept.
+    writeStored("bimcraft.test", "back");
+    expect(readStored("bimcraft.test")).toBe("back");
+  });
 });
