@@ -1,0 +1,37 @@
+[package]
+name = "viewport"
+version = "0.0.0"
+description = "Interaction of the 3D viewport: scene cache, camera, picking, snapping and tools."
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+# `cdylib` is what wasm-bindgen processes (scripts/build-viewport.sh); `rlib` keeps the native
+# tests and the other crates linking it.
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+geom = { workspace = true }
+libm = { workspace = true }
+render = { workspace = true }
+scene-wire = { workspace = true }
+thiserror = { workspace = true }
+
+# The browser glue, `src/web/`: wasm32 only.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+js-sys = { workspace = true }
+wasm-bindgen = { workspace = true }
+wasm-bindgen-futures = { workspace = true }
+web-sys = { workspace = true }
+wgpu = { workspace = true }
+
+[dev-dependencies]
+pollster = { workspace = true }
+proptest = { workspace = true }
+# The GPU test creates its own offscreen target.
+wgpu = { workspace = true }
+
+[lints]
+workspace = true

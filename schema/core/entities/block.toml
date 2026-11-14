@@ -1,0 +1,45 @@
+format = 1
+
+[entity]
+name = "Block"
+kind = "element"
+doc = "A generic box the user places in the model: the first element the viewport can draw. It stands on its location, a point at the centre of its base, and is turned about the vertical axis. It is exported as an IFC building element proxy."
+
+[ifc]
+entity = "IfcBuildingElementProxy"
+
+[[attribute]]
+name = "location"
+value = "list:quantity:length"
+required = true
+doc = "The centre of the base: three lengths, x, y and z, in the project's world frame. The generator refuses any other number of values."
+
+[[attribute]]
+name = "rotation"
+value = "quantity:plane_angle"
+default = 0.0
+doc = "Angle from the x-axis of the world to the x-axis of the block, counter-clockwise seen from above."
+
+[[attribute]]
+name = "size_x"
+value = "quantity:length"
+required = true
+doc = "Extent along the block's own x-axis. Positive."
+
+[[attribute]]
+name = "size_y"
+value = "quantity:length"
+required = true
+doc = "Extent along the block's own y-axis. Positive."
+
+[[attribute]]
+name = "size_z"
+value = "quantity:length"
+required = true
+doc = "Height, from the base up. Positive."
+
+[[representation]]
+lod = 300
+context = "body"
+generator = "block::body"
+depends_on = ["location", "rotation", "size_x", "size_y", "size_z"]

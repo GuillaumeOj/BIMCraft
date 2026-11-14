@@ -13,6 +13,7 @@ mod commands;
 #[cfg(feature = "conformance")]
 pub mod conformance;
 mod descriptor;
+mod elements;
 mod error;
 mod georeference;
 pub mod jsonrpc;
@@ -26,6 +27,7 @@ mod version;
 
 pub use buildups::BuildUpsError;
 pub use descriptor::{Descriptor, Kind, Outcome};
+pub use elements::{ElementsError, MAX_MOVED, MAX_TRANSLATION};
 pub use error::{ApiError, GeorefError, RegistryError};
 pub use materials::MaterialsError;
 pub use queries::{DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE};

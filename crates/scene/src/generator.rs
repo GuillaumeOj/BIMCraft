@@ -3,6 +3,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 
+use crate::Placement;
 use core_model::{EntityId, Model};
 use geom::{BooleanError, BrepError, ExtrusionError, ProfileError, Solid};
 
@@ -12,7 +13,7 @@ use geom::{BooleanError, BrepError, ExtrusionError, ProfileError, Solid};
 /// read: the element, its type, the relationships it takes part in, the objects its attributes
 /// refer to, and the objects it lists in [`Generated::inputs`]. The scene recomputes it when one
 /// of them changes, and only then.
-pub trait Generator {
+pub trait Generator: Send + Sync {
     /// The solids of `element`'s representation.
     ///
     /// # Errors
@@ -25,7 +26,7 @@ pub trait Generator {
 /// Any function of the model and an element is a generator.
 impl<F> Generator for F
 where
-    F: Fn(&Model, EntityId) -> Result<Generated, GeneratorError>,
+    F: Fn(&Model, EntityId) -> Result<Generated, GeneratorError> + Send + Sync,
 {
     fn generate(&self, model: &Model, element: EntityId) -> Result<Generated, GeneratorError> {
         self(model, element)
@@ -35,8 +36,10 @@ where
 /// What a generator computed.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Generated {
-    /// The solids of the representation.
+    /// The solids of the representation, in the element's local frame.
     pub solids: Vec<Solid>,
+    /// Where the local frame lies in the world; the identity by default.
+    pub placement: Placement,
     /// Other objects the generator read (a layer set, an opening…), beyond the element itself,
     /// its type, the relationships it takes part in and the objects its attributes refer to,
     /// which the scene always tracks. A change to any of them makes the element's mesh stale.

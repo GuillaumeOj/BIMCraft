@@ -28,7 +28,7 @@ const V1: Version = Version::new(1, 0, 0);
 /// A point `[x, y, z]`, or `[latitude, longitude, height]` for a geographic one.
 type Point = [f64; 3];
 
-fn point_schema() -> Value {
+pub(crate) fn point_schema() -> Value {
     let number = json!({ "type": "number" });
     json!({
         "type": "array",

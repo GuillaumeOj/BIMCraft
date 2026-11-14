@@ -25,6 +25,7 @@ express = { path = "crates/express" }
 geom = { path = "crates/geom" }
 georef = { path = "crates/georef" }
 host-desktop = { path = "crates/host-desktop" }
+js-sys = "=0.3.106"
 # Without the default features, which fetch remote and file `$ref`s over HTTP and TLS.
 jsonschema = { version = "=0.58.5", default-features = false }
 libm = "=0.2.16"
@@ -40,6 +41,7 @@ proptest = "=1.11.0"
 rayon = "=1.12.0"
 render = { path = "crates/render" }
 robust = "=1.2.0"
+scene-wire = { path = "crates/scene-wire" }
 # Without the default `cache` feature, which only adds a statement cache and its dependencies.
 rusqlite = { version = "=0.41.1", default-features = false, features = [
   "bundled",
@@ -60,6 +62,24 @@ tauri-build = { version = "=2.7.4", default-features = false }
 tempfile = "=3.27.0"
 thiserror = "=2.0.21"
 toml = "=1.1.6"
+# The browser glue of the viewport (VP-01): wasm32 only, at the versions wgpu's WebGPU backend
+# already locks, so no second copy is built.
+wasm-bindgen = "=0.2.129"
+wasm-bindgen-futures = "=0.4.79"
+web-sys = { version = "=0.3.106", features = [
+  "AddEventListenerOptions",
+  "DomRect",
+  "Element",
+  "Event",
+  "EventTarget",
+  "HtmlCanvasElement",
+  "KeyboardEvent",
+  "MouseEvent",
+  "PointerEvent",
+  "WheelEvent",
+  "Window",
+  "console",
+] }
 # The renderer of the 3D viewport (VP-04). Without the default features: WGSL shaders and the
 # Metal, Vulkan, DX12 and browser WebGPU backends only, no GLES/WebGL (VP-05 comes later).
 wgpu = { version = "=30.0.1", default-features = false, features = [

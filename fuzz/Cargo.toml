@@ -28,6 +28,7 @@ material = { path = "../crates/material" }
 persist = { path = "../crates/persist" }
 schema = { path = "../crates/schema" }
 schema-gen = { path = "../crates/schema-gen" }
+scene-wire = { path = "../crates/scene-wire" }
 # Already in the lockfile through api: reads the server's answers back.
 serde_json = "=1.0.151"
 
@@ -148,6 +149,13 @@ bench = false
 [[bin]]
 name = "sweep"
 path = "fuzz_targets/sweep.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "scene_wire_decode"
+path = "fuzz_targets/scene_wire_decode.rs"
 test = false
 doc = false
 bench = false

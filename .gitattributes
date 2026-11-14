@@ -7,3 +7,7 @@ bun.lock linguist-generated=true -diff
 # Vendored unchanged under CC BY-ND 4.0: keep its bytes exactly as published.
 crates/interop-ifc/schema/*.exp -text
 *.bim binary
+# Binary seeds of the scene delta fuzz target.
+fuzz/seeds/scene_wire_decode/* binary
+# Scene delta fixtures written by crates/host-desktop/tests/scene_fixtures.rs.
+ui/e2e/fixtures/*.bin binary

@@ -102,3 +102,37 @@ fn a_new_document_is_empty_and_served_to_the_window() {
     assert_eq!(response["result"]["can_undo"], false, "{response}");
     assert_eq!(response["result"]["can_redo"], false, "{response}");
 }
+
+/// Asks the `scene` command for a delta; the answer is raw bytes, not JSON.
+fn scene_bytes(client: &TauriIpc, since: &serde_json::Value) -> Vec<u8> {
+    let request = InvokeRequest {
+        cmd: ipc::SCENE_COMMAND.into(),
+        callback: CallbackFn(0),
+        error: CallbackFn(1),
+        url: APP_URL.parse().unwrap(),
+        body: InvokeBody::Json(serde_json::json!({ "since": since })),
+        headers: tauri::http::HeaderMap::default(),
+        invoke_key: INVOKE_KEY.to_owned(),
+    };
+    match get_ipc_response(&client.webview, request).unwrap() {
+        tauri::ipc::InvokeResponseBody::Raw(bytes) => bytes,
+        tauri::ipc::InvokeResponseBody::Json(json) => unreachable!("expected bytes, got {json}"),
+    }
+}
+
+#[test]
+fn the_scene_command_answers_with_raw_bytes_a_viewport_can_decode() {
+    let mut client = connect(DocumentHost::open_new().unwrap());
+    let first = scene_bytes(&client, &serde_json::Value::Null);
+    let delta = scene_wire::decode(&first).unwrap();
+    assert!(delta.full && delta.elements.is_empty());
+
+    let place = r#"{"jsonrpc":"2.0","id":2,"method":"model.create","params":{"id":"00000000000000000000000000000001","entity":"Block","values":[["location",{"List":[{"Real":0.0},{"Real":0.0},{"Real":0.0}]}],["size_x",{"Real":1.0}],["size_y",{"Real":1.0}],["size_z",{"Real":1.0}]]}}"#;
+    let response = client.send(place).unwrap().unwrap();
+    assert!(!response.contains("error"), "{response}");
+    let update =
+        scene_wire::decode(&scene_bytes(&client, &serde_json::json!(delta.revision))).unwrap();
+    assert!(!update.full);
+    assert_eq!(update.elements.len(), 1);
+    assert_eq!(update.revision, delta.revision + 1);
+}

@@ -3,7 +3,9 @@
 use core_model::Model;
 use core_txn::{Document, ModelCommand};
 
-use crate::{Registry, RegistryError, buildups, commands, georeference, materials, queries};
+use crate::{
+    Registry, RegistryError, buildups, commands, elements, georeference, materials, queries,
+};
 
 /// One open model and its history: what a client works on through the API.
 #[derive(Clone, Debug)]
@@ -42,6 +44,7 @@ impl Session {
             .chain(georeference::descriptors())
             .chain(materials::descriptors())
             .chain(buildups::descriptors())
+            .chain(elements::descriptors())
         {
             registry.register(descriptor)?;
         }

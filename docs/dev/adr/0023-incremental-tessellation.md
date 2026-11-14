@@ -14,7 +14,7 @@ What the model offers:
 - every transaction, undo and redo gives a `ChangeEvent` listing the objects created, modified and deleted, as net states. A change to a type lists the type, not its instances; a change to a relationship lists the relationship (CORE-07, ADR 0015);
 - `DependencyGraph<K, V>` marks stale what depends on a changed node and recomputes lazily, but it cannot call a function that both computes a value and declares the dependencies it found while doing so.
 
-No entity of the core schema has a representation yet, and no generator exists. The scene therefore takes generators as plug-ins.
+No entity of the core schema had a representation when this was decided (the `Block` entity added with the 3D viewport has the first), and no generator existed. The scene therefore takes generators as plug-ins.
 
 ## Decision
 
@@ -25,6 +25,10 @@ No entity of the core schema has a representation yet, and no generator exists. 
 - A `Generator` computes the solids of one element's representation from the model, and the objects it read beyond the obvious ones (`Generated::inputs`). Generators are registered by the path the schema names in `Representation::generator`, such as `wall::body`; a closure is a generator.
 - A `View` says which representation is meshed: in its context, the greatest level of detail not above its own (the last declared on a tie). An entity with none is not meshed.
 - A `Scene` meshes every such element once (`rebuild`), marks stale what an event can have changed (`apply`, which computes nothing), meshes the stale elements and only them (`update`), and meshes one element on demand (`mesh`).
+
+### Local frame and placement (amendment, 3D viewport)
+
+Generators return their solids in the element's **local frame** and an `f64` rigid `Placement` (rotation matrix and translation) that carries that frame to the world (`Generated::placement`, the identity by default); `ElementMesh` keeps both. Staleness, dependency keys and `SceneUpdate` are unchanged. Elements with identical local geometry then produce identical meshes, which the host deduplicates and the renderer instances, and a move changes only the placement. The first built-in generator, `block::body` (`scene::builtin`), makes the box of a `Block` of the core schema: centred in x and y, standing on z = 0, so its size alone decides the mesh. The scene channel that serves meshes and placements is in `.orchestrator/features/epic-3d-viewport/api-contract.md` until ADR 0025 records it.
 
 ### Dependency keys
 

@@ -5,8 +5,9 @@
   "type": "module",
   "packageManager": "bun@1.4.2",
   "scripts": {
-    "dev": "vite",
-    "build": "bun run typecheck && vite build",
+    "build:viewport": "sh ../scripts/build-viewport.sh",
+    "dev": "bun run build:viewport && vite",
+    "build": "bun run build:viewport && bun run typecheck && vite build",
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.app.json",
     "preview": "vite preview",
     "test": "vitest run",

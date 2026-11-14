@@ -98,6 +98,7 @@ dependencies = [
  "jsonschema",
  "material",
  "proptest",
+ "scene-wire",
  "schema",
  "schema-gen",
  "serde",
@@ -1652,11 +1653,15 @@ dependencies = [
  "api",
  "core-model",
  "core-txn",
+ "criterion",
+ "geom",
  "material",
  "persist",
  "platform",
  "proptest",
  "rayon",
+ "scene",
+ "scene-wire",
  "schema",
  "schema-gen",
  "serde_json",
@@ -3307,6 +3312,7 @@ name = "render"
 version = "0.0.0"
 dependencies = [
  "bytemuck",
+ "criterion",
  "geom",
  "libm",
  "pollster",
@@ -3457,8 +3463,19 @@ dependencies = [
  "core-model",
  "core-txn",
  "geom",
+ "libm",
  "proptest",
+ "scene-wire",
  "schema",
+ "schema-gen",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "scene-wire"
+version = "0.0.0"
+dependencies = [
+ "proptest",
  "thiserror 2.0.21",
 ]
 
@@ -4683,6 +4700,24 @@ name = "version_check"
 version = "0.9.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
+
+[[package]]
+name = "viewport"
+version = "0.0.0"
+dependencies = [
+ "geom",
+ "js-sys",
+ "libm",
+ "pollster",
+ "proptest",
+ "render",
+ "scene-wire",
+ "thiserror 2.0.21",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
+ "wgpu",
+]
 
 [[package]]
 name = "vsimd"
