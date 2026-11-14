@@ -449,10 +449,9 @@ impl<S: SceneSink> Viewport<S> {
     /// drag cut short (the focus left, a second finger landed) is cancelled, not left following
     /// the pointer with no button held.
     fn abandon_gesture(&mut self) {
-        if self.gesture == Gesture::Drag && matches!(self.step, Step::MoveTarget { .. }) {
-            // Esc would only empty a value typed during the drag: the move must end.
-            self.typed.clear();
-            self.cancel();
+        if let (Gesture::Drag, Step::MoveTarget { direct, .. }) = (self.gesture, self.step) {
+            self.cancel_move(direct);
+            self.refresh_pointer();
         }
         if let Gesture::Handle { start, .. } = self.gesture {
             self.restore_handle(start);
@@ -928,6 +927,15 @@ impl<S: SceneSink> Viewport<S> {
         }
     }
 
+    /// Ends a move without committing it: back to the selection after a direct drag, to the base
+    /// point otherwise.
+    fn cancel_move(&mut self, direct: bool) {
+        self.typed.clear();
+        self.gesture = Gesture::None;
+        self.step = if direct { Step::Select } else { Step::MoveBase };
+        self.say(AnnouncementKey::MoveCancelled, Vec::new());
+    }
+
     /// Esc: one tool step back, else the waiting preview, else the selection.
     fn cancel(&mut self) {
         // While a tool takes values, Esc first empties what is being typed, then goes back one
@@ -939,11 +947,7 @@ impl<S: SceneSink> Viewport<S> {
         }
         self.typed.clear();
         match self.step {
-            Step::MoveTarget { direct, .. } => {
-                self.gesture = Gesture::None;
-                self.step = if direct { Step::Select } else { Step::MoveBase };
-                self.say(AnnouncementKey::MoveCancelled, Vec::new());
-            }
+            Step::MoveTarget { direct, .. } => self.cancel_move(direct),
             // Back to the step just left, with what it had before: a typed width is kept.
             Step::Height {
                 first,
