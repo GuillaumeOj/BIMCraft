@@ -1,45 +1,31 @@
 import { useState } from "react";
 import { useI18n } from "../i18n/I18nProvider";
 import type { MessageKey } from "../i18n/i18n";
+import { readStored, writeStored } from "../ui/storage";
 
-/** Where "Don't show again" is remembered. */
+/**
+ * Where the card's dismissal is remembered: "Got it" in session storage (until the application
+ * restarts), "Don't show again" in local storage.
+ */
 export const HINT_STORAGE_KEY = "bimcraft.viewport.navigationHint";
-
-// "Got it" hides the card for the rest of the session: until the application restarts.
-let dismissedThisSession = false;
-
-/** Forgets "Got it", for tests. */
-export function resetNavigationHint() {
-  dismissedThisSession = false;
-}
 
 const ROWS = ["orbit", "pan", "zoom", "fit", "fitSelection", "trackpad"] as const;
 
-// Storage can be missing or throw (private windows, blocked site data).
-function hiddenForGood(): boolean {
-  try {
-    return localStorage.getItem(HINT_STORAGE_KEY) === "hidden";
-  } catch {
-    return false;
-  }
-}
+const dismissed = () =>
+  readStored(HINT_STORAGE_KEY, "session") !== null || readStored(HINT_STORAGE_KEY) !== null;
 
 /** The first-time card listing the mouse, trackpad and keyboard bindings (board 3.21). */
 export function NavigationHint() {
   const { t } = useI18n();
-  const [shown, setShown] = useState(() => !dismissedThisSession && !hiddenForGood());
+  const [shown, setShown] = useState(() => !dismissed());
   if (!shown) return null;
 
   const gotIt = () => {
-    dismissedThisSession = true;
+    writeStored(HINT_STORAGE_KEY, "hidden", "session");
     setShown(false);
   };
   const never = () => {
-    try {
-      localStorage.setItem(HINT_STORAGE_KEY, "hidden");
-    } catch {
-      // Not remembered beyond this session.
-    }
+    writeStored(HINT_STORAGE_KEY, "hidden");
     gotIt();
   };
 
@@ -60,7 +46,7 @@ export function NavigationHint() {
         <button type="button" className="button button-primary" onClick={gotIt}>
           {t("viewport.hintCard.gotIt")}
         </button>
-        <button type="button" className="button vp-quiet" onClick={never}>
+        <button type="button" className="ghost-button" onClick={never}>
           {t("viewport.hintCard.never")}
         </button>
       </div>

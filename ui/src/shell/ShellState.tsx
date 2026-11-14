@@ -10,6 +10,7 @@ import {
 } from "react";
 import { historyDepth, undoLastStep, useApi } from "../api";
 import { useI18n } from "../i18n/I18nProvider";
+import { readStored, writeStored } from "../ui/storage";
 
 /** Something the toast can undo: runs the undo, and rejects when it cannot. */
 type Undo = () => Promise<void>;
@@ -37,24 +38,10 @@ export type ShellState = {
 /** Where the single-key shortcuts choice is kept. */
 export const SINGLE_KEYS_STORAGE_KEY = "bimcraft.singleKeyShortcuts";
 
-// Storage can be missing or throw (private windows, blocked site data): the shortcuts then stay
-// on, and a choice lasts only for this session.
-function readSingleKeys(): boolean {
-  try {
-    return localStorage.getItem(SINGLE_KEYS_STORAGE_KEY) !== "off";
-  } catch {
-    return true;
-  }
-}
-
-function writeSingleKeys(enabled: boolean) {
-  try {
-    if (enabled) localStorage.removeItem(SINGLE_KEYS_STORAGE_KEY);
-    else localStorage.setItem(SINGLE_KEYS_STORAGE_KEY, "off");
-  } catch {
-    // Not remembered; see readSingleKeys.
-  }
-}
+// Without storage, the shortcuts stay on and a choice lasts only for this session.
+const readSingleKeys = () => readStored(SINGLE_KEYS_STORAGE_KEY) !== "off";
+const writeSingleKeys = (enabled: boolean) =>
+  writeStored(SINGLE_KEYS_STORAGE_KEY, enabled ? null : "off");
 
 // A toast with Undo stays longer: the user needs time to reach the button.
 const TOAST_MS = 5000;

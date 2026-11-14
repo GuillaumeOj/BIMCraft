@@ -1,4 +1,4 @@
-import { formatNumber } from "../georef/units";
+import { formatNumber, LENGTH_DECIMALS } from "../georef/units";
 import type { Language, MessageKey, MessageParams } from "../i18n/i18n";
 import type { AnnouncementKey, PreviewLabel } from "./types";
 
@@ -6,7 +6,7 @@ type Translate = (key: MessageKey, params?: MessageParams) => string;
 
 /** `metres` with the 3 decimals of the 3D view and the locale's separator (FR: "2,500"). */
 export function formatMetres(language: Language, metres: number): string {
-  return formatNumber(metres, 3, language);
+  return formatNumber(metres, LENGTH_DECIMALS, language);
 }
 
 const number = (value: string | number | undefined) => (typeof value === "number" ? value : 0);

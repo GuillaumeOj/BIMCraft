@@ -2,6 +2,7 @@ import { useLayoutEffect, useRef } from "react";
 import { useI18n } from "../i18n/I18nProvider";
 import { useShellState } from "../shell/ShellState";
 import { ErrorIcon } from "../ui/ErrorIcon";
+import { shortcutProps } from "../ui/shortcut";
 import { GUIDE_PLACE_BLOCK, GUIDE_TROUBLESHOOTING } from "./guide";
 import { WarningIcon } from "./icons";
 import type { FailureReason } from "./useViewportSession";
@@ -26,15 +27,9 @@ export function LoadingCard({ slow, onCancel }: { slow: boolean; onCancel: () =>
 }
 
 /** An empty model (board 3.27a): what to do next. */
-export function EmptyCard({
-  shortcuts,
-  onPlaceBlock,
-}: {
-  /** Whether the single-key shortcuts are on: only then does the button name B. */
-  shortcuts: boolean;
-  onPlaceBlock: () => void;
-}) {
+export function EmptyCard({ onPlaceBlock }: { onPlaceBlock: () => void }) {
   const { t } = useI18n();
+  const { singleKeys } = useShellState();
   const label = t("viewport.empty.button");
   return (
     <div className="vp-card vp-card-centre">
@@ -43,8 +38,7 @@ export function EmptyCard({
       <button
         type="button"
         className="button button-primary"
-        aria-keyshortcuts={shortcuts ? "B" : undefined}
-        title={shortcuts ? t("viewport.withShortcut", { label, shortcut: "B" }) : undefined}
+        {...shortcutProps(t, label, singleKeys ? "B" : undefined)}
         onClick={onPlaceBlock}
       >
         {label}
@@ -89,12 +83,15 @@ export function FailedCard({ reason, repeated, onReload }: FailedProps) {
   }, []);
 
   // Only the cause and the browser: never model content (SEC-03).
-  const copy = () => {
-    const details = `BIMCraft 3D view stopped: ${reason}\n${navigator.userAgent}`;
-    navigator.clipboard?.writeText(details).then(
-      () => notify(t("viewport.error.copied")),
-      () => undefined,
-    );
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(
+        `BIMCraft 3D view stopped: ${reason}\n${navigator.userAgent}`,
+      );
+      notify(t("viewport.error.copied"));
+    } catch {
+      // Clipboard access can be refused; nothing was copied, so nothing is announced.
+    }
   };
 
   return (

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { hasDrawableElements, moveElements, moveRefusal, placeBlock, useApi } from "../api";
 import { useI18n } from "../i18n/I18nProvider";
 import type { MessageKey } from "../i18n/i18n";
@@ -6,7 +6,7 @@ import { useShellState } from "../shell/ShellState";
 import { announcementText, formatMetres, previewText } from "./format";
 import { NavigationHint } from "./HintCard";
 import { EmptyCard, FailedCard, LoadingCard, UnavailableCard } from "./StateCards";
-import { viewportShortcut } from "./shortcuts";
+import { type ViewportShortcut, viewportShortcut } from "./shortcuts";
 import { Toolbar } from "./Toolbar";
 import type {
   Intent,
@@ -17,7 +17,7 @@ import type {
   ViewCommand,
   ViewportEvent,
 } from "./types";
-import { useViewportSession } from "./useViewportSession";
+import { type Phase, useViewportSession } from "./useViewportSession";
 import { ViewControls } from "./ViewControls";
 import "./viewport.css";
 
@@ -39,12 +39,7 @@ const FLIP = 48;
  * Draws the chip next to the pointer straight into the DOM: it moves at pointer speed (D2). A
  * typed value looks like a field, so users see where their typing goes (board 3.28).
  */
-function drawPreview(
-  chip: HTMLElement | null,
-  label: PreviewLabel | null,
-  text: (label: PreviewLabel) => string,
-  typedLabel: (label: PreviewLabel) => string,
-) {
+function drawPreview(chip: HTMLElement | null, label: PreviewLabel | null, text: string) {
   if (chip === null) return;
   if (label === null) {
     chip.hidden = true;
@@ -56,7 +51,7 @@ function drawPreview(
   chip.hidden = false;
   chip.style.transform = `translate(${x}px, ${top}px)`;
   chip.classList.toggle("vp-chip-typed", label.typed !== null);
-  chip.textContent = label.typed === null ? text(label) : typedLabel(label);
+  chip.textContent = text;
 }
 
 /**
@@ -80,76 +75,62 @@ export function ViewportView() {
   // Which value the pointer chip names: the hint bar follows it while the depth is typed.
   const [labelKey, setLabelKey] = useState<PreviewLabel["key"] | null>(null);
   const chip = useRef<HTMLDivElement>(null);
-  const live = useRef({ t, language });
-  live.current = { t, language };
 
-  const chipText = useCallback(
-    (label: PreviewLabel) => previewText(live.current.t, live.current.language, label),
-    [],
-  );
-  const typedText = useCallback(
-    (label: PreviewLabel) =>
-      `${live.current.t(`viewport.typed.${label.key}`)} ${label.typed} ${live.current.t("viewport.typed.unit")} ↵`,
-    [],
-  );
+  const chipText = (label: PreviewLabel) =>
+    label.typed === null
+      ? previewText(t, language, label)
+      : `${t(`viewport.typed.${label.key}`)} ${label.typed} ${t("viewport.typed.unit")} ↵`;
 
-  const onIntent = useRef<(intent: Intent) => void>(() => undefined);
-
-  const onEvent = useCallback(
-    (event: ViewportEvent) => {
-      switch (event.kind) {
-        case "selection":
-          setSelection(event.ids);
-          break;
-        case "tool_state":
-          setTool(event.tool);
-          setStep(event.step);
-          break;
-        case "view_state":
-          setProjection(event.state.projection);
-          setSnapping(event.state.snapping);
-          setTool(event.state.tool);
-          break;
-        case "announce":
-          setAnnouncement((previous) => ({
-            text: announcementText(live.current.t, live.current.language, event.key, event.values),
-            serial: previous.serial + 1,
-          }));
-          break;
-        case "preview_label":
-          drawPreview(chip.current, event.label, chipText, typedText);
-          setLabelKey(event.label?.key ?? null);
-          break;
-        case "intent":
-          onIntent.current(event.intent);
-          break;
-        default:
-          // Hover is drawn by the viewport and not announced (design/ux-notes.md).
-          break;
-      }
-    },
-    [chipText, typedText],
-  );
+  // The session always calls the latest version of this function: it reads this render's state.
+  const onEvent = (event: ViewportEvent) => {
+    switch (event.kind) {
+      case "selection":
+        setSelection(event.ids);
+        break;
+      case "tool_state":
+        setTool(event.tool);
+        setStep(event.step);
+        break;
+      case "view_state":
+        setProjection(event.state.projection);
+        setSnapping(event.state.snapping);
+        setTool(event.state.tool);
+        break;
+      case "announce":
+        setAnnouncement((previous) => ({
+          text: announcementText(t, language, event.key, event.values),
+          serial: previous.serial + 1,
+        }));
+        break;
+      case "preview_label":
+        drawPreview(chip.current, event.label, event.label === null ? "" : chipText(event.label));
+        setLabelKey(event.label?.key ?? null);
+        break;
+      case "intent":
+        runIntent(event.intent);
+        break;
+      default:
+        // Hover is drawn by the viewport and not announced (design/ux-notes.md).
+        break;
+    }
+  };
 
   const session = useViewportSession(onEvent);
   const { phase, handle, feed, sceneLoaded, sceneVersion } = session;
   const ready = phase.kind === "ready";
 
-  const command = useCallback((value: ViewCommand) => handle.current?.command(value), [handle]);
+  const command = (value: ViewCommand) => handle.current?.command(value);
 
-  const chooseTool = useCallback(
-    (next: Tool) => {
-      if (next === "move" && selection.length === 0) {
-        notify(t("viewport.toast.moveNoSelection"));
-        return;
-      }
-      handle.current?.setTool(next);
-      setTool(next);
-    },
-    [handle, notify, selection.length, t],
-  );
+  const chooseTool = (next: Tool) => {
+    if (next === "move" && selection.length === 0) {
+      notify(t("viewport.toast.moveNoSelection"));
+      return;
+    }
+    handle.current?.setTool(next);
+    setTool(next);
+  };
 
-  onIntent.current = (intent) => {
+  function runIntent(intent: Intent) {
     const metres = (value: number) => formatMetres(language, value);
     if (intent.kind === "move") {
       const count = intent.ids.length;
@@ -194,7 +175,7 @@ export function ViewportView() {
       },
       () => notify(t("viewport.toast.placeFailed")),
     );
-  };
+  }
 
   // What is drawn may have changed with each delta: the empty state follows the model.
   useEffect(() => {
@@ -212,27 +193,34 @@ export function ViewportView() {
     };
   }, [api, sceneVersion]);
 
+  // The shortcut handler of this render; the listener below stays subscribed across renders.
+  const onShortcut = useRef<(shortcut: ViewportShortcut) => void>(() => undefined);
+  onShortcut.current = (shortcut) => {
+    if (shortcut === "projection") {
+      command({
+        kind: "projection",
+        projection: projection === "perspective" ? "parallel" : "perspective",
+      });
+    } else if (shortcut === "snapping") {
+      command({ kind: "snapping", enabled: !snapping });
+    } else {
+      chooseTool(shortcut);
+    }
+  };
+
   // V, M, B, P and S, outside the canvas too; quiet behind a modal dialog and in text fields.
+  const { canvasRef } = session;
   useEffect(() => {
     if (!ready || modalOpen) return;
     const onKeyDown = (event: KeyboardEvent) => {
-      const shortcut = viewportShortcut(event, { singleKeys, canvas: session.canvasRef.current });
+      const shortcut = viewportShortcut(event, { singleKeys, canvas: canvasRef.current });
       if (shortcut === null) return;
       event.preventDefault();
-      if (shortcut === "projection") {
-        command({
-          kind: "projection",
-          projection: projection === "perspective" ? "parallel" : "perspective",
-        });
-      } else if (shortcut === "snapping") {
-        command({ kind: "snapping", enabled: !snapping });
-      } else {
-        chooseTool(shortcut);
-      }
+      onShortcut.current(shortcut);
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [ready, modalOpen, singleKeys, session.canvasRef, command, projection, snapping, chooseTool]);
+  }, [ready, modalOpen, singleKeys, canvasRef]);
 
   const hint =
     step === "second_corner" && labelKey === "place.depth" ? "viewport.hint.depth" : HINTS[step];
@@ -266,12 +254,12 @@ export function ViewportView() {
         <FailedCard reason={phase.reason} repeated={phase.repeated} onReload={session.reload} />
       )}
       {ready && sceneLoaded && empty === true && step === "idle" && (
-        <EmptyCard shortcuts={singleKeys} onPlaceBlock={() => chooseTool("place_block")} />
+        <EmptyCard onPlaceBlock={() => chooseTool("place_block")} />
       )}
       {ready && sceneLoaded && empty === false && <NavigationHint />}
       <div className="vp-bottom">
         {hint !== undefined && <p className="vp-hint">{t(hint)}</p>}
-        <Toolbar tool={tool} disabled={!ready} shortcuts={singleKeys} onSelect={chooseTool} />
+        <Toolbar tool={tool} disabled={!ready} onSelect={chooseTool} />
       </div>
       <p className="vp-status" id="vp-status">
         {status}
@@ -280,7 +268,6 @@ export function ViewportView() {
         projection={projection}
         empty={empty !== false}
         hasSelection={selection.length > 0}
-        shortcuts={singleKeys}
         disabled={!ready}
         onCommand={command}
       />
@@ -292,7 +279,7 @@ export function ViewportView() {
 }
 
 type StatusInput = {
-  phase: "loading" | "unavailable" | "ready" | "failed";
+  phase: Phase["kind"];
   sceneLoaded: boolean;
   empty: boolean;
   count: number;

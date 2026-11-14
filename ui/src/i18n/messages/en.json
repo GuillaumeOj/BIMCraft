@@ -372,7 +372,6 @@
   "viewport.tool.select": "Select",
   "viewport.tool.move": "Move",
   "viewport.tool.place_block": "Block",
-  "viewport.withShortcut": "{label} ({shortcut})",
   "viewport.controls": "View controls",
   "viewport.zoomFit": "Zoom fit",
   "viewport.zoomSelection": "Zoom to selection",

@@ -8,6 +8,8 @@ type Props = {
   /** Names the button when its content is only a symbol; the visible text must come first. */
   label?: string;
   className?: string;
+  /** Where the menu opens: below the button, or above it near the bottom of the window. */
+  placement?: "down" | "up";
   items: readonly MenuItem[];
 };
 
@@ -15,7 +17,13 @@ type Props = {
  * A button that opens a menu of actions (`aria-haspopup="menu"`): Escape closes it, and focus
  * returns to the button. The first item takes focus when it opens; arrows move between items.
  */
-export function ActionMenu({ children, label, className = "button", items }: Props) {
+export function ActionMenu({
+  children,
+  label,
+  className = "button",
+  placement = "down",
+  items,
+}: Props) {
   const [open, setOpen] = useState(false);
   const button = useRef<HTMLButtonElement>(null);
   const menu = useRef<HTMLDivElement>(null);
@@ -70,7 +78,7 @@ export function ActionMenu({ children, label, className = "button", items }: Pro
         {children}
       </button>
       {open && (
-        <div className="menu" role="menu" ref={menu}>
+        <div className={placement === "up" ? "menu menu-up" : "menu"} role="menu" ref={menu}>
           {items.map((item) => (
             <button
               key={item.label}

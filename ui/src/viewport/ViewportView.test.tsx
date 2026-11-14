@@ -5,7 +5,7 @@ import { SINGLE_KEYS_STORAGE_KEY } from "../shell/ShellState";
 import { fakeCore } from "../test-support/fakeCore";
 import { fakeViewport } from "../test-support/fakeViewport";
 import { renderWithCore } from "../test-support/render";
-import { HINT_STORAGE_KEY, resetNavigationHint } from "./HintCard";
+import { HINT_STORAGE_KEY } from "./HintCard";
 import type { ViewportHandle, ViewportModule } from "./types";
 import { ViewportView } from "./ViewportView";
 
@@ -31,7 +31,7 @@ beforeEach(() => {
       disconnect() {}
     },
   );
-  resetNavigationHint();
+  sessionStorage.clear();
 });
 
 afterEach(() => {

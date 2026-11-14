@@ -20,7 +20,9 @@
   --bc-on-danger: #ffffff;
   /* Borders of form fields: --bc-line is only 1.46:1, below the 3:1 of WCAG 1.4.11. */
   --bc-field-line: #858b94;
-  /* 3D view colours (the `color/vp-*` variables): handed to the viewport module as its theme. */
+  /* 3D view colours (the `color/vp-*` variables). theme.ts hands bg, select, hover, snap, ghost
+     and cut to the viewport module; the chips use chip and chip-ink; halo is the viewport's own
+     halo, kept here so contrast.test.ts checks the overlay colours against it. */
   --bc-vp-bg: #f4f5f6;
   --bc-vp-select: #0f6b5e;
   --bc-vp-hover: #b25e00;

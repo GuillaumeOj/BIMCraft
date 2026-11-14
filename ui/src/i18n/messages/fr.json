@@ -372,7 +372,6 @@
   "viewport.tool.select": "Sélection",
   "viewport.tool.move": "Déplacer",
   "viewport.tool.place_block": "Bloc",
-  "viewport.withShortcut": "{label} ({shortcut})",
   "viewport.controls": "Commandes de vue",
   "viewport.zoomFit": "Tout cadrer",
   "viewport.zoomSelection": "Cadrer la sélection",

@@ -20,14 +20,8 @@ export function readTheme(element: Element = document.documentElement): Viewport
     const value = style.getPropertyValue(token).trim();
     return HEX.test(value) ? value : fallback;
   };
-  return {
-    background: colour(TOKENS.background),
-    selection: colour(TOKENS.selection),
-    hover: colour(TOKENS.hover),
-    snap: colour(TOKENS.snap),
-    preview: colour(TOKENS.preview),
-    cut: colour(TOKENS.cut),
-  };
+  const entries = Object.entries(TOKENS) as [keyof ViewportTheme, [string, string]][];
+  return Object.fromEntries(entries.map(([name, token]) => [name, colour(token)])) as ViewportTheme;
 }
 
 /** Calls `onChange` whenever the system switches between light and dark; returns the stop call. */

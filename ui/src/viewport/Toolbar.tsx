@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
 import { useI18n } from "../i18n/I18nProvider";
+import { useShellState } from "../shell/ShellState";
+import { shortcutProps } from "../ui/shortcut";
 import { BlockIcon, MoveIcon, SelectIcon } from "./icons";
 import type { Tool } from "./types";
 
@@ -13,14 +15,14 @@ export const TOOLS: readonly { tool: Tool; shortcut: string; icon: () => ReactNo
 type Props = {
   tool: Tool;
   disabled: boolean;
-  /** Whether the single-key shortcuts are on: only then do the buttons name them. */
-  shortcuts: boolean;
   onSelect: (tool: Tool) => void;
 };
 
 /** The bottom tool bar: Select, Move and Block (board 3.21), pressed for the active tool. */
-export function Toolbar({ tool, disabled, shortcuts, onSelect }: Props) {
+export function Toolbar({ tool, disabled, onSelect }: Props) {
   const { t } = useI18n();
+  // The keys work outside the view only while single-key shortcuts are on: only then are they named.
+  const { singleKeys } = useShellState();
   return (
     <div className="vp-toolbar" role="toolbar" aria-label={t("viewport.tools")}>
       {TOOLS.map(({ tool: value, shortcut, icon: ToolIcon }) => {
@@ -31,8 +33,7 @@ export function Toolbar({ tool, disabled, shortcuts, onSelect }: Props) {
             type="button"
             className="vp-tool"
             aria-pressed={value === tool}
-            aria-keyshortcuts={shortcuts ? shortcut : undefined}
-            title={shortcuts ? t("viewport.withShortcut", { label, shortcut }) : label}
+            {...shortcutProps(t, label, singleKeys ? shortcut : undefined)}
             disabled={disabled}
             onClick={() => onSelect(value)}
           >

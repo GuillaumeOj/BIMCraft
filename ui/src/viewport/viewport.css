@@ -1,5 +1,10 @@
 /* The 3D view: boards 3.21–3.28 of the FigCraft design. The canvas fills the viewport slot; the
    tool bar, the status and the view controls float in the band under the side panels. */
+/* Toasts float above the tool bar and the hint while the 3D view is on screen. */
+:root:has(.vp) {
+  --bc-toast-bottom: 120px;
+}
+
 .vp {
   position: absolute;
   inset: 0;
@@ -102,11 +107,6 @@
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-}
-
-.vp-quiet {
-  border-color: transparent;
-  background: none;
 }
 
 .vp-spinner {
@@ -264,10 +264,4 @@
   color: var(--bc-muted);
   opacity: 0.6;
   cursor: default;
-}
-
-/* The presets menu opens upwards: the cluster sits at the bottom of the window. */
-.vp-controls .menu {
-  bottom: 100%;
-  margin: 0 0 6px;
 }

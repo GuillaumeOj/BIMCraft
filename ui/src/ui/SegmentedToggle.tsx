@@ -1,4 +1,5 @@
 import { useI18n } from "../i18n/I18nProvider";
+import { shortcutProps } from "./shortcut";
 
 type Option<V extends string> = { value: V; label: string };
 
@@ -28,8 +29,7 @@ export function SegmentedToggle<V extends string>({
           key={option.value}
           type="button"
           aria-pressed={option.value === value}
-          aria-keyshortcuts={shortcut}
-          title={shortcut && t("ui.withShortcut", { label: option.label, shortcut })}
+          {...(shortcut === undefined ? {} : shortcutProps(t, option.label, shortcut))}
           onClick={() => onChange(option.value)}
         >
           {option.label}
