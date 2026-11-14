@@ -10,6 +10,9 @@ type Kind = "category" | "discipline";
 const KINDS: readonly Kind[] = ["category", "discipline"];
 
 /** The attribute that marks the button which opens the popover, so a press on it is not "outside". */
+/** The id of the popover, for the button that opens it. */
+export const VISIBILITY_POPOVER_ID = "vp-visibility";
+
 export const VISIBILITY_TRIGGER = "data-visibility-trigger";
 
 type Props = {
@@ -138,6 +141,7 @@ export function VisibilityPopover({
   return (
     <div
       className="vp-popover"
+      id={VISIBILITY_POPOVER_ID}
       role="dialog"
       aria-label={t("viewport.visibility.title")}
       ref={root}
@@ -179,7 +183,7 @@ export function VisibilityPopover({
                   aria-checked={!group.hidden}
                   className="vp-row"
                   data-isolated={group.isolated}
-                  tabIndex={index === active ? 0 : -1}
+                  tabIndex={index === Math.min(active, groups.length - 1) ? 0 : -1}
                   ref={(element) => {
                     rows.current[index] = element;
                   }}

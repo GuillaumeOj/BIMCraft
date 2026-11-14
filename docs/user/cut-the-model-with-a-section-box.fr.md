@@ -24,7 +24,7 @@ Quelques mots employés sur cette page :
 
 Il y a deux façons équivalentes de déplacer une face.
 
-**En faisant glisser.** Faites glisser une poignée de la boîte. Maintenez **Maj** pour avancer par pas de 100 mm. La barre d'état affiche par exemple « Boîte de coupe · 1 face déplacée ».
+**En faisant glisser.** Faites glisser une poignée de la boîte. Maintenez **Maj** pour avancer par pas de 0,100 m. La barre d'état affiche par exemple « Boîte de coupe · 1 face déplacée ».
 
 **En saisissant.** Dans le panneau, les champs **Min** et **Max** donnent la position de chaque face selon X, Y et Z, en mètres.
 
@@ -47,7 +47,7 @@ Un minimum doit rester inférieur à son maximum. Sinon, le champ devient rouge 
 
 ## Couper avec des plans de coupe
 
-1. Dans la section **Plans de coupe**, choisissez **Ajouter sur une face…**. Un message indique « Cliquez sur une face pour couper à cet endroit · Échap pour annuler ».
+1. Dans la section **Plans de coupe**, choisissez **Ajouter un plan sur une face**. Un message indique « Cliquez sur une face pour couper à cet endroit · Échap pour annuler ».
 2. Cliquez sur une face du modèle. Le plan passe par ce point, tourné vers vous : ce qui se trouve entre vous et la face est coupé.
 
 **Résultat :** le panneau liste « Plan 1 », avec sa direction (par exemple « Normale +X ») et sa position en mètres. La barre d'état indique combien de plans sont actifs.
@@ -58,7 +58,7 @@ Pour chaque plan de la liste :
 - **Supprimer** supprime le plan. Quand le focus est sur les boutons d'un plan, **Suppr** le supprime aussi.
 - **Tout supprimer** retire tous les plans. **Annuler** ne peut pas revenir dessus : les plans font partie de la vue, pas du modèle.
 
-Vous pouvez avoir six plans au maximum ; à six, **Ajouter sur une face…** indique « 6 plans au maximum ».
+Vous pouvez avoir six plans au maximum ; à six, **Ajouter un plan sur une face** indique « 6 plans au maximum ».
 
 ## Astuces
 

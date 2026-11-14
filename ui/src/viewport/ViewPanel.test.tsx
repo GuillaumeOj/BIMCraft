@@ -185,6 +185,36 @@ describe("View panel", () => {
       expect(sent(viewport)).toContainEqual({ kind: "section_box", enabled: false });
     });
 
+    it("drops what was typed, and its refusal, when the viewport moves that extent", async () => {
+      const { viewport, user } = await setUp();
+      await viewport.emit({ kind: "view_state", state: viewState({ sectionBox: box() }) });
+      await user.clear(field("Min Z"));
+      await user.type(field("Min Z"), "12{Enter}");
+      expect(field("Min Z")).toBeInvalid();
+      await viewport.emit({
+        kind: "view_state",
+        state: viewState({ sectionBox: box({ min: [-1, -2, 1] }) }),
+      });
+      expect(field("Min Z")).toHaveValue("1.000");
+      expect(field("Min Z")).toBeValid();
+      expect(screen.queryByText("Minimum must be below maximum")).not.toBeInTheDocument();
+    });
+
+    it("forgets a refusal when the box is switched off and on again", async () => {
+      const { viewport, user } = await setUp();
+      await viewport.emit({ kind: "view_state", state: viewState({ sectionBox: box() }) });
+      await user.clear(field("Min Z"));
+      await user.type(field("Min Z"), "12{Enter}");
+      await viewport.emit({
+        kind: "view_state",
+        state: viewState({ sectionBox: box({ enabled: false }) }),
+      });
+      await viewport.emit({ kind: "view_state", state: viewState({ sectionBox: box() }) });
+      expect(field("Min Z")).toBeValid();
+      expect(field("Min Z")).toHaveValue("0.000");
+      expect(screen.queryByText("Minimum must be below maximum")).not.toBeInTheDocument();
+    });
+
     it("fits the box to the selection only when there is one", async () => {
       const { viewport, user } = await setUp();
       await viewport.emit({ kind: "view_state", state: viewState({ sectionBox: box() }) });
@@ -281,7 +311,7 @@ describe("View panel", () => {
     it("starts with none and arms a face pick, whose hint and status follow the view", async () => {
       const { viewport, user } = await setUp();
       expect(screen.getByRole("button", { name: /Clipping planes.*None/ })).toBeInTheDocument();
-      await user.click(screen.getByRole("button", { name: "Add on a face…" }));
+      await user.click(screen.getByRole("button", { name: "Add plane on face" }));
       expect(sent(viewport)).toContainEqual({ kind: "clip_plane_pick" });
 
       await viewport.emit({ kind: "tool_state", tool: "select", step: "pick_face" });
@@ -289,7 +319,7 @@ describe("View panel", () => {
       expect(document.getElementById("vp-status")).toHaveTextContent(
         "Clipping plane · choose a face",
       );
-      const add = screen.getByRole("button", { name: "Add on a face…" });
+      const add = screen.getByRole("button", { name: "Add plane on face" });
       expect(add).toHaveAttribute("aria-pressed", "true");
       await user.click(add);
       expect(sent(viewport)).toContainEqual({ kind: "cancel" });
@@ -332,7 +362,7 @@ describe("View panel", () => {
       screen.getByRole("button", { name: "Flip plane 2" }).focus();
       await user.keyboard("{Delete}");
       expect(sent(viewport)).toContainEqual({ kind: "clip_plane_remove", index: 1 });
-      screen.getByRole("button", { name: "Add on a face…" }).focus();
+      screen.getByRole("button", { name: "Add plane on face" }).focus();
       await user.keyboard("{Delete}");
       expect(sent(viewport).filter((command) => command.kind === "clip_plane_remove")).toHaveLength(
         1,
@@ -356,7 +386,7 @@ describe("View panel", () => {
       const { viewport, user } = await setUp();
       const six = Array.from({ length: 6 }, (_, index) => plane([index, 0, 0], [1, 0, 0]));
       await viewport.emit({ kind: "view_state", state: viewState({ clipPlanes: six }) });
-      const add = screen.getByRole("button", { name: "Add on a face…" });
+      const add = screen.getByRole("button", { name: "Add plane on face" });
       expect(add).toHaveAttribute("aria-disabled", "true");
       await user.click(add);
       expect(screen.getByText("Maximum 6 planes")).toBeVisible();

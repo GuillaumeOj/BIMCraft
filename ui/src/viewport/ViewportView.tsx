@@ -169,10 +169,9 @@ export function ViewportView() {
       notify(t("viewport.hint.section"));
     }
     if (next.isolating && !before.isolating) {
-      const names = [...isolatedNames(next.categories), ...isolatedNames(next.disciplines)];
       notify(
         t("viewport.hint.isolate", {
-          names: names.length > 0 ? names.join(", ") : t("viewport.hint.isolateSelection"),
+          names: isolatedLabel(next, t("viewport.hint.isolateSelection")),
         }),
       );
     }

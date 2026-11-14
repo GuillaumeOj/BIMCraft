@@ -6,7 +6,7 @@ import { SegmentedToggle } from "../ui/SegmentedToggle";
 import { shortcutProps } from "../ui/shortcut";
 import { EyeIcon, PresetsIcon, ZoomFitIcon, ZoomSelectionIcon } from "./icons";
 import type { Preset, Projection, ViewCommand } from "./types";
-import { VISIBILITY_TRIGGER } from "./VisibilityPopover";
+import { VISIBILITY_POPOVER_ID, VISIBILITY_TRIGGER } from "./VisibilityPopover";
 
 const PRESETS: readonly Preset[] = [
   "top",
@@ -84,6 +84,7 @@ export function ViewControls({
         aria-label={t("viewport.visibility.title")}
         title={t("viewport.visibility.title")}
         aria-haspopup="dialog"
+        aria-controls={visibilityOpen ? VISIBILITY_POPOVER_ID : undefined}
         aria-expanded={visibilityOpen}
         disabled={disabled}
         onClick={onVisibility}

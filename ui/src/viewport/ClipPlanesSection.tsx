@@ -1,4 +1,4 @@
-import { type KeyboardEvent, useId } from "react";
+import type { KeyboardEvent } from "react";
 import { formatNumber, LENGTH_DECIMALS } from "../georef/units";
 import { useI18n } from "../i18n/I18nProvider";
 import { useShellState } from "../shell/ShellState";
@@ -14,7 +14,6 @@ import { AXIS_NAMES, axisNormal, type ClipPlane, MAX_CLIP_PLANES } from "./viewS
 export function ClipPlanesSection({ report }: { report: ViewReport }) {
   const { t, language } = useI18n();
   const { notify } = useShellState();
-  const ids = useId();
   const { view, send, step } = report;
   const planes = view?.clipPlanes ?? [];
   const picking = step === "pick_face";
@@ -91,7 +90,6 @@ export function ClipPlanesSection({ report }: { report: ViewReport }) {
         <button
           type="button"
           className="button button-small"
-          id={`${ids}-add`}
           aria-pressed={picking}
           aria-disabled={view === null || (full && !picking)}
           onClick={add}

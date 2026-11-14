@@ -1,4 +1,4 @@
-import { type KeyboardEvent, useId, useState } from "react";
+import { type KeyboardEvent, useEffect, useEffectEvent, useId, useState } from "react";
 import { formatNumber, LENGTH_DECIMALS, parseNumber } from "../georef/units";
 import { useI18n } from "../i18n/I18nProvider";
 import type { MessageKey } from "../i18n/i18n";
@@ -190,6 +190,14 @@ function ExtentField({
   // What the user is typing; null shows the viewport's value.
   const [draft, setDraft] = useState<string | null>(null);
   const invalid = problem?.field === field;
+
+  // The viewport moved this extent (a drag, Reset, Fit) or the box came back after being switched
+  // off: what was typed, and the refusal of it, no longer describe anything.
+  const discard = useEffectEvent((_extent: number) => {
+    setDraft(null);
+    if (invalid) onProblem(null);
+  });
+  useEffect(() => discard(current), [current]);
 
   const restore = () => {
     setDraft(null);

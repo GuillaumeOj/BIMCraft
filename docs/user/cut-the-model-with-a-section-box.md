@@ -24,7 +24,7 @@ A few words used on this page:
 
 There are two equivalent ways to move a face.
 
-**By dragging.** Drag a handle of the box. Hold **Shift** to move in steps of 100 mm. The status bar reads, for example, "Section box · 1 face moved".
+**By dragging.** Drag a handle of the box. Hold **Shift** to move in steps of 0.100 m. The status bar reads, for example, "Section box · 1 face moved".
 
 **By typing.** In the panel, the **Min** and **Max** fields give the position of each face along X, Y and Z, in metres.
 
@@ -47,7 +47,7 @@ A minimum must stay below its maximum. If it does not, the field turns red and s
 
 ## Cut with clipping planes
 
-1. In the **Clipping planes** section, choose **Add on a face…**. A message reads "Click a face to cut at it · Esc to cancel".
+1. In the **Clipping planes** section, choose **Add plane on face**. A message reads "Click a face to cut at it · Esc to cancel".
 2. Click a face of the model. The plane goes through that point, facing you, so what lies between you and the face is cut away.
 
 **Result:** the panel lists "Plane 1", with its direction (for example "Normal +X") and its position in metres. The status bar says how many planes are active.
@@ -58,7 +58,7 @@ For each plane in the list:
 - **Remove** deletes the plane. With the focus on a plane's buttons, **Delete** removes it too.
 - **Clear all** removes every plane. This cannot be undone with **Undo**: planes are part of the view, not of the model.
 
-You can have six planes at most; at six, **Add on a face…** says "Maximum 6 planes".
+You can have six planes at most; at six, **Add plane on face** says "Maximum 6 planes".
 
 ## Tips
 

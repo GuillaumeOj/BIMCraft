@@ -11,17 +11,11 @@ export type Side = "min" | "max";
 export const AXES: readonly Axis[] = [0, 1, 2];
 export const AXIS_NAMES = ["X", "Y", "Z"] as const;
 
-/** The six faces of the box, as "min x", "max z"…: what "N faces moved" counts. */
-const faces = (box: SectionBox) => [
-  ...box.min.map((v) => ["min", v]),
-  ...box.max.map((v) => ["max", v]),
-];
-
-/** The indices (0–5) of the faces whose position differs between two boxes. */
+/** The indices (0–5) of the faces whose position differs between two boxes: min x, y, z, then max x, y, z. */
 export function changedFaces(before: SectionBox, after: SectionBox): number[] {
-  const a = faces(before);
-  const b = faces(after);
-  return a.flatMap((face, index) => (face[1] === b[index]?.[1] ? [] : [index]));
+  const a = [...before.min, ...before.max];
+  const b = [...after.min, ...after.max];
+  return a.flatMap((value, index) => (value === b[index] ? [] : [index]));
 }
 
 /** A box with `value` at `side` of `axis`. */

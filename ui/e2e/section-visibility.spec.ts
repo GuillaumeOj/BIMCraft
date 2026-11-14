@@ -144,7 +144,7 @@ test("isolate the selection, end the isolate with the button and with Esc", asyn
 test("clipping planes: arm a face pick, then cancel it with Esc", async ({ page }) => {
   await open(page, "blocks");
   await showViewPanel(page);
-  await page.getByRole("button", { name: "Add on a face…" }).click();
+  await page.getByRole("button", { name: "Add plane on face" }).click();
   await expect(page.getByText("Click a face to cut at it · Esc to cancel")).toBeVisible();
   await expect(status(page)).toHaveText("Clipping plane · choose a face");
   await page.keyboard.press("Escape");
