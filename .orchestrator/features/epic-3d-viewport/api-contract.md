@@ -153,12 +153,15 @@ type ViewportEvent =
   | { kind: "preview_label"; label: PreviewLabel | null }   // emitted only when it changes; null hides it
   | { kind: "error"; key: "device_lost" | "scene_rejected" | "out_of_memory" };
 
-// The chip next to the cursor during a move or a placement ("2,500 m", "6,00 × 4,00 m"): the
+// The chip next to the cursor during a move or a placement ("2,500 m", "6,000 × 4,000 m"; metres with 3 decimals, design README rule 1): the
 // renderer draws no text, so the UI draws it at `at` (CSS px from the canvas's top left),
 // positioned through a ref, never through React state. `typed` is the raw typed buffer, if any.
 type PreviewLabel = {
   at: [number, number];
-  key: "move.distance" | "place.size" | "place.height";
+  // place.size: footprint being dragged or its width typed (values width, depth);
+  // place.depth: width confirmed, depth being typed (values width, depth); place.height: height step.
+  // The UI names the typed value from the key: Width/Largeur, Depth/Profondeur, Height/Hauteur.
+  key: "move.distance" | "place.size" | "place.depth" | "place.height";
   values: Record<string, number>;          // metres
   typed: string | null;
 };
