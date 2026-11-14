@@ -24,7 +24,7 @@ env:
 jobs:
   detect:
     name: Detect code
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     outputs:
       rust: ${{ steps.detect.outputs.rust }}
       ui: ${{ steps.detect.outputs.ui }}
@@ -41,7 +41,7 @@ jobs:
 
   repo:
     name: Repository checks
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -117,7 +117,7 @@ jobs:
     name: wasm32
     needs: detect
     if: needs.detect.outputs.rust == 'true'
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -132,7 +132,7 @@ jobs:
     name: Rust coverage
     needs: detect
     if: needs.detect.outputs.rust == 'true'
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -163,7 +163,7 @@ jobs:
     name: Fuzzing
     needs: detect
     if: needs.detect.outputs.rust == 'true'
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     # Replays the seeds (scripts/check-all.sh); building the targets takes most of it. This bounds a hang.
     timeout-minutes: 45
     steps:
@@ -195,7 +195,7 @@ jobs:
     name: IFC sample corpus
     needs: detect
     if: needs.detect.outputs.rust == 'true'
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -207,7 +207,7 @@ jobs:
     name: UI
     needs: detect
     if: needs.detect.outputs.ui == 'true'
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -229,7 +229,7 @@ jobs:
     name: End-to-end
     needs: detect
     if: needs.detect.outputs.e2e == 'true'
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
