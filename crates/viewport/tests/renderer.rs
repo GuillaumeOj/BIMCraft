@@ -7,8 +7,8 @@
 use render::{DisplayState, MeshData, Placement, RenderError, Renderer, Theme};
 use scene_wire::{Element, Mesh, SceneDelta};
 use viewport::{
-    Button, ElementId, InputEvent, Intent, Modifiers, Preview, PreviewLine, RendererSink,
-    SceneSink, SinkError, Tool, ViewCommand, Viewport, ViewportEvent,
+    Button, ElementId, InputEvent, Intent, Modifiers, Preset, Preview, PreviewLine, ProjectionMode,
+    RendererSink, SceneSink, SinkError, Tool, ViewCommand, Viewport, ViewportEvent,
 };
 
 const FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
@@ -237,4 +237,171 @@ fn the_renderer_sink_maps_ids_and_refuses_unknown_ones() {
         .unwrap();
     sink.remove_object(id(1)).unwrap();
     sink.remove_mesh(1).unwrap();
+}
+
+/// The full scene of the e2e tests (`ui/e2e/fixtures/README.md`): blocks 1 and 2 are 4 × 2 × 3 m
+/// at (0, 0, 0) and (6, 0, 0), block 3 is 2 × 2 × 6 m at (0, 6, 0).
+const BLOCKS: &[u8] = include_bytes!("../../../ui/e2e/fixtures/scene-blocks.bin");
+
+/// The target of the picking test: 192 px rows are 768 bytes, a multiple of the copy alignment.
+const PICK_SIZE: [u32; 2] = [192, 128];
+
+/// Renders the viewport's view and reads the pixels back, row by row from the top left.
+fn frame(
+    viewport: &mut Viewport<RendererSink>,
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+) -> Vec<[u8; 4]> {
+    let [width, height] = PICK_SIZE;
+    let extent = wgpu::Extent3d {
+        width,
+        height,
+        depth_or_array_layers: 1,
+    };
+    let texture = device.create_texture(&wgpu::TextureDescriptor {
+        label: Some("picking test target"),
+        size: extent,
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format: FORMAT,
+        usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
+        view_formats: &[],
+    });
+    let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+    let camera = viewport.camera();
+    let clear = Theme::light().clear_color();
+    viewport
+        .sink_mut()
+        .renderer_mut()
+        .render(&view, PICK_SIZE, &camera, clear)
+        .unwrap();
+    let row = width * 4;
+    let buffer = device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("picking test readback"),
+        size: u64::from(row * height),
+        usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+        mapped_at_creation: false,
+    });
+    let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+    encoder.copy_texture_to_buffer(
+        texture.as_image_copy(),
+        wgpu::TexelCopyBufferInfo {
+            buffer: &buffer,
+            layout: wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(row),
+                rows_per_image: Some(height),
+            },
+        },
+        extent,
+    );
+    queue.submit([encoder.finish()]);
+    let (sender, receiver) = std::sync::mpsc::channel();
+    buffer.map_async(wgpu::MapMode::Read, .., move |result| {
+        sender.send(result).unwrap();
+    });
+    device.poll(wgpu::PollType::wait_indefinitely()).unwrap();
+    receiver.recv().unwrap().unwrap();
+    buffer
+        .get_mapped_range(..)
+        .unwrap()
+        .as_chunks::<4>()
+        .0
+        .to_vec()
+}
+
+/// Clicks the centre of pixel `[x, y]` and leaves the view, so no hover tints the next frame.
+fn click_pixel(viewport: &mut Viewport<RendererSink>, [x, y]: [u32; 2]) {
+    let pos = [f64::from(x) + 0.5, f64::from(y) + 0.5];
+    let mods = Modifiers::default();
+    viewport.input(InputEvent::PointerMove { pos, mods });
+    viewport.input(InputEvent::PointerDown {
+        pos,
+        button: Button::Primary,
+        mods,
+    });
+    viewport.input(InputEvent::PointerUp {
+        pos,
+        button: Button::Primary,
+        mods,
+    });
+    viewport.input(InputEvent::PointerLeave);
+}
+
+/// In every preset and both projections, after a zoom fit over the e2e blocks, a click selects
+/// what is drawn under the pointer: nothing over the background, else the block that turns to
+/// the selection colour there once selected, and no other block's pixels change.
+#[test]
+fn a_click_selects_what_is_drawn_under_it_in_every_view() {
+    let (device, queue) = device();
+    let renderer = Renderer::new(&device, &queue, FORMAT).unwrap();
+    let mut viewport = Viewport::new(RendererSink::new(renderer), PICK_SIZE.map(f64::from), 1.0);
+    viewport.set_theme(Theme::light());
+    viewport.apply_scene(BLOCKS).unwrap();
+    let [width, height] = PICK_SIZE;
+    let at = |pixels: &[[u8; 4]], x: u32, y: u32| pixels[(y * width + x) as usize];
+    let presets = [
+        Preset::Top,
+        Preset::Front,
+        Preset::Back,
+        Preset::Left,
+        Preset::Right,
+        Preset::IsoSe,
+        Preset::IsoSw,
+        Preset::IsoNe,
+        Preset::IsoNw,
+    ];
+    for mode in [ProjectionMode::Perspective, ProjectionMode::Parallel] {
+        for preset in presets {
+            viewport.command(ViewCommand::Select(Vec::new()));
+            viewport.command(ViewCommand::Projection(mode));
+            viewport.command(ViewCommand::ViewPreset(preset));
+            viewport.command(ViewCommand::ZoomFit);
+            let before = frame(&mut viewport, &device, &queue);
+            let background = at(&before, 0, 0);
+            // The picked pixels of each block, away from every edge of the frame.
+            let mut picked: Vec<(ElementId, Vec<[u32; 2]>)> = Vec::new();
+            for y in (4..height - 4).step_by(8) {
+                for x in (4..width - 4).step_by(8) {
+                    let colour = at(&before, x, y);
+                    let flat = [(x - 3, y), (x + 3, y), (x, y - 3), (x, y + 3)]
+                        .iter()
+                        .all(|&(nx, ny)| at(&before, nx, ny) == colour);
+                    if !flat {
+                        continue;
+                    }
+                    click_pixel(&mut viewport, [x, y]);
+                    let selection = viewport.selection().to_vec();
+                    let context = format!("{mode:?} {preset:?} at {x} {y}");
+                    if colour == background {
+                        assert!(selection.is_empty(), "{context}: {selection:?}");
+                        continue;
+                    }
+                    let [element] = selection[..] else {
+                        panic!("{context}: {selection:?}");
+                    };
+                    match picked.iter_mut().find(|(id, _)| *id == element) {
+                        Some((_, pixels)) => pixels.push([x, y]),
+                        None => picked.push((element, vec![[x, y]])),
+                    }
+                }
+            }
+            assert!(picked.len() >= 2, "{mode:?} {preset:?}: {picked:?}");
+            for (element, _) in &picked {
+                viewport.command(ViewCommand::Select(vec![*element]));
+                let selected = frame(&mut viewport, &device, &queue);
+                for (other, others) in &picked {
+                    for &[x, y] in others {
+                        let changed = at(&selected, x, y) != at(&before, x, y);
+                        assert_eq!(
+                            changed,
+                            other == element,
+                            "{mode:?} {preset:?}: {element:?} selected, {other:?} picked at {x} {y}"
+                        );
+                    }
+                }
+            }
+        }
+    }
 }

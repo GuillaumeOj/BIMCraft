@@ -7,6 +7,7 @@ use crate::event::{Preset, ProjectionMode};
 use crate::math::norm;
 use crate::test_support::{Call, FakeSink, cubes, element, id};
 
+mod picking;
 mod sectioning;
 
 const SIZE: [f64; 2] = [400.0, 300.0];
