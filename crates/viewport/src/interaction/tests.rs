@@ -703,10 +703,10 @@ fn the_label_of_a_typed_block_goes_from_size_to_depth_to_height() {
             .into_iter()
             .rev()
             .find_map(|event| match event {
-                ViewportEvent::PreviewLabel(Some(label)) => Some(label),
+                ViewportEvent::PreviewLabel(label) => Some(label),
                 _ => None,
             })
-            .map(|label| label.key)
+            .and_then(|label| label.map(|label| label.key))
     };
     assert_eq!(last_label(&mut viewport), Some(LabelKey::PlaceSize));
     type_text(&mut viewport, "4");
