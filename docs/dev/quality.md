@@ -54,6 +54,7 @@ Updates come in groups, so that versions that must agree move together and CI ru
 | `actions` | every GitHub Action | Monday before 6am |
 | `toolchains` | `scripts/tool-versions.env` but gitleaks and actionlint (one pull request each, as CI pins their tarball checksums), the stable Rust toolchain, Bun | Monday before 6am |
 | `tauri` | the tauri crates and `@tauri-apps/api` | Monday before 6am |
+| `wasm-bindgen` | the `wasm-bindgen`, `js-sys`, `web-sys` and `wasm-bindgen-futures` crates and `wasm-bindgen-cli` in `scripts/tool-versions.env`, which must equal the crate ([viewport.md](viewport.md)) | Monday before 6am |
 | `fuzz-nightly` | `fuzz/rust-toolchain.toml` | first day of the month |
 | lock-file maintenance | the transitive dependencies of `Cargo.lock`, `fuzz/Cargo.lock` and `ui/bun.lock` | first day of the month |
 

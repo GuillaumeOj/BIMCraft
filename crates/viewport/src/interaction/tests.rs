@@ -1032,6 +1032,52 @@ fn a_drag_cut_by_a_blur_is_cancelled_and_leaves_no_marker() {
 }
 
 #[test]
+fn a_pointer_leave_mid_drag_cancels_without_an_intent() {
+    let mut viewport = viewport(1.0);
+    let (from, to) = (px(&viewport, CORNER_1), px(&viewport, CORNER_2));
+    viewport.input(InputEvent::PointerMove {
+        pos: from,
+        mods: NONE,
+    });
+    viewport.input(InputEvent::PointerDown {
+        pos: from,
+        button: Button::Primary,
+        mods: NONE,
+    });
+    viewport.input(InputEvent::PointerMove {
+        pos: to,
+        mods: NONE,
+    });
+    assert_eq!(viewport.tool_step(), ToolStep::TargetPoint);
+    viewport.input(InputEvent::PointerLeave);
+    assert_eq!(viewport.tool_step(), ToolStep::Idle);
+    viewport.input(InputEvent::PointerUp {
+        pos: to,
+        button: Button::Primary,
+        mods: NONE,
+    });
+    assert!(intents(&viewport.drain_events()).is_empty());
+}
+
+#[test]
+fn a_pointer_leave_after_a_press_makes_the_release_no_click() {
+    let mut viewport = viewport(1.0);
+    let at = px(&viewport, CORNER_1);
+    viewport.input(InputEvent::PointerDown {
+        pos: at,
+        button: Button::Primary,
+        mods: NONE,
+    });
+    viewport.input(InputEvent::PointerLeave);
+    viewport.input(InputEvent::PointerUp {
+        pos: at,
+        button: Button::Primary,
+        mods: NONE,
+    });
+    assert!(viewport.selection().is_empty());
+}
+
+#[test]
 fn a_raised_footprint_follows_the_pointer_over_nothing() {
     let mut viewport = viewport(1.0);
     viewport.set_tool(Tool::PlaceBlock);
