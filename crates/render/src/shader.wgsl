@@ -63,17 +63,8 @@ fn vs_main(
     return out;
 }
 
-// Whether the normal of the fragment points away from the eye. The eye is at the origin of the
-// camera space for a perspective, towards +z for a parallel view, whose projection has w = 1
-// (projection_matrix in transform.rs).
-fn seen_from_behind(normal: vec3<f32>, view_position: vec3<f32>) -> bool {
-    let parallel = frame.projection[3][3] > 0.5;
-    let toward_eye = select(-view_position, vec3<f32>(0.0, 0.0, 1.0), parallel);
-    return dot(normal, toward_eye) < 0.0;
-}
-
 @fragment
-fn fs_main(in: Varyings) -> @location(0) vec4<f32> {
+fn fs_main(in: Varyings, @builtin(front_facing) front: bool) -> @location(0) vec4<f32> {
     let planes = u32(frame.clip.x);
     for (var i = 0u; i < planes; i = i + 1u) {
         let plane = frame.planes[i];
@@ -82,10 +73,9 @@ fn fs_main(in: Varyings) -> @location(0) vec4<f32> {
         }
     }
     // The inside of a solid seen through a cut is its far faces seen from behind: flat in the
-    // cut colour. Ghosts (translucent) keep their own colour. "From behind" follows the normal,
-    // not the winding (`front_facing`), since BIM solids are not always consistently wound.
-    let tinted = planes > 0u && frame.clip.y > 0.5 && in.color.a >= 1.0;
-    if tinted && seen_from_behind(in.normal, in.view_position) {
+    // cut colour. Meshes turn counterclockwise seen from outside (geom's tessellation, GEO-05).
+    // Ghosts (translucent) keep their own colour.
+    if !front && planes > 0u && frame.clip.y > 0.5 && in.color.a >= 1.0 {
         return vec4<f32>(frame.cut_color.rgb, 1.0);
     }
     let ambient = frame.light.w;

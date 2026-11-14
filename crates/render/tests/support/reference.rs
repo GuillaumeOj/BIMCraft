@@ -237,7 +237,10 @@ impl Builder {
     fn cuboid(&mut self, min: [f32; 3], max: [f32; 3]) {
         for axis in 0..3 {
             let (u, v) = ((axis + 1) % 3, (axis + 2) % 3);
-            for (side, sign) in [(min, -1.0), (max, 1.0)] {
+            for (side, sign, order) in [
+                (min, -1.0, [0, 2, 1, 0, 3, 2]),
+                (max, 1.0, [0, 1, 2, 0, 2, 3]),
+            ] {
                 let first = self.next();
                 for (a, b) in [(min, min), (max, min), (max, max), (min, max)] {
                     let mut corner = [0.0; 3];
@@ -249,8 +252,7 @@ impl Builder {
                     normal[axis] = sign;
                     self.normals.push(normal);
                 }
-                self.indices
-                    .extend([0, 1, 2, 0, 2, 3].map(|corner| first + corner));
+                self.indices.extend(order.map(|corner| first + corner));
             }
         }
     }
@@ -301,7 +303,9 @@ impl Builder {
                 self.normals.push([0.0, 0.0, sign]);
             }
             for k in 1..7 {
-                self.indices.extend([first, first + k, first + k + 1]);
+                // Counterclockwise seen from above for the top, from below for the bottom.
+                let (b, c) = if sign > 0.0 { (k, k + 1) } else { (k + 1, k) };
+                self.indices.extend([first, first + b, first + c]);
             }
         }
         for k in 0..8_u8 {
@@ -331,6 +335,18 @@ impl Builder {
             indices: self.indices,
         };
         mesh.validate().unwrap();
+        // Counterclockwise seen from outside, as geom tessellates: the cut tint relies on it.
+        for triangle in mesh.indices.as_chunks::<3>().0 {
+            let [a, b, c] = triangle.map(|i| mesh.positions[i as usize]);
+            let (ab, ac) = (
+                [0, 1, 2].map(|k| b[k] - a[k]),
+                [0, 1, 2].map(|k| c[k] - a[k]),
+            );
+            let cross = [0, 1, 2]
+                .map(|k| ab[(k + 1) % 3] * ac[(k + 2) % 3] - ab[(k + 2) % 3] * ac[(k + 1) % 3]);
+            let normal = mesh.normals[triangle[0] as usize];
+            assert!((0..3).map(|k| cross[k] * normal[k]).sum::<f32>() > 0.0);
+        }
         mesh
     }
 }

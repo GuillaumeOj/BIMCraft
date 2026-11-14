@@ -43,7 +43,13 @@ fn cube(id: u64) -> Mesh {
                 n[axis] = side * 2.0;
                 normals.push(n);
             }
-            indices.extend_from_slice(&[base, base + 1, base + 2, base, base + 2, base + 3]);
+            // Counterclockwise seen from outside, as geom tessellates.
+            let order = if side < 0.0 {
+                [0, 2, 1, 0, 3, 2]
+            } else {
+                [0, 1, 2, 0, 2, 3]
+            };
+            indices.extend(order.map(|corner| base + corner));
         }
     }
     Mesh {
