@@ -445,10 +445,13 @@ impl<S: SceneSink> Viewport<S> {
         self.refresh();
     }
 
-    /// Ends the gesture in progress (a press, an orbit, a pan or a drag) without committing it: a drag cut short (the focus left, a
-    /// second finger landed) is cancelled, not left following the pointer with no button held.
+    /// Ends the gesture in progress (a press, an orbit, a pan or a drag) without committing it: a
+    /// drag cut short (the focus left, a second finger landed) is cancelled, not left following
+    /// the pointer with no button held.
     fn abandon_gesture(&mut self) {
         if self.gesture == Gesture::Drag && matches!(self.step, Step::MoveTarget { .. }) {
+            // Esc would only empty a value typed during the drag: the move must end.
+            self.typed.clear();
             self.cancel();
         }
         if let Gesture::Handle { start, .. } = self.gesture {
