@@ -90,7 +90,8 @@ pub enum InputEvent {
         /// The modifiers held.
         mods: Modifiers,
     },
-    /// The pointer left the canvas.
+    /// The pointer left the canvas, or the glue abandons the gesture (the browser cancelled the
+    /// pointer, a second finger landed): the gesture in progress ends without committing.
     PointerLeave,
     /// A wheel turn or a two-finger scroll: zooms to the pointer, or pans when `pan` (a
     /// trackpad's two-finger scroll, as the glue tells).

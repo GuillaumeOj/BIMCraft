@@ -1060,6 +1060,24 @@ fn a_pointer_leave_mid_drag_cancels_without_an_intent() {
 }
 
 #[test]
+fn a_pointer_leave_after_a_press_makes_the_release_no_click() {
+    let mut viewport = viewport(1.0);
+    let at = px(&viewport, CORNER_1);
+    viewport.input(InputEvent::PointerDown {
+        pos: at,
+        button: Button::Primary,
+        mods: NONE,
+    });
+    viewport.input(InputEvent::PointerLeave);
+    viewport.input(InputEvent::PointerUp {
+        pos: at,
+        button: Button::Primary,
+        mods: NONE,
+    });
+    assert!(viewport.selection().is_empty());
+}
+
+#[test]
 fn a_raised_footprint_follows_the_pointer_over_nothing() {
     let mut viewport = viewport(1.0);
     viewport.set_tool(Tool::PlaceBlock);
