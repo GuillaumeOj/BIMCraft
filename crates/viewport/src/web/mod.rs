@@ -65,7 +65,6 @@ fn set_panic_hook() {
 struct Inner {
     viewport: Viewport<RendererSink>,
     gpu: Gpu,
-    canvas: HtmlCanvasElement,
     theme: Theme,
     /// A frame did not get a surface texture: draw again.
     retries: u8,
@@ -122,13 +121,14 @@ impl Shared {
             return;
         }
         loop {
+            // Without a listener the events wait in the outbox for `onEvent`, not get dropped.
+            let Some(listener) = self.listener.borrow().clone() else {
+                break;
+            };
             let events = std::mem::take(&mut *self.outbox.borrow_mut());
             if events.is_empty() {
                 break;
             }
-            let Some(listener) = self.listener.borrow().clone() else {
-                break;
-            };
             for event in events {
                 // A throwing listener is the page's bug; it must not stop the viewport.
                 listener.call1(&JsValue::NULL, &event).ok();
@@ -247,11 +247,14 @@ impl WebViewport {
             .map_err(|error| JsError::new(&error.to_string()))?;
         let mut viewport = Viewport::new(RendererSink::new(renderer), css, ratio);
         viewport.set_theme(theme);
+        // The viewport's own rounding is the one that counts; the surface follows at the first frame.
+        let [w, h] = viewport.size();
+        canvas.set_width(w);
+        canvas.set_height(h);
         let shared = Rc::new(Shared {
             inner: RefCell::new(Some(Inner {
                 viewport,
                 gpu,
-                canvas: canvas.clone(),
                 theme,
                 retries: 0,
             })),
@@ -309,12 +312,13 @@ impl WebViewport {
     /// The canvas is now `width` × `height` CSS pixels at `device_pixel_ratio`.
     pub fn resize(&self, width: f64, height: f64, device_pixel_ratio: f64) -> Result<(), JsError> {
         let (size, ratio) = convert::parse_size(width, height, device_pixel_ratio)?;
-        self.shared.run(|inner| {
+        let [w, h] = self.shared.run(|inner| {
             inner.viewport.resize(size, ratio);
-            let [w, h] = inner.viewport.size();
-            inner.canvas.set_width(w);
-            inner.canvas.set_height(h);
-        })
+            inner.viewport.size()
+        })?;
+        self.shared.canvas.set_width(w);
+        self.shared.canvas.set_height(h);
+        Ok(())
     }
 
     /// Changes the colours, from the CSS tokens.

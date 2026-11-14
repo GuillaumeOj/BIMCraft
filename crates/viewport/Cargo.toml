@@ -19,7 +19,7 @@ render = { workspace = true }
 scene-wire = { workspace = true }
 thiserror = { workspace = true }
 
-# The browser glue, `src/web.rs`: wasm32 only.
+# The browser glue, `src/web/`: wasm32 only.
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 js-sys = { workspace = true }
 wasm-bindgen = { workspace = true }

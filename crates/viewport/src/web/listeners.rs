@@ -233,6 +233,12 @@ fn pointer(canvas: &HtmlCanvasElement, send: &Rc<dyn Fn(InputEvent)>) -> Vec<Lis
                     return;
                 }
             }
+            // The browser took the pointer away (its button is meaningless): end the gesture
+            // without committing it.
+            if name == "pointercancel" {
+                s(InputEvent::PointerLeave);
+                return;
+            }
             if let Some(button) = button(&event) {
                 s(InputEvent::PointerUp {
                     pos: position(&c, &event),

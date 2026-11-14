@@ -62,8 +62,6 @@ tauri-build = { version = "=2.7.4", default-features = false }
 tempfile = "=3.27.0"
 thiserror = "=2.0.21"
 toml = "=1.1.6"
-# The renderer of the 3D viewport (VP-04). Without the default features: WGSL shaders and the
-# Metal, Vulkan, DX12 and browser WebGPU backends only, no GLES/WebGL (VP-05 comes later).
 # The browser glue of the viewport (VP-01): wasm32 only, at the versions wgpu's WebGPU backend
 # already locks, so no second copy is built.
 wasm-bindgen = "=0.2.129"
@@ -82,6 +80,8 @@ web-sys = { version = "=0.3.106", features = [
   "Window",
   "console",
 ] }
+# The renderer of the 3D viewport (VP-04). Without the default features: WGSL shaders and the
+# Metal, Vulkan, DX12 and browser WebGPU backends only, no GLES/WebGL (VP-05 comes later).
 wgpu = { version = "=30.0.1", default-features = false, features = [
   "dx12",
   "metal",
