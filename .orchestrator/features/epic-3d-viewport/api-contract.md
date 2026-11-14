@@ -128,6 +128,20 @@ type ViewCommand =
 
 type VisibilityTarget =
   | { by: "category"; names: string[] } | { by: "discipline"; names: string[] } | { by: "selection" };
+```
+
+Clipping conventions (B8):
+- A plane removes the half-space its normal points to: what lies behind the normal stays visible.
+- A face-picked plane passes through the picked point and takes the face normal turned toward the eye, so what lies between the eye and the face is cut away.
+- `clip_plane_flip` reverses the normal.
+- There are at most six user planes. A seventh `clip_plane_add` or pick changes nothing; the UI disables Add at six and shows the 6-plane toast (board 3.28).
+- `section_box{enabled:true}` with no box yet fits the scene with a 0.1 m margin; an empty scene gives `sectionBox: null`.
+- `section_box_reset` keeps the enabled flag.
+- `section_box_extents` with min ≥ max on any axis, or with non-finite values, is ignored: the UI validates first (board 3.26, "Le minimum doit être inférieur au maximum").
+- `show {by: "selection"}` un-hides what "hide selection" hid, because hidden elements cannot be selected.
+- Cut faces are back faces seen through a cut, filled with solid `vp-cut` (design README rule 6, not shaded). With faces oriented inconsistently, a stray tint can appear; ADR 0026 records it.
+
+```ts
 
 type ViewportEvent =
   | { kind: "selection"; ids: string[] }
