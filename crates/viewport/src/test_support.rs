@@ -265,7 +265,13 @@ pub(crate) fn box_mesh(key: u64, origin: Vec3, min: [f32; 3], max: [f32; 3]) -> 
                 positions.push(p);
                 normals.push(normal);
             }
-            indices.extend_from_slice(&[base, base + 1, base + 2, base, base + 2, base + 3]);
+            // Counterclockwise seen from outside, as geom tessellates.
+            let order = if side == 0 {
+                [0, 2, 1, 0, 3, 2]
+            } else {
+                [0, 1, 2, 0, 2, 3]
+            };
+            indices.extend(order.map(|corner| base + corner));
         }
     }
     Mesh {

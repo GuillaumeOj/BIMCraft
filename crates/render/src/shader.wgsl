@@ -73,7 +73,8 @@ fn fs_main(in: Varyings, @builtin(front_facing) front: bool) -> @location(0) vec
         }
     }
     // The inside of a solid seen through a cut is its far faces seen from behind: flat in the
-    // cut colour. Ghosts (translucent) keep their own colour.
+    // cut colour. Meshes turn counterclockwise seen from outside (geom's tessellation, GEO-05).
+    // Ghosts (translucent) keep their own colour.
     if !front && planes > 0u && frame.clip.y > 0.5 && in.color.a >= 1.0 {
         return vec4<f32>(frame.cut_color.rgb, 1.0);
     }

@@ -39,7 +39,7 @@ Il n'est pas encore possible de désigner un élément au clavier seul ; les uti
 
 **Résultat :** les éléments sont déplacés et un message comme « 1 élément déplacé de 2,500 m » apparaît avec un bouton **Annuler**.
 
-Appuyez sur **Échap** pour abandonner un déplacement en cours.
+Appuyez sur **Échap** pour abandonner un déplacement en cours. Si vous saisissez une distance, le premier **Échap** l'efface seulement : le déplacement garde son point de base et suit de nouveau le pointeur ; un second **Échap** l'abandonne.
 
 ## Options
 
