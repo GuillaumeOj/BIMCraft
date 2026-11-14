@@ -31,9 +31,20 @@ fn api<R: Runtime>(
     handled.response
 }
 
+/// The Tauri command that returns the scene delta for a viewport holding revision `since`, as raw
+/// bytes (api-contract.md section 1): an `ArrayBuffer` in JavaScript, never parsed there as JSON.
+pub const SCENE_COMMAND: &str = "scene";
+
+// Tauri hands commands their arguments by value.
+#[allow(clippy::needless_pass_by_value)]
+#[tauri::command(async)]
+fn scene(host: State<'_, DocumentHost>, since: Option<u64>) -> tauri::ipc::Response {
+    tauri::ipc::Response::new(host.scene(since))
+}
+
 /// `builder` serving `host` to its windows.
 pub fn serve<R: Runtime>(builder: Builder<R>, host: DocumentHost) -> Builder<R> {
     builder
         .manage(host)
-        .invoke_handler(tauri::generate_handler![api])
+        .invoke_handler(tauri::generate_handler![api, scene])
 }

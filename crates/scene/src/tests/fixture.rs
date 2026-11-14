@@ -1,9 +1,8 @@
 //! A schema, commands and generators shared by the tests: walls with a type, a height, a
 //! thickness and a finish, whose body is a box.
 
-use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet};
-use std::rc::Rc;
+use std::sync::{Arc, Mutex, PoisonError};
 
 use core_model::{AttributeValue, Component, EntityId, LibraryRef, Model};
 use core_txn::{ChangeEvent, Document, ModelCommand, Origin};
@@ -192,16 +191,20 @@ fn wall_common() -> PropertySet {
 
 /// The generator invocations so far, as the path and the element, in order.
 #[derive(Clone, Default)]
-pub struct Calls(Rc<RefCell<Vec<(String, EntityId)>>>);
+pub struct Calls(Arc<Mutex<Vec<(String, EntityId)>>>);
 
 impl Calls {
+    fn lock(&self) -> std::sync::MutexGuard<'_, Vec<(String, EntityId)>> {
+        self.0.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+
     fn push(&self, path: &str, element: EntityId) {
-        self.0.borrow_mut().push((path.into(), element));
+        self.lock().push((path.into(), element));
     }
 
     /// The invocations since the last call, in order.
     pub fn take(&self) -> Vec<(String, EntityId)> {
-        std::mem::take(&mut self.0.borrow_mut())
+        std::mem::take(&mut *self.lock())
     }
 
     /// The elements generated since the last call, sorted.

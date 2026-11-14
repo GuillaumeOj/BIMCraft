@@ -23,10 +23,10 @@ fn the_embedded_core_schema_is_the_schema_core_directory() {
 fn a_poisoned_lock_does_not_stop_the_document() {
     let host = DocumentHost::open_new().unwrap();
     let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        let _guard = host.server.lock().unwrap();
+        let _guard = host.open.lock().unwrap();
         panic!("poison");
     }));
-    assert!(host.server.is_poisoned());
+    assert!(host.open.is_poisoned());
     let handled = host.handle(r#"{"jsonrpc":"2.0","id":1,"method":"history.state","params":{}}"#);
     assert!(handled.response.is_some());
 }

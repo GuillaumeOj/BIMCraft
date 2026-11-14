@@ -60,3 +60,15 @@ With occlusion culling on, the same probe, 2026-11-14 (B3), timed the walk of th
 Medians of 200 frames; the 95th percentiles stay under 2.5 ms. The frames that skip hidden clusters write fewer instance records, so they cost less than these. What occlusion culling saves on the GPU needs `gpu/frame` on a hardware adapter; no number yet.
 
 Each object drawn costs one 80-byte instance record uploaded per frame. Without occlusion culling, the outside views draw everything except the 2,000 sprinkler heads, which are under a pixel; with it, the elements behind the façades are skipped once the GPU has found them hidden.
+
+## Moving an element: the core path (VP-01, NFR-03)
+
+What the desktop host does between the drop of a move and the bytes the viewport receives: decode the `elements.move` message, run the transaction, re-mesh the moved block, update the scene channel, then build and encode the delta for the revision the viewport holds. IPC and the frame come on top; NFR-03 leaves this part 50 ms.
+
+`cargo bench -p host-desktop --bench move`, release profile. The model has 100,000 blocks in a grid, in eight sizes, so meshes are shared as in a real model; the bench checks that a move sends one placement and no mesh. Apple M3, Rust 1.98.1, macOS, 2026-11-14.
+
+| Benchmark | Median |
+| --- | --- |
+| `move/one_block_in_100k` | 9.7 µs |
+
+The cost follows what the edit changed, not the model: the scene meshes the moved block only (GEO-05), and the delta is built from the change log. The scene of the whole model is built once when the document opens.

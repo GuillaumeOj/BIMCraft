@@ -13,7 +13,7 @@ use geom::{BooleanError, BrepError, ExtrusionError, ProfileError, Solid};
 /// read: the element, its type, the relationships it takes part in, the objects its attributes
 /// refer to, and the objects it lists in [`Generated::inputs`]. The scene recomputes it when one
 /// of them changes, and only then.
-pub trait Generator {
+pub trait Generator: Send + Sync {
     /// The solids of `element`'s representation.
     ///
     /// # Errors
@@ -26,7 +26,7 @@ pub trait Generator {
 /// Any function of the model and an element is a generator.
 impl<F> Generator for F
 where
-    F: Fn(&Model, EntityId) -> Result<Generated, GeneratorError>,
+    F: Fn(&Model, EntityId) -> Result<Generated, GeneratorError> + Send + Sync,
 {
     fn generate(&self, model: &Model, element: EntityId) -> Result<Generated, GeneratorError> {
         self(model, element)

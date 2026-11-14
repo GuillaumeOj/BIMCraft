@@ -63,7 +63,10 @@ fn a_block_is_a_local_box_and_a_placement() {
     let generated = generate(&d, id).unwrap();
     assert_eq!(generated.solids.len(), 1);
     assert!((generated.solids[0].volume() - 48.0).abs() < 1e-9);
-    assert_eq!(generated.placement, Placement::about_z(0.0, [10.0, 20.0, 3.0]));
+    assert_eq!(
+        generated.placement,
+        Placement::about_z(0.0, [10.0, 20.0, 3.0])
+    );
     // Centred in x and y, standing on z = 0.
     let (min, max) = bounds(&generated);
     assert_eq!((min, max), ([-1.0, -2.0, 0.0], [1.0, 2.0, 6.0]));
