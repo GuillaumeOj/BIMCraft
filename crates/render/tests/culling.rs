@@ -293,5 +293,7 @@ fn moving_an_object_into_view_draws_it() {
     let (pixels, stats) = frame(&mut renderer, &camera, [64, 64]);
     assert_eq!(stats.fine, 1);
     let centre = (32 * 64 + 32) * 4;
-    assert_eq!(pixels[centre], 255);
+    // The face turned to the camera is lit 0.25 + 0.75 · 0.80 = 0.85 (the ambient share plus the
+    // diffuse light), so full red comes out as 217.
+    assert_eq!(pixels[centre..centre + 4], [217, 0, 0, 255]);
 }
