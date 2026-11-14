@@ -232,7 +232,14 @@ fn an_isolation_whose_elements_are_all_gone_ends_and_a_partial_one_stays() {
     // The hidden set is kept, and the scene shows again.
     assert_eq!(hidden_states(&viewport), [id(1)]);
     let keys = announced(&mut viewport, &[]);
-    assert!(keys.contains(&AnnouncementKey::VisibilityReset), "{keys:?}");
+    assert!(
+        keys.contains(&AnnouncementKey::VisibilityHidden),
+        "{keys:?}"
+    );
+    assert!(
+        !keys.contains(&AnnouncementKey::VisibilityReset),
+        "{keys:?}"
+    );
     // Undoing the deletion brings the element back without isolating it again.
     let back = SceneDelta {
         revision: 3,
@@ -255,6 +262,33 @@ fn an_isolation_whose_elements_are_all_gone_ends_and_a_partial_one_stays() {
     viewport.apply_delta(&removal(2, &[id(2)])).unwrap();
     assert!(view_state(&viewport).isolating);
     assert!(hidden_states(&viewport).is_empty());
+}
+
+#[test]
+fn a_category_isolation_whose_elements_are_all_gone_ends() {
+    let mut viewport = categorised();
+    viewport.command(ViewCommand::Isolate(VisibilityTarget::Categories(names(
+        &["Wall"],
+    ))));
+    assert_eq!(hidden_states(&viewport), [id(2)]);
+    viewport.drain_events();
+    viewport.apply_delta(&removal(2, &[id(1)])).unwrap();
+    assert!(!view_state(&viewport).isolating);
+    assert!(hidden_states(&viewport).is_empty());
+    let keys = announced(&mut viewport, &[]);
+    assert!(keys.contains(&AnnouncementKey::VisibilityReset), "{keys:?}");
+}
+
+#[test]
+fn a_discipline_isolation_whose_elements_are_all_gone_ends() {
+    let mut viewport = categorised();
+    viewport.command(ViewCommand::Isolate(VisibilityTarget::Disciplines(names(
+        &["arch"],
+    ))));
+    viewport.apply_delta(&removal(2, &[id(1)])).unwrap();
+    assert!(view_state(&viewport).isolating);
+    viewport.apply_delta(&removal(3, &[id(2)])).unwrap();
+    assert!(!view_state(&viewport).isolating);
 }
 
 #[test]

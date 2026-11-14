@@ -367,21 +367,29 @@ impl<S: SceneSink> Viewport<S> {
     /// `recreated` elements, whose objects forgot), drops hidden ones from the selection and the
     /// hover, and refreshes the panels' lists of categories and disciplines.
     pub(super) fn visibility_changed(&mut self, recreated: &BTreeSet<ElementId>) {
-        let isolation_ended = self
-            .sect
+        self.sect
             .visibility
             .retain_elements(|id| self.cache.contains(id));
-        let mut hidden = BTreeSet::new();
         let mut categories: BTreeMap<&str, usize> = BTreeMap::new();
         let mut disciplines: BTreeMap<&str, usize> = BTreeMap::new();
-        for (id, element) in self.cache.elements() {
+        for (_, element) in self.cache.elements() {
             let (category, discipline) = self.cache.names_of(element);
-            if !self.sect.visibility.visible(id, category, discipline) {
-                hidden.insert(id);
-            }
             *categories.entry(category).or_default() += 1;
             *disciplines.entry(discipline).or_default() += 1;
         }
+        let isolation_ended = self.sect.visibility.end_isolation_if_empty(
+            |name| categories.contains_key(name),
+            |name| disciplines.contains_key(name),
+        );
+        let hidden: BTreeSet<ElementId> = self
+            .cache
+            .elements()
+            .filter(|&(id, element)| {
+                let (category, discipline) = self.cache.names_of(element);
+                !self.sect.visibility.visible(id, category, discipline)
+            })
+            .map(|(id, _)| id)
+            .collect();
         let vis = &self.sect.visibility;
         let categories = name_states(&categories, &|n| vis.category_hidden(n), &|n| {
             vis.category_isolated(n)
@@ -430,7 +438,7 @@ impl<S: SceneSink> Viewport<S> {
             self.sect.version += 1;
         }
         if isolation_ended {
-            self.say(AnnouncementKey::VisibilityReset, Vec::new());
+            self.say_visibility();
         }
         self.dirty = true;
     }
