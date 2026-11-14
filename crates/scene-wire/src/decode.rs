@@ -231,7 +231,9 @@ fn vec3s(bytes: &[u8]) -> Vec<[f32; 3]> {
 /// delta unreadable.
 #[must_use]
 pub fn mesh_is_valid(mesh: &Mesh) -> bool {
-    check_mesh(mesh, 0).is_ok()
+    // The decoder reads one normal per position by construction; a mesh built in memory may not
+    // have them, and the encoder would then write a payload that shifts what follows.
+    mesh.normals.len() == mesh.positions.len() && check_mesh(mesh, 0).is_ok()
 }
 
 fn check_mesh(mesh: &Mesh, index: usize) -> Result<(), WireError> {
