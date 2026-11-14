@@ -1359,6 +1359,31 @@ fn a_pointer_leave_mid_drag_cancels_without_an_intent() {
 }
 
 #[test]
+fn a_blur_mid_drag_ends_the_move_even_with_a_value_typed() {
+    let mut viewport = viewport(1.0);
+    let (from, to) = (px(&viewport, CORNER_1), px(&viewport, CORNER_2));
+    viewport.input(InputEvent::PointerMove {
+        pos: from,
+        mods: NONE,
+    });
+    viewport.input(InputEvent::PointerDown {
+        pos: from,
+        button: Button::Primary,
+        mods: NONE,
+    });
+    viewport.input(InputEvent::PointerMove {
+        pos: to,
+        mods: NONE,
+    });
+    key(&mut viewport, Key::Char('2'));
+    assert_eq!(viewport.tool_step(), ToolStep::TargetPoint);
+    viewport.input(InputEvent::Blur);
+    assert_eq!(viewport.tool_step(), ToolStep::Idle);
+    click(&mut viewport, offset(to, 1.0, 0.0), NONE);
+    assert!(intents(&viewport.drain_events()).is_empty());
+}
+
+#[test]
 fn a_pointer_leave_after_a_press_makes_the_release_no_click() {
     let mut viewport = viewport(1.0);
     let at = px(&viewport, CORNER_1);
