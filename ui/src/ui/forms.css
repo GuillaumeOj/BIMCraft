@@ -482,7 +482,8 @@
 .toast-region {
   position: fixed;
   left: 50%;
-  bottom: 24px;
+  /* A screen with controls along the bottom edge raises it (the 3D view does). */
+  bottom: var(--bc-toast-bottom, 24px);
   z-index: 30;
   transform: translateX(-50%);
 }

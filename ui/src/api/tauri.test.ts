@@ -32,6 +32,24 @@ describe("tauriTransport", () => {
     );
   });
 
+  it("fetches a scene delta as raw bytes through the scene command", async () => {
+    const buffer = new Uint8Array([66, 67]).buffer;
+    tauri.invoke.mockResolvedValue(buffer);
+    await expect(tauriTransport.scene?.(7)).resolves.toBe(buffer);
+    expect(tauri.invoke).toHaveBeenCalledWith("scene", { since: 7 });
+  });
+
+  it("reports a failed or malformed scene call as a TransportError", async () => {
+    tauri.invoke.mockRejectedValue("document closed");
+    await expect(tauriTransport.scene?.(null)).rejects.toEqual(
+      new TransportError("document closed"),
+    );
+    tauri.invoke.mockResolvedValue("not bytes");
+    await expect(tauriTransport.scene?.(null)).rejects.toEqual(
+      new TransportError("malformed scene response"),
+    );
+  });
+
   it("delivers notification events and stops on unsubscribe", async () => {
     const unlisten = vi.fn();
     tauri.listen.mockResolvedValue(unlisten);

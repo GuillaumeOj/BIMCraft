@@ -1,8 +1,11 @@
 import { screen, within } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { fakeCore } from "../test-support/fakeCore";
 import { renderWithCore } from "../test-support/render";
 import { Shell } from "./Shell";
+
+// The 3D view stays loading: its own tests cover it (viewport/ViewportView.test.tsx).
+vi.mock("../viewport/module", () => ({ loadViewportModule: () => new Promise(() => undefined) }));
 
 // jsdom reports an English system language (navigator.languages is ["en-US", "en"]).
 function renderShell() {

@@ -74,7 +74,32 @@ export function fakeCore(options: { georeference?: Georeference | null } = {}) {
           },
         };
 
+  // Blocks (spec D1): their ids only; the viewport's tests do not need their geometry.
+  const blocks = new Set<string>();
+  const sceneCalls: (number | null)[] = [];
+  // Each delta is one byte, the revision it brings, unless a test replaces it.
+  let sceneRevision = 0;
+  let sceneAnswer: (since: number | null) => Promise<ArrayBuffer> = async () =>
+    new Uint8Array([sceneRevision]).buffer;
+
   const builtIn: Record<string, Handler> = {
+    "model.create": (params) => {
+      const { entity, id } = params as { entity: string; id: string };
+      if (entity !== "Block") throw refusal("unknown_entity");
+      blocks.add(id);
+      materials.record("model.create");
+      return null;
+    },
+    "elements.move": (params) => {
+      const { ids } = params as { ids: string[] };
+      if (ids.some((id) => !blocks.has(id))) throw refusal("unknown_element");
+      materials.record("model.batch");
+      return null;
+    },
+    "model.list_objects": (params) => {
+      const { limit } = params as { limit?: number };
+      return { items: [...blocks].slice(0, limit ?? undefined), next: null };
+    },
     ...(materials.handlers as unknown as Record<string, Handler>),
     ...(buildUps.handlers as unknown as Record<string, Handler>),
     "georef.list_crs": () => ({ crs }),
@@ -123,6 +148,8 @@ export function fakeCore(options: { georeference?: Georeference | null } = {}) {
         if (failure) throw failure;
         const result = await (override[method] ?? builtIn[method])?.(params);
         if (
+          method === "model.create" ||
+          method === "elements.move" ||
           method === "georef.set" ||
           method === "georef.clear" ||
           materials.commands.includes(method) ||
@@ -140,6 +167,10 @@ export function fakeCore(options: { georeference?: Georeference | null } = {}) {
     async listen(onMessage) {
       listeners.add(onMessage);
       return () => listeners.delete(onMessage);
+    },
+    scene(since) {
+      sceneCalls.push(since);
+      return sceneAnswer(since);
     },
   };
 
@@ -164,6 +195,18 @@ export function fakeCore(options: { georeference?: Georeference | null } = {}) {
     },
     /** What the project's georeference is now. */
     current: () => value,
+    /** The blocks of the model; add some to start from a model that is not empty. */
+    blocks,
+    /** The `since` of every `scene` call, in order. */
+    sceneCalls,
+    /** Sets the revision the next deltas bring. */
+    setSceneRevision: (revision: number) => {
+      sceneRevision = revision;
+    },
+    /** Answers the `scene` calls with `answer` from now on. */
+    answerScene: (answer: (since: number | null) => Promise<ArrayBuffer>) => {
+      sceneAnswer = answer;
+    },
     /** Sends a `model.changed` notification, as another window or an undo would. */
     notifyChange: push,
   };

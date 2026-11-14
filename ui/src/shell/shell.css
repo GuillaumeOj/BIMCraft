@@ -174,3 +174,15 @@
 .panel-tab[aria-selected="true"] {
   font-weight: 600;
 }
+
+.single-keys-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--bc-ink-2);
+}
+
+.single-keys-toggle input {
+  margin: 0;
+  accent-color: var(--bc-verdigris);
+}

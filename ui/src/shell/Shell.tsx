@@ -6,7 +6,9 @@ import { LocationDialog } from "../georef/LocationDialog";
 import { useI18n } from "../i18n/I18nProvider";
 import { LanguageSelect } from "../i18n/LanguageSelect";
 import { MaterialsDialog } from "../materials/MaterialsDialog";
+import { ViewportView } from "../viewport/ViewportView";
 import { useShellState } from "./ShellState";
+import { SingleKeysToggle } from "./SingleKeysToggle";
 import "./shell.css";
 
 const RIGHT_PANELS = ["properties", "history", "coordinates"] as const;
@@ -163,6 +165,7 @@ export function Shell() {
         >
           {t("panel.console")}
         </button>
+        <SingleKeysToggle />
         <LanguageSelect />
       </header>
       <div className="workspace">
@@ -185,7 +188,9 @@ export function Shell() {
           ref={viewport}
           data-region
           tabIndex={-1}
-        />
+        >
+          <ViewportView />
+        </main>
         <section
           className="panel panel-right"
           aria-labelledby={tabId(rightPanel)}
