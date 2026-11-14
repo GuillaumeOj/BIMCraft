@@ -24,6 +24,53 @@ struct Plane {
     offset: f64,
 }
 
+/// The planes, in camera coordinates (x right, y up, looking down −z), of the view volume seen
+/// through the window `[left, bottom, right, top]` of the view in normalised device coordinates:
+/// left, right, bottom, top and near, plus far for an orthographic projection (the count says
+/// how many). A point `q` relative to the eye is inside a plane `(n, d)` when `n · q + d ≥ 0`.
+pub(crate) fn camera_planes(
+    projection: &Projection,
+    aspect: f64,
+    [left, bottom, right, top]: [f64; 4],
+) -> ([([f64; 3], f64); 6], usize) {
+    match *projection {
+        Projection::Perspective {
+            fov_y_radians,
+            near,
+        } => {
+            // In view at depth −z when x lies between left·tan_x·(−z) and right·tan_x·(−z).
+            let tan_y = libm::tan(fov_y_radians / 2.0);
+            let tan_x = tan_y * aspect;
+            (
+                [
+                    ([1.0, 0.0, left * tan_x], 0.0),
+                    ([-1.0, 0.0, -right * tan_x], 0.0),
+                    ([0.0, 1.0, bottom * tan_y], 0.0),
+                    ([0.0, -1.0, -top * tan_y], 0.0),
+                    ([0.0, 0.0, -1.0], -near),
+                    ([0.0; 3], 0.0),
+                ],
+                5,
+            )
+        }
+        Projection::Orthographic { height, near, far } => {
+            let half_y = height / 2.0;
+            let half_x = half_y * aspect;
+            (
+                [
+                    ([1.0, 0.0, 0.0], -left * half_x),
+                    ([-1.0, 0.0, 0.0], right * half_x),
+                    ([0.0, 1.0, 0.0], -bottom * half_y),
+                    ([0.0, -1.0, 0.0], top * half_y),
+                    ([0.0, 0.0, -1.0], -near),
+                    ([0.0, 0.0, 1.0], far),
+                ],
+                6,
+            )
+        }
+    }
+}
+
 /// The planes of a camera's view volume: left, right, bottom, top and near, plus far for an
 /// orthographic camera (a perspective one has an infinite far plane).
 #[derive(Clone, Debug)]
@@ -37,43 +84,19 @@ impl Frustum {
     /// The frustum of a validated camera's view and projection, for a target of `aspect`
     /// (width over height).
     pub(crate) fn new(view: &ViewFrame, projection: &Projection, aspect: f64) -> Self {
-        // Planes in camera coordinates (x right, y up, looking down −z), inside when
-        // `n · q + d ≥ 0` for a point `q` relative to the eye.
-        let (camera_planes, count): ([([f64; 3], f64); 6], usize) = match *projection {
-            Projection::Perspective {
-                fov_y_radians,
-                near,
-            } => {
-                let tan_y = libm::tan(fov_y_radians / 2.0);
-                let tan_x = tan_y * aspect;
-                (
-                    [
-                        ([1.0, 0.0, -tan_x], 0.0),
-                        ([-1.0, 0.0, -tan_x], 0.0),
-                        ([0.0, 1.0, -tan_y], 0.0),
-                        ([0.0, -1.0, -tan_y], 0.0),
-                        ([0.0, 0.0, -1.0], -near),
-                        ([0.0; 3], 0.0),
-                    ],
-                    5,
-                )
-            }
-            Projection::Orthographic { height, near, far } => {
-                let half_y = height / 2.0;
-                let half_x = half_y * aspect;
-                (
-                    [
-                        ([1.0, 0.0, 0.0], half_x),
-                        ([-1.0, 0.0, 0.0], half_x),
-                        ([0.0, 1.0, 0.0], half_y),
-                        ([0.0, -1.0, 0.0], half_y),
-                        ([0.0, 0.0, -1.0], -near),
-                        ([0.0, 0.0, 1.0], far),
-                    ],
-                    6,
-                )
-            }
-        };
+        Self::window(view, projection, aspect, [-1.0, -1.0, 1.0, 1.0])
+    }
+
+    /// The part of that frustum seen through the window `[left, bottom, right, top]` of the
+    /// view, in normalised device coordinates (the whole view is `[-1, -1, 1, 1]`): the volume
+    /// a pick or a snap under the pointer looks into. The window may reach beyond the view.
+    pub(crate) fn window(
+        view: &ViewFrame,
+        projection: &Projection,
+        aspect: f64,
+        [left, bottom, right, top]: [f64; 4],
+    ) -> Self {
+        let (camera_planes, count) = camera_planes(projection, aspect, [left, bottom, right, top]);
         // `n · (V · r) = (Vᵀ · n) · r`: the world normal is the transposed view rotation applied
         // to the camera normal.
         let rows = &view.rotation;

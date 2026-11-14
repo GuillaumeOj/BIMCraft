@@ -561,3 +561,35 @@ fn unknown_objects_are_refused() {
     );
     assert!(!fixture.frame().is_black());
 }
+
+#[test]
+fn objects_under_a_rectangle_of_pixels_are_found() {
+    let mut fixture = Fixture::new();
+    let object = fixture.add_cube(1.0, [0.0; 3], RED);
+    let centre = f64::from(SIZE) / 2.0;
+    let mut found = Vec::new();
+    fixture
+        .renderer
+        .objects_in_rect(
+            &fixture.camera,
+            [SIZE; 2],
+            [centre - 1.0, centre - 1.0, centre + 1.0, centre + 1.0],
+            |id| found.push(id),
+        )
+        .unwrap();
+    assert_eq!(found, [object]);
+    found.clear();
+    fixture
+        .renderer
+        .objects_in_rect(&fixture.camera, [SIZE; 2], [0.0, 0.0, 2.0, 2.0], |id| {
+            found.push(id);
+        })
+        .unwrap();
+    assert!(found.is_empty());
+    assert_eq!(
+        fixture
+            .renderer
+            .objects_in_rect(&fixture.camera, [SIZE; 2], [2.0, 0.0, 1.0, 1.0], |_| {}),
+        Err(RenderError::InvalidRect)
+    );
+}

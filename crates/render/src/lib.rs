@@ -16,7 +16,8 @@
 //! Objects have a [`DisplayState`] (normal, hovered, selected, ghost), coloured by a [`Theme`]. An
 //! [`Overlay`] adds temporary geometry over the model: lines, snap markers, translucent boxes and
 //! ghosts of existing objects (previews of a move or a placement), drawn after the opaque pass
-//! and replaced each frame without uploading a mesh.
+//! and replaced each frame without uploading a mesh. [`Renderer::objects_in_rect`] finds the
+//! objects under a rectangle of pixels: the broad phase of picking and snapping.
 //!
 //! This crate builds for native targets and `wasm32-unknown-unknown` (ARCH-01), never touches the
 //! platform directly (ARCH-02) and computes trigonometry with `libm` (ENG-04).

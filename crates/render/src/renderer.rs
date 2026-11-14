@@ -21,8 +21,9 @@ use std::sync::atomic::{AtomicU8, Ordering};
 use wgpu::util::DeviceExt as _;
 
 use crate::bounds::Aabb;
+use crate::frustum::Frustum;
 use crate::lod::{DetailLevel, RenderSettings, has_coarse_level};
-use crate::overlay::{Overlay, OverlayFrame, PRIMITIVE_ATTRIBUTES, PRIMITIVE_STRIDE, near_plane};
+use crate::overlay::{ClipVolume, Overlay, OverlayFrame, PRIMITIVE_ATTRIBUTES, PRIMITIVE_STRIDE};
 use crate::theme::{DisplayState, Theme};
 use crate::transform::{Matrix, ViewFrame, projection_matrix};
 use crate::world::{
@@ -121,6 +122,9 @@ pub enum RenderError {
     /// The object id is not, or no longer, in the renderer.
     #[error("the object is not in the renderer")]
     UnknownObject(ObjectId),
+    /// The overlay needs more records than the device's largest buffer holds.
+    #[error("the overlay is larger than this device can draw")]
+    OverlayTooLarge,
     /// The renderer holds as many objects as one frame can draw on this device.
     #[error("the renderer holds the {max} objects this device can draw in one frame")]
     TooManyObjects {
@@ -152,6 +156,9 @@ pub enum RenderError {
         /// The limit for this device.
         max: u32,
     },
+    /// The rectangle of a query is not finite or is inverted.
+    #[error("the rectangle is not finite or is inverted")]
+    InvalidRect,
     /// The target view is not a single-sampled 2D render attachment of the renderer's format and
     /// of the given size.
     #[error("the render target does not match the renderer's format or the given size")]
@@ -405,14 +412,21 @@ impl Renderer {
     ///
     /// # Errors
     ///
-    /// [`RenderError::UnknownObject`] when a ghost shows an object that is not in the renderer;
-    /// the previous overlay is kept.
+    /// [`RenderError::UnknownObject`] when a ghost shows an object that is not in the renderer,
+    /// or [`RenderError::OverlayTooLarge`] when the overlay, with the objects already in the
+    /// ghost state, needs more records than a buffer of the device holds (set the ghost states
+    /// first). Either way the previous overlay is kept: nothing is ever drawn in part.
     pub fn set_overlay(&mut self, overlay: &Overlay) -> Result<(), RenderError> {
         if let Some(missing) = overlay
             .ghost_objects()
             .find(|&id| self.world.state(id).is_err())
         {
             return Err(RenderError::UnknownObject(missing));
+        }
+        let (primitives, instances) = overlay.record_counts();
+        let instances = instances + self.world.ghost_state_count() as u64;
+        if !overlay_fits(primitives, instances, self.max_buffer_size) {
+            return Err(RenderError::OverlayTooLarge);
         }
         self.overlay.clone_from(overlay);
         Ok(())
@@ -503,6 +517,30 @@ impl Renderer {
         self.world.drawn_level(id)
     }
 
+    /// Calls `found` with every object whose world bounds meet the part of the view seen through
+    /// `rect`, `[left, top, right, bottom]` in pixels of a target of `size` (origin at the top
+    /// left, y down; it may reach beyond the target). Culling, occlusion and level of detail do
+    /// not matter: an object hidden behind another is reported too. It is the broad phase of
+    /// picking and snapping under the pointer, tested in `f64` relative to the eye like the
+    /// culling, so as exact 10⁷ m from the origin as at it.
+    ///
+    /// # Errors
+    ///
+    /// [`RenderError::ZeroSizedTarget`], [`RenderError::InvalidRect`] when `rect` is not finite
+    /// or its left is right of its right or its top below its bottom, or
+    /// [`RenderError::Camera`] for an invalid camera.
+    pub fn objects_in_rect(
+        &mut self,
+        camera: &Camera,
+        size: [u32; 2],
+        rect: [f64; 4],
+        found: impl FnMut(ObjectId),
+    ) -> Result<(), RenderError> {
+        let frustum = rect_frustum(camera, size, rect)?;
+        self.world.objects_in(&frustum, found);
+        Ok(())
+    }
+
     /// Prepares a frame seen from `camera` on a target of `size` pixels, without drawing it:
     /// culls the objects, chooses their levels of detail and computes their instance records,
     /// all on the CPU. [`Renderer::render`] does this before drawing; on its own, it measures
@@ -558,7 +596,7 @@ impl Renderer {
             &self.overlay,
             &self.theme,
             &view,
-            near_plane(&camera.projection),
+            &ClipVolume::new(&camera.projection, f64::from(size[0]) / f64::from(size[1])),
             &self.world,
             &mut self.draw_list,
         );
@@ -1084,6 +1122,38 @@ fn max_instances(max_buffer_size: u64) -> usize {
     usize::try_from(count).unwrap_or(usize::MAX)
 }
 
+/// The frustum seen through `rect`, in pixels of a target of `size`; see
+/// [`Renderer::objects_in_rect`].
+fn rect_frustum(camera: &Camera, size: [u32; 2], rect: [f64; 4]) -> Result<Frustum, RenderError> {
+    if size.contains(&0) {
+        return Err(RenderError::ZeroSizedTarget);
+    }
+    let [left, top, right, bottom] = rect;
+    if !rect.iter().all(|v| v.is_finite()) || left > right || top > bottom {
+        return Err(RenderError::InvalidRect);
+    }
+    camera.validate()?;
+    let view = ViewFrame::new(camera)?;
+    let [width, height] = size.map(f64::from);
+    let ndc_x = |x: f64| 2.0 * x / width - 1.0;
+    let ndc_y = |y: f64| 1.0 - 2.0 * y / height;
+    Ok(Frustum::window(
+        &view,
+        &camera.projection,
+        width / height,
+        [ndc_x(left), ndc_y(bottom), ndc_x(right), ndc_y(top)],
+    ))
+}
+
+/// Whether `primitives` line and marker records and `instances` ghost and box records each fit
+/// a buffer of `max_buffer_size` bytes, with indices within `u32`.
+fn overlay_fits(primitives: u64, instances: u64, max_buffer_size: u64) -> bool {
+    let fits = |count: u64, stride: u64| {
+        u32::try_from(count).is_ok() && count.saturating_mul(stride) <= max_buffer_size
+    };
+    fits(primitives, PRIMITIVE_STRIDE) && fits(instances, INSTANCE_STRIDE)
+}
+
 /// Whether every device can render a floating-point colour into textures of `format`.
 fn is_renderable(format: wgpu::TextureFormat, features: wgpu::Features) -> bool {
     format.has_color_aspect()
@@ -1335,6 +1405,7 @@ pub async fn headless_device() -> Result<(wgpu::Device, wgpu::Queue), RenderErro
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::Projection;
 
     fn mesh(vertices: usize, indices: usize) -> MeshData {
         MeshData {
@@ -1343,6 +1414,140 @@ mod tests {
             normals: vec![[0.0, 0.0, 1.0]; vertices],
             indices: vec![0; indices],
         }
+    }
+
+    /// Unit cubes at x = −2, 0 and 2 (and one 5 m behind the middle one), 5 m in front of a
+    /// camera looking along +y, all offset by `offset`; returns the objects a rectangle of a
+    /// 100 × 100 target meets, as their positions in that list.
+    fn objects_in(offset: f64, rect: [f64; 4], projection: Projection) -> Vec<usize> {
+        let mut world = World::new(16);
+        let bounds = Aabb::of_local([0.0; 3], &[[-0.5; 3], [0.5; 3]]).unwrap();
+        let mesh = world.add_mesh([0.0; 3], bounds, false);
+        let objects: Vec<ObjectId> = [
+            [-2.0, 0.0, 0.0],
+            [0.0, 0.0, 0.0],
+            [2.0, 0.0, 0.0],
+            [0.0, 5.0, 0.0],
+        ]
+        .into_iter()
+        .map(|at| {
+            let at = at.map(|v: f64| v + offset);
+            world
+                .add_object(mesh, Placement::from_translation(at), [1.0; 4])
+                .unwrap()
+        })
+        .collect();
+        let camera = Camera {
+            eye: geom::Point3::new(offset, offset - 5.0, offset),
+            target: geom::Point3::new(offset, offset, offset),
+            up: geom::Vector3::new(0.0, 0.0, 1.0),
+            projection,
+        };
+        let frustum = rect_frustum(&camera, [100, 100], rect).unwrap();
+        let mut found = Vec::new();
+        world.objects_in(&frustum, |id| {
+            found.push(objects.iter().position(|&o| o == id).unwrap());
+        });
+        found.sort_unstable();
+        found
+    }
+
+    #[test]
+    fn a_rectangle_finds_the_objects_behind_it_whatever_the_distance_to_the_origin() {
+        let perspective = Projection::Perspective {
+            fov_y_radians: core::f64::consts::FRAC_PI_2,
+            near: 0.1,
+        };
+        // 90° over 100 px: at 5 m, a pixel is 0.1 m; the cubes span x ∈ [−2.5, −1.5], [−0.5,
+        // 0.5] and [1.5, 2.5], so pixels 25–35, 45–55 and 65–75; the far one hides behind the
+        // middle one.
+        let parallel = Projection::Orthographic {
+            height: 10.0,
+            near: 0.1,
+            far: 100.0,
+        };
+        for offset in [0.0, 1e6, 1e7] {
+            assert_eq!(
+                objects_in(offset, [49.0, 49.0, 51.0, 51.0], perspective),
+                [1, 3]
+            );
+            assert_eq!(
+                objects_in(offset, [29.0, 49.0, 31.0, 51.0], perspective),
+                [0]
+            );
+            assert_eq!(
+                objects_in(offset, [38.0, 49.0, 42.0, 51.0], perspective),
+                Vec::<usize>::new()
+            );
+            assert_eq!(
+                objects_in(offset, [20.0, 49.0, 80.0, 51.0], perspective),
+                [0, 1, 2, 3]
+            );
+            // Above the cubes, and off the target entirely.
+            assert_eq!(
+                objects_in(offset, [45.0, 10.0, 55.0, 20.0], perspective),
+                Vec::<usize>::new()
+            );
+            assert_eq!(
+                objects_in(offset, [-90.0, 49.0, -80.0, 51.0], perspective),
+                Vec::<usize>::new()
+            );
+            // In parallel, the far cube is the same size as the near ones.
+            assert_eq!(objects_in(offset, [69.0, 49.0, 71.0, 51.0], parallel), [2]);
+            assert_eq!(
+                objects_in(offset, [49.0, 49.0, 51.0, 51.0], parallel),
+                [1, 3]
+            );
+        }
+    }
+
+    #[test]
+    fn a_rectangle_must_be_finite_and_upright() {
+        let camera = Camera {
+            eye: geom::Point3::new(0.0, -5.0, 0.0),
+            target: geom::Point3::new(0.0, 0.0, 0.0),
+            up: geom::Vector3::new(0.0, 0.0, 1.0),
+            projection: Projection::Perspective {
+                fov_y_radians: 1.0,
+                near: 0.1,
+            },
+        };
+        for rect in [
+            [f64::NAN, 0.0, 1.0, 1.0],
+            [0.0, 0.0, f64::INFINITY, 1.0],
+            [2.0, 0.0, 1.0, 1.0],
+            [0.0, 2.0, 1.0, 1.0],
+        ] {
+            assert!(matches!(
+                rect_frustum(&camera, [10, 10], rect),
+                Err(RenderError::InvalidRect)
+            ));
+        }
+        assert!(matches!(
+            rect_frustum(&camera, [0, 10], [0.0; 4]),
+            Err(RenderError::ZeroSizedTarget)
+        ));
+        let mut bad = camera;
+        bad.target = bad.eye;
+        assert!(matches!(
+            rect_frustum(&bad, [10, 10], [0.0; 4]),
+            Err(RenderError::Camera(CameraError::EyeAtTarget))
+        ));
+    }
+
+    /// On a device with a tiny largest buffer, one record too many is refused, never truncated.
+    #[test]
+    fn an_overlay_must_fit_the_largest_buffer() {
+        let lines = 2 * PRIMITIVE_STRIDE;
+        assert!(overlay_fits(2, 0, lines));
+        assert!(!overlay_fits(3, 0, lines));
+        let ghosts = 3 * INSTANCE_STRIDE;
+        assert!(overlay_fits(0, 3, ghosts));
+        assert!(!overlay_fits(0, 4, ghosts));
+        assert!(overlay_fits(0, 0, 0));
+        // Indices stay within u32 whatever the buffer.
+        assert!(!overlay_fits(u64::from(u32::MAX) + 1, 0, u64::MAX));
+        assert!(!overlay_fits(0, u64::from(u32::MAX) + 1, u64::MAX));
     }
 
     #[test]
