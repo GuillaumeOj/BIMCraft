@@ -100,6 +100,32 @@ const INITIAL_VIEW: ViewState = {
   cutFaces: "tinted",
 };
 
+/** What Esc does at each step that shows a hint, when no value is being typed. */
+const ESC_HINTS: Partial<Record<ToolStep, MessageKey>> = {
+  first_corner: "viewport.hint.esc.cancel",
+  base_point: "viewport.hint.esc.cancel",
+  second_corner: "viewport.hint.esc.previous",
+  height: "viewport.hint.esc.previous",
+  target_point: "viewport.hint.esc.previous",
+};
+
+/**
+ * The hint above the tool bar for `step`: what to do, then what Esc does, which is to clear the
+ * value first while one is being typed.
+ */
+function stepHint(
+  t: Translate,
+  step: ToolStep,
+  labelKey: PreviewLabel["key"] | null,
+  typing: boolean,
+): string | null {
+  const hint =
+    step === "second_corner" && labelKey === "place.depth" ? "viewport.hint.depth" : HINTS[step];
+  if (hint === undefined) return null;
+  const esc = typing ? "viewport.hint.esc.clear" : ESC_HINTS[step];
+  return esc === undefined ? t(hint) : `${t(hint)} · ${t(esc)}`;
+}
+
 /** Pointers lower than this above the bottom edge get their chip above them: the band of the tool bar and the hint. */
 const BOTTOM_BAND = 150;
 /** How far above the pointer a chip goes when it cannot go below. */
@@ -143,6 +169,8 @@ export function ViewportView() {
   const [announcement, setAnnouncement] = useState({ text: "", serial: 0 });
   // Which value the pointer chip names: the hint bar follows it while the depth is typed.
   const [labelKey, setLabelKey] = useState<PreviewLabel["key"] | null>(null);
+  // Whether a value is being typed: Esc then clears it before it steps back.
+  const [typing, setTyping] = useState(false);
   const chip = useRef<HTMLDivElement>(null);
   const lastView = useRef<ViewState | null>(null);
   const { projection, snapping } = view;
@@ -174,6 +202,7 @@ export function ViewportView() {
       case "preview_label":
         drawPreview(chip.current, event.label, event.label === null ? "" : chipText(event.label));
         setLabelKey(event.label?.key ?? null);
+        setTyping(event.label?.typed != null);
         break;
       case "intent":
         runIntent(event.intent);
@@ -341,8 +370,7 @@ export function ViewportView() {
     document.querySelector<HTMLElement>(`[${VISIBILITY_TRIGGER}]`)?.focus();
   }, []);
 
-  const hint =
-    step === "second_corner" && labelKey === "place.depth" ? "viewport.hint.depth" : HINTS[step];
+  const hintText = stepHint(t, step, labelKey, typing);
   const status = statusText(t, {
     phase: phase.kind,
     sceneLoaded,
@@ -381,7 +409,7 @@ export function ViewportView() {
       )}
       {ready && sceneLoaded && empty === false && <NavigationHint />}
       <div className="vp-bottom">
-        {hint !== undefined && <p className="vp-hint">{t(hint)}</p>}
+        {hintText !== null && <p className="vp-hint">{hintText}</p>}
         <Toolbar tool={tool} disabled={!ready} onSelect={chooseTool} />
       </div>
       <p className="vp-status" id="vp-status">

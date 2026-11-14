@@ -7,7 +7,7 @@ import { fakeViewport } from "../test-support/fakeViewport";
 import { renderWithCore } from "../test-support/render";
 import { group, viewState } from "../test-support/viewState";
 import { HINT_STORAGE_KEY } from "./HintCard";
-import type { ViewportHandle, ViewportModule } from "./types";
+import type { ViewportEvent, ViewportHandle, ViewportModule } from "./types";
 import { ViewportView } from "./ViewportView";
 
 const loader = vi.hoisted(() => ({
@@ -282,6 +282,65 @@ describe("ViewportView", () => {
     unmount();
     await act(async () => created(viewport.handle));
     expect(viewport.free).toHaveBeenCalled();
+  });
+});
+
+describe("Esc in the step hints", () => {
+  const hint = () => document.querySelector(".vp-hint");
+  const label = (
+    key: "move.distance" | "place.size" | "place.depth" | "place.height",
+    typed: string | null,
+  ): ViewportEvent => ({
+    kind: "preview_label",
+    label: { at: [10, 10], key, values: { distance: 1, width: 1, depth: 1, height: 1 }, typed },
+  });
+
+  it.each([
+    ["first_corner", "Esc: cancel"],
+    ["base_point", "Esc: cancel"],
+    ["second_corner", "Esc: previous step"],
+    ["height", "Esc: previous step"],
+    ["target_point", "Esc: previous step"],
+  ] as const)("says what Esc does at %s", async (step, text) => {
+    const { viewport } = await ready();
+    viewport.emit({ kind: "tool_state", tool: "move", step });
+    expect(hint()).toHaveTextContent(new RegExp(`${text}$`));
+  });
+
+  it("says what Esc does at the depth step", async () => {
+    const { viewport } = await ready();
+    viewport.emit({ kind: "tool_state", tool: "place_block", step: "second_corner" });
+    viewport.emit(label("place.depth", null));
+    expect(hint()).toHaveTextContent(/type the depth, Enter · Esc: previous step$/);
+  });
+
+  it.each([
+    ["second_corner", "place.size"],
+    ["second_corner", "place.depth"],
+    ["height", "place.height"],
+    ["target_point", "move.distance"],
+  ] as const)("says that Esc clears the value while one is typed at %s", async (step, key) => {
+    const { viewport } = await ready();
+    viewport.emit({ kind: "tool_state", tool: "move", step });
+    viewport.emit(label(key, "2"));
+    expect(hint()).toHaveTextContent(/Esc: clear the value$/);
+    expect(hint()).not.toHaveTextContent(/previous step|Esc: cancel/);
+    // The first Esc cleared it: the step's own wording is back.
+    viewport.emit(label(key, null));
+    expect(hint()).toHaveTextContent(/Esc: previous step$/);
+  });
+
+  it("is worded in French too", async () => {
+    localStorage.setItem("bimcraft.language", "fr");
+    const { viewport } = await ready();
+    viewport.emit({ kind: "tool_state", tool: "move", step: "target_point" });
+    expect(hint()).toHaveTextContent(/Échap : étape précédente$/);
+    viewport.emit(label("move.distance", "2"));
+    expect(hint()).toHaveTextContent(/Échap : effacer la valeur$/);
+    viewport.emit({ kind: "tool_state", tool: "move", step: "base_point" });
+    viewport.emit(label("move.distance", null));
+    expect(hint()).toHaveTextContent(/Échap : annuler$/);
+    localStorage.removeItem("bimcraft.language");
   });
 });
 
