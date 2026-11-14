@@ -58,12 +58,3 @@ export async function placeBlock(api: ApiClient, block: BlockPlacement): Promise
   });
   return id;
 }
-
-/**
- * Whether the model has anything the 3D view can draw. Blocks are the only elements with a body
- * so far (spec D1); walls, slabs and columns join this check when they arrive.
- */
-export async function hasDrawableElements(api: ApiClient): Promise<boolean> {
-  const page = await api.query("model.list_objects", { entity: "Block", limit: 1 });
-  return page.items.length > 0;
-}

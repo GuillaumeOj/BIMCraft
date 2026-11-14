@@ -59,6 +59,9 @@ async function ready(options: Parameters<typeof setUp>[0] = {}) {
   const setup = await setUp(options);
   await waitFor(() => expect(setup.viewport.applied).toEqual([3]));
   await waitFor(() => expect(status()).not.toHaveTextContent("Loading"));
+  // The viewport counts what it draws, by category; an empty model has none.
+  if ((options.blocks ?? [BLOCK]).length > 0)
+    setup.viewport.emit({ kind: "view_state", state: viewState() });
   return setup;
 }
 
@@ -327,18 +330,7 @@ describe("ViewportView tools", () => {
     ]);
     viewport.emit({
       kind: "view_state",
-      state: {
-        projection: "parallel",
-        snapping: false,
-        tool: "select",
-        categories: [],
-        disciplines: [],
-        isolating: false,
-        hiddenSelection: 0,
-        sectionBox: null,
-        clipPlanes: [],
-        cutFaces: "tinted",
-      },
+      state: viewState({ projection: "parallel", snapping: false }),
     });
     expect(status()).toHaveTextContent("1 element selected · Esc to clear · Snap off");
     await user.keyboard("ps");
@@ -532,6 +524,54 @@ describe("ViewportView feedback", () => {
     core.failNext("elements.move", new ApiError(-32602, "invalid params"));
     move();
     expect(await screen.findByText("The move failed. Try again.")).toBeVisible();
+    core.failNext("elements.move", new ApiError(-32000, "refused", { reason: "out_of_range" }));
+    move();
+    expect(
+      await screen.findByText("This move would take the element too far from the project origin."),
+    ).toBeVisible();
+    core.failNext("elements.move", new ApiError(-32000, "refused", { reason: "unknown_element" }));
+    move();
+    expect(
+      await screen.findByText("This element no longer exists. It may have been deleted."),
+    ).toBeVisible();
+  });
+
+  it("says why a move was refused, in French", async () => {
+    localStorage.setItem("bimcraft.language", "fr");
+    const { core, viewport } = await ready();
+    const move = () =>
+      viewport.emit({
+        kind: "intent",
+        intent: { kind: "move", ids: [BLOCK], translation: [1, 0, 0] },
+      });
+    core.failNext("elements.move", new ApiError(-32000, "refused", { reason: "out_of_range" }));
+    move();
+    expect(
+      await screen.findByText(
+        "Ce déplacement amènerait l’élément trop loin de l’origine du projet.",
+      ),
+    ).toBeVisible();
+    core.failNext("elements.move", new ApiError(-32000, "refused", { reason: "unknown_element" }));
+    move();
+    expect(
+      await screen.findByText("Cet élément n’existe plus. Il a peut-être été supprimé."),
+    ).toBeVisible();
+    localStorage.removeItem("bimcraft.language");
+  });
+
+  it("derives the empty state from the categories the viewport reports, not from the model", async () => {
+    const { core, viewport } = await ready();
+    expect(screen.queryByRole("heading", { name: "Nothing to see yet" })).toBeNull();
+    viewport.emit({
+      kind: "view_state",
+      state: viewState({ categories: [group("Block")].map((g) => ({ ...g, count: 0 })) }),
+    });
+    expect(await screen.findByRole("heading", { name: "Nothing to see yet" })).toBeVisible();
+    viewport.emit({ kind: "view_state", state: viewState() });
+    await waitFor(() =>
+      expect(screen.queryByRole("heading", { name: "Nothing to see yet" })).toBeNull(),
+    );
+    expect(core.calls.some((call) => call.method === "model.list_objects")).toBe(false);
   });
 
   it("places the block of an intent, offers Undo and selects it once the view has it", async () => {
@@ -548,6 +588,8 @@ describe("ViewportView feedback", () => {
       expect(viewport.commands).toContainEqual({ kind: "select", ids: [id ?? ""] }),
     );
     expect(viewport.applied.at(-1)).toBe(4);
+    // The viewport now draws the block.
+    viewport.emit({ kind: "view_state", state: viewState() });
     await waitFor(() => expect(screen.queryByText("Nothing to see yet")).not.toBeInTheDocument());
   });
 

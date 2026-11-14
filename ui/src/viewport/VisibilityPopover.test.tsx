@@ -191,7 +191,7 @@ describe("Visibility popover", () => {
   });
 
   it("says when the model has nothing to list", async () => {
-    const { user } = await setUp(viewState());
+    const { user } = await setUp(viewState({ categories: [] }));
     await user.click(opener());
     expect(screen.getByText("The model has no categories yet.")).toBeInTheDocument();
     await user.click(screen.getByRole("tab", { name: "Discipline" }));

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useEffectEvent, useRef, useState } from "react";
-import { hasDrawableElements, moveElements, moveRefusal, placeBlock, useApi } from "../api";
+import { type MoveRefusal, moveElements, moveRefusal, placeBlock, useApi } from "../api";
 import { useI18n } from "../i18n/I18nProvider";
 import type { MessageKey } from "../i18n/i18n";
 import { useShellState } from "../shell/ShellState";
@@ -34,6 +34,58 @@ const HINTS: Partial<Record<ToolStep, MessageKey>> = {
   pick_face: "viewport.hint.pick_face",
 };
 
+/** The toast for each reason a move did not happen; a refusal not listed reads as "can't move". */
+const MOVE_FAILURES: Record<MoveRefusal | "failed", MessageKey> = {
+  too_many: "viewport.toast.moveTooMany",
+  out_of_range: "viewport.toast.moveOutOfRange",
+  unknown_element: "viewport.toast.moveUnknown",
+  not_movable: "viewport.toast.moveRefused",
+  empty: "viewport.toast.moveRefused",
+  failed: "viewport.toast.moveFailed",
+};
+
+/**
+ * "N faces moved": which faces of the section box changed position since it was switched on or
+ * last reset, read from the successive states the viewport reports.
+ */
+function useFacesMoved() {
+  const moved = useRef(new Set<number>());
+  const lastBox = useRef<SectionBox | null>(null);
+  const [facesMoved, setFacesMoved] = useState(0);
+  const trackFaces = useCallback((box: SectionBox | null) => {
+    const before = lastBox.current;
+    lastBox.current = box;
+    if (box === null || !box.enabled || before === null || !before.enabled) {
+      moved.current.clear();
+    } else {
+      for (const face of changedFaces(before, box)) moved.current.add(face);
+    }
+    setFacesMoved(moved.current.size);
+  }, []);
+  // A new box starts a new count; what the viewport then changes is counted from its next state.
+  const resetFaces = useCallback(() => {
+    moved.current.clear();
+    setFacesMoved(0);
+  }, []);
+  return { facesMoved, trackFaces, resetFaces };
+}
+
+/** Whether the viewport draws no element at all. */
+const isEmpty = (view: ViewState) => view.categories.every((category) => category.count === 0);
+
+/** The hints a change of state calls for: they come once, when the state they explain begins. */
+function stateHints(t: Translate, before: ViewState, next: ViewState): string[] {
+  const hints: string[] = [];
+  if (next.sectionBox?.enabled === true && before.sectionBox?.enabled !== true) {
+    hints.push(t("viewport.hint.section"));
+  }
+  if (next.isolating && !before.isolating) {
+    const names = isolatedLabel(next, t("viewport.hint.isolateSelection"));
+    hints.push(t("viewport.hint.isolate", { names }));
+  }
+  return hints;
+}
+
 /** What the viewport reports until its first change: nothing hidden, no cut, perspective. */
 const INITIAL_VIEW: ViewState = {
   projection: "perspective",
@@ -47,13 +99,6 @@ const INITIAL_VIEW: ViewState = {
   clipPlanes: [],
   cutFaces: "tinted",
 };
-
-/** The commands that give the section box a new starting point: moves are counted from it. */
-const REBASES = new Set<ViewCommand["kind"]>([
-  "section_box",
-  "section_box_reset",
-  "section_box_fit_selection",
-]);
 
 /** Pointers lower than this above the bottom edge get their chip above them: the band of the tool bar and the hint. */
 const BOTTOM_BAND = 150;
@@ -93,18 +138,12 @@ export function ViewportView() {
   const [tool, setTool] = useState<Tool>("select");
   const [step, setStep] = useState<ToolStep>("idle");
   const [view, setView] = useState(INITIAL_VIEW);
-  const [facesMoved, setFacesMoved] = useState(0);
+  const { facesMoved, trackFaces, resetFaces } = useFacesMoved();
   const [visibilityOpen, setVisibilityOpen] = useState(false);
   const [announcement, setAnnouncement] = useState({ text: "", serial: 0 });
-  // Unknown (null) until the model was first asked: neither the empty card nor the hint shows.
-  const [empty, setEmpty] = useState<boolean | null>(null);
   // Which value the pointer chip names: the hint bar follows it while the depth is typed.
   const [labelKey, setLabelKey] = useState<PreviewLabel["key"] | null>(null);
   const chip = useRef<HTMLDivElement>(null);
-  // Which faces of the section box moved since it last got a starting point, and the box before.
-  const moved = useRef(new Set<number>());
-  const lastBox = useRef<SectionBox | null>(null);
-  const rebase = useRef(false);
   const lastView = useRef<ViewState | null>(null);
   const { projection, snapping } = view;
 
@@ -146,15 +185,20 @@ export function ViewportView() {
   };
 
   const session = useViewportSession(onEvent);
-  const { phase, handle, feed, sceneLoaded, sceneVersion, canvasRef } = session;
+  const { phase, handle, feed, sceneLoaded, canvasRef } = session;
+  // The viewport counts what it draws, by category: no element at all means an empty model.
+  // Unknown (null) until the first scene: neither the empty card nor the hint shows.
+  const empty = sceneLoaded ? isEmpty(view) : null;
   const ready = phase.kind === "ready";
 
   const command = useCallback(
     (value: ViewCommand) => {
-      if (REBASES.has(value.kind)) rebase.current = true;
+      if (value.kind === "section_box_reset" || value.kind === "section_box_fit_selection") {
+        resetFaces();
+      }
       handle.current?.command(value);
     },
-    [handle],
+    [handle, resetFaces],
   );
 
   // Hints are toasts: they come once, when the state they explain begins.
@@ -164,30 +208,9 @@ export function ViewportView() {
     setView(next);
     setTool(next.tool);
     trackFaces(next.sectionBox);
-    if (before === null) return;
-    if (next.sectionBox?.enabled === true && before.sectionBox?.enabled !== true) {
-      notify(t("viewport.hint.section"));
+    if (before !== null) {
+      for (const hint of stateHints(t, before, next)) notify(hint);
     }
-    if (next.isolating && !before.isolating) {
-      notify(
-        t("viewport.hint.isolate", {
-          names: isolatedLabel(next, t("viewport.hint.isolateSelection")),
-        }),
-      );
-    }
-  }
-
-  // "N faces moved": the faces whose position changed since the box was switched on or reset.
-  function trackFaces(box: SectionBox | null) {
-    const before = lastBox.current;
-    lastBox.current = box;
-    if (box === null || !box.enabled || before === null || !before.enabled || rebase.current) {
-      moved.current.clear();
-    } else {
-      for (const face of changedFaces(before, box)) moved.current.add(face);
-    }
-    if (box?.enabled === true) rebase.current = false;
-    setFacesMoved(moved.current.size);
   }
 
   const chooseTool = (next: Tool) => {
@@ -213,16 +236,7 @@ export function ViewportView() {
             { undoable: true },
           ),
         (error: unknown) => {
-          const reason = moveRefusal(error);
-          notify(
-            t(
-              reason === "too_many"
-                ? "viewport.toast.moveTooMany"
-                : reason === null
-                  ? "viewport.toast.moveFailed"
-                  : "viewport.toast.moveRefused",
-            ),
-          );
+          notify(t(MOVE_FAILURES[moveRefusal(error) ?? "failed"]));
         },
       );
       return;
@@ -245,22 +259,6 @@ export function ViewportView() {
       () => notify(t("viewport.toast.placeFailed")),
     );
   }
-
-  // What is drawn may have changed with each delta: the empty state follows the model.
-  useEffect(() => {
-    // No delta yet: nothing to ask about.
-    if (sceneVersion === 0) return;
-    let current = true;
-    hasDrawableElements(api).then(
-      (any) => {
-        if (current) setEmpty(!any);
-      },
-      () => undefined,
-    );
-    return () => {
-      current = false;
-    };
-  }, [api, sceneVersion]);
 
   const hideOrIsolate = (kind: "hide" | "isolate") => {
     if (selection.length === 0) {
@@ -298,7 +296,8 @@ export function ViewportView() {
   });
 
   // Esc ends a pending face pick, then an isolate, from outside the canvas too (inside it, the
-  // viewport takes the key). Whatever else uses Esc (a popover, a field, a dialog) goes first.
+  // viewport takes the key). Whatever else uses Esc (a popover, a field, a dialog) goes first,
+  // so anything new that listens for Esc must call preventDefault, or it also ends the isolate.
   const cancellable = view.isolating || step === "pick_face";
   const onEscape = useEffectEvent((event: KeyboardEvent) => {
     if (event.key !== "Escape" || event.defaultPrevented || event.target === canvasRef.current) {
@@ -351,9 +350,9 @@ export function ViewportView() {
     count: selection.length,
     snapping,
     pickingFace: step === "pick_face",
-    facesMoved: view.sectionBox?.enabled === true ? facesMoved : 0,
-    isolated: view.isolating ? isolatedLabel(view, t("viewport.hint.isolateSelection")) : null,
-    planes: view.clipPlanes.length,
+    view,
+    facesMoved,
+    isolatedFallback: t("viewport.hint.isolateSelection"),
   });
 
   return (
@@ -423,10 +422,10 @@ type StatusInput = {
   count: number;
   snapping: boolean;
   pickingFace: boolean;
+  view: ViewState;
   facesMoved: number;
-  /** The names of what is isolated, or null when nothing is. */
-  isolated: string | null;
-  planes: number;
+  /** What the status calls the selection when it is what is isolated. */
+  isolatedFallback: string;
 };
 
 /** The names of the isolated groups, or `fallback` when the selection is isolated. */
@@ -438,20 +437,26 @@ function isolatedLabel(view: ViewState, fallback: string): string {
 /** The status of what the user is doing to the view while nothing is selected, or null. */
 function activityStatus(
   t: Translate,
-  { facesMoved, isolated, planes }: Pick<StatusInput, "facesMoved" | "isolated" | "planes">,
+  {
+    view,
+    facesMoved,
+    isolatedFallback,
+  }: Pick<StatusInput, "view" | "facesMoved" | "isolatedFallback">,
 ): string | null {
-  if (facesMoved > 0) {
-    return t(facesMoved === 1 ? "viewport.status.section.one" : "viewport.status.section.other", {
-      count: facesMoved,
+  const moved = view.sectionBox?.enabled === true ? facesMoved : 0;
+  if (moved > 0) {
+    return t(moved === 1 ? "viewport.status.section.one" : "viewport.status.section.other", {
+      count: moved,
     });
   }
-  if (isolated !== null) return t("viewport.status.isolated", { names: isolated });
-  if (planes > 0) {
-    return t(planes === 1 ? "viewport.status.planes.one" : "viewport.status.planes.other", {
-      count: planes,
-    });
+  if (view.isolating) {
+    return t("viewport.status.isolated", { names: isolatedLabel(view, isolatedFallback) });
   }
-  return null;
+  const planes = view.clipPlanes.length;
+  if (planes === 0) return null;
+  return t(planes === 1 ? "viewport.status.planes.one" : "viewport.status.planes.other", {
+    count: planes,
+  });
 }
 
 /**

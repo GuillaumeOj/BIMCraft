@@ -6,7 +6,7 @@ export function viewState(changes: Partial<ViewState> = {}): ViewState {
     projection: "perspective",
     snapping: true,
     tool: "select",
-    categories: [],
+    categories: [group("Block")],
     disciplines: [],
     isolating: false,
     hiddenSelection: 0,

@@ -548,5 +548,7 @@
   "view.visibility.isolated": "Isolated",
   "view.visibility.theSelection": "The selection",
   "view.visibility.end": "End isolate",
-  "view.visibility.reset": "Reset visibility"
+  "view.visibility.reset": "Reset visibility",
+  "viewport.toast.moveOutOfRange": "This move would take the element too far from the project origin.",
+  "viewport.toast.moveUnknown": "This element no longer exists. It may have been deleted."
 }

@@ -52,6 +52,8 @@ async function setUp(options: { language?: "fr" } = {}) {
   await waitFor(() =>
     expect(document.getElementById("vp-status")).not.toHaveTextContent("Loading"),
   );
+  // The viewport counts what it draws, by category; an empty model has none.
+  await viewport.emit({ kind: "view_state", state: viewState() });
   return { viewport, core, ...rendered };
 }
 
@@ -267,7 +269,7 @@ describe("View panel", () => {
       expect(status()).toHaveTextContent("Section box · 2 faces moved");
     });
 
-    it("counts from the new box after Reset, Fit to selection, and when the box is switched off", async () => {
+    it("starts a new count at Reset and Fit to selection, and when the box is switched off", async () => {
       const { viewport, user } = await setUp();
       const status = () => document.getElementById("vp-status");
       await viewport.emit({ kind: "view_state", state: viewState({ sectionBox: box() }) });
@@ -277,18 +279,32 @@ describe("View panel", () => {
       });
       expect(status()).toHaveTextContent("1 face moved");
       await user.click(screen.getByRole("button", { name: "Reset" }));
-      await viewport.emit({ kind: "view_state", state: viewState({ sectionBox: box() }) });
       expect(status()).toHaveTextContent("No selection · Snap on");
 
       await viewport.emit({
         kind: "view_state",
-        state: viewState({ sectionBox: box({ max: [5, 5, 3] }) }),
+        state: viewState({ sectionBox: box({ max: [6, 5, 3] }) }),
       });
+      expect(status()).toHaveTextContent("1 face moved");
       await viewport.emit({
         kind: "view_state",
         state: viewState({ sectionBox: box({ enabled: false }) }),
       });
       expect(status()).toHaveTextContent("No selection · Snap on");
+    });
+
+    it("counts a face dragged after a Reset that changed nothing", async () => {
+      const { viewport, user } = await setUp();
+      const status = () => document.getElementById("vp-status");
+      await viewport.emit({ kind: "view_state", state: viewState({ sectionBox: box() }) });
+      // The viewport already had this box, so it reports no new state for the Reset.
+      await user.click(screen.getByRole("button", { name: "Reset" }));
+      await viewport.emit({
+        kind: "view_state",
+        state: viewState({ sectionBox: box({ max: [5, 5, 3] }) }),
+      });
+      expect(status()).toHaveTextContent("Section box · 1 face moved");
+      expect(field("Max X")).toHaveValue("5.000");
     });
 
     it("shows the hint as a toast when the box is switched on, not at first sight", async () => {
