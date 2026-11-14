@@ -52,6 +52,11 @@ pub(crate) fn distance_2d(a: [f64; 2], b: [f64; 2]) -> f64 {
     libm::hypot(a[0] - b[0], a[1] - b[1])
 }
 
+/// A count as the number of an announcement or of a state, saturating.
+pub(crate) fn count(n: usize) -> f64 {
+    u32::try_from(n).map_or(f64::MAX, f64::from)
+}
+
 #[cfg(test)]
 #[expect(clippy::float_cmp, reason = "small integers and halves, exact in f64")]
 mod tests {

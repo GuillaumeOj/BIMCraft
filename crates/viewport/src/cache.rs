@@ -54,6 +54,9 @@ pub(crate) struct CachedMesh {
 pub(crate) struct CachedElement {
     pub(crate) mesh: u64,
     pub(crate) placement: Placement,
+    /// The category and the discipline, as positions in the cache's names.
+    category: u32,
+    discipline: u32,
 }
 
 /// What a delta changed, for the selection and the previews.
@@ -79,6 +82,9 @@ pub(crate) struct SceneCache {
     revision: Option<u64>,
     meshes: BTreeMap<u64, CachedMesh>,
     elements: BTreeMap<ElementId, CachedElement>,
+    /// The category and discipline names the elements refer to; deltas carry their own string
+    /// tables, so names are interned here, and never forgotten (a handful per model).
+    names: Vec<String>,
     /// The bounding sphere of every element, kept with the elements: the camera asks for it on
     /// every pointer move.
     scene: Option<Sphere>,
@@ -93,6 +99,30 @@ impl SceneCache {
     pub(crate) fn element(&self, id: ElementId) -> Option<(&CachedElement, &CachedMesh)> {
         let element = self.elements.get(&id)?;
         Some((element, self.meshes.get(&element.mesh)?))
+    }
+
+    /// Every element, by id.
+    pub(crate) fn elements(&self) -> impl Iterator<Item = (ElementId, &CachedElement)> {
+        self.elements.iter().map(|(&id, element)| (id, element))
+    }
+
+    /// The category and the discipline of an element.
+    pub(crate) fn names_of(&self, element: &CachedElement) -> (&str, &str) {
+        let name = |index: u32| self.names.get(index as usize).map_or("", String::as_str);
+        (name(element.category), name(element.discipline))
+    }
+
+    /// The position of `name` among the names, added when new.
+    fn intern(&mut self, name: &str) -> u32 {
+        let at = self
+            .names
+            .iter()
+            .position(|known| known == name)
+            .unwrap_or_else(|| {
+                self.names.push(name.to_owned());
+                self.names.len() - 1
+            });
+        u32::try_from(at).unwrap_or(u32::MAX)
     }
 
     pub(crate) fn contains(&self, id: ElementId) -> bool {
@@ -113,7 +143,8 @@ impl SceneCache {
         }
     }
 
-    fn bounding_sphere(&self, ids: Option<&[ElementId]>) -> Option<Sphere> {
+    /// The box around `ids` (every element when `None`), `(min, max)`.
+    pub(crate) fn extent(&self, ids: Option<&[ElementId]>) -> Option<(Vec3, Vec3)> {
         let mut bounds: Option<(Vec3, Vec3)> = None;
         let mut grow = |id: ElementId| {
             if let Some((min, max)) = self.bounds(id) {
@@ -130,7 +161,11 @@ impl SceneCache {
             Some(ids) => ids.iter().copied().for_each(&mut grow),
             None => self.elements.keys().copied().for_each(&mut grow),
         }
-        let (min, max) = bounds?;
+        bounds
+    }
+
+    fn bounding_sphere(&self, ids: Option<&[ElementId]>) -> Option<Sphere> {
+        let (min, max) = self.extent(ids)?;
         let centre = core::array::from_fn(|a| min[a] + (max[a] - min[a]) / 2.0);
         let radius = libm::sqrt((0..3).map(|a| (max[a] - min[a]) * (max[a] - min[a])).sum()) / 2.0;
         Some(Sphere { centre, radius })
@@ -250,9 +285,13 @@ impl SceneCache {
         }
         for element in &delta.elements {
             let id = ElementId(element.id);
+            // The decoder checked both positions against the strings.
+            let name = |index: u32| delta.strings.get(index as usize).map_or("", String::as_str);
             let new = CachedElement {
                 mesh: element.mesh,
                 placement: placement(&element.rotation, element.translation),
+                category: self.intern(name(element.category)),
+                discipline: self.intern(name(element.discipline)),
             };
             match self.elements.get(&id) {
                 Some(old) if old.mesh == new.mesh => {

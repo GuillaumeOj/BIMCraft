@@ -4,8 +4,8 @@
 use std::collections::BTreeMap;
 
 use render::{
-    Camera, DisplayState, MeshData, MeshError, MeshId, ObjectId, Overlay, OverlayError, Placement,
-    RenderError, Renderer, SnapKind, Theme, Tone,
+    Camera, Clip, ClipError, ClipPlane, CutFaces, DisplayState, MeshData, MeshError, MeshId,
+    ObjectId, Overlay, OverlayError, Placement, RenderError, Renderer, SnapKind, Theme, Tone,
 };
 
 use crate::ElementId;
@@ -23,6 +23,9 @@ pub enum SinkError {
     /// An item of a preview was refused.
     #[error(transparent)]
     Overlay(#[from] OverlayError),
+    /// The clipping planes were refused.
+    #[error(transparent)]
+    Clip(#[from] ClipError),
     /// The element has no object in the renderer.
     #[error("the element is not in the renderer")]
     UnknownElement,
@@ -130,6 +133,13 @@ pub trait SceneSink {
 
     /// Sets the colours of the view.
     fn set_theme(&mut self, theme: Theme);
+
+    /// Sets the planes frames clip with and how the cut shows.
+    ///
+    /// # Errors
+    ///
+    /// When the renderer refuses the planes.
+    fn set_clip(&mut self, planes: &[ClipPlane], cut: CutFaces) -> Result<(), SinkError>;
 
     /// Calls `found` with every element whose bounds meet the view through `rect`,
     /// `[left, top, right, bottom]` in pixels of a target of `size`.
@@ -277,6 +287,11 @@ impl SceneSink for RendererSink {
 
     fn set_theme(&mut self, theme: Theme) {
         self.renderer.set_theme(theme);
+    }
+
+    fn set_clip(&mut self, planes: &[ClipPlane], cut: CutFaces) -> Result<(), SinkError> {
+        self.renderer.set_clip(Clip::new(planes, cut)?);
+        Ok(())
     }
 
     fn elements_in_rect(

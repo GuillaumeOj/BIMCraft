@@ -24,6 +24,7 @@
 mod announce;
 mod cache;
 mod camera;
+mod clipping;
 mod event;
 mod input;
 mod interaction;
@@ -35,16 +36,19 @@ mod snap;
 mod test_support;
 mod typed;
 mod view;
+mod visibility;
 #[cfg(target_arch = "wasm32")]
 mod web;
 
 pub use cache::SceneError;
 pub use event::{
-    Announcement, AnnouncementKey, ElementId, ErrorKey, Intent, LabelKey, Preset, PreviewLabel,
-    ProjectionMode, Tool, ToolStep, Value, ViewCommand, ViewState, ViewportEvent,
+    Announcement, AnnouncementKey, ElementId, ErrorKey, Intent, LabelKey, NameState, Preset,
+    PreviewLabel, ProjectionMode, SectionBoxState, Tool, ToolStep, Value, ViewCommand, ViewState,
+    ViewportEvent, VisibilityTarget,
 };
 pub use input::{Button, InputEvent, Key, Modifiers};
 pub use interaction::{Tick, Viewport};
+pub use render::{ClipPlane, CutFaces, MAX_CLIP_PLANES};
 pub use sink::{Preview, PreviewLine, RendererSink, SceneSink, SinkError};
 pub use snap::DEFAULT_TOLERANCE;
 

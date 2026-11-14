@@ -2,7 +2,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use render::{Camera, DisplayState, MeshData, Placement, RenderError, Theme};
+use render::{Camera, ClipPlane, CutFaces, DisplayState, MeshData, Placement, RenderError, Theme};
 use scene_wire::{Element, Mesh, SceneDelta};
 
 use crate::ElementId;
@@ -20,6 +20,7 @@ pub(crate) enum Call {
     State(ElementId, DisplayState),
     Preview(Preview),
     Theme,
+    Clip(Vec<ClipPlane>, CutFaces),
 }
 
 /// A renderer that records what it is told and answers rectangle queries from the world boxes
@@ -31,6 +32,7 @@ pub(crate) struct FakeSink {
     pub(crate) objects: BTreeMap<ElementId, (u64, Placement)>,
     pub(crate) states: BTreeMap<ElementId, DisplayState>,
     pub(crate) preview: Preview,
+    pub(crate) clip: (Vec<ClipPlane>, CutFaces),
     /// The most ghosts a preview may hold, as a device's largest buffer would.
     pub(crate) max_ghosts: Option<usize>,
     /// Refuses the object added after this many more.
@@ -183,6 +185,12 @@ impl SceneSink for FakeSink {
         self.calls.push(Call::Theme);
     }
 
+    fn set_clip(&mut self, planes: &[ClipPlane], cut: CutFaces) -> Result<(), SinkError> {
+        self.calls.push(Call::Clip(planes.to_vec(), cut));
+        self.clip = (planes.to_vec(), cut);
+        Ok(())
+    }
+
     fn elements_in_rect(
         &mut self,
         camera: &Camera,
@@ -204,6 +212,10 @@ impl SceneSink for FakeSink {
             let Some([min, max]) = self.world_box(id) else {
                 continue;
             };
+            // As the renderer: hidden objects are not found.
+            if self.states.get(&id) == Some(&DisplayState::Hidden) {
+                continue;
+            }
             let corner_in = (0..8).any(|corner| {
                 let p: Vec3 =
                     core::array::from_fn(|a| if corner >> a & 1 == 0 { min[a] } else { max[a] });
