@@ -75,6 +75,7 @@ fn an_incremental_delta_moves_adds_and_removes() {
     delta.removed_elements = vec![id(2).0, id(42).0];
     let applied = run(&mut cache, &mut sink, &delta).unwrap();
     assert_eq!(applied.touched, crate::test_support::ids(&[1, 2, 3]));
+    assert_eq!(applied.recreated, crate::test_support::ids(&[2, 3]));
     assert_eq!(
         sink.take_calls(),
         [
@@ -94,11 +95,12 @@ fn an_incremental_delta_moves_adds_and_removes() {
     assert_eq!(
         sink.take_calls(),
         [
-            Call::RemoveMesh(9),
             Call::RemoveObject(id(3)),
             Call::AddObject(id(3), 7),
+            Call::RemoveMesh(9),
         ]
     );
+    assert_eq!(sink.objects.get(&id(3)).map(|object| object.0), Some(7));
     assert_eq!(cache.revision(), Some(3));
 }
 
@@ -155,6 +157,20 @@ fn inconsistent_deltas_change_nothing() {
         sink.take_calls(),
         [Call::RemoveObject(id(1)), Call::RemoveMesh(7)]
     );
+}
+
+#[test]
+fn a_mesh_removed_and_sent_again_keeps_its_objects() {
+    let (mut cache, mut sink) = (SceneCache::default(), FakeSink::default());
+    run(&mut cache, &mut sink, &cubes(1, [0.0; 3], &[[0.0; 3]])).unwrap();
+    sink.take_calls();
+    let mut delta = incremental(2, 1);
+    delta.removed_meshes = vec![7];
+    delta.meshes = vec![box_mesh(7, [0.0; 3], [-0.5; 3], [0.5; 3])];
+    run(&mut cache, &mut sink, &delta).unwrap();
+    assert!(sink.take_calls().is_empty());
+    assert!(sink.objects.contains_key(&id(1)));
+    assert!(cache.element(id(1)).is_some());
 }
 
 #[test]

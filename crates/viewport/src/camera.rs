@@ -199,8 +199,12 @@ impl CameraController {
         self.adopt(next, scene);
     }
 
-    /// Switches the projection, keeping the size of what is at the target.
+    /// Switches the projection, keeping the size of what is at the target. The current one
+    /// changes nothing: the other mode's size is stale, its zoom not kept up to date.
     pub(crate) fn set_mode(&mut self, mode: ProjectionMode, scene: Option<Sphere>) {
+        if mode == self.mode {
+            return;
+        }
         let mut next = *self;
         next.mode = mode;
         match mode {

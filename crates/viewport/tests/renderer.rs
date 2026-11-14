@@ -160,24 +160,25 @@ fn the_viewport_drives_a_renderer() {
     );
     assert!(viewport.tick().draw);
     draw(&mut viewport, &device);
-    // The moved element comes back moved; another goes with the mesh it alone used.
+    // The moved element comes back moved on a new mesh; another goes; the old mesh, which no
+    // object places any more, goes in the same delta.
     let mut moved = SceneDelta {
         revision: 2,
         base: 1,
         meshes: vec![cube(8)],
         elements: vec![element(1, [1.0, 0.0, 0.5])],
         removed_elements: vec![element(2, [0.0; 3]).id],
+        removed_meshes: vec![7],
         ..SceneDelta::default()
     };
     moved.elements[0].mesh = 8;
     viewport.apply_delta(&moved).unwrap();
-    let cleanup = SceneDelta {
-        revision: 3,
-        base: 2,
-        removed_meshes: vec![7],
-        ..SceneDelta::default()
-    };
-    viewport.apply_delta(&cleanup).unwrap();
+    assert!(
+        viewport
+            .drain_events()
+            .iter()
+            .all(|event| !matches!(event, ViewportEvent::Error(_)))
+    );
     draw(&mut viewport, &device);
     assert!(pollster::block_on(scope.pop()).is_none());
 }

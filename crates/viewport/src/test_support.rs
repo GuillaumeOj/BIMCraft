@@ -84,6 +84,17 @@ impl SceneSink for FakeSink {
 
     fn remove_mesh(&mut self, key: u64) -> Result<(), SinkError> {
         self.meshes.remove(&key).ok_or(SinkError::UnknownMesh)?;
+        // As the renderer: the objects that still place the mesh go with it.
+        let placing: Vec<ElementId> = self
+            .objects
+            .iter()
+            .filter(|(_, (mesh, _))| *mesh == key)
+            .map(|(&element, _)| element)
+            .collect();
+        for element in placing {
+            self.objects.remove(&element);
+            self.states.remove(&element);
+        }
         self.calls.push(Call::RemoveMesh(key));
         Ok(())
     }

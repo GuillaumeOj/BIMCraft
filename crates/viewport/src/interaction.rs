@@ -3,7 +3,7 @@
 
 use std::collections::BTreeMap;
 
-use render::{Camera, DisplayState, Theme, Tone};
+use render::{Camera, DisplayState, SnapKind, Theme, Tone};
 use scene_wire::SceneDelta;
 
 use crate::ElementId;
@@ -252,27 +252,29 @@ impl<S: SceneSink> Viewport<S> {
     /// As [`Viewport::apply_scene`].
     pub fn apply_delta(&mut self, delta: &SceneDelta) -> Result<u64, SceneError> {
         let result = self.cache.apply(delta, &mut self.sink);
-        let touched = match &result {
-            Ok(applied) => applied.touched.clone(),
+        match &result {
+            Ok(applied) => {
+                if self.pending.as_ref().is_some_and(|pending| {
+                    pending.ids.iter().any(|id| applied.touched.contains(id))
+                }) {
+                    self.pending = None;
+                }
+                // The states of the elements the delta re-created are gone with their objects;
+                // a moved object keeps its state, which the next sync may still have to reset.
+                for id in &applied.recreated {
+                    self.states.remove(id);
+                }
+            }
             Err(SceneError::Render(_)) => {
                 self.events
                     .push(ViewportEvent::Error(ErrorKey::SceneRejected));
                 self.states.clear();
+                self.pending = None;
+                // The overlay may still show lines and markers: clear it in the renderer too.
+                drop(self.sink.set_preview(&Preview::default()));
                 self.preview = Preview::default();
-                self.selection.iter().copied().collect()
             }
             Err(_) => return result.map(|_| delta.revision),
-        };
-        if self
-            .pending
-            .as_ref()
-            .is_some_and(|pending| pending.ids.iter().any(|id| touched.contains(id)))
-        {
-            self.pending = None;
-        }
-        // The states of the elements the delta re-created are gone with their objects.
-        for id in &touched {
-            self.states.remove(id);
         }
         let before = self.selection.len();
         self.selection.retain(|&id| self.cache.contains(id));
@@ -413,6 +415,11 @@ impl<S: SceneSink> Viewport<S> {
             InputEvent::KeyUp { key, mods } => self.set_alt(mods.alt && key != Key::Alt),
             InputEvent::Blur => {
                 self.set_alt(false);
+                // A drag cut short by the focus leaving is cancelled, not left following the
+                // pointer with no button held.
+                if self.gesture == Gesture::Drag && matches!(self.step, Step::MoveTarget { .. }) {
+                    self.cancel();
+                }
                 self.gesture = Gesture::None;
             }
         }
@@ -750,13 +757,15 @@ impl<S: SceneSink> Viewport<S> {
         self.camera.zoom(factor, anchor, self.scene());
     }
 
-    /// The point under `pos` at the depth of the target.
+    /// The point under `pos` at the depth of the target (the parallel view stands further back
+    /// than the distance).
     fn on_target_plane(&self, pos: [f64; 2]) -> Vec3 {
         let view = self.view();
         let ray = view.ray(pos);
         let forward = self.camera.forward();
         let along = dot(ray.direction, forward);
-        let t = (self.camera.distance() - dot(ray.origin, forward)) / along;
+        let depth = view.depth(sub(self.camera.target(), view.eye));
+        let t = (depth - dot(ray.origin, forward)) / along;
         add(view.eye, ray.at(if t.is_finite() { t } else { 0.0 }))
     }
 
@@ -829,6 +838,7 @@ impl<S: SceneSink> Viewport<S> {
 
     /// Enter with the typed value (`None`: nothing typed), or a typed distance.
     fn confirm(&mut self, value: Option<f64>) {
+        let given = value.is_some();
         let value = value.filter(|v| v.is_finite() && *v > 0.0 && *v <= MAX_TYPED_DISTANCE);
         match self.step {
             Step::MoveTarget { base, .. } => {
@@ -863,10 +873,11 @@ impl<S: SceneSink> Viewport<S> {
                 }
             }
             Step::Height { first, second } => {
-                let height = if self.typed.text().is_none() && value.is_none() {
-                    Some(DEFAULT_BLOCK_HEIGHT)
-                } else {
+                // The default only when nothing was given: a refused value places nothing.
+                let height = if given {
                     value
+                } else {
+                    Some(DEFAULT_BLOCK_HEIGHT)
                 };
                 if let Some(height) = height {
                     self.commit_block(first, second, height);
@@ -960,7 +971,11 @@ impl<S: SceneSink> Viewport<S> {
     /// Where the pointer's ray meets the horizontal plane through `first`, snapped when it
     /// snaps.
     fn on_plane(&self, first: Vec3) -> Option<Vec3> {
-        if let Some(snap) = self.snap.filter(|snap| snap.kind.is_some()) {
+        // The ground is z = 0: above or below it, its point is not under the pointer.
+        if let Some(snap) = self
+            .snap
+            .filter(|snap| snap.kind.is_some_and(|kind| kind != SnapKind::Ground))
+        {
             return Some([snap.point[0], snap.point[1], first[2]]);
         }
         let view = self.view();
@@ -1203,12 +1218,13 @@ impl<S: SceneSink> Viewport<S> {
             }
             _ => {}
         }
-        // The height follows the pointer without snapping.
+        // The height follows the pointer without snapping; the Select tool does not snap (the
+        // snap of a direct move that just ended is stale).
         if let Some(Snap {
             kind: Some(kind),
             point,
         }) = self.snap
-            && !matches!(self.step, Step::Height { .. })
+            && !matches!(self.step, Step::Height { .. } | Step::Select)
         {
             preview.markers.push((point, kind));
         }

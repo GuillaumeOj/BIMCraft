@@ -1,6 +1,7 @@
 //! Throttling of the live-region announcements: at most one per [`INTERVAL`] frames (500 ms at
 //! 60 frames a second), the newest waiting one replacing older ones, except that a snap kind
-//! never replaces the outcome of an action; the snap kind only when it changes. Frames, not the clock, so the tests are deterministic (AGENTS.md §5).
+//! never replaces the outcome of an action; the snap kind only when it changes. Frames, not the
+//! clock, so the tests are deterministic (AGENTS.md §5).
 
 use render::SnapKind;
 

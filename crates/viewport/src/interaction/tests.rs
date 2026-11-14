@@ -903,3 +903,145 @@ fn frames_are_drawn_only_when_something_changed() {
     viewport.resize([f64::NAN, 1e9], f64::NAN);
     assert_eq!(viewport.size(), [1, u32::from(u16::MAX)]);
 }
+
+// Regressions.
+
+#[test]
+fn a_refused_typed_height_places_nothing() {
+    let mut viewport = viewport(1.0);
+    viewport.set_tool(Tool::PlaceBlock);
+    click_on(&mut viewport, [-3.0, -3.0, 0.0], NONE);
+    click_on(&mut viewport, [-1.0, -2.0, 0.0], NONE);
+    assert_eq!(viewport.tool_step(), ToolStep::Height);
+    for bad in [0.0, -1.0, f64::NAN, 2e6] {
+        viewport.command(ViewCommand::TypedDistance(bad));
+    }
+    assert!(intents(&viewport.drain_events()).is_empty());
+    assert_eq!(viewport.tool_step(), ToolStep::Height);
+}
+
+#[test]
+fn the_current_projection_again_keeps_the_view() {
+    let mut viewport = viewport(1.0);
+    key(&mut viewport, Key::Char('+'));
+    let camera = viewport.camera();
+    viewport.command(ViewCommand::Projection(ProjectionMode::Perspective));
+    assert_eq!(viewport.camera(), camera);
+    viewport.command(ViewCommand::Projection(ProjectionMode::Parallel));
+    key(&mut viewport, Key::Char('+'));
+    let camera = viewport.camera();
+    viewport.command(ViewCommand::Projection(ProjectionMode::Parallel));
+    assert_eq!(viewport.camera(), camera);
+}
+
+#[test]
+fn a_parallel_zoom_over_nothing_keeps_the_target_depth() {
+    let mut viewport = viewport(1.0);
+    viewport.command(ViewCommand::Projection(ProjectionMode::Parallel));
+    let (target, forward) = (viewport.camera.target(), viewport.camera.forward());
+    viewport.input(InputEvent::Wheel {
+        pos: [5.0, 5.0],
+        delta: [0.0, -100.0],
+        pan: false,
+        mods: NONE,
+    });
+    assert!(norm(sub(viewport.camera.target(), target)) > 1e-3);
+    assert!(dot(sub(viewport.camera.target(), target), forward).abs() < 1e-9);
+}
+
+#[test]
+fn a_moved_element_no_longer_shown_as_a_ghost_is_drawn_normally() {
+    let mut viewport = viewport(1.0);
+    viewport.command(ViewCommand::Select(vec![id(1)]));
+    viewport.set_tool(Tool::Move);
+    click_on(&mut viewport, CORNER_1, NONE);
+    click_on(&mut viewport, CORNER_2, NONE);
+    viewport.set_tool(Tool::Select);
+    // The selection goes while the move waits for the scene: the ghost stays.
+    viewport.command(ViewCommand::ClearSelection);
+    assert_eq!(
+        viewport.sink().states.get(&id(1)),
+        Some(&DisplayState::Ghost)
+    );
+    let delta = SceneDelta {
+        revision: 2,
+        base: 1,
+        elements: vec![element(1, 7, [3.0, 0.0, 0.5])],
+        ..SceneDelta::default()
+    };
+    viewport.apply_delta(&delta).unwrap();
+    assert_eq!(viewport.sink().states.get(&id(1)), None);
+}
+
+#[test]
+fn a_refused_scene_clears_the_preview_and_the_waiting_move() {
+    let mut viewport = viewport(1.0);
+    viewport.command(ViewCommand::Select(vec![id(1)]));
+    viewport.set_tool(Tool::Move);
+    click_on(&mut viewport, CORNER_1, NONE);
+    click_on(&mut viewport, CORNER_2, NONE);
+    viewport.set_tool(Tool::Select);
+    viewport.command(ViewCommand::ClearSelection);
+    assert!(!viewport.sink().preview.is_empty());
+    viewport.sink_mut().objects_before_failure = Some(0);
+    let delta = SceneDelta {
+        revision: 2,
+        base: 1,
+        elements: vec![element(3, 7, [0.0; 3])],
+        ..SceneDelta::default()
+    };
+    assert!(viewport.apply_delta(&delta).is_err());
+    assert!(viewport.sink().preview.is_empty());
+    assert_eq!(viewport.pending, None);
+}
+
+#[test]
+fn a_drag_cut_by_a_blur_is_cancelled_and_leaves_no_marker() {
+    let mut viewport = viewport(1.0);
+    let (from, to) = (px(&viewport, CORNER_1), px(&viewport, CORNER_2));
+    let press = |viewport: &mut Viewport<FakeSink>| {
+        viewport.input(InputEvent::PointerMove {
+            pos: from,
+            mods: NONE,
+        });
+        viewport.input(InputEvent::PointerDown {
+            pos: from,
+            button: Button::Primary,
+            mods: NONE,
+        });
+        viewport.input(InputEvent::PointerMove {
+            pos: to,
+            mods: NONE,
+        });
+    };
+    press(&mut viewport);
+    assert_eq!(viewport.tool_step(), ToolStep::TargetPoint);
+    viewport.input(InputEvent::Blur);
+    assert_eq!(viewport.tool_step(), ToolStep::Idle);
+    click(&mut viewport, offset(to, 1.0, 0.0), NONE);
+    assert!(intents(&viewport.drain_events()).is_empty());
+    // A drag that ends leaves no snap marker behind in the Select tool.
+    press(&mut viewport);
+    viewport.input(InputEvent::PointerUp {
+        pos: to,
+        button: Button::Primary,
+        mods: NONE,
+    });
+    assert_eq!(intents(&viewport.drain_events()).len(), 1);
+    assert!(viewport.sink().preview.markers.is_empty());
+}
+
+#[test]
+fn a_raised_footprint_follows_the_pointer_over_nothing() {
+    let mut viewport = viewport(1.0);
+    viewport.set_tool(Tool::PlaceBlock);
+    click_on(&mut viewport, [0.0, 0.0, 1.0], NONE);
+    let ToolStep::SecondCorner = viewport.tool_step() else {
+        panic!("no first corner");
+    };
+    let corner = [-2.0, -3.0, 1.0];
+    hover_on(&mut viewport, corner);
+    let lines = &viewport.sink().preview.lines;
+    assert_eq!(lines.len(), 4);
+    assert!(close(lines[2].from, corner, 1e-6), "{lines:?}");
+}

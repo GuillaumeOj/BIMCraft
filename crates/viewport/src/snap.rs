@@ -68,14 +68,6 @@ pub(crate) fn snap(query: &Query<'_>, sink: &mut impl SceneSink) -> Option<Snap>
             .into_iter()
             .filter(|&id| !(query.skip)(id))
             .collect();
-    let hit = nearest(
-        query.cache,
-        &view,
-        &ray,
-        &elements,
-        query.skip,
-        query.pickable,
-    );
     let found = |kind, relative| Snap {
         kind: query.enabled.then_some(kind),
         point: add(view.eye, relative),
@@ -85,7 +77,14 @@ pub(crate) fn snap(query: &Query<'_>, sink: &mut impl SceneSink) -> Option<Snap>
     {
         return Some(snap);
     }
-    if let Some(hit) = hit {
+    if let Some(hit) = nearest(
+        query.cache,
+        &view,
+        &ray,
+        &elements,
+        query.skip,
+        query.pickable,
+    ) {
         return Some(found(SnapKind::Face, hit.relative));
     }
     ground(&view, &ray).map(|relative| found(SnapKind::Ground, relative))

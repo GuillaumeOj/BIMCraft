@@ -61,6 +61,9 @@ pub(crate) struct CachedElement {
 pub(crate) struct Applied {
     /// Elements added, changed or removed (with the full delta, all that were held).
     pub(crate) touched: BTreeSet<ElementId>,
+    /// The touched elements whose object was removed or created anew, so the renderer forgot
+    /// how it drew them; the others were only moved.
+    pub(crate) recreated: BTreeSet<ElementId>,
 }
 
 /// A bounding sphere, in world metres.
@@ -76,6 +79,9 @@ pub(crate) struct SceneCache {
     revision: Option<u64>,
     meshes: BTreeMap<u64, CachedMesh>,
     elements: BTreeMap<ElementId, CachedElement>,
+    /// The bounding sphere of every element, kept with the elements: the camera asks for it on
+    /// every pointer move.
+    scene: Option<Sphere>,
 }
 
 impl SceneCache {
@@ -101,6 +107,13 @@ impl SceneCache {
 
     /// The bounding sphere of `ids` (every element when `None`), or `None` for none.
     pub(crate) fn sphere(&self, ids: Option<&[ElementId]>) -> Option<Sphere> {
+        match ids {
+            Some(ids) => self.bounding_sphere(Some(ids)),
+            None => self.scene,
+        }
+    }
+
+    fn bounding_sphere(&self, ids: Option<&[ElementId]>) -> Option<Sphere> {
         let mut bounds: Option<(Vec3, Vec3)> = None;
         let mut grow = |id: ElementId| {
             if let Some((min, max)) = self.bounds(id) {
@@ -133,7 +146,7 @@ impl SceneCache {
     ) -> Result<Applied, SceneError> {
         self.check(delta)?;
         let mut applied = Applied::default();
-        match self.write(delta, sink, &mut applied) {
+        let result = match self.write(delta, sink, &mut applied) {
             Ok(()) => {
                 self.revision = Some(delta.revision);
                 Ok(applied)
@@ -143,7 +156,9 @@ impl SceneCache {
                 self.revision = None;
                 Err(SceneError::Render(error))
             }
-        }
+        };
+        self.scene = self.bounding_sphere(None);
+        result
     }
 
     /// Checks the delta against what is held, without changing anything. Removals of ids not
@@ -187,6 +202,9 @@ impl SceneCache {
         Ok(())
     }
 
+    /// Writes the delta: removed elements, new meshes, elements, then removed meshes, so no
+    /// mesh leaves the renderer while an object still places it (the renderer would drop the
+    /// object with it).
     fn write(
         &mut self,
         delta: &SceneDelta,
@@ -201,11 +219,7 @@ impl SceneCache {
                 if self.elements.remove(&id).is_some() {
                     sink.remove_object(id)?;
                     applied.touched.insert(id);
-                }
-            }
-            for id in &delta.removed_meshes {
-                if self.meshes.remove(id).is_some() {
-                    sink.remove_mesh(*id)?;
+                    applied.recreated.insert(id);
                 }
             }
         }
@@ -249,11 +263,26 @@ impl SceneCache {
                 Some(_) => {
                     sink.remove_object(id)?;
                     sink.add_object(id, new.mesh, new.placement)?;
+                    applied.recreated.insert(id);
                 }
-                None => sink.add_object(id, new.mesh, new.placement)?,
+                None => {
+                    sink.add_object(id, new.mesh, new.placement)?;
+                    applied.recreated.insert(id);
+                }
             }
             self.elements.insert(id, new);
             applied.touched.insert(id);
+        }
+        if !delta.full {
+            for id in &delta.removed_meshes {
+                // A mesh removed and sent again in the same delta stays (immutable).
+                if delta.meshes.iter().any(|mesh| mesh.id == *id) {
+                    continue;
+                }
+                if self.meshes.remove(id).is_some() {
+                    sink.remove_mesh(*id)?;
+                }
+            }
         }
         Ok(())
     }
@@ -264,6 +293,7 @@ impl SceneCache {
             // Emptying what may already be gone: refusals do not matter.
             drop(sink.remove_object(id));
             applied.touched.insert(id);
+            applied.recreated.insert(id);
         }
         for id in core::mem::take(&mut self.meshes).into_keys() {
             drop(sink.remove_mesh(id));
