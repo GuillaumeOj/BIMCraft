@@ -920,6 +920,13 @@ impl<S: SceneSink> Viewport<S> {
 
     /// Esc: one tool step back, else the waiting preview, else the selection.
     fn cancel(&mut self) {
+        // While placing a block, Esc first empties what is being typed, then goes back one step.
+        let placing = matches!(self.step, Step::SecondCorner { .. } | Step::Height { .. });
+        if placing && self.typed.text().is_some() {
+            self.typed.clear();
+            self.refresh_pointer();
+            return;
+        }
         self.typed.clear();
         match self.step {
             Step::MoveTarget { direct, .. } => {
@@ -930,7 +937,12 @@ impl<S: SceneSink> Viewport<S> {
             Step::Height { first, .. } => {
                 self.step = Step::SecondCorner { first, width: None };
             }
-            Step::SecondCorner { .. } => self.step = Step::FirstCorner,
+            // The depth step goes back to the width; the width step, to the first corner.
+            Step::SecondCorner {
+                first,
+                width: Some(_),
+            } => self.step = Step::SecondCorner { first, width: None },
+            Step::SecondCorner { width: None, .. } => self.step = Step::FirstCorner,
             Step::MoveIdle | Step::MoveBase | Step::FirstCorner => {
                 self.tool = Tool::Select;
                 self.step = Step::Select;

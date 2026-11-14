@@ -718,6 +718,99 @@ fn the_label_of_a_typed_block_goes_from_size_to_depth_to_height() {
 }
 
 #[test]
+fn the_depth_follows_the_pointer_once_the_width_is_confirmed() {
+    let mut viewport = viewport(1.0);
+    viewport.set_tool(Tool::PlaceBlock);
+    click_on(&mut viewport, [-3.0, -3.0, 0.0], NONE);
+    hover_on(&mut viewport, [-1.0, -2.0, 0.0]);
+    type_text(&mut viewport, "4");
+    key(&mut viewport, Key::Enter);
+    let label = |viewport: &mut Viewport<FakeSink>| {
+        viewport
+            .drain_events()
+            .into_iter()
+            .rev()
+            .find_map(|event| match event {
+                ViewportEvent::PreviewLabel(Some(label)) => Some(label),
+                _ => None,
+            })
+            .unwrap()
+    };
+    let size = |label: &PreviewLabel| {
+        label
+            .values
+            .iter()
+            .map(|(_, value)| match value {
+                Value::Number(n) => *n,
+                Value::Text(_) => f64::NAN,
+            })
+            .collect::<Vec<_>>()
+    };
+    hover_on(&mut viewport, [-1.0, -1.0, 0.0]);
+    let first = label(&mut viewport);
+    hover_on(&mut viewport, [-1.0, 0.0, 0.0]);
+    let second = label(&mut viewport);
+    assert_eq!(
+        (first.key, second.key),
+        (LabelKey::PlaceDepth, LabelKey::PlaceDepth)
+    );
+    // The width stays at the confirmed 4 m; the depth follows the pointer.
+    let (a, b) = (size(&first), size(&second));
+    assert!((a[0] - 4.0).abs() < 1e-9 && (b[0] - 4.0).abs() < 1e-9);
+    assert!(b[1] > a[1], "{a:?} {b:?}");
+}
+
+#[test]
+fn escape_goes_back_one_step_at_a_time_while_placing_a_block() {
+    let mut viewport = viewport(1.0);
+    viewport.set_tool(Tool::PlaceBlock);
+    let first = [-3.0, -3.0, 0.0];
+    click_on(&mut viewport, first, NONE);
+    hover_on(&mut viewport, [-1.0, -2.0, 0.0]);
+    type_text(&mut viewport, "4");
+    key(&mut viewport, Key::Enter);
+    type_text(&mut viewport, "2");
+    // Esc empties the typed depth, then returns to the width, then to the first corner.
+    key(&mut viewport, Key::Escape);
+    assert_eq!(viewport.tool_step(), ToolStep::SecondCorner);
+    assert!(viewport.typed.text().is_none());
+    key(&mut viewport, Key::Escape);
+    assert!(matches!(
+        viewport.step,
+        Step::SecondCorner { width: None, .. }
+    ));
+    let label = viewport
+        .drain_events()
+        .into_iter()
+        .rev()
+        .find_map(|event| match event {
+            ViewportEvent::PreviewLabel(Some(label)) => Some(label.key),
+            _ => None,
+        });
+    assert_eq!(label, Some(LabelKey::PlaceSize));
+    key(&mut viewport, Key::Escape);
+    assert_eq!(viewport.tool_step(), ToolStep::FirstCorner);
+    // From the height step: the typed value first, then the second corner.
+    click_on(&mut viewport, first, NONE);
+    hover_on(&mut viewport, [-1.0, -2.0, 0.0]);
+    click_on(&mut viewport, [-1.0, -2.0, 0.0], NONE);
+    assert_eq!(viewport.tool_step(), ToolStep::Height);
+    type_text(&mut viewport, "2");
+    key(&mut viewport, Key::Escape);
+    assert_eq!(viewport.tool_step(), ToolStep::Height);
+    key(&mut viewport, Key::Escape);
+    assert!(matches!(
+        viewport.step,
+        Step::SecondCorner { width: None, .. }
+    ));
+    // At the first corner, Esc leaves the tool.
+    key(&mut viewport, Key::Escape);
+    key(&mut viewport, Key::Escape);
+    assert_eq!(viewport.tool_step(), ToolStep::Idle);
+    assert_eq!(viewport.tool, Tool::Select);
+}
+
+#[test]
 fn a_block_can_be_typed() {
     let mut viewport = viewport(1.0);
     viewport.set_tool(Tool::PlaceBlock);
@@ -770,6 +863,9 @@ fn a_flat_block_is_refused_and_esc_steps_back() {
     type_text(&mut viewport, "0");
     key(&mut viewport, Key::Enter);
     assert!(intents(&viewport.drain_events()).is_empty());
+    // The refused value is still typed: Esc empties it first, then steps back.
+    key(&mut viewport, Key::Escape);
+    assert_eq!(viewport.tool_step(), ToolStep::Height);
     key(&mut viewport, Key::Escape);
     assert_eq!(viewport.tool_step(), ToolStep::SecondCorner);
     key(&mut viewport, Key::Escape);
