@@ -1,5 +1,7 @@
 # Rust
 /target/
+# criterion, run from a crate directory, writes its output beside the crate
+/crates/*/target/
 **/*.rs.bk
 
 # WebAssembly builds
