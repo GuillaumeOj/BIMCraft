@@ -299,11 +299,17 @@ impl Renderer {
                 resource: frame_buffer.as_entire_binding(),
             }],
         });
-        let pipeline = create_pipeline(device, &frame_layout, color_format, Pass::Opaque);
-        let query_pipeline = create_pipeline(device, &frame_layout, color_format, Pass::Query);
-        let ghost_pipeline = create_pipeline(device, &frame_layout, color_format, Pass::Ghost);
-        let box_pipeline = create_pipeline(device, &frame_layout, color_format, Pass::Box);
-        let primitive_pipeline = create_primitive_pipeline(device, &frame_layout, color_format);
+        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("render shader"),
+            source: wgpu::ShaderSource::Wgsl(include_str!("shader.wgsl").into()),
+        });
+        let create = |pass| create_pipeline(device, &shader, &frame_layout, color_format, pass);
+        let pipeline = create(Pass::Opaque);
+        let query_pipeline = create(Pass::Query);
+        let ghost_pipeline = create(Pass::Ghost);
+        let box_pipeline = create(Pass::Box);
+        let primitive_pipeline =
+            create_primitive_pipeline(device, &shader, &frame_layout, color_format);
         let unit_cube = upload_buffers(
             device,
             &UNIT_CUBE,
@@ -1107,16 +1113,13 @@ enum Pass {
 
 fn create_pipeline(
     device: &wgpu::Device,
+    shader: &wgpu::ShaderModule,
     frame_layout: &wgpu::BindGroupLayout,
     color_format: wgpu::TextureFormat,
     pass: Pass,
 ) -> wgpu::RenderPipeline {
     let query = pass == Pass::Query;
     let blended = matches!(pass, Pass::Ghost | Pass::Box);
-    let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-        label: Some("render shader"),
-        source: wgpu::ShaderSource::Wgsl(include_str!("shader.wgsl").into()),
-    });
     let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: Some("render"),
         bind_group_layouts: &[Some(frame_layout)],
@@ -1145,7 +1148,7 @@ fn create_pipeline(
         }),
         layout: Some(&layout),
         vertex: wgpu::VertexState {
-            module: &shader,
+            module: shader,
             entry_point: Some("vs_main"),
             compilation_options: wgpu::PipelineCompilationOptions::default(),
             buffers: &[
@@ -1167,8 +1170,9 @@ fn create_pipeline(
         depth_stencil: Some(wgpu::DepthStencilState {
             format: DEPTH_FORMAT,
             depth_write_enabled: Some(pass == Pass::Opaque),
-            // Reverse-Z: nearer is larger.
-            depth_compare: Some(if query {
+            // Reverse-Z: nearer is larger. Previews at the depth of a surface, such as the ghost
+            // of a move that has not moved yet, must show over it.
+            depth_compare: Some(if query || blended {
                 wgpu::CompareFunction::GreaterEqual
             } else {
                 wgpu::CompareFunction::Greater
@@ -1179,7 +1183,7 @@ fn create_pipeline(
         // No MSAA: deterministic pixels for the visual test.
         multisample: wgpu::MultisampleState::default(),
         fragment: Some(wgpu::FragmentState {
-            module: &shader,
+            module: shader,
             entry_point: Some(if pass == Pass::Box {
                 "fs_flat"
             } else {
@@ -1214,13 +1218,10 @@ fn pixels(length: u32) -> f32 {
 /// quad of six vertices, blended, over everything (no depth test, nothing written).
 fn create_primitive_pipeline(
     device: &wgpu::Device,
+    shader: &wgpu::ShaderModule,
     frame_layout: &wgpu::BindGroupLayout,
     color_format: wgpu::TextureFormat,
 ) -> wgpu::RenderPipeline {
-    let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-        label: Some("render shader"),
-        source: wgpu::ShaderSource::Wgsl(include_str!("shader.wgsl").into()),
-    });
     let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: Some("render overlay"),
         bind_group_layouts: &[Some(frame_layout)],
@@ -1237,7 +1238,7 @@ fn create_primitive_pipeline(
         label: Some("render overlay primitives"),
         layout: Some(&layout),
         vertex: wgpu::VertexState {
-            module: &shader,
+            module: shader,
             entry_point: Some("vs_primitive"),
             compilation_options: wgpu::PipelineCompilationOptions::default(),
             buffers: &[Some(wgpu::VertexBufferLayout {
@@ -1258,7 +1259,7 @@ fn create_primitive_pipeline(
         }),
         multisample: wgpu::MultisampleState::default(),
         fragment: Some(wgpu::FragmentState {
-            module: &shader,
+            module: shader,
             entry_point: Some("fs_primitive"),
             compilation_options: wgpu::PipelineCompilationOptions::default(),
             targets: &[Some(wgpu::ColorTargetState {
