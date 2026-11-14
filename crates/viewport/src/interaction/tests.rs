@@ -692,6 +692,32 @@ fn a_block_is_placed_with_two_corners_and_a_height() {
 }
 
 #[test]
+fn the_label_of_a_typed_block_goes_from_size_to_depth_to_height() {
+    let mut viewport = viewport(1.0);
+    viewport.set_tool(Tool::PlaceBlock);
+    click_on(&mut viewport, [-3.0, -3.0, 0.0], NONE);
+    hover_on(&mut viewport, [-4.0, -2.0, 0.0]);
+    let last_label = |viewport: &mut Viewport<FakeSink>| {
+        viewport
+            .drain_events()
+            .into_iter()
+            .rev()
+            .find_map(|event| match event {
+                ViewportEvent::PreviewLabel(Some(label)) => Some(label),
+                _ => None,
+            })
+            .map(|label| label.key)
+    };
+    assert_eq!(last_label(&mut viewport), Some(LabelKey::PlaceSize));
+    type_text(&mut viewport, "4");
+    key(&mut viewport, Key::Enter);
+    assert_eq!(last_label(&mut viewport), Some(LabelKey::PlaceDepth));
+    type_text(&mut viewport, "2");
+    key(&mut viewport, Key::Enter);
+    assert_eq!(last_label(&mut viewport), Some(LabelKey::PlaceHeight));
+}
+
+#[test]
 fn a_block_can_be_typed() {
     let mut viewport = viewport(1.0);
     viewport.set_tool(Tool::PlaceBlock);

@@ -290,8 +290,10 @@ pub struct Announcement {
 pub enum LabelKey {
     /// The distance of a move: `distance`.
     MoveDistance,
-    /// The footprint of a block: `width`, `depth`.
+    /// The footprint of a block, before its width is confirmed: `width`, `depth`.
     PlaceSize,
+    /// The depth of a block, once its width is confirmed: `width`, `depth`.
+    PlaceDepth,
     /// The height of a block: `height`.
     PlaceHeight,
 }
@@ -303,6 +305,7 @@ impl LabelKey {
         match self {
             Self::MoveDistance => "move.distance",
             Self::PlaceSize => "place.size",
+            Self::PlaceDepth => "place.depth",
             Self::PlaceHeight => "place.height",
         }
     }
@@ -432,6 +435,7 @@ mod tests {
             "selection.cleared"
         );
         assert_eq!(LabelKey::PlaceSize.as_str(), "place.size");
+        assert_eq!(LabelKey::PlaceDepth.as_str(), "place.depth");
         let snaps = [
             SnapKind::Endpoint,
             SnapKind::Midpoint,

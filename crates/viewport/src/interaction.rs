@@ -1297,11 +1297,19 @@ impl<S: SceneSink> Viewport<S> {
                     typed,
                 })
             }
-            Step::SecondCorner { first, .. } => {
+            Step::SecondCorner {
+                first,
+                width: fixed,
+            } => {
                 let [width, depth] = footprint(first, self.second_corner()?);
                 Some(PreviewLabel {
                     at: cursor?,
-                    key: LabelKey::PlaceSize,
+                    // Once the width is confirmed, the depth is what is being set.
+                    key: if fixed.is_some() {
+                        LabelKey::PlaceDepth
+                    } else {
+                        LabelKey::PlaceSize
+                    },
                     values: vec![
                         ("width", Value::Number(width)),
                         ("depth", Value::Number(depth)),
