@@ -87,6 +87,8 @@ enum Step {
     Height {
         first: Vec3,
         second: Vec3,
+        /// The signed width when it was typed, so Esc goes back to the depth step and keeps it.
+        typed_width: Option<f64>,
     },
     /// A clipping plane waits for the face the user clicks.
     PickFace,
@@ -742,12 +744,14 @@ impl<S: SceneSink> Viewport<S> {
                     self.typed.clear();
                 }
             }
-            Step::SecondCorner { first, .. } => {
+            Step::SecondCorner { first, width } => {
                 if let Some(second) = self.second_corner() {
-                    self.confirm_footprint(first, second);
+                    // A width being typed when the corner is clicked counts as typed.
+                    let typed = self.typed.value().map(|_| second[0] - first[0]);
+                    self.confirm_footprint(first, second, width.or(typed));
                 }
             }
-            Step::Height { first, second } => {
+            Step::Height { first, second, .. } => {
                 if let Some(height) = self.pointer_height(first, second) {
                     self.commit_block(first, second, height);
                 }
@@ -899,11 +903,11 @@ impl<S: SceneSink> Viewport<S> {
                             first[1] + sign(pointer[1] - first[1]) * v,
                             first[2],
                         ];
-                        self.confirm_footprint(first, second);
+                        self.confirm_footprint(first, second, Some(width));
                     }
                 }
             }
-            Step::Height { first, second } => {
+            Step::Height { first, second, .. } => {
                 // The default only when nothing was given: a refused value places nothing.
                 let height = if given {
                     value
@@ -920,9 +924,9 @@ impl<S: SceneSink> Viewport<S> {
 
     /// Esc: one tool step back, else the waiting preview, else the selection.
     fn cancel(&mut self) {
-        // While placing a block, Esc first empties what is being typed, then goes back one step.
-        let placing = matches!(self.step, Step::SecondCorner { .. } | Step::Height { .. });
-        if placing && self.typed.text().is_some() {
+        // While a tool takes values, Esc first empties what is being typed, then goes back one
+        // step: a move keeps its base point.
+        if self.takes_values() && self.typed.text().is_some() {
             self.typed.clear();
             self.refresh_pointer();
             return;
@@ -934,8 +938,14 @@ impl<S: SceneSink> Viewport<S> {
                 self.step = if direct { Step::Select } else { Step::MoveBase };
                 self.say(AnnouncementKey::MoveCancelled, Vec::new());
             }
-            Step::Height { first, .. } => {
-                self.step = Step::SecondCorner { first, width: None };
+            // Back to the step just left, with what it had before: a typed width is kept.
+            Step::Height {
+                first, typed_width, ..
+            } => {
+                self.step = Step::SecondCorner {
+                    first,
+                    width: typed_width,
+                };
             }
             // The depth step goes back to the width; the width step, to the first corner.
             Step::SecondCorner {
@@ -1070,13 +1080,17 @@ impl<S: SceneSink> Viewport<S> {
         })
     }
 
-    fn confirm_footprint(&mut self, first: Vec3, second: Vec3) {
+    fn confirm_footprint(&mut self, first: Vec3, second: Vec3, typed_width: Option<f64>) {
         let [width, depth] = footprint(first, second);
         if width < MIN_BLOCK_SIDE || depth < MIN_BLOCK_SIDE {
             return;
         }
         self.typed.clear();
-        self.step = Step::Height { first, second };
+        self.step = Step::Height {
+            first,
+            second,
+            typed_width,
+        };
         self.say(
             AnnouncementKey::PlaceSize,
             vec![
@@ -1262,7 +1276,7 @@ impl<S: SceneSink> Viewport<S> {
                     }
                 }
             }
-            Step::Height { first, second } => {
+            Step::Height { first, second, .. } => {
                 if let Some(height) = self.pointer_height(first, second) {
                     let min = [first[0].min(second[0]), first[1].min(second[1]), first[2]];
                     let max = [
@@ -1329,7 +1343,7 @@ impl<S: SceneSink> Viewport<S> {
                     typed,
                 })
             }
-            Step::Height { first, second } => Some(PreviewLabel {
+            Step::Height { first, second, .. } => Some(PreviewLabel {
                 at: cursor?,
                 key: LabelKey::PlaceHeight,
                 values: vec![("height", Value::Number(self.pointer_height(first, second)?))],

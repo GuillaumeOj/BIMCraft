@@ -555,6 +555,55 @@ fn esc_steps_back_one_step_at_a_time() {
 }
 
 #[test]
+fn esc_clears_a_typed_distance_before_cancelling_the_move() {
+    let mut viewport = viewport(1.0);
+    viewport.command(ViewCommand::Select(vec![id(1)]));
+    viewport.set_tool(Tool::Move);
+    click_on(&mut viewport, CORNER_1, NONE);
+    hover_on(&mut viewport, CORNER_2);
+    type_text(&mut viewport, "2.5");
+    quiet(&mut viewport);
+    // The first Esc empties the typed distance: the move keeps its base point and follows the
+    // pointer again, and nothing is announced as cancelled.
+    key(&mut viewport, Key::Escape);
+    assert!(viewport.typed.text().is_none());
+    assert!(matches!(viewport.step, Step::MoveTarget { base, .. } if base == CORNER_1));
+    let events = viewport.drain_events();
+    assert!(tool_states(&events).is_empty());
+    assert!(announced(&mut viewport, &events).is_empty());
+    let label = events.iter().rev().find_map(|event| match event {
+        ViewportEvent::PreviewLabel(Some(label)) => Some(label),
+        _ => None,
+    });
+    assert_eq!(
+        label.map(|label| label.typed.clone()),
+        Some(None),
+        "{events:?}"
+    );
+    // A click now moves to the pointer, not by the cleared 2.5 m.
+    click_on(&mut viewport, CORNER_2, NONE);
+    assert!(close(
+        translation(&intents(&viewport.drain_events())[0]),
+        [3.0, 0.0, 0.0],
+        1e-9
+    ));
+    // Typed again, the first Esc clears and the second cancels the move.
+    click_on(&mut viewport, CORNER_1, NONE);
+    hover_on(&mut viewport, CORNER_2);
+    type_text(&mut viewport, "1");
+    key(&mut viewport, Key::Escape);
+    quiet(&mut viewport);
+    key(&mut viewport, Key::Escape);
+    let events = viewport.drain_events();
+    assert_eq!(tool_states(&events), [(Tool::Move, ToolStep::BasePoint)]);
+    assert_eq!(
+        announced(&mut viewport, &events),
+        [AnnouncementKey::MoveCancelled]
+    );
+    assert!(intents(&events).is_empty());
+}
+
+#[test]
 fn a_waiting_preview_vanishes_after_its_frames_or_on_esc() {
     let mut viewport = viewport(1.0);
     viewport.command(ViewCommand::Select(vec![id(1)]));
@@ -809,6 +858,104 @@ fn escape_goes_back_one_step_at_a_time_while_placing_a_block() {
     key(&mut viewport, Key::Escape);
     assert_eq!(viewport.tool_step(), ToolStep::Idle);
     assert_eq!(viewport.tool, Tool::Select);
+}
+
+/// The key of the last preview label the viewport sent.
+fn last_label(viewport: &mut Viewport<FakeSink>) -> Option<LabelKey> {
+    viewport
+        .drain_events()
+        .into_iter()
+        .rev()
+        .find_map(|event| match event {
+            ViewportEvent::PreviewLabel(label) => Some(label.map(|label| label.key)),
+            _ => None,
+        })
+        .flatten()
+}
+
+#[test]
+fn esc_from_the_height_keeps_what_the_footprint_step_had() {
+    let a = [-3.0, -3.0, 0.0];
+    let pointer = [-1.0, -2.0, 0.0];
+    let start = |viewport: &mut Viewport<FakeSink>| {
+        viewport.set_tool(Tool::PlaceBlock);
+        click_on(viewport, a, NONE);
+        hover_on(viewport, pointer);
+    };
+    let height_step = |viewport: &Viewport<FakeSink>| {
+        assert!(
+            matches!(viewport.step, Step::Height { first, .. } if close(first, a, 1e-6)),
+            "{:?}",
+            viewport.step
+        );
+    };
+
+    // A clicked second corner: back to it, the first corner kept, the second following the
+    // pointer, which still shows the same footprint.
+    let mut vp = viewport(1.0);
+    start(&mut vp);
+    click_on(&mut vp, pointer, NONE);
+    height_step(&vp);
+    key(&mut vp, Key::Escape);
+    assert!(matches!(
+        vp.step,
+        Step::SecondCorner { first, width: None } if close(first, a, 1e-6)
+    ));
+    let second = vp.second_corner().unwrap();
+    assert!(close(second, pointer, 1e-6), "{second:?}");
+    assert_eq!(last_label(&mut vp), Some(LabelKey::PlaceSize));
+
+    // A typed footprint: back to the depth step with the width kept, then to the width, then
+    // to the first corner.
+    let mut vp = viewport(1.0);
+    start(&mut vp);
+    type_text(&mut vp, "4");
+    key(&mut vp, Key::Enter);
+    type_text(&mut vp, "2");
+    key(&mut vp, Key::Enter);
+    height_step(&vp);
+    key(&mut vp, Key::Escape);
+    assert!(matches!(
+        vp.step,
+        Step::SecondCorner { first, width: Some(w) } if close(first, a, 1e-6) && (w - 4.0).abs() < 1e-6
+    ));
+    assert_eq!(last_label(&mut vp), Some(LabelKey::PlaceDepth));
+    // The depth follows the pointer again, or a new typed value.
+    let second = vp.second_corner().unwrap();
+    assert!(close(second, [1.0, pointer[1], 0.0], 1e-6), "{second:?}");
+    type_text(&mut vp, "3");
+    key(&mut vp, Key::Enter);
+    let Step::Height { second, .. } = vp.step else {
+        panic!("not at the height step");
+    };
+    assert!(close(second, [1.0, 0.0, 0.0], 1e-6), "{second:?}");
+    key(&mut vp, Key::Escape);
+    key(&mut vp, Key::Escape);
+    assert!(matches!(vp.step, Step::SecondCorner { width: None, .. }));
+    assert_eq!(last_label(&mut vp), Some(LabelKey::PlaceSize));
+    key(&mut vp, Key::Escape);
+    assert_eq!(vp.tool_step(), ToolStep::FirstCorner);
+
+    // A typed width and a clicked depth follow the typed rule: the width is kept.
+    for confirm_width in [true, false] {
+        let mut vp = viewport(1.0);
+        start(&mut vp);
+        type_text(&mut vp, "4");
+        if confirm_width {
+            key(&mut vp, Key::Enter);
+        }
+        click_on(&mut vp, pointer, NONE);
+        height_step(&vp);
+        key(&mut vp, Key::Escape);
+        assert!(
+            matches!(
+                vp.step,
+                Step::SecondCorner { width: Some(w), .. } if (w - 4.0).abs() < 1e-6
+            ),
+            "{confirm_width}: {:?}",
+            vp.step
+        );
+    }
 }
 
 #[test]

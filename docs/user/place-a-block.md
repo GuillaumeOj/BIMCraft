@@ -25,7 +25,7 @@ A few words used on this page:
 | Option | What it does |
 | --- | --- |
 | Typed values | Sizes in metres, with a point as the decimal separator. Each value ends with **Enter**, never Tab. |
-| **Esc** | Goes back one step: from the height to the footprint, then to the first corner, then out of the tool. |
+| **Esc** | First clears the value you are typing. Then it goes back one step: from the height to the footprint, then to the first corner, then out of the tool. A width you typed is kept: from the height, Esc goes back to the depth, and a second Esc to the width. |
 | Hold **Alt** | Suspends snapping while held. |
 | `S` | Turns snapping on or off. |
 
