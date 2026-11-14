@@ -1534,6 +1534,83 @@ mod tests {
         }
     }
 
+    /// The pixel where the GPU draws the world point `q`: `P · V · (q − eye)`, then the viewport
+    /// transform, from the top left.
+    fn drawn_at(camera: &Camera, size: [u32; 2], q: [f64; 3]) -> [f64; 2] {
+        let view = ViewFrame::new(camera).unwrap();
+        let [width, height] = size.map(f64::from);
+        let projection = projection_matrix(&camera.projection, width / height).unwrap();
+        let p = crate::vector::apply(&view.rotation, crate::vector::sub(q, view.eye));
+        let clip: [f64; 4] = core::array::from_fn(|row| {
+            (0..3)
+                .map(|k| f64::from(projection[k][row]) * p[k])
+                .sum::<f64>()
+                + f64::from(projection[3][row])
+        });
+        let [x, y] = [clip[0] / clip[3], clip[1] / clip[3]];
+        [
+            f64::midpoint(x, 1.0) * width,
+            f64::midpoint(1.0, -y) * height,
+        ]
+    }
+
+    #[test]
+    fn a_rectangle_finds_what_is_drawn_under_it_in_any_view() {
+        use crate::bounds::Aabb;
+        use crate::bvh::Overlap;
+
+        let size = [400, 300];
+        let target = [5.0, 3.0, 1.5];
+        // A Top view looking down −z with north up, as the viewport builds it (its forward is
+        // not exactly vertical), an isometric view from the south-east, and one from below.
+        let views = [
+            ([5.0, 3.0 - 1e-12, 40.0], [0.0, 1.0, 0.0]),
+            ([25.0, -17.0, 18.0], [0.0, 0.0, 1.0]),
+            ([-10.0, 20.0, -12.0], [0.0, 0.0, 1.0]),
+        ];
+        let projections = [
+            Projection::Perspective {
+                fov_y_radians: 0.87,
+                near: 0.04,
+            },
+            Projection::Orthographic {
+                height: 14.0,
+                near: 0.001,
+                far: 100.0,
+            },
+        ];
+        for (eye, up) in views {
+            for projection in projections {
+                let camera = Camera {
+                    eye: geom::Point3::new(eye[0], eye[1], eye[2]),
+                    target: geom::Point3::new(target[0], target[1], target[2]),
+                    up: geom::Vector3::new(up[0], up[1], up[2]),
+                    projection,
+                };
+                for q in [target, [2.0, 1.0, 0.0], [8.0, 6.0, 3.0], [1.0, 7.0, 6.0]] {
+                    let [x, y] = drawn_at(&camera, size, q);
+                    let speck = Aabb {
+                        min: q.map(|v| v - 1e-3),
+                        max: q.map(|v| v + 1e-3),
+                    };
+                    let found = |dx: f64| {
+                        let rect = [x + dx - 1.0, y - 1.0, x + dx + 1.0, y + 1.0];
+                        let frustum = rect_frustum(&camera, size, rect).unwrap();
+                        !matches!(
+                            frustum.classify(&speck, frustum.all_planes()),
+                            Overlap::Outside
+                        )
+                    };
+                    assert!(found(0.0), "{eye:?} {projection:?} {q:?} at {x} {y}");
+                    assert!(
+                        !found(20.0) && !found(-20.0),
+                        "{eye:?} {projection:?} {q:?}"
+                    );
+                }
+            }
+        }
+    }
+
     #[test]
     fn a_rectangle_must_be_finite_and_upright() {
         let camera = Camera {
