@@ -16,13 +16,35 @@ use crate::clipping::{
 use crate::event::{
     AnnouncementKey, NameState, SectionBoxState, Value, ViewCommand, ViewState, VisibilityTarget,
 };
-use crate::math::{Vec3, add, scale, sub};
+use crate::math::{Vec3, add, count, scale, sub};
 use crate::pick::{Hit, Pickable};
 use crate::sink::{Preview, PreviewLine, SceneSink};
 use crate::visibility::{Target, Visibility};
 
 /// How near a pointer must be to a face handle to take it, in CSS pixels.
 const HANDLE_REACH: f64 = 12.0;
+
+/// The panels' list of names with their counts and flags.
+fn name_states(
+    counts: &BTreeMap<&str, usize>,
+    hidden: &dyn Fn(&str) -> bool,
+    isolated: &dyn Fn(&str) -> bool,
+) -> Vec<NameState> {
+    counts
+        .iter()
+        .map(|(&name, &count)| NameState {
+            name: name.to_owned(),
+            count,
+            hidden: hidden(name),
+            isolated: isolated(name),
+        })
+        .collect()
+}
+
+/// Whether the box can be handed to the renderer.
+fn valid_section(section: &SectionBox) -> bool {
+    valid_extents(section.min, section.max)
+}
 
 /// What the view holds beyond the camera and the tools.
 #[derive(Debug, Default)]
@@ -77,21 +99,27 @@ impl<S: SceneSink> Viewport<S> {
             }
             ViewCommand::SectionBoxFitSelection => {
                 let fit = self.cache.extent(Some(&self.selection));
-                if let Some((min, max)) = fit {
-                    self.set_section(Some(fitted(min, max)));
+                if let Some(section) = fit.map(|(min, max)| fitted(min, max)).filter(valid_section)
+                {
+                    self.set_section(Some(section));
                 }
             }
             ViewCommand::SectionBoxReset => {
                 if let Some((min, max)) = self.cache.extent(None) {
                     let enabled = self.sect.clipping.section.is_some_and(|s| s.enabled);
-                    self.set_section(Some(SectionBox {
+                    let section = SectionBox {
                         enabled,
                         ..fitted(min, max)
-                    }));
+                    };
+                    if valid_section(&section) {
+                        self.set_section(Some(section));
+                    }
                 }
             }
             ViewCommand::ClipPlanePick => {
-                if self.sect.clipping.planes.len() < crate::clipping::MAX_USER_PLANES {
+                if self.step == Step::Select
+                    && self.sect.clipping.planes.len() < crate::clipping::MAX_USER_PLANES
+                {
                     self.step = Step::PickFace;
                     self.sect.face_hit = None;
                     self.refresh_pointer();
@@ -152,7 +180,11 @@ impl<S: SceneSink> Viewport<S> {
         let section = match self.sect.clipping.section {
             Some(section) => Some(SectionBox { enabled, ..section }),
             // The first time, the box fits the scene; with nothing to fit there is no box.
-            None if enabled => self.cache.extent(None).map(|(min, max)| fitted(min, max)),
+            None if enabled => self
+                .cache
+                .extent(None)
+                .map(|(min, max)| fitted(min, max))
+                .filter(valid_section),
             None => None,
         };
         self.set_section(section);
@@ -160,6 +192,10 @@ impl<S: SceneSink> Viewport<S> {
 
     fn set_section(&mut self, section: Option<SectionBox>) {
         self.sect.clipping.section = section;
+        // A box that is off has no handles to grab.
+        if section.is_none_or(|s| !s.enabled) {
+            self.sect.handle = None;
+        }
         self.clipping_changed();
     }
 
@@ -278,9 +314,12 @@ impl<S: SceneSink> Viewport<S> {
 
     fn hide(&mut self, target: &VisibilityTarget) {
         if let Some(target) = self.resolve(target) {
+            let before = self.sect.hidden.len();
             self.sect.visibility.hide(&target);
             self.visibility_changed(&BTreeSet::new());
-            self.say_visibility();
+            if self.sect.hidden.len() != before {
+                self.say_visibility();
+            }
         }
     }
 
@@ -292,8 +331,11 @@ impl<S: SceneSink> Viewport<S> {
         } else if let Some(target) = self.resolve(target) {
             self.sect.visibility.show(&target);
         }
+        let before = self.sect.hidden.len();
         self.visibility_changed(&BTreeSet::new());
-        self.say_visibility();
+        if self.sect.hidden.len() != before {
+            self.say_visibility();
+        }
     }
 
     fn isolate(&mut self, target: &VisibilityTarget) {
@@ -329,36 +371,27 @@ impl<S: SceneSink> Viewport<S> {
             .visibility
             .retain_elements(|id| self.cache.contains(id));
         let mut hidden = BTreeSet::new();
-        let mut categories: BTreeMap<String, usize> = BTreeMap::new();
-        let mut disciplines: BTreeMap<String, usize> = BTreeMap::new();
+        let mut categories: BTreeMap<&str, usize> = BTreeMap::new();
+        let mut disciplines: BTreeMap<&str, usize> = BTreeMap::new();
         for (id, element) in self.cache.elements() {
             let (category, discipline) = self.cache.names_of(element);
             if !self.sect.visibility.visible(id, category, discipline) {
                 hidden.insert(id);
             }
-            *categories.entry(category.to_owned()).or_default() += 1;
-            *disciplines.entry(discipline.to_owned()).or_default() += 1;
+            *categories.entry(category).or_default() += 1;
+            *disciplines.entry(discipline).or_default() += 1;
         }
         let vis = &self.sect.visibility;
-        let listed = |counts: BTreeMap<String, usize>,
-                      hidden: &dyn Fn(&str) -> bool,
-                      isolated: &dyn Fn(&str) -> bool| {
-            counts
-                .into_iter()
-                .map(|(name, count)| NameState {
-                    hidden: hidden(&name),
-                    isolated: isolated(&name),
-                    name,
-                    count,
-                })
-                .collect::<Vec<_>>()
-        };
-        let categories = listed(categories, &|n| vis.category_hidden(n), &|n| {
+        let categories = name_states(&categories, &|n| vis.category_hidden(n), &|n| {
             vis.category_isolated(n)
         });
-        let disciplines = listed(disciplines, &|n| vis.discipline_hidden(n), &|n| {
+        let disciplines = name_states(&disciplines, &|n| vis.discipline_hidden(n), &|n| {
             vis.discipline_isolated(n)
         });
+        // Nothing the panels show changed: a delta that moves a wall sends no view state.
+        let changed = hidden != self.sect.hidden
+            || categories != self.sect.categories
+            || disciplines != self.sect.disciplines;
         let old = core::mem::replace(&mut self.sect.hidden, hidden);
         for &id in self
             .sect
@@ -392,7 +425,9 @@ impl<S: SceneSink> Viewport<S> {
         }
         // A hidden element is hidden for the renderer whatever else it was: not tracked.
         self.states.retain(|id, _| !self.sect.hidden.contains(id));
-        self.sect.version += 1;
+        if changed {
+            self.sect.version += 1;
+        }
         self.dirty = true;
     }
 
@@ -470,9 +505,4 @@ impl<S: SceneSink> Viewport<S> {
             });
         }
     }
-}
-
-/// A small count as the number of an announcement.
-fn count(n: usize) -> f64 {
-    u32::try_from(n).map_or(f64::MAX, f64::from)
 }

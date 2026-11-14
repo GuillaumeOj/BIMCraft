@@ -503,3 +503,57 @@ fn clipped_points_are_not_snapped_to() {
         Some(SnapKind::Endpoint)
     );
 }
+
+#[test]
+fn arming_a_pick_does_not_discard_a_tool_in_progress() {
+    let mut viewport = categorised();
+    viewport.set_tool(Tool::PlaceBlock);
+    click_on(&mut viewport, [0.0, -0.5, 1.0], NONE);
+    assert_eq!(viewport.tool_step(), ToolStep::SecondCorner);
+    viewport.command(ViewCommand::ClipPlanePick);
+    assert_eq!(viewport.tool_step(), ToolStep::SecondCorner);
+}
+
+#[test]
+fn a_box_turned_off_has_no_handle_to_grab() {
+    let mut viewport = categorised();
+    section_on(&mut viewport);
+    let from = x_max_handle(&viewport);
+    viewport.input(InputEvent::PointerMove {
+        pos: from,
+        mods: NONE,
+    });
+    assert!(viewport.sect.handle.is_some());
+    viewport.command(ViewCommand::SectionBox(false));
+    assert_eq!(viewport.sect.handle, None);
+    let before = viewport.sect.clipping.section;
+    viewport.input(InputEvent::PointerDown {
+        pos: from,
+        button: Button::Primary,
+        mods: NONE,
+    });
+    viewport.input(InputEvent::PointerMove {
+        pos: offset(from, -60.0, 0.0),
+        mods: NONE,
+    });
+    assert_eq!(viewport.sect.clipping.section, before);
+}
+
+#[test]
+fn a_delta_that_changes_nothing_the_panels_show_sends_no_view_state() {
+    let mut viewport = categorised();
+    viewport.drain_events();
+    let delta = SceneDelta {
+        revision: 2,
+        base: 1,
+        strings: vec!["Wall".to_owned(), "arch".to_owned()],
+        elements: vec![element(1, 7, [0.0, 0.5, 0.5])],
+        ..SceneDelta::default()
+    };
+    viewport.apply_delta(&delta).unwrap();
+    let sent = viewport
+        .drain_events()
+        .iter()
+        .any(|event| matches!(event, ViewportEvent::ViewState(_)));
+    assert!(!sent);
+}

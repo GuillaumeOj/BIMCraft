@@ -373,17 +373,13 @@ fn name_states(states: &[NameState]) -> JsValue {
         .map(|state| {
             object(vec![
                 ("name", state.name.as_str().into()),
-                ("count", num(count(state.count))),
+                ("count", num(crate::math::count(state.count))),
                 ("hidden", state.hidden.into()),
                 ("isolated", state.isolated.into()),
             ])
         })
         .collect::<Array>()
         .into()
-}
-
-fn count(n: usize) -> f64 {
-    u32::try_from(n).map_or(f64::MAX, f64::from)
 }
 
 fn clip_plane(plane: &ClipPlane) -> JsValue {
@@ -401,7 +397,10 @@ fn view_state(state: &ViewState) -> JsValue {
         ("categories", name_states(&state.categories)),
         ("disciplines", name_states(&state.disciplines)),
         ("isolating", state.isolating.into()),
-        ("hiddenSelection", num(count(state.hidden_selection))),
+        (
+            "hiddenSelection",
+            num(crate::math::count(state.hidden_selection)),
+        ),
         (
             "sectionBox",
             state.section_box.map_or(JsValue::NULL, |section| {

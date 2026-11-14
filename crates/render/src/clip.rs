@@ -79,14 +79,16 @@ impl Clip {
             if !finite || !plane.point.iter().all(|&v| in_world(v)) {
                 return Err(ClipError::OutOfRange);
             }
-            let length = norm(plane.normal);
-            // Below this a normal is numerical noise, and its reciprocal would overflow.
-            if length < 1e-12 {
+            // Scaled by its largest component first, so a huge normal does not overflow and a
+            // tiny one does not underflow when its length is taken.
+            let largest = plane.normal.iter().fold(0.0_f64, |m, v| m.max(v.abs()));
+            if largest == 0.0 {
                 return Err(ClipError::ZeroNormal);
             }
+            let scaled = scale(plane.normal, 1.0 / largest);
             unit.push(ClipPlane {
                 point: plane.point,
-                normal: scale(plane.normal, 1.0 / length),
+                normal: scale(scaled, 1.0 / norm(scaled)),
             });
         }
         Ok(Self { planes: unit, cut })
@@ -191,6 +193,11 @@ mod tests {
             Clip::new(&[plane([0.0; 3], [0.0; 3])], CutFaces::None),
             Err(ClipError::ZeroNormal)
         );
+        // Huge and tiny normals keep their direction.
+        for scale in [1e200, 1e-200] {
+            let clip = Clip::new(&[plane([0.0; 3], [scale, 0.0, 0.0])], CutFaces::None).unwrap();
+            assert_eq!(clip.planes()[0].normal, [1.0, 0.0, 0.0]);
+        }
     }
 
     #[test]

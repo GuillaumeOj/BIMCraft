@@ -287,13 +287,13 @@ impl<S: SceneSink> Viewport<S> {
             }
             Err(_) => return result.map(|_| delta.revision),
         }
-        // Whatever the delta added or recreated is hidden or shown by the rules at once.
-        self.visibility_changed(&recreated);
         let before = self.selection.len();
         self.selection.retain(|&id| self.cache.contains(id));
         if self.selection.len() != before {
             self.selection_changed();
         }
+        // Whatever the delta added or recreated is hidden or shown by the rules at once.
+        self.visibility_changed(&recreated);
         if self.hover.is_some_and(|id| !self.cache.contains(id)) {
             self.hover = None;
             self.events.push(ViewportEvent::Hover(None));
@@ -526,7 +526,7 @@ impl<S: SceneSink> Viewport<S> {
         if self.selection.is_empty() {
             self.say(AnnouncementKey::SelectionCleared, Vec::new());
         } else {
-            let count = u32::try_from(self.selection.len()).map_or(f64::MAX, f64::from);
+            let count = crate::math::count(self.selection.len());
             self.say(
                 AnnouncementKey::SelectionCount,
                 vec![("count", Value::Number(count))],
@@ -622,7 +622,7 @@ impl<S: SceneSink> Viewport<S> {
                 last: pos,
                 depth: self.pan_depth(pos),
             },
-            Button::Primary => match self.sect.handle.zip(self.sect.clipping.section) {
+            Button::Primary => match self.handle_at(pos).zip(self.sect.clipping.section) {
                 Some((face, start)) if self.step == Step::Select => Gesture::Handle { face, start },
                 _ => Gesture::Pressed { start: pos, mods },
             },
@@ -1196,7 +1196,8 @@ impl<S: SceneSink> Viewport<S> {
             wanted.insert(id, DisplayState::Selected);
         }
         if let Some((ids, _)) = self.moving() {
-            for id in ids {
+            // A hidden element stays hidden, whatever move is waiting for the scene.
+            for id in ids.into_iter().filter(|id| !self.sect.hidden.contains(id)) {
                 wanted.insert(id, DisplayState::Ghost);
             }
         }
