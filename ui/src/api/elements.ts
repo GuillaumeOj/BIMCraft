@@ -4,21 +4,24 @@ import type { EntityId } from "./protocol.gen";
 
 type Vector = [number, number, number];
 
-/** Why `elements.move` refused a move (api-contract.md §3). */
-export type MoveRefusal = "unknown_element" | "not_movable" | "out_of_range" | "empty" | "too_many";
-
-const MOVE_REFUSALS: readonly string[] = [
+const MOVE_REFUSALS = [
   "unknown_element",
   "not_movable",
   "out_of_range",
   "empty",
   "too_many",
-] satisfies MoveRefusal[];
+] as const;
+
+/** Why `elements.move` refused a move (api-contract.md §3). */
+export type MoveRefusal = (typeof MOVE_REFUSALS)[number];
+
+const isMoveRefusal = (reason: string): reason is MoveRefusal =>
+  (MOVE_REFUSALS as readonly string[]).includes(reason);
 
 /** The reason `elements.move` refused with, or null for any other failure. */
 export function moveRefusal(error: unknown): MoveRefusal | null {
   const reason = apiReason(error);
-  return reason !== null && MOVE_REFUSALS.includes(reason) ? (reason as MoveRefusal) : null;
+  return reason !== null && isMoveRefusal(reason) ? reason : null;
 }
 
 /** Moves the elements `ids` by `translation` (metres), in one undoable step. */

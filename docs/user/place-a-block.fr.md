@@ -8,17 +8,17 @@ Un bloc est une simple boîte : utilisez-le pour une étude de volumétrie, comm
 
 Quelques mots employés sur cette page :
 
-- **Emprise.** Le rectangle que le bloc occupe au sol : sa longueur et sa profondeur.
+- **Emprise.** Le rectangle que le bloc occupe au sol : sa largeur et sa profondeur.
 - **Accroche.** Pendant que vous pointez, BIMCraft capte l'angle, le milieu d'arête, l'arête, la face ou le sol le plus proche, et affiche un repère et son nom.
 
 ## Étapes
 
 1. Choisissez **Bloc** dans la barre d'outils en bas de la fenêtre. **Raccourci :** `B`. Dans un projet vide, le bouton **Placer un bloc** au milieu de la vue fait de même.
 2. Cliquez sur le premier angle de l'emprise, au sol ou sur un autre élément.
-3. Cliquez sur le second angle, ou saisissez la longueur en mètres et appuyez sur **Entrée**, puis la profondeur et **Entrée**. Un rectangle en pointillés et sa taille (par exemple « 6,00 × 4,00 m ») suivent le pointeur.
-4. Montez le pointeur pour régler la hauteur, ou saisissez-la et appuyez sur **Entrée**. **Entrée** sans valeur donne 3,00 m.
+3. Cliquez sur le second angle, ou saisissez la largeur en mètres et appuyez sur **Entrée**, puis la profondeur et **Entrée**. Le champ à côté du pointeur nomme la valeur saisie : Largeur, puis Profondeur. Un rectangle en pointillés et sa taille (par exemple « 6,000 × 4,000 m ») suivent le pointeur.
+4. Montez le pointeur pour régler la hauteur, ou saisissez-la et appuyez sur **Entrée**. **Entrée** sans valeur donne 3,000 m.
 
-**Résultat :** le bloc apparaît, sélectionné, et un message comme « Bloc placé · 6,00 × 4,00 × 3,00 m » apparaît avec un bouton **Annuler**. L'outil Bloc reste actif pour placer le suivant ; appuyez sur **Échap** ou `V` pour revenir à la Sélection.
+**Résultat :** le bloc apparaît, sélectionné, et un message comme « Bloc placé · 6,000 × 4,000 × 3,000 m » apparaît avec un bouton **Annuler**. L'outil Bloc reste actif pour placer le suivant ; appuyez sur **Échap** ou `V` pour revenir à la Sélection.
 
 ## Options
 

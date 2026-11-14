@@ -31,7 +31,8 @@
   top: 0;
   left: 0;
   padding: 3px 8px;
-  border-radius: 6px;
+  border: 1px solid transparent;
+  border-radius: 4px;
   font-size: 12px;
   font-weight: 500;
   white-space: nowrap;
@@ -40,6 +41,14 @@
   pointer-events: none;
   /* Beside the pointer, not under it. */
   margin: 12px 0 0 12px;
+}
+
+/* A typed value reads as a field (board 3.28, "Champ saisi"): users see where their typing goes. */
+.vp-chip-typed {
+  color: var(--bc-ink);
+  background: var(--bc-surface);
+  border-color: var(--bc-verdigris);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--bc-verdigris) 35%, transparent);
 }
 
 .vp-card {
@@ -85,7 +94,7 @@
   font-weight: 500;
 }
 
-.vp-card-title svg {
+.vp-card-error .vp-card-title svg {
   color: var(--bc-danger);
 }
 

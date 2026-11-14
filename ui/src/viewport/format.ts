@@ -1,14 +1,12 @@
-import type { MessageKey, MessageParams } from "../i18n/i18n";
+import { formatNumber } from "../georef/units";
+import type { Language, MessageKey, MessageParams } from "../i18n/i18n";
 import type { AnnouncementKey, PreviewLabel } from "./types";
 
 type Translate = (key: MessageKey, params?: MessageParams) => string;
 
-/** `metres` with `digits` decimals and the locale's decimal separator (FR: "2,500"). */
-export function formatMetres(language: string, metres: number, digits: number): string {
-  return new Intl.NumberFormat(language, {
-    minimumFractionDigits: digits,
-    maximumFractionDigits: digits,
-  }).format(metres);
+/** `metres` with the 3 decimals of the 3D view and the locale's separator (FR: "2,500"). */
+export function formatMetres(language: Language, metres: number): string {
+  return formatNumber(metres, 3, language);
 }
 
 const number = (value: string | number | undefined) => (typeof value === "number" ? value : 0);
@@ -19,11 +17,11 @@ const number = (value: string | number | undefined) => (typeof value === "number
  */
 export function announcementText(
   t: Translate,
-  language: string,
+  language: Language,
   key: AnnouncementKey,
   values: Readonly<Record<string, string | number>>,
 ): string {
-  const metres = (name: string) => formatMetres(language, number(values[name]), 2);
+  const metres = (name: string) => formatMetres(language, number(values[name]));
   const { count: rawCount, name, projection } = values;
   switch (key) {
     case "selection.count": {
@@ -55,15 +53,15 @@ export function announcementText(
 }
 
 /** The text of the chip next to the pointer during a move or a placement. */
-export function previewText(t: Translate, language: string, label: PreviewLabel): string {
-  const value = (name: string, digits: number) =>
-    formatMetres(language, label.values[name] ?? 0, digits);
+export function previewText(t: Translate, language: Language, label: PreviewLabel): string {
+  const value = (name: string) => formatMetres(language, label.values[name] ?? 0);
   switch (label.key) {
     case "move.distance":
-      return t("viewport.chip.distance", { distance: value("distance", 3) });
+      return t("viewport.chip.distance", { distance: value("distance") });
     case "place.size":
-      return t("viewport.chip.size", { width: value("width", 2), depth: value("depth", 2) });
+    case "place.depth":
+      return t("viewport.chip.size", { width: value("width"), depth: value("depth") });
     case "place.height":
-      return t("viewport.chip.height", { height: value("height", 2) });
+      return t("viewport.chip.height", { height: value("height") });
   }
 }

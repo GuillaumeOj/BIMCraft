@@ -8,17 +8,17 @@ A block is a simple box: use it for massing studies, placeholders or anything yo
 
 A few words used on this page:
 
-- **Footprint.** The rectangle the block covers on the ground: its length and its depth.
+- **Footprint.** The rectangle the block covers on the ground: its width and its depth.
 - **Snapping.** While you point, BIMCraft catches the nearest corner, edge midpoint, edge, face or the ground, and shows a marker and its name.
 
 ## Steps
 
 1. Choose **Block** in the tool bar at the bottom of the window. **Shortcut:** `B`. In an empty project, the **Place a block** button in the middle of the view does the same.
 2. Click the first corner of the footprint, on the ground or on another element.
-3. Click the second corner, or type the length in metres and press **Enter**, then the depth and **Enter**. A dashed rectangle with its live size (for example "6.00 × 4.00 m") follows the pointer.
-4. Move the pointer up to set the height, or type it and press **Enter**. Pressing **Enter** without a value gives 3.00 m.
+3. Click the second corner, or type the width in metres and press **Enter**, then the depth and **Enter**. The field next to the pointer names the value you are typing: Width, then Depth. A dashed rectangle with its live size (for example "6.000 × 4.000 m") follows the pointer.
+4. Move the pointer up to set the height, or type it and press **Enter**. Pressing **Enter** without a value gives 3.000 m.
 
-**Result:** the block appears, selected, and a message such as "Block placed · 6.00 × 4.00 × 3.00 m" appears with an **Undo** button. The Block tool stays active so you can place the next one; press **Esc** or `V` to go back to Select.
+**Result:** the block appears, selected, and a message such as "Block placed · 6.000 × 4.000 × 3.000 m" appears with an **Undo** button. The Block tool stays active so you can place the next one; press **Esc** or `V` to go back to Select.
 
 ## Options
 

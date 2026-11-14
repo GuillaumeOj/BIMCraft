@@ -114,7 +114,8 @@ export type ViewState = {
 export type PreviewLabel = {
   /** CSS pixels from the canvas's top left. */
   at: [number, number];
-  key: "move.distance" | "place.size" | "place.height";
+  /** `place.size`: footprint dragged or width typed; `place.depth`: width confirmed, depth typed. */
+  key: "move.distance" | "place.size" | "place.depth" | "place.height";
   /** Metres. */
   values: Record<string, number>;
   /** The raw typed buffer, if any. */

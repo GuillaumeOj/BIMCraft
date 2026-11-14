@@ -16,7 +16,7 @@ Quelques mots employés sur cette page :
 
 | Pour | Souris | Pavé tactile |
 | --- | --- | --- |
-| Orbite | Clic droit et glisser | Option + glisser (macOS) |
+| Orbite | Clic droit et glisser | Utilisez les flèches |
 | Panoramique | Clic molette et glisser, ou Maj + glisser | Deux doigts |
 | Zoom | Molette, ou Ctrl + molette | Pincer |
 
@@ -52,6 +52,12 @@ Les commandes de vue sont en bas à droite de la fenêtre, de gauche à droite :
 
 L'infobulle de chaque commande indique son raccourci. La barre d'état, en bas à gauche, indique ce qui est sélectionné et si l'accroche est activée.
 
+## Désactiver les raccourcis à une touche
+
+Les raccourcis d'une seule lettre (`V`, `M`, `B`, `P`, `S`) peuvent être déclenchés par erreur, par exemple par un logiciel de reconnaissance vocale. Pour les désactiver, décochez **Raccourcis à une touche** dans la barre de titre, à côté du choix de la langue. BIMCraft retient ce choix.
+
+**Résultat :** ces lettres ne fonctionnent plus que lorsque la vue 3D a le clavier (cliquez dedans, ou atteignez-la avec Tab). Les raccourcis avec une touche de modification, comme Ctrl + Maj + M, et les touches propres à la vue 3D (flèches, `F`, Échap, valeurs saisies) restent actifs. Les infobulles ne citent plus les raccourcis à une touche.
+
 ## Astuces
 
 - Après une vue prédéfinie, appuyez sur `F` pour y cadrer tout le modèle.
@@ -69,7 +75,7 @@ La carte graphique ne répond plus, ou le modèle est trop volumineux pour elle.
 Au bout de dix secondes, elle affiche « Toujours en cours… » et propose **Annuler**. Annulez, puis choisissez **Recharger la vue**.
 
 **Les lettres comme `P` ou `S` ne font rien.**
-Ces raccourcis sont inactifs quand une boîte de dialogue est ouverte ou pendant la saisie dans un champ. Fermez la boîte de dialogue ou cliquez d'abord dans la vue 3D.
+Ces raccourcis sont inactifs quand une boîte de dialogue est ouverte ou pendant la saisie dans un champ. Fermez la boîte de dialogue ou cliquez d'abord dans la vue 3D. Si **Raccourcis à une touche** est décoché, elles ne fonctionnent que lorsque la vue 3D a le clavier (voir plus haut).
 
 ## Voir aussi
 

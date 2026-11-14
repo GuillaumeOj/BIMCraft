@@ -22,6 +22,8 @@ type Props = {
   empty: boolean;
   hasSelection: boolean;
   disabled: boolean;
+  /** Whether the single-key shortcuts are on: only then does the projection toggle name P. */
+  shortcuts: boolean;
   onCommand: (command: ViewCommand) => void;
 };
 
@@ -29,7 +31,14 @@ type Props = {
  * The view-controls cluster, bottom right (board 3.21): zoom fit, zoom to selection, the preset
  * views menu and the projection toggle. Each button names its shortcut.
  */
-export function ViewControls({ projection, empty, hasSelection, disabled, onCommand }: Props) {
+export function ViewControls({
+  projection,
+  empty,
+  hasSelection,
+  disabled,
+  shortcuts,
+  onCommand,
+}: Props) {
   const { t } = useI18n();
   const zoomFit = t("viewport.zoomFit");
   const zoomSelection = t("viewport.zoomSelection");
@@ -73,6 +82,7 @@ export function ViewControls({ projection, empty, hasSelection, disabled, onComm
       </ActionMenu>
       <SegmentedToggle<Projection>
         label={t("viewport.projection")}
+        shortcut={shortcuts ? "P" : undefined}
         value={projection}
         options={[
           { value: "perspective", label: t("viewport.projection.perspective") },

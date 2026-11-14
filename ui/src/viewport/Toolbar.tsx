@@ -10,10 +10,16 @@ export const TOOLS: readonly { tool: Tool; shortcut: string; icon: () => ReactNo
   { tool: "place_block", shortcut: "B", icon: BlockIcon },
 ];
 
-type Props = { tool: Tool; disabled: boolean; onSelect: (tool: Tool) => void };
+type Props = {
+  tool: Tool;
+  disabled: boolean;
+  /** Whether the single-key shortcuts are on: only then do the buttons name them. */
+  shortcuts: boolean;
+  onSelect: (tool: Tool) => void;
+};
 
 /** The bottom tool bar: Select, Move and Block (board 3.21), pressed for the active tool. */
-export function Toolbar({ tool, disabled, onSelect }: Props) {
+export function Toolbar({ tool, disabled, shortcuts, onSelect }: Props) {
   const { t } = useI18n();
   return (
     <div className="vp-toolbar" role="toolbar" aria-label={t("viewport.tools")}>
@@ -25,8 +31,8 @@ export function Toolbar({ tool, disabled, onSelect }: Props) {
             type="button"
             className="vp-tool"
             aria-pressed={value === tool}
-            aria-keyshortcuts={shortcut}
-            title={t("viewport.withShortcut", { label, shortcut })}
+            aria-keyshortcuts={shortcuts ? shortcut : undefined}
+            title={shortcuts ? t("viewport.withShortcut", { label, shortcut }) : label}
             disabled={disabled}
             onClick={() => onSelect(value)}
           >

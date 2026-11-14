@@ -16,7 +16,7 @@ A few words used on this page:
 
 | To | Mouse | Trackpad |
 | --- | --- | --- |
-| Orbit | Right-click and drag | Option + drag (macOS) |
+| Orbit | Right-click and drag | Use the arrow keys |
 | Pan | Middle-click and drag, or Shift + drag | Two fingers |
 | Zoom | Wheel, or Ctrl + wheel | Pinch |
 
@@ -52,6 +52,12 @@ The view controls sit at the bottom right of the window, from left to right:
 
 Each control names its shortcut in its tooltip. The status bar at the bottom left tells you what is selected and whether snapping is on.
 
+## Turn off single-key shortcuts
+
+Shortcuts made of one letter (`V`, `M`, `B`, `P`, `S`) can be pressed by accident, for example by speech recognition software. To turn them off, untick **Single-key shortcuts** in the title bar, next to the language choice. BIMCraft remembers the choice.
+
+**Result:** these letters then work only while the 3D view has the keyboard (click it first, or reach it with Tab). Keys with a modifier, such as Ctrl + Shift + M, and the keys of the 3D view itself (arrows, `F`, Esc, typed values) still work. Tooltips stop naming the single-key shortcuts.
+
 ## Tips
 
 - After a preset view, press `F` to frame the whole model in it.
@@ -69,7 +75,7 @@ The graphics card stopped responding, or the model was too big for it. Your mode
 After ten seconds it says "Still working…" and offers **Cancel**. Cancel, then choose **Reload view**.
 
 **Letters such as `P` or `S` do nothing.**
-These shortcuts are off while a dialog is open or while you type in a text field. Close the dialog or click the 3D view first.
+These shortcuts are off while a dialog is open or while you type in a text field. Close the dialog or click the 3D view first. If **Single-key shortcuts** is unticked, they work only while the 3D view has the keyboard (see below).
 
 ## See also
 

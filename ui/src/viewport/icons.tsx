@@ -52,3 +52,10 @@ export const PresetsIcon = () => (
     <path d="M9 2.5l6 3.2v7L9 16l-6-3.3v-7zM3 5.7L9 9l6-3.3M9 9v7M15.5 13.5l2 2 2-2" />
   </Icon>
 );
+
+export const WarningIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+    <path d="M8 2l6.5 11.5h-13z" fill="none" stroke="currentColor" strokeLinejoin="round" />
+    <path d="M8 6.5v3.5M8 11.5v.01" stroke="currentColor" strokeWidth="1.5" />
+  </svg>
+);

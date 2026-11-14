@@ -213,7 +213,7 @@ test("place a block with typed sizes, then undo it", async ({ page }) => {
   }
 
   await expect(
-    page.getByRole("status").filter({ hasText: "Block placed · 6.00 × 4.00 × 3.00 m" }),
+    page.getByRole("status").filter({ hasText: "Block placed · 6.000 × 4.000 × 3.000 m" }),
   ).toBeVisible();
   const [created] = await calls(page, "model.create");
   expect(created?.params).toMatchObject({

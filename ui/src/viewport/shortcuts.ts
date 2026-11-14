@@ -20,11 +20,16 @@ function isTextEntry(target: EventTarget | null): boolean {
 
 /**
  * The viewport shortcut `event` presses, or null. Letters with a modifier belong to the browser
- * and to the shell's chords, a held key does not repeat a toggle, and text fields keep their
- * letters.
+ * and to the shell's chords, a held key does not repeat a toggle, text fields keep their
+ * letters, and with `singleKeys` off only the focused `canvas` takes them.
  */
-export function viewportShortcut(event: KeyboardEvent): ViewportShortcut | null {
+export function viewportShortcut(
+  event: KeyboardEvent,
+  { singleKeys, canvas }: { singleKeys: boolean; canvas: HTMLCanvasElement | null },
+): ViewportShortcut | null {
   if (event.ctrlKey || event.metaKey || event.altKey || event.repeat) return null;
   if (isTextEntry(event.target)) return null;
+  // Turned off (WCAG 2.1.4), they work only while the 3D view has the focus.
+  if (!singleKeys && event.target !== canvas) return null;
   return LETTERS[event.key.toLowerCase()] ?? null;
 }

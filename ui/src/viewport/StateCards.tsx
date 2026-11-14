@@ -3,6 +3,7 @@ import { useI18n } from "../i18n/I18nProvider";
 import { useShellState } from "../shell/ShellState";
 import { ErrorIcon } from "../ui/ErrorIcon";
 import { GUIDE_PLACE_BLOCK, GUIDE_TROUBLESHOOTING } from "./guide";
+import { WarningIcon } from "./icons";
 import type { FailureReason } from "./useViewportSession";
 
 /** Loading the module and the first scene (board 3.27b); after 10 s it offers Cancel. */
@@ -11,18 +12,28 @@ export function LoadingCard({ slow, onCancel }: { slow: boolean; onCancel: () =>
   return (
     <div className="vp-card vp-card-centre" role="status">
       <span className="vp-spinner" aria-hidden="true" />
-      <p className="vp-card-title">{t(slow ? "viewport.loadingSlow" : "viewport.loading")}</p>
+      <p className="vp-card-title">{t("viewport.loading")}</p>
       {slow && (
-        <button type="button" className="button" onClick={onCancel}>
-          {t("viewport.cancel")}
-        </button>
+        <>
+          <p>{t("viewport.loadingSlow")}</p>
+          <button type="button" className="button" onClick={onCancel}>
+            {t("viewport.cancel")}
+          </button>
+        </>
       )}
     </div>
   );
 }
 
 /** An empty model (board 3.27a): what to do next. */
-export function EmptyCard({ onPlaceBlock }: { onPlaceBlock: () => void }) {
+export function EmptyCard({
+  shortcuts,
+  onPlaceBlock,
+}: {
+  /** Whether the single-key shortcuts are on: only then does the button name B. */
+  shortcuts: boolean;
+  onPlaceBlock: () => void;
+}) {
   const { t } = useI18n();
   const label = t("viewport.empty.button");
   return (
@@ -32,8 +43,8 @@ export function EmptyCard({ onPlaceBlock }: { onPlaceBlock: () => void }) {
       <button
         type="button"
         className="button button-primary"
-        aria-keyshortcuts="B"
-        title={t("viewport.withShortcut", { label, shortcut: "B" })}
+        aria-keyshortcuts={shortcuts ? "B" : undefined}
+        title={shortcuts ? t("viewport.withShortcut", { label, shortcut: "B" }) : undefined}
         onClick={onPlaceBlock}
       >
         {label}
@@ -50,7 +61,10 @@ export function UnavailableCard() {
   const { t } = useI18n();
   return (
     <div className="vp-card vp-card-centre">
-      <h2 className="vp-card-title">{t("viewport.unavailable.title")}</h2>
+      <h2 className="vp-card-title">
+        <WarningIcon />
+        {t("viewport.unavailable.title")}
+      </h2>
       <p>{t("viewport.unavailable.body")}</p>
       <a className="button" href={GUIDE_TROUBLESHOOTING} target="_blank" rel="noreferrer">
         {t("viewport.unavailable.guide")}
@@ -84,7 +98,7 @@ export function FailedCard({ reason, repeated, onReload }: FailedProps) {
   };
 
   return (
-    <div className="vp-card vp-card-centre" role="alert">
+    <div className="vp-card vp-card-centre vp-card-error" role="alert">
       <h2 className="vp-card-title">
         <ErrorIcon />
         {t("viewport.error.title")}

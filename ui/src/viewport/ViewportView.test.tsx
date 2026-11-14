@@ -1,6 +1,7 @@
 import { act, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "../api";
+import { SINGLE_KEYS_STORAGE_KEY } from "../shell/ShellState";
 import { fakeCore } from "../test-support/fakeCore";
 import { fakeViewport } from "../test-support/fakeViewport";
 import { renderWithCore } from "../test-support/render";
@@ -188,6 +189,35 @@ describe("ViewportView", () => {
     );
   });
 
+  it("stops, without blaming the model data, when the scene cannot be fetched", async () => {
+    const core = fakeCore();
+    core.answerScene(() => Promise.reject(new Error("document closed")));
+    const viewport = fakeViewport();
+    loader.load = async () => viewport.module;
+    renderWithCore(<ViewportView />, core);
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("The view lost its link to the model.");
+    expect(alert).not.toHaveTextContent("couldn't read the model data");
+  });
+
+  it("offers Cancel when the first scene takes longer than 10 s", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const core = fakeCore();
+    core.answerScene(() => new Promise(() => undefined));
+    const viewport = fakeViewport();
+    loader.load = async () => viewport.module;
+    const { user } = renderWithCore(<ViewportView />, core);
+    await waitFor(() => expect(viewport.create).toHaveBeenCalled());
+    await waitFor(() => expect(core.sceneCalls).toEqual([null]));
+    expect(screen.getByText("Loading the 3D view…")).toBeVisible();
+    act(() => vi.advanceTimersByTime(10_000));
+    expect(screen.getByText("Still working…")).toBeVisible();
+    expect(screen.getByText("Loading the 3D view…")).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Loading was cancelled.");
+    expect(viewport.free).toHaveBeenCalled();
+  });
+
   it("stops when the module cannot be loaded, or the viewport cannot be created", async () => {
     loader.load = () => Promise.reject(new Error("offline"));
     const { unmount } = renderWithCore(<ViewportView />, fakeCore());
@@ -223,6 +253,7 @@ describe("ViewportView", () => {
     expect(status()).toHaveTextContent("Loading…");
     act(() => vi.advanceTimersByTime(10_000));
     expect(screen.getByText("Still working…")).toBeVisible();
+    expect(screen.getByText("Loading the 3D view…")).toBeVisible();
     await user.click(screen.getByRole("button", { name: "Cancel" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("Loading was cancelled.");
   });
@@ -261,7 +292,14 @@ describe("ViewportView tools", () => {
     expect(viewport.tools).toEqual(["place_block"]);
     expect(tool("Block")).toHaveAttribute("aria-pressed", "true");
     viewport.emit({ kind: "tool_state", tool: "place_block", step: "second_corner" });
-    expect(screen.getByText(/click the second corner or type the length/)).toBeVisible();
+    expect(screen.getByText(/click the second corner or type the width/)).toBeVisible();
+    // The width is confirmed: the hint and the typed field name the depth.
+    viewport.emit({
+      kind: "preview_label",
+      label: { at: [10, 10], key: "place.depth", values: { width: 6, depth: 0 }, typed: "4" },
+    });
+    expect(screen.getByText(/type the depth/)).toBeVisible();
+    expect(document.querySelector(".vp-chip")).toHaveTextContent("Depth 4 m ↵");
     viewport.emit({ kind: "tool_state", tool: "select", step: "idle" });
     expect(screen.queryByText(/click the second corner/)).not.toBeInTheDocument();
     expect(tool("Select")).toHaveAttribute("aria-pressed", "true");
@@ -331,6 +369,33 @@ describe("ViewportView tools", () => {
     expect(viewport.tools).toEqual(["place_block", "move", "select", "place_block"]);
   });
 
+  it("keeps single-key shortcuts to the focused view once they are turned off", async () => {
+    localStorage.setItem(SINGLE_KEYS_STORAGE_KEY, "off");
+    const { viewport, user } = await ready();
+    expect(tool("Block")).not.toHaveAttribute("aria-keyshortcuts");
+    expect(tool("Block")).toHaveAttribute("title", "Block");
+    const parallel = within(screen.getByRole("group", { name: "Projection" })).getByRole("button", {
+      name: "Parallel",
+    });
+    expect(parallel).not.toHaveAttribute("title");
+    await user.keyboard("bp");
+    expect(viewport.tools).toEqual([]);
+    expect(viewport.commands).toEqual([]);
+    screen.getByRole("application", { name: "3D view" }).focus();
+    await user.keyboard("bp");
+    expect(viewport.tools).toEqual(["place_block"]);
+    expect(viewport.commands).toEqual([{ kind: "projection", projection: "parallel" }]);
+  });
+
+  it("names P on the projection toggle while single-key shortcuts are on", async () => {
+    await ready();
+    const parallel = within(screen.getByRole("group", { name: "Projection" })).getByRole("button", {
+      name: "Parallel",
+    });
+    expect(parallel).toHaveAttribute("aria-keyshortcuts", "P");
+    expect(parallel).toHaveAttribute("title", "Parallel (P)");
+  });
+
   it("controls the view: zoom, presets and projection", async () => {
     const { viewport, user } = await ready();
     const zoomSelection = screen.getByRole("button", { name: "Zoom to selection" });
@@ -367,11 +432,11 @@ describe("ViewportView feedback", () => {
     expect(announce("selection.count", { count: 0 })).toBe("Selection cleared");
     expect(announce("selection.count", { count: 1 })).toBe("1 element selected");
     expect(announce("selection.count", { count: 3 })).toBe("3 elements selected");
-    expect(announce("move.distance", { distance: 2.5 })).toBe("Moved by 2.50 metres");
-    expect(announce("place.size", { width: 6, depth: 4 })).toBe("Footprint 6.00 by 4.00 metres");
-    expect(announce("place.height", { height: 3 })).toBe("Block placed, height 3.00 metres");
+    expect(announce("move.distance", { distance: 2.5 })).toBe("Moved by 2.500 metres");
+    expect(announce("place.size", { width: 6, depth: 4 })).toBe("Footprint 6.000 by 4.000 metres");
+    expect(announce("place.height", { height: 3 })).toBe("Block placed, height 3.000 metres");
     expect(announce("section_box.face_moved", { value: 1.25 })).toBe(
-      "Section box face moved to 1.25 metres",
+      "Section box face moved to 1.250 metres",
     );
     expect(announce("view.preset", { name: "top" })).toBe("Top view");
     expect(announce("view.projection", { projection: "parallel" })).toBe("Parallel projection");
@@ -386,7 +451,7 @@ describe("ViewportView feedback", () => {
     localStorage.setItem("bimcraft.language", "fr");
     const { viewport } = await ready();
     viewport.emit({ kind: "announce", key: "move.distance", values: { distance: 2.5 } });
-    expect(liveRegion()).toHaveTextContent("Déplacé de 2,50 mètres");
+    expect(liveRegion()).toHaveTextContent("Déplacé de 2,500 mètres");
   });
 
   it("draws the chip next to the pointer without re-rendering", async () => {
@@ -403,14 +468,26 @@ describe("ViewportView feedback", () => {
     expect(chip).toHaveTextContent("2.500 m");
     expect(chip?.style.transform).toBe("translate(40px, 60px)");
     label("place.size", { width: 6, depth: 4 });
-    expect(chip).toHaveTextContent("6.00 × 4.00 m");
+    expect(chip).toHaveTextContent("6.000 × 4.000 m");
     label("place.height", {});
-    expect(chip).toHaveTextContent("Height 0.00 m");
+    expect(chip).toHaveTextContent("Height 0.000 m");
+    expect(chip).not.toHaveClass("vp-chip-typed");
     viewport.emit({
       kind: "preview_label",
       label: { at: [0, 0], key: "move.distance", values: {}, typed: "2.5" },
     });
     expect(chip).toHaveTextContent("Distance 2.5 m ↵");
+    // A typed value reads as a field.
+    expect(chip).toHaveClass("vp-chip-typed");
+    // Near the bottom edge the chip goes above the pointer, clear of the tool bar.
+    const view = chip?.parentElement;
+    if (view) Object.defineProperty(view, "clientHeight", { value: 600, configurable: true });
+    viewport.emit({
+      kind: "preview_label",
+      label: { at: [30, 550], key: "place.size", values: { width: 6, depth: 4 }, typed: "6" },
+    });
+    expect(chip?.style.transform).toBe("translate(30px, 502px)");
+    expect(chip).toHaveTextContent("Width 6 m ↵");
     viewport.emit({ kind: "preview_label", label: null });
     expect(chip).not.toBeVisible();
   });
@@ -464,7 +541,7 @@ describe("ViewportView feedback", () => {
       kind: "intent",
       intent: { kind: "place_block", location: [1, 2, 0], rotation: 0, size: [6, 4, 3] },
     });
-    expect(await screen.findByText("Block placed · 6.00 × 4.00 × 3.00 m")).toBeVisible();
+    expect(await screen.findByText("Block placed · 6.000 × 4.000 × 3.000 m")).toBeVisible();
     const created = core.calls.find((call) => call.method === "model.create");
     const { id } = (created?.params ?? {}) as { id?: string };
     await waitFor(() =>

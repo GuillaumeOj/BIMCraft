@@ -8,6 +8,7 @@ import { LanguageSelect } from "../i18n/LanguageSelect";
 import { MaterialsDialog } from "../materials/MaterialsDialog";
 import { ViewportView } from "../viewport/ViewportView";
 import { useShellState } from "./ShellState";
+import { SingleKeysToggle } from "./SingleKeysToggle";
 import "./shell.css";
 
 const RIGHT_PANELS = ["properties", "history", "coordinates"] as const;
@@ -164,6 +165,7 @@ export function Shell() {
         >
           {t("panel.console")}
         </button>
+        <SingleKeysToggle />
         <LanguageSelect />
       </header>
       <div className="workspace">

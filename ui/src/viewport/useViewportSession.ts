@@ -4,11 +4,14 @@ import { loadViewportModule } from "./module";
 import { readTheme, watchColourScheme } from "./theme";
 import type { ViewportErrorKey, ViewportEvent, ViewportHandle, ViewportModule } from "./types";
 
-/** Why the view stopped: an error of the viewport, a module that did not load, or Cancel. */
-export type FailureReason = ViewportErrorKey | "load_failed" | "cancelled";
+/**
+ * Why the view stopped: an error of the viewport, a module that did not load, a scene that could
+ * not be fetched, or Cancel.
+ */
+export type FailureReason = ViewportErrorKey | "load_failed" | "scene_unavailable" | "cancelled";
 
 export type Phase =
-  | { kind: "loading"; slow: boolean }
+  | { kind: "loading" }
   | { kind: "unavailable" }
   | { kind: "ready" }
   | { kind: "failed"; reason: FailureReason; repeated: boolean };
@@ -29,6 +32,8 @@ export type ViewportSession = {
   feed: React.RefObject<SceneFeed | null>;
   /** Whether a first scene has been applied. */
   sceneLoaded: boolean;
+  /** Whether loading (the module, then the first scene) has taken longer than `SLOW_LOADING_MS`. */
+  slow: boolean;
   /** How many deltas were applied: a change of the model may have changed what is drawn. */
   sceneVersion: number;
   reload: () => void;
@@ -51,8 +56,9 @@ export function useViewportSession(onEvent: (event: ViewportEvent) => void): Vie
   // A new viewport waits until the previous one freed its GPU surface on the same page.
   const previous = useRef<Promise<void>>(Promise.resolve());
   const [attempt, setAttempt] = useState(0);
-  const [phase, setPhase] = useState<Phase>({ kind: "loading", slow: false });
+  const [phase, setPhase] = useState<Phase>({ kind: "loading" });
   const [sceneLoaded, setSceneLoaded] = useState(false);
+  const [slow, setSlow] = useState(false);
   const [sceneVersion, setSceneVersion] = useState(0);
 
   useEffect(() => {
@@ -61,6 +67,11 @@ export function useViewportSession(onEvent: (event: ViewportEvent) => void): Vie
 
   const fail = useCallback((reason: FailureReason) => {
     stopCurrent.current?.();
+    // Cancel is the user's choice, not a failure of the view.
+    if (reason === "cancelled") {
+      setPhase({ kind: "failed", reason, repeated: false });
+      return;
+    }
     const now = Date.now();
     const repeated =
       lastFailure.current !== null && now - lastFailure.current < REPEATED_FAILURE_MS;
@@ -82,18 +93,16 @@ export function useViewportSession(onEvent: (event: ViewportEvent) => void): Vie
     let unwatch: () => void = () => undefined;
     let created: ViewportHandle | null = null;
 
-    setPhase({ kind: "loading", slow: false });
+    setPhase({ kind: "loading" });
     setSceneLoaded(false);
-    const slow = setTimeout(
-      () =>
-        setPhase((phase) => (phase.kind === "loading" ? { kind: "loading", slow: true } : phase)),
-      SLOW_LOADING_MS,
-    );
+    setSlow(false);
+    // Runs until the first scene is drawn: a stalled scene fetch offers Cancel too.
+    const slowTimer = setTimeout(() => setSlow(true), SLOW_LOADING_MS);
 
     const stop = () => {
       if (stopped) return;
       stopped = true;
-      clearTimeout(slow);
+      clearTimeout(slowTimer);
       feed.current?.stop();
       feed.current = null;
       observer?.disconnect();
@@ -124,15 +133,16 @@ export function useViewportSession(onEvent: (event: ViewportEvent) => void): Vie
         {
           applyScene: (bytes) => {
             const revision = viewport.applyScene(bytes);
+            clearTimeout(slowTimer);
+            setSlow(false);
             setSceneLoaded(true);
             setSceneVersion((version) => version + 1);
             return revision;
           },
           revision: () => viewport.revision(),
         },
-        () => fail("scene_rejected"),
+        (failure) => fail(failure.kind === "fetch" ? "scene_unavailable" : "scene_rejected"),
       );
-      clearTimeout(slow);
       setPhase({ kind: "ready" });
     };
 
@@ -164,6 +174,7 @@ export function useViewportSession(onEvent: (event: ViewportEvent) => void): Vie
     feed,
     sceneLoaded,
     sceneVersion,
+    slow,
     reload,
     cancel,
   };

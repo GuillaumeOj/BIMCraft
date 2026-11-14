@@ -30,7 +30,15 @@ const HINTS: Partial<Record<ToolStep, MessageKey>> = {
   target_point: "viewport.hint.target_point",
 };
 
-/** Draws the chip next to the pointer straight into the DOM: it moves at pointer speed (D2). */
+/** Pointers lower than this above the bottom edge get their chip above them: the band of the tool bar and the hint. */
+const BOTTOM_BAND = 150;
+/** How far above the pointer a chip goes when it cannot go below. */
+const FLIP = 48;
+
+/**
+ * Draws the chip next to the pointer straight into the DOM: it moves at pointer speed (D2). A
+ * typed value looks like a field, so users see where their typing goes (board 3.28).
+ */
 function drawPreview(
   chip: HTMLElement | null,
   label: PreviewLabel | null,
@@ -42,8 +50,12 @@ function drawPreview(
     chip.hidden = true;
     return;
   }
+  const [x, y] = label.at;
+  const height = chip.parentElement?.clientHeight ?? 0;
+  const top = height > 0 && y > height - BOTTOM_BAND ? y - FLIP : y;
   chip.hidden = false;
-  chip.style.transform = `translate(${label.at[0]}px, ${label.at[1]}px)`;
+  chip.style.transform = `translate(${x}px, ${top}px)`;
+  chip.classList.toggle("vp-chip-typed", label.typed !== null);
   chip.textContent = label.typed === null ? text(label) : typedLabel(label);
 }
 
@@ -56,14 +68,17 @@ function drawPreview(
 export function ViewportView() {
   const api = useApi();
   const { t, language } = useI18n();
-  const { modalOpen, notify } = useShellState();
+  const { modalOpen, notify, singleKeys } = useShellState();
   const [selection, setSelection] = useState<readonly string[]>([]);
   const [tool, setTool] = useState<Tool>("select");
   const [step, setStep] = useState<ToolStep>("idle");
   const [projection, setProjection] = useState<Projection>("perspective");
   const [snapping, setSnapping] = useState(true);
   const [announcement, setAnnouncement] = useState({ text: "", serial: 0 });
-  const [empty, setEmpty] = useState(false);
+  // Unknown (null) until the model was first asked: neither the empty card nor the hint shows.
+  const [empty, setEmpty] = useState<boolean | null>(null);
+  // Which value the pointer chip names: the hint bar follows it while the depth is typed.
+  const [labelKey, setLabelKey] = useState<PreviewLabel["key"] | null>(null);
   const chip = useRef<HTMLDivElement>(null);
   const live = useRef({ t, language });
   live.current = { t, language };
@@ -103,6 +118,7 @@ export function ViewportView() {
           break;
         case "preview_label":
           drawPreview(chip.current, event.label, chipText, typedText);
+          setLabelKey(event.label?.key ?? null);
           break;
         case "intent":
           onIntent.current(event.intent);
@@ -134,10 +150,10 @@ export function ViewportView() {
   );
 
   onIntent.current = (intent) => {
-    const metres = (value: number, digits: number) => formatMetres(language, value, digits);
+    const metres = (value: number) => formatMetres(language, value);
     if (intent.kind === "move") {
       const count = intent.ids.length;
-      const distance = metres(Math.hypot(...intent.translation), 3);
+      const distance = metres(Math.hypot(...intent.translation));
       moveElements(api, intent.ids, intent.translation).then(
         () =>
           notify(
@@ -166,9 +182,9 @@ export function ViewportView() {
       async (id) => {
         notify(
           t("viewport.toast.placed", {
-            width: metres(width, 2),
-            depth: metres(depth, 2),
-            height: metres(height, 2),
+            width: metres(width),
+            depth: metres(depth),
+            height: metres(height),
           }),
           { undoable: true },
         );
@@ -181,9 +197,9 @@ export function ViewportView() {
   };
 
   // What is drawn may have changed with each delta: the empty state follows the model.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: each new delta (`sceneVersion`) asks again.
   useEffect(() => {
-    if (!sceneLoaded) return;
+    // No delta yet: nothing to ask about.
+    if (sceneVersion === 0) return;
     let current = true;
     hasDrawableElements(api).then(
       (any) => {
@@ -194,13 +210,13 @@ export function ViewportView() {
     return () => {
       current = false;
     };
-  }, [api, sceneLoaded, sceneVersion]);
+  }, [api, sceneVersion]);
 
   // V, M, B, P and S, outside the canvas too; quiet behind a modal dialog and in text fields.
   useEffect(() => {
     if (!ready || modalOpen) return;
     const onKeyDown = (event: KeyboardEvent) => {
-      const shortcut = viewportShortcut(event);
+      const shortcut = viewportShortcut(event, { singleKeys, canvas: session.canvasRef.current });
       if (shortcut === null) return;
       event.preventDefault();
       if (shortcut === "projection") {
@@ -216,13 +232,14 @@ export function ViewportView() {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [ready, modalOpen, command, projection, snapping, chooseTool]);
+  }, [ready, modalOpen, singleKeys, session.canvasRef, command, projection, snapping, chooseTool]);
 
-  const hint = HINTS[step];
+  const hint =
+    step === "second_corner" && labelKey === "place.depth" ? "viewport.hint.depth" : HINTS[step];
   const status = statusText(t, {
     phase: phase.kind,
     sceneLoaded,
-    empty,
+    empty: empty === true,
     count: selection.length,
     snapping,
   });
@@ -241,27 +258,29 @@ export function ViewportView() {
         tabIndex={0}
       />
       <div className="vp-chip" ref={chip} hidden aria-hidden="true" />
-      {ready && !sceneLoaded && <LoadingCard slow={false} onCancel={session.cancel} />}
-      {phase.kind === "loading" && <LoadingCard slow={phase.slow} onCancel={session.cancel} />}
+      {(phase.kind === "loading" || (ready && !sceneLoaded)) && (
+        <LoadingCard slow={session.slow} onCancel={session.cancel} />
+      )}
       {phase.kind === "unavailable" && <UnavailableCard />}
       {phase.kind === "failed" && (
         <FailedCard reason={phase.reason} repeated={phase.repeated} onReload={session.reload} />
       )}
-      {ready && sceneLoaded && empty && step === "idle" && (
-        <EmptyCard onPlaceBlock={() => chooseTool("place_block")} />
+      {ready && sceneLoaded && empty === true && step === "idle" && (
+        <EmptyCard shortcuts={singleKeys} onPlaceBlock={() => chooseTool("place_block")} />
       )}
-      {ready && sceneLoaded && !empty && <NavigationHint />}
+      {ready && sceneLoaded && empty === false && <NavigationHint />}
       <div className="vp-bottom">
         {hint !== undefined && <p className="vp-hint">{t(hint)}</p>}
-        <Toolbar tool={tool} disabled={!ready} onSelect={chooseTool} />
+        <Toolbar tool={tool} disabled={!ready} shortcuts={singleKeys} onSelect={chooseTool} />
       </div>
       <p className="vp-status" id="vp-status">
         {status}
       </p>
       <ViewControls
         projection={projection}
-        empty={empty}
+        empty={empty !== false}
         hasSelection={selection.length > 0}
+        shortcuts={singleKeys}
         disabled={!ready}
         onCommand={command}
       />
