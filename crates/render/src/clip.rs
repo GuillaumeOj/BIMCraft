@@ -20,6 +20,12 @@ pub const MAX_CLIP_PLANES: usize = 12;
 /// Floats of the clipping block of the frame uniform: the planes, then two vectors of four.
 pub(crate) const CLIP_FLOATS: usize = MAX_CLIP_PLANES * 4 + 8;
 
+/// Where `(count, tinted, 0, 0)` starts in the clipping block, in floats: after the planes.
+pub(crate) const CLIP_PARAMS: usize = MAX_CLIP_PLANES * 4;
+
+/// Where the cut colour starts in the clipping block, in floats.
+pub(crate) const CUT_COLOR: usize = CLIP_PARAMS + 4;
+
 /// A plane that removes what lies on the side of its normal.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ClipPlane {
@@ -122,12 +128,11 @@ impl Clip {
             }
             block[at + 3] = narrow(offset);
         }
-        let params = MAX_CLIP_PLANES * 4;
         // At most `MAX_CLIP_PLANES`, so it fits a byte.
-        block[params] = f32::from(u8::try_from(self.planes.len()).unwrap_or(0));
-        block[params + 1] = f32::from(u8::from(self.cut == CutFaces::Tinted));
+        block[CLIP_PARAMS] = f32::from(u8::try_from(self.planes.len()).unwrap_or(0));
+        block[CLIP_PARAMS + 1] = f32::from(u8::from(self.cut == CutFaces::Tinted));
         let [r, g, b] = cut.linear();
-        block[params + 4..params + 8].copy_from_slice(&[r, g, b, 1.0]);
+        block[CUT_COLOR..CUT_COLOR + 4].copy_from_slice(&[r, g, b, 1.0]);
         block
     }
 }
@@ -215,19 +220,86 @@ mod tests {
         // The first fragment 3 m to the right of the eye is removed, one 1 m to its right is not.
         let removed = |x: f32| block[0] * x + block[3] > 0.0;
         assert!(removed(3.0) && !removed(1.0));
-        let params = MAX_CLIP_PLANES * 4;
-        assert_eq!(block[params..params + 2], [1.0, 1.0]);
-        assert_eq!(block[params + 4..params + 8], [1.0, 0.0, 0.0, 1.0]);
+        assert_eq!(block[CLIP_PARAMS..CLIP_PARAMS + 2], [1.0, 1.0]);
+        assert_eq!(block[CUT_COLOR..CUT_COLOR + 4], [1.0, 0.0, 0.0, 1.0]);
         // Unused slots are zero, so they would never remove anything.
-        assert!(block[4..params].iter().all(|&v| v == 0.0));
+        assert!(block[4..CLIP_PARAMS].iter().all(|&v| v == 0.0));
+    }
+
+    /// What the shader computes for a world point `q`: `dot(n, p) + d` with `p = R · (q − eye)`
+    /// its camera-space position.
+    fn shader_side(block: &[f32; CLIP_FLOATS], view: &ViewFrame, q: [f64; 3]) -> f32 {
+        let p = apply(&view.rotation, sub(q, view.eye)).map(narrow);
+        block[0] * p[0] + block[1] * p[1] + block[2] * p[2] + block[3]
+    }
+
+    #[test]
+    fn the_shader_removes_the_side_of_the_normal_in_any_view() {
+        // A Top view looking down −z with +y up, and an oblique view from below.
+        let views = [
+            ([3.0, 4.0, 20.0], [3.0, 4.0, 0.0], [0.0, 1.0, 0.0]),
+            ([-7.0, 9.0, -4.0], [1.0, 2.0, 3.0], [0.0, 0.0, 1.0]),
+        ];
+        let planes = [
+            plane([5.0, 4.0, 0.0], [1.0, 0.0, 0.0]),
+            plane([0.0, 0.0, 1.5], [0.0, 0.0, -1.0]),
+            plane([1.0, 1.0, 1.0], [1.0, -2.0, 0.5]),
+        ];
+        for (eye, target, up) in views {
+            let camera = Camera {
+                eye: Point3::new(eye[0], eye[1], eye[2]),
+                target: Point3::new(target[0], target[1], target[2]),
+                up: Vector3::new(up[0], up[1], up[2]),
+                projection: Projection::Orthographic {
+                    height: 10.0,
+                    near: 0.1,
+                    far: 100.0,
+                },
+            };
+            let view = ViewFrame::new(&camera).unwrap();
+            for plane in planes {
+                let clip = Clip::new(&[plane], CutFaces::Tinted).unwrap();
+                let block = clip.uniform(&view, Rgb { r: 0, g: 0, b: 0 });
+                let n = clip.planes()[0].normal;
+                for offset in [-2.0, -0.5, 0.5, 2.0] {
+                    let q = [0, 1, 2].map(|i| plane.point[i] + n[i] * offset + 0.3);
+                    let world = dot(n, sub(q, plane.point));
+                    let side = shader_side(&block, &view, q);
+                    assert_eq!(side > 0.0, world > 0.0, "{eye:?} {plane:?} {offset}");
+                    assert!((f64::from(side) - world).abs() < 1e-4);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn the_top_view_axes_are_east_north_and_up() {
+        // Looking down −z with north up, the camera's right is +x and its backward axis +z: a
+        // plane removing what is above z = 1 removes, in the camera space, what is nearer the eye.
+        let camera = Camera {
+            eye: Point3::new(0.0, 0.0, 10.0),
+            target: Point3::new(0.0, 0.0, 0.0),
+            up: Vector3::new(0.0, 1.0, 0.0),
+            projection: Projection::Perspective {
+                fov_y_radians: 1.0,
+                near: 0.1,
+            },
+        };
+        let view = ViewFrame::new(&camera).unwrap();
+        assert_eq!(
+            view.rotation,
+            [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]
+        );
+        let clip = Clip::new(&[plane([0.0, 0.0, 1.0], [0.0, 0.0, 1.0])], CutFaces::Tinted).unwrap();
+        let block = clip.uniform(&view, Rgb { r: 0, g: 0, b: 0 });
+        assert_eq!(block[..4], [0.0, 0.0, 1.0, 9.0]);
     }
 
     #[test]
     fn untinted_cuts_say_so_and_an_empty_clip_clips_nothing() {
         let clip = Clip::new(&[], CutFaces::None).unwrap();
         let block = clip.uniform(&view([0.0; 3]), Rgb { r: 0, g: 0, b: 0 });
-        let params = MAX_CLIP_PLANES * 4;
-        assert_eq!(block[params..params + 2], [0.0, 0.0]);
+        assert_eq!(block[CLIP_PARAMS..CLIP_PARAMS + 2], [0.0, 0.0]);
         assert_eq!(Clip::default().cut(), CutFaces::Tinted);
     }
 }

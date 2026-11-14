@@ -114,6 +114,8 @@ pub struct Boxes {
 
 impl Boxes {
     /// Adds the box from `min` to `max`: four vertices per face, so each face has its own normal.
+    /// The faces on the `min` side are wound inwards, as BIM solids sometimes are: the renderer
+    /// must not rely on the winding.
     pub fn add(&mut self, min: [f64; 3], max: [f64; 3]) {
         for axis in 0..3 {
             for (side, normal_sign) in [(min, -1.0_f32), (max, 1.0)] {

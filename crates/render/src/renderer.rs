@@ -1651,4 +1651,57 @@ mod tests {
         assert!((x * x + y * y + z * z - 1.0).abs() < 1e-6);
         assert_eq!(size_of_val(&frame), UNIFORM_SIZE as usize);
     }
+
+    /// The offsets of the WGSL `Frame` struct, from the shader as the GPU compiles it, against
+    /// the floats [`frame_uniform`] and [`Clip::uniform`] write (native: naga comes with wgpu-core).
+    #[cfg(not(target_family = "wasm"))]
+    #[test]
+    fn the_frame_uniform_matches_the_shader_layout() {
+        use crate::clip::{CLIP_PARAMS, CUT_COLOR, MAX_CLIP_PLANES};
+        use wgpu::naga;
+
+        let module = naga::front::wgsl::parse_str(include_str!("shader.wgsl")).unwrap();
+        naga::valid::Validator::new(
+            naga::valid::ValidationFlags::all(),
+            naga::valid::Capabilities::empty(),
+        )
+        .validate(&module)
+        .unwrap();
+        let mut layouter = naga::proc::Layouter::default();
+        layouter.update(module.to_ctx()).unwrap();
+        let (handle, frame) = module
+            .types
+            .iter()
+            .find(|(_, ty)| ty.name.as_deref() == Some("Frame"))
+            .unwrap();
+        let naga::TypeInner::Struct { members, span } = &frame.inner else {
+            panic!("Frame is a struct");
+        };
+        let offsets: Vec<(&str, u32)> = members
+            .iter()
+            .map(|member| (member.name.as_deref().unwrap(), member.offset / 4))
+            .collect();
+        let floats = |at: usize| u32::try_from(at).unwrap();
+        assert_eq!(
+            offsets,
+            [
+                ("projection", 0),
+                ("light", 16),
+                ("viewport", 20),
+                ("planes", floats(CLIP_START)),
+                ("clip", floats(CLIP_START + CLIP_PARAMS)),
+                ("cut_color", floats(CLIP_START + CUT_COLOR)),
+            ]
+        );
+        assert_eq!(*span, UNIFORM_SIZE);
+        assert_eq!(layouter[handle].size, UNIFORM_SIZE);
+        assert_eq!(FRAME_FLOATS * 4, UNIFORM_SIZE as usize);
+        // The planes are an array of MAX_CLIP_PLANES vectors of four.
+        let planes = module.types[members[3].ty].inner.clone();
+        assert!(matches!(
+            planes,
+            naga::TypeInner::Array { size: naga::ArraySize::Constant(n), stride: 16, .. }
+                if n.get() == u32::try_from(MAX_CLIP_PLANES).unwrap()
+        ));
+    }
 }
