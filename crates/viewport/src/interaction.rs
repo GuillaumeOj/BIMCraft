@@ -1,7 +1,7 @@
 //! The viewport: input in, renderer calls and events out. Tools are state machines driven
 //! event by event (`design/ux-notes.md` flows 1–4).
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use render::{Camera, DisplayState, SnapKind, Theme, Tone};
 use scene_wire::SceneDelta;
@@ -10,17 +10,21 @@ use crate::ElementId;
 use crate::announce::Announcer;
 use crate::cache::{SceneCache, SceneError, Sphere};
 use crate::camera::CameraController;
+use crate::clipping::{Face, SectionBox};
 use crate::event::{
     Announcement, AnnouncementKey, ErrorKey, Intent, LabelKey, PreviewLabel, Tool, ToolStep, Value,
     ViewCommand, ViewState, ViewportEvent,
 };
 use crate::input::{Button, InputEvent, Key, Modifiers};
 use crate::math::{Vec3, add, distance_2d, dot, norm, normalize, scale, sub};
-use crate::pick::{Everything, pick};
+use crate::pick::{Hit, pick};
 use crate::sink::{Preview, PreviewLine, SceneSink, SinkError};
 use crate::snap::{self, DEFAULT_TOLERANCE, Query, Snap};
 use crate::typed::Typed;
 use crate::view::{Ray, View};
+
+mod sectioning;
+use sectioning::{Gate, Sectioning};
 
 /// How far the pointer moves, in CSS pixels, before a press becomes a drag.
 const DRAG_THRESHOLD: f64 = 4.0;
@@ -84,6 +88,8 @@ enum Step {
         first: Vec3,
         second: Vec3,
     },
+    /// A clipping plane waits for the face the user clicks.
+    PickFace,
 }
 
 /// What the pointer is doing.
@@ -105,6 +111,11 @@ enum Gesture {
     },
     /// A direct move of the selection.
     Drag,
+    /// A face handle of the section box, `start` being the box before the drag.
+    Handle {
+        face: Face,
+        start: SectionBox,
+    },
 }
 
 /// A move sent to the core, whose ghosts stay until the scene shows it.
@@ -149,6 +160,8 @@ pub struct Viewport<S: SceneSink> {
     label: Option<PreviewLabel>,
     reported: (Tool, ToolStep, ViewState),
     announcer: Announcer,
+    /// The section box, the clipping planes and the visibility.
+    sect: Sectioning,
     events: Vec<ViewportEvent>,
     dirty: bool,
 }
@@ -157,11 +170,6 @@ impl<S: SceneSink> Viewport<S> {
     /// A viewport drawing into `sink`, on a canvas of `size` CSS pixels at `ratio` device pixels
     /// per CSS pixel.
     pub fn new(sink: S, size: [f64; 2], ratio: f64) -> Self {
-        let state = ViewState {
-            projection: crate::event::ProjectionMode::Perspective,
-            snapping: true,
-            tool: Tool::Select,
-        };
         let mut viewport = Self {
             sink,
             cache: SceneCache::default(),
@@ -183,11 +191,13 @@ impl<S: SceneSink> Viewport<S> {
             states: BTreeMap::new(),
             preview: Preview::default(),
             label: None,
-            reported: (Tool::Select, ToolStep::Idle, state),
+            reported: (Tool::Select, ToolStep::Idle, ViewState::default()),
             announcer: Announcer::default(),
+            sect: Sectioning::default(),
             events: Vec::new(),
             dirty: true,
         };
+        viewport.reported.2 = viewport.view_state();
         viewport.resize(size, ratio);
         viewport
     }
@@ -251,8 +261,10 @@ impl<S: SceneSink> Viewport<S> {
     /// As [`Viewport::apply_scene`].
     pub fn apply_delta(&mut self, delta: &SceneDelta) -> Result<u64, SceneError> {
         let result = self.cache.apply(delta, &mut self.sink);
+        let mut recreated = BTreeSet::new();
         match &result {
             Ok(applied) => {
+                recreated.clone_from(&applied.recreated);
                 if self.pending.as_ref().is_some_and(|pending| {
                     pending.ids.iter().any(|id| applied.touched.contains(id))
                 }) {
@@ -280,6 +292,8 @@ impl<S: SceneSink> Viewport<S> {
         if self.selection.len() != before {
             self.selection_changed();
         }
+        // Whatever the delta added or recreated is hidden or shown by the rules at once.
+        self.visibility_changed(&recreated);
         if self.hover.is_some_and(|id| !self.cache.contains(id)) {
             self.hover = None;
             self.events.push(ViewportEvent::Hover(None));
@@ -359,6 +373,7 @@ impl<S: SceneSink> Viewport<S> {
                 self.snapping = enabled;
                 self.refresh_pointer();
             }
+            other => self.sectioning_command(other),
         }
         self.refresh();
     }
@@ -368,10 +383,12 @@ impl<S: SceneSink> Viewport<S> {
         match event {
             InputEvent::PointerDown { pos, button, mods } => {
                 self.set_alt(mods.alt);
+                self.sect.shift = mods.shift;
                 self.pointer_down(self.device(pos), button, mods);
             }
             InputEvent::PointerMove { pos, mods } => {
                 self.set_alt(mods.alt);
+                self.sect.shift = mods.shift;
                 self.pointer_move(self.device(pos));
             }
             InputEvent::PointerUp { pos, button, mods } => {
@@ -428,6 +445,9 @@ impl<S: SceneSink> Viewport<S> {
     fn abandon_gesture(&mut self) {
         if self.gesture == Gesture::Drag && matches!(self.step, Step::MoveTarget { .. }) {
             self.cancel();
+        }
+        if let Gesture::Handle { start, .. } = self.gesture {
+            self.restore_handle(start);
         }
         self.gesture = Gesture::None;
     }
@@ -506,7 +526,7 @@ impl<S: SceneSink> Viewport<S> {
         if self.selection.is_empty() {
             self.say(AnnouncementKey::SelectionCleared, Vec::new());
         } else {
-            let count = u32::try_from(self.selection.len()).map_or(f64::MAX, f64::from);
+            let count = crate::math::count(self.selection.len());
             self.say(
                 AnnouncementKey::SelectionCount,
                 vec![("count", Value::Number(count))],
@@ -550,17 +570,16 @@ impl<S: SceneSink> Viewport<S> {
 
     // Pointer.
 
-    fn pick_at(&mut self, pos: [f64; 2]) -> Option<(ElementId, Vec3, f64)> {
+    /// What is under `pos`, among what is shown and not clipped away.
+    fn pick_hit(&mut self, pos: [f64; 2]) -> Option<Hit> {
         let camera = self.camera();
-        let view = View::new(&camera, self.size);
-        let hit = pick(
-            &self.cache,
-            &mut self.sink,
-            &camera,
-            self.size,
-            pos,
-            &Everything,
-        )?;
+        let gate = Gate::new(&self.sect);
+        pick(&self.cache, &mut self.sink, &camera, self.size, pos, &gate)
+    }
+
+    fn pick_at(&mut self, pos: [f64; 2]) -> Option<(ElementId, Vec3, f64)> {
+        let hit = self.pick_hit(pos)?;
+        let view = self.view();
         Some((
             hit.element,
             add(view.eye, hit.relative),
@@ -574,6 +593,7 @@ impl<S: SceneSink> Viewport<S> {
             Step::MoveTarget { .. } => &self.selection,
             _ => &[],
         };
+        let gate = Gate::new(&self.sect);
         let query = Query {
             cache: &self.cache,
             camera: &camera,
@@ -582,7 +602,7 @@ impl<S: SceneSink> Viewport<S> {
             tolerance: DEFAULT_TOLERANCE * self.ratio,
             enabled: self.snapping && !self.alt,
             skip: &|id| moving.contains(&id),
-            pickable: &Everything,
+            pickable: &gate,
         };
         snap::snap(&query, &mut self.sink)
     }
@@ -602,7 +622,10 @@ impl<S: SceneSink> Viewport<S> {
                 last: pos,
                 depth: self.pan_depth(pos),
             },
-            Button::Primary => Gesture::Pressed { start: pos, mods },
+            Button::Primary => match self.handle_at(pos).zip(self.sect.clipping.section) {
+                Some((face, start)) if self.step == Step::Select => Gesture::Handle { face, start },
+                _ => Gesture::Pressed { start: pos, mods },
+            },
         };
     }
 
@@ -638,6 +661,10 @@ impl<S: SceneSink> Viewport<S> {
                 if distance_2d(pos, start) > DRAG_THRESHOLD * self.ratio =>
             {
                 self.start_drag(start, pos, mods);
+            }
+            Gesture::Handle { face, .. } => {
+                self.drag_handle(face, pos);
+                self.dirty = true;
             }
             Gesture::Pressed { .. } | Gesture::None | Gesture::Drag => self.refresh_pointer(),
         }
@@ -679,6 +706,10 @@ impl<S: SceneSink> Viewport<S> {
                 self.refresh_pointer();
                 self.commit_move(self.move_target());
             }
+            Gesture::Handle { face, .. } => {
+                self.drop_handle(face);
+                self.refresh_pointer();
+            }
             _ => {}
         }
     }
@@ -690,6 +721,7 @@ impl<S: SceneSink> Viewport<S> {
                 let hit = self.pick_at(pos).map(|(id, _, _)| id);
                 self.click_select(hit, mods);
             }
+            Step::PickFace => self.pick_face_click(),
             Step::MoveIdle => {}
             Step::MoveBase => {
                 if let Some(snap) = self.snap {
@@ -728,10 +760,20 @@ impl<S: SceneSink> Viewport<S> {
         let Some(pos) = self.cursor else {
             return;
         };
-        if self.step == Step::Select {
+        if self.step == Step::PickFace {
+            self.snap = None;
+            self.set_hover(None);
+            self.sect.face_hit = self.face_under(pos);
+        } else if self.step == Step::Select {
             self.snap = None;
             if matches!(self.gesture, Gesture::None | Gesture::Pressed { .. }) {
-                let hover = self.pick_at(pos).map(|(id, _, _)| id);
+                // A face handle of the section box takes the pointer from the elements behind.
+                self.sect.handle = self.handle_at(pos);
+                let hover = if self.sect.handle.is_some() {
+                    None
+                } else {
+                    self.pick_at(pos).map(|(id, _, _)| id)
+                };
                 self.set_hover(hover);
             }
         } else {
@@ -878,6 +920,13 @@ impl<S: SceneSink> Viewport<S> {
 
     /// Esc: one tool step back, else the waiting preview, else the selection.
     fn cancel(&mut self) {
+        // While placing a block, Esc first empties what is being typed, then goes back one step.
+        let placing = matches!(self.step, Step::SecondCorner { .. } | Step::Height { .. });
+        if placing && self.typed.text().is_some() {
+            self.typed.clear();
+            self.refresh_pointer();
+            return;
+        }
         self.typed.clear();
         match self.step {
             Step::MoveTarget { direct, .. } => {
@@ -888,14 +937,29 @@ impl<S: SceneSink> Viewport<S> {
             Step::Height { first, .. } => {
                 self.step = Step::SecondCorner { first, width: None };
             }
-            Step::SecondCorner { .. } => self.step = Step::FirstCorner,
+            // The depth step goes back to the width; the width step, to the first corner.
+            Step::SecondCorner {
+                first,
+                width: Some(_),
+            } => self.step = Step::SecondCorner { first, width: None },
+            Step::SecondCorner { width: None, .. } => self.step = Step::FirstCorner,
             Step::MoveIdle | Step::MoveBase | Step::FirstCorner => {
                 self.tool = Tool::Select;
                 self.step = Step::Select;
             }
+            Step::PickFace => {
+                self.sect.face_hit = None;
+                self.step = self.first_step();
+            }
             Step::Select => {
-                if self.pending.is_some() {
+                if let Gesture::Handle { start, .. } = self.gesture {
+                    self.restore_handle(start);
+                    self.gesture = Gesture::None;
+                } else if self.pending.is_some() {
                     self.pending = None;
+                } else if self.sect.visibility.end_isolation() {
+                    self.visibility_changed(&BTreeSet::new());
+                    self.say_visibility();
                 } else {
                     self.set_selection(Vec::new());
                 }
@@ -1094,19 +1158,19 @@ impl<S: SceneSink> Viewport<S> {
             self.label.clone_from(&label);
             self.events.push(ViewportEvent::PreviewLabel(label));
         }
-        let state = ViewState {
-            projection: self.camera.mode(),
-            snapping: self.snapping && !self.alt,
-            tool: self.tool,
-        };
         let step = self.tool_step();
         if (self.tool, step) != (self.reported.0, self.reported.1) {
             self.events.push(ViewportEvent::ToolState(self.tool, step));
         }
-        if state != self.reported.2 {
-            self.events.push(ViewportEvent::ViewState(state));
+        // The state holds lists: it is built only when something it shows changed.
+        if self.view_state_changed() {
+            let state = self.view_state();
+            self.events.push(ViewportEvent::ViewState(state.clone()));
+            self.reported.2 = state;
+            self.view_state_sent();
         }
-        self.reported = (self.tool, step, state);
+        self.reported.0 = self.tool;
+        self.reported.1 = step;
     }
 
     fn tool_step(&self) -> ToolStep {
@@ -1117,6 +1181,7 @@ impl<S: SceneSink> Viewport<S> {
             Step::FirstCorner => ToolStep::FirstCorner,
             Step::SecondCorner { .. } => ToolStep::SecondCorner,
             Step::Height { .. } => ToolStep::Height,
+            Step::PickFace => ToolStep::PickFace,
         }
     }
 
@@ -1143,7 +1208,8 @@ impl<S: SceneSink> Viewport<S> {
             wanted.insert(id, DisplayState::Selected);
         }
         if let Some((ids, _)) = self.moving() {
-            for id in ids {
+            // A hidden element stays hidden, whatever move is waiting for the scene.
+            for id in ids.into_iter().filter(|id| !self.sect.hidden.contains(id)) {
                 wanted.insert(id, DisplayState::Ghost);
             }
         }
@@ -1209,6 +1275,7 @@ impl<S: SceneSink> Viewport<S> {
             }
             _ => {}
         }
+        self.sectioning_preview(&mut preview);
         // The height follows the pointer without snapping; the Select tool does not snap (the
         // snap of a direct move that just ended is stale).
         if let Some(Snap {
@@ -1242,11 +1309,19 @@ impl<S: SceneSink> Viewport<S> {
                     typed,
                 })
             }
-            Step::SecondCorner { first, .. } => {
+            Step::SecondCorner {
+                first,
+                width: fixed,
+            } => {
                 let [width, depth] = footprint(first, self.second_corner()?);
                 Some(PreviewLabel {
                     at: cursor?,
-                    key: LabelKey::PlaceSize,
+                    // Once the width is confirmed, the depth is what is being set.
+                    key: if fixed.is_some() {
+                        LabelKey::PlaceDepth
+                    } else {
+                        LabelKey::PlaceSize
+                    },
                     values: vec![
                         ("width", Value::Number(width)),
                         ("depth", Value::Number(depth)),

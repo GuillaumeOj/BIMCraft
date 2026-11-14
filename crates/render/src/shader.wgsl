@@ -13,6 +13,13 @@ struct Frame {
     light: vec4<f32>,
     // The size of the target in pixels, for the overlay primitives; zw unused.
     viewport: vec4<f32>,
+    // Clipping planes in camera space (clip.rs): a fragment at p is removed when
+    // dot(xyz, p) + w > 0. Slots from clip.x on are unused.
+    planes: array<vec4<f32>, 12>,
+    // x: the number of planes; y: 1 when the faces seen through a cut are tinted.
+    clip: vec4<f32>,
+    // The linear colour of cut faces.
+    cut_color: vec4<f32>,
 }
 
 // One instance record (INSTANCE_FLOATS in world.rs): the columns of the model-view, then the colour.
@@ -30,6 +37,8 @@ struct Varyings {
     @builtin(position) clip: vec4<f32>,
     @location(0) normal: vec3<f32>,
     @location(1) color: vec4<f32>,
+    // The camera-space position, to clip against the planes.
+    @location(2) view_position: vec3<f32>,
 }
 
 @vertex
@@ -45,7 +54,9 @@ fn vs_main(
         instance.model_view_3,
     );
     var out: Varyings;
-    out.clip = frame.projection * (model_view * vec4<f32>(position, 1.0));
+    let view_position = model_view * vec4<f32>(position, 1.0);
+    out.view_position = view_position.xyz;
+    out.clip = frame.projection * view_position;
     // The upper 3×3 of the model-view is a rotation, so it maps normals too.
     out.normal = (model_view * vec4<f32>(normal, 0.0)).xyz;
     out.color = instance.color;
@@ -53,7 +64,19 @@ fn vs_main(
 }
 
 @fragment
-fn fs_main(in: Varyings) -> @location(0) vec4<f32> {
+fn fs_main(in: Varyings, @builtin(front_facing) front: bool) -> @location(0) vec4<f32> {
+    let planes = u32(frame.clip.x);
+    for (var i = 0u; i < planes; i = i + 1u) {
+        let plane = frame.planes[i];
+        if dot(plane.xyz, in.view_position) + plane.w > 0.0 {
+            discard;
+        }
+    }
+    // The inside of a solid seen through a cut is its far faces seen from behind: flat in the
+    // cut colour. Ghosts (translucent) keep their own colour.
+    if !front && planes > 0u && frame.clip.y > 0.5 && in.color.a >= 1.0 {
+        return vec4<f32>(frame.cut_color.rgb, 1.0);
+    }
     let ambient = frame.light.w;
     // Interpolated normals can cancel out between opposite vertex normals: no diffuse light then,
     // rather than the NaN of normalising a zero vector.

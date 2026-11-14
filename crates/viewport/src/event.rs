@@ -1,7 +1,7 @@
 //! What the viewport tells its host, and what the host asks of it (`api-contract.md` §2): plain
 //! Rust types, which the browser glue maps to and from JavaScript values.
 
-use render::SnapKind;
+use render::{ClipPlane, CutFaces, SnapKind};
 
 /// The id of an element: an `EntityId`, 16 bytes little-endian, as the scene channel sends it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -34,6 +34,8 @@ pub enum ToolStep {
     SecondCorner,
     /// The block waits for its height.
     Height,
+    /// A clipping plane waits for the face the user picks.
+    PickFace,
 }
 
 /// A preset direction of view.
@@ -98,8 +100,19 @@ impl ProjectionMode {
     }
 }
 
-/// A view command, from buttons, menus and shortcuts outside the canvas. The section box,
-/// clipping planes and visibility commands join with VP-03.
+/// What a visibility command acts on. Names are the categories and disciplines of the scene
+/// (schema names, never user text); an unknown name does nothing.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum VisibilityTarget {
+    /// Elements of these categories.
+    Categories(Vec<String>),
+    /// Elements of these disciplines.
+    Disciplines(Vec<String>),
+    /// The selected elements.
+    Selection,
+}
+
+/// A view command, from buttons, menus and shortcuts outside the canvas.
 #[derive(Clone, Debug, PartialEq)]
 pub enum ViewCommand {
     /// Frames every element.
@@ -120,6 +133,48 @@ pub enum ViewCommand {
     TypedDistance(f64),
     /// Turns snapping on or off.
     Snapping(bool),
+    /// Turns the section box on or off; the first time, it fits the scene.
+    SectionBox(bool),
+    /// Sets the extents of the section box, in metres. Refused (nothing changes) unless every
+    /// component is finite and each minimum is below its maximum.
+    SectionBoxExtents {
+        /// The lowest corner.
+        min: [f64; 3],
+        /// The highest corner.
+        max: [f64; 3],
+    },
+    /// Fits the section box to the selection, with a margin.
+    SectionBoxFitSelection,
+    /// Fits the section box to the whole scene.
+    SectionBoxReset,
+    /// Arms a one-shot face pick: the next click on a face adds a plane there; Esc cancels.
+    ClipPlanePick,
+    /// Adds a clipping plane through `point`, removing the side `normal` points to; ignored
+    /// beyond six planes, or for a normal of no direction.
+    ClipPlaneAdd {
+        /// A point of the plane, in metres.
+        point: [f64; 3],
+        /// Its normal, pointing to the removed side.
+        normal: [f64; 3],
+    },
+    /// Turns the plane at this position around.
+    ClipPlaneFlip(usize),
+    /// Removes the plane at this position.
+    ClipPlaneRemove(usize),
+    /// Removes every plane.
+    ClipPlanesClear,
+    /// How a cut shows.
+    CutFaces(CutFaces),
+    /// Hides elements.
+    Hide(VisibilityTarget),
+    /// Shows hidden elements again; for the selection, those hidden with "hide selection".
+    Show(VisibilityTarget),
+    /// Shows only these elements.
+    Isolate(VisibilityTarget),
+    /// Ends the isolation.
+    EndIsolate,
+    /// Shows everything again.
+    ResetVisibility,
 }
 
 /// The key of an announcement for the live region; the UI translates it (UI-04).
@@ -151,6 +206,22 @@ pub enum AnnouncementKey {
     ViewPreset,
     /// A projection: `projection`.
     ViewProjection,
+    /// Elements were hidden: `count` is how many are hidden now.
+    VisibilityHidden,
+    /// Elements were isolated: `count` is how many are shown.
+    VisibilityIsolated,
+    /// Everything is visible again.
+    VisibilityReset,
+    /// A clipping plane was added: `count` planes now.
+    ClipPlaneAdded,
+    /// A clipping plane was turned around: `index`, from 1.
+    ClipPlaneFlipped,
+    /// A clipping plane was removed: `count` planes left.
+    ClipPlaneRemoved,
+    /// Every clipping plane was removed.
+    ClipPlanesCleared,
+    /// A face of the section box moved: `face` (`x_min`…), `value` in metres.
+    SectionBoxFaceMoved,
 }
 
 impl AnnouncementKey {
@@ -171,6 +242,14 @@ impl AnnouncementKey {
             Self::PlaceHeight => "place.height",
             Self::ViewPreset => "view.preset",
             Self::ViewProjection => "view.projection",
+            Self::VisibilityHidden => "visibility.hidden",
+            Self::VisibilityIsolated => "visibility.isolated",
+            Self::VisibilityReset => "visibility.reset",
+            Self::ClipPlaneAdded => "clip_plane.added",
+            Self::ClipPlaneFlipped => "clip_plane.flipped",
+            Self::ClipPlaneRemoved => "clip_plane.removed",
+            Self::ClipPlanesCleared => "clip_plane.cleared",
+            Self::SectionBoxFaceMoved => "section_box.face_moved",
         }
     }
 
@@ -211,8 +290,10 @@ pub struct Announcement {
 pub enum LabelKey {
     /// The distance of a move: `distance`.
     MoveDistance,
-    /// The footprint of a block: `width`, `depth`.
+    /// The footprint of a block, before its width is confirmed: `width`, `depth`.
     PlaceSize,
+    /// The depth of a block, once its width is confirmed: `width`, `depth`.
+    PlaceDepth,
     /// The height of a block: `height`.
     PlaceHeight,
 }
@@ -224,6 +305,7 @@ impl LabelKey {
         match self {
             Self::MoveDistance => "move.distance",
             Self::PlaceSize => "place.size",
+            Self::PlaceDepth => "place.depth",
             Self::PlaceHeight => "place.height",
         }
     }
@@ -263,9 +345,32 @@ pub enum Intent {
     },
 }
 
-/// The view state mirrored to the UI's panels. Visibility, the section box and the clipping
-/// planes join with VP-03.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+/// A category or a discipline of the scene, for the visibility panel.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct NameState {
+    /// The name, as the schema spells it.
+    pub name: String,
+    /// How many elements carry it.
+    pub count: usize,
+    /// Whether it is hidden.
+    pub hidden: bool,
+    /// Whether it is what is isolated.
+    pub isolated: bool,
+}
+
+/// The section box, for the View panel.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct SectionBoxState {
+    /// Whether it cuts.
+    pub enabled: bool,
+    /// The lowest corner, in metres.
+    pub min: [f64; 3],
+    /// The highest corner, in metres.
+    pub max: [f64; 3],
+}
+
+/// The view state mirrored to the UI's panels.
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct ViewState {
     /// The projection.
     pub projection: ProjectionMode,
@@ -273,6 +378,20 @@ pub struct ViewState {
     pub snapping: bool,
     /// The tool.
     pub tool: Tool,
+    /// The categories of the scene, by name.
+    pub categories: Vec<NameState>,
+    /// The disciplines of the scene, by name.
+    pub disciplines: Vec<NameState>,
+    /// Whether an isolation is on.
+    pub isolating: bool,
+    /// How many elements "hide selection" hid.
+    pub hidden_selection: usize,
+    /// The section box, once it was turned on, fitted or typed; `None` before.
+    pub section_box: Option<SectionBoxState>,
+    /// The clipping planes, in the order they were added.
+    pub clip_planes: Vec<ClipPlane>,
+    /// How a cut shows.
+    pub cut_faces: CutFaces,
 }
 
 /// Why the view stopped.
@@ -316,6 +435,7 @@ mod tests {
             "selection.cleared"
         );
         assert_eq!(LabelKey::PlaceSize.as_str(), "place.size");
+        assert_eq!(LabelKey::PlaceDepth.as_str(), "place.depth");
         let snaps = [
             SnapKind::Endpoint,
             SnapKind::Midpoint,

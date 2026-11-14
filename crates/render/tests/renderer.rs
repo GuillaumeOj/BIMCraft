@@ -7,8 +7,8 @@ mod support;
 
 use geom::{Point3, Vector3};
 use render::{
-    Camera, CameraError, MeshData, MeshError, MeshId, Placement, PlacementError, Projection,
-    RenderError, Renderer,
+    Camera, CameraError, Clip, ClipPlane, CutFaces, DisplayState, MeshData, MeshError, MeshId,
+    Placement, PlacementError, Projection, RenderError, Renderer,
 };
 use support::{Boxes, FORMAT, Target};
 
@@ -134,6 +134,131 @@ fn a_cube_is_drawn_in_its_colour_with_lambert_shading() {
     assert!((215..=219).contains(&red), "{red}");
     assert_eq!([green, blue, alpha], [0, 0, 255]);
     assert_eq!(frame.pixel(0, 0), CLEAR_BYTES);
+}
+
+/// The cut colour of the default theme as a frame holds it: its linear value, in bytes.
+fn cut_bytes() -> [u8; 4] {
+    let [r, g, b] = render::Theme::default().cut.linear();
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "a linear channel between 0 and 1, rounded to a byte"
+    )]
+    let byte = |c: f32| (c * 255.0).round() as u8;
+    [byte(r), byte(g), byte(b), 255]
+}
+
+fn near(pixel: [u8; 4], expected: [u8; 4]) -> bool {
+    pixel.iter().zip(expected).all(|(&p, e)| p.abs_diff(e) <= 1)
+}
+
+#[test]
+fn a_plane_removes_the_side_of_its_normal_and_the_cut_shows_the_tint() {
+    let mut fixture = Fixture::new();
+    fixture.add_cube(1.0, [0.0; 3], RED);
+    let plane = ClipPlane {
+        point: [0.0; 3],
+        normal: [1.0, 0.0, 0.0],
+    };
+    fixture
+        .renderer
+        .set_clip(Clip::new(&[plane], CutFaces::Tinted).unwrap());
+    let frame = fixture.frame();
+    let row = SIZE / 2;
+    // The kept half keeps its lit red (0.25 + 0.75 × 0.80 of full red).
+    let [red, green, blue, alpha] = frame.pixel(column(-0.25), row);
+    assert!((215..=219).contains(&red), "{red}");
+    assert_eq!([green, blue, alpha], [0, 0, 255]);
+    // Where the removed half was, the inside of the far face shows in the flat cut colour.
+    assert!(near(frame.pixel(column(0.25), row), cut_bytes()));
+    // Beyond the cube there is nothing.
+    assert_eq!(frame.pixel(column(1.5), row), CLEAR_BYTES);
+
+    // Untinted, the same pixel is the far face as any back face is drawn: neither clear nor cut.
+    fixture
+        .renderer
+        .set_clip(Clip::new(&[plane], CutFaces::None).unwrap());
+    let untinted = fixture.frame().pixel(column(0.25), row);
+    assert_ne!(untinted, CLEAR_BYTES);
+    assert!(!near(untinted, cut_bytes()));
+
+    // No planes: the whole cube again.
+    fixture.renderer.set_clip(Clip::default());
+    let [red, ..] = fixture.frame().pixel(column(0.25), row);
+    assert!((215..=219).contains(&red), "{red}");
+}
+
+#[test]
+fn clipping_is_camera_relative_far_from_the_origin() {
+    let mut fixture = Fixture::new();
+    let far = 1.0e7;
+    fixture.add_cube(1.0, [far, 0.0, 0.0], RED);
+    let moved = Camera {
+        eye: Point3::new(far, -5.0, 0.0),
+        target: Point3::new(far, 0.0, 0.0),
+        up: Vector3::new(0.0, 0.0, 1.0),
+        projection: PERSPECTIVE,
+    };
+    let plane = ClipPlane {
+        point: [far, 0.0, 0.0],
+        normal: [1.0, 0.0, 0.0],
+    };
+    fixture
+        .renderer
+        .set_clip(Clip::new(&[plane], CutFaces::Tinted).unwrap());
+    let frame = fixture.frame_through(&moved);
+    let [red, ..] = frame.pixel(column(-0.25), SIZE / 2);
+    assert!((215..=219).contains(&red), "{red}");
+    assert!(near(frame.pixel(column(0.25), SIZE / 2), cut_bytes()));
+}
+
+#[test]
+fn an_object_wholly_clipped_away_costs_no_draw() {
+    let mut fixture = Fixture::new();
+    fixture.add_cube(1.0, [-1.0, 0.0, 0.0], RED);
+    fixture.add_cube(1.0, [1.0, 0.0, 0.0], GREEN);
+    let draw = |fixture: &mut Fixture| {
+        fixture
+            .renderer
+            .render(
+                &fixture.target.view,
+                fixture.target.size,
+                &camera(PERSPECTIVE),
+                CLEAR,
+            )
+            .unwrap()
+    };
+    assert_eq!(draw(&mut fixture).fine, 2);
+    // x = 0 removes the east cube, which is entirely beyond it.
+    let plane = ClipPlane {
+        point: [0.0; 3],
+        normal: [1.0, 0.0, 0.0],
+    };
+    fixture
+        .renderer
+        .set_clip(Clip::new(&[plane], CutFaces::Tinted).unwrap());
+    let stats = draw(&mut fixture);
+    assert_eq!((stats.fine, stats.culled_frustum), (1, 1));
+    // The green cube is not on the frame; the red one is.
+    let frame = Frame(fixture.target.read(&fixture.device, &fixture.queue));
+    assert_eq!(frame.pixel(column(1.0), SIZE / 2), CLEAR_BYTES);
+    assert!(frame.pixel(column(-1.0), SIZE / 2)[0] > 200);
+}
+
+#[test]
+fn hidden_objects_are_not_drawn_until_shown_again() {
+    let mut fixture = Fixture::new();
+    let cube = fixture.add_cube(1.0, [0.0; 3], RED);
+    fixture
+        .renderer
+        .set_display_state(cube, DisplayState::Hidden)
+        .unwrap();
+    assert!(fixture.frame().is_clear());
+    fixture
+        .renderer
+        .set_display_state(cube, DisplayState::Normal)
+        .unwrap();
+    assert!(!fixture.frame().is_clear());
 }
 
 #[test]
