@@ -1,14 +1,16 @@
-//! The mesh of an element: the meshes of all its solids, merged.
+//! The mesh of an element: the meshes of all its solids, merged, in its local frame.
 
 use geom::TriangleMesh;
 
-use crate::SceneError;
+use crate::{Placement, SceneError};
 
 /// The mesh of an element: its solids, each tessellated and merged into one flat-shaded mesh.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct ElementMesh {
     /// The merged mesh.
     pub mesh: TriangleMesh,
+    /// Where the mesh's local frame lies in the world.
+    pub placement: Placement,
 }
 
 /// The most vertices a merged mesh may have: positions that 32-bit indices address.
@@ -21,7 +23,10 @@ impl ElementMesh {
     ///
     /// [`SceneError::TooManyVertices`] if 32-bit indices cannot address every vertex.
     pub(crate) fn merge(parts: Vec<TriangleMesh>) -> Result<Self, SceneError> {
-        merge_with_limit(parts, MAX_VERTICES).map(|mesh| Self { mesh })
+        merge_with_limit(parts, MAX_VERTICES).map(|mesh| Self {
+            mesh,
+            placement: Placement::IDENTITY,
+        })
     }
 }
 

@@ -311,6 +311,7 @@ pub fn generators(calls: &Calls) -> Generators {
                 return Ok(Generated {
                     solids: vec![untriangulable_solid()],
                     inputs,
+                    ..Generated::default()
                 });
             }
             let thickness = read_real(model, wall, "thickness")? + offset;
@@ -318,6 +319,7 @@ pub fn generators(calls: &Calls) -> Generators {
             Ok(Generated {
                 solids: vec![solid],
                 inputs,
+                ..Generated::default()
             })
         },
     );
@@ -342,6 +344,7 @@ pub fn generators(calls: &Calls) -> Generators {
                 Ok(Generated {
                     solids: vec![prism(0.5, 0.5, height + extra)?],
                     inputs,
+                    ..Generated::default()
                 })
             },
         );
