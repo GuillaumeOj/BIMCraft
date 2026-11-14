@@ -379,6 +379,9 @@ impl<S: SceneSink> Viewport<S> {
                 self.pointer_up(self.device(pos), button, mods);
             }
             InputEvent::PointerLeave => {
+                // The glue also sends it when a second finger lands or the browser cancels the
+                // pointer: the gesture ends without committing anything.
+                self.abandon_drag();
                 self.cursor = None;
                 self.snap = None;
                 self.set_hover(None);
@@ -414,15 +417,19 @@ impl<S: SceneSink> Viewport<S> {
             InputEvent::KeyUp { key, mods } => self.set_alt(mods.alt && key != Key::Alt),
             InputEvent::Blur => {
                 self.set_alt(false);
-                // A drag cut short by the focus leaving is cancelled, not left following the
-                // pointer with no button held.
-                if self.gesture == Gesture::Drag && matches!(self.step, Step::MoveTarget { .. }) {
-                    self.cancel();
-                }
-                self.gesture = Gesture::None;
+                self.abandon_drag();
             }
         }
         self.refresh();
+    }
+
+    /// Ends the gesture in progress without committing it: a drag cut short (the focus left, a
+    /// second finger landed) is cancelled, not left following the pointer with no button held.
+    fn abandon_drag(&mut self) {
+        if self.gesture == Gesture::Drag && matches!(self.step, Step::MoveTarget { .. }) {
+            self.cancel();
+        }
+        self.gesture = Gesture::None;
     }
 
     /// One frame passed: sends due announcements and ages a waiting preview.

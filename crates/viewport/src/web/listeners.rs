@@ -167,15 +167,10 @@ fn pointer(canvas: &HtmlCanvasElement, send: &Rc<dyn Fn(InputEvent)>) -> Vec<Lis
                 if !touches.pinching {
                     touches.pinching = true;
                     touches.last_distance = distance;
-                    // The first finger's gesture ends: the pinch takes over.
-                    if let Some(&(_, first)) = touches.points.first() {
-                        drop(touches);
-                        s(InputEvent::PointerUp {
-                            pos: first,
-                            button: Button::Primary,
-                            mods: modifiers(&event),
-                        });
-                    }
+                    // The first finger's gesture is abandoned, never committed: the pinch
+                    // takes over.
+                    drop(touches);
+                    s(InputEvent::PointerLeave);
                 }
                 return;
             }
