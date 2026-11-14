@@ -17,6 +17,7 @@ license = "MIT"
 api = { path = "crates/api" }
 # Vertex and uniform data as bytes for the GPU (render).
 bytemuck = "=1.25.2"
+core-ext = { path = "crates/core-ext" }
 core-model = { path = "crates/core-model" }
 core-txn = { path = "crates/core-txn" }
 criterion = { version = "=0.8.2", default-features = false }

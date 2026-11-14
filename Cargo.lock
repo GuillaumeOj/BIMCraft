@@ -538,6 +538,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "core-ext"
+version = "0.0.0"
+dependencies = [
+ "core-model",
+ "core-txn",
+ "geom",
+ "georef",
+ "material",
+ "schema",
+]
+
+[[package]]
 name = "core-foundation"
 version = "0.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"

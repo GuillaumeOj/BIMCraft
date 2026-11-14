@@ -87,7 +87,16 @@ check_coverage() {
     cargo llvm-cov --workspace --all-features --locked --fail-under-lines 90 --lcov --output-path lcov.info
   for crate in $(existing_crates scripts/critical-crates.txt); do
     in_scope "$crate" || continue
-    cargo llvm-cov --package "$crate" --all-features --locked --fail-under-lines 98
+    if [ "$crate" = core-ext ]; then
+      # The façade of ARCH-03 holds re-exports only and compiles to no code: llvm-cov finds no file
+      # and fails any threshold on 0/0 lines. Require it to stay that way instead (ADR 0024).
+      cargo llvm-cov --package "$crate" --all-features --locked --json --summary-only | grep -q '"files":\[\]' || {
+        echo "check-all: core-ext tests failed, or it holds code; it must hold re-exports only (ADR 0024)" >&2
+        exit 1
+      }
+    else
+      cargo llvm-cov --package "$crate" --all-features --locked --fail-under-lines 98
+    fi
   done
 }
 
