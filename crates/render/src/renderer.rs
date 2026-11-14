@@ -22,6 +22,8 @@ use wgpu::util::DeviceExt as _;
 
 use crate::bounds::Aabb;
 use crate::lod::{DetailLevel, RenderSettings, has_coarse_level};
+use crate::overlay::{Overlay, OverlayFrame, PRIMITIVE_ATTRIBUTES, PRIMITIVE_STRIDE, near_plane};
+use crate::theme::{DisplayState, Theme};
 use crate::transform::{Matrix, ViewFrame, projection_matrix};
 use crate::world::{
     DrawList, FrameStats, INSTANCE_FLOATS, INSTANCE_STRIDE, MeshId, ObjectId, World,
@@ -41,8 +43,9 @@ const LIGHT_DIRECTION: [f32; 3] = [0.267_261_24, 0.534_522_5, 0.801_783_7];
 /// The share of the colour lit by ambient light, so faces turned away from the light stay visible.
 const AMBIENT: f32 = 0.25;
 
-/// Bytes of the frame uniform: a 4×4 matrix and a vector of four `f32`.
-const UNIFORM_SIZE: u32 = 80;
+/// Bytes of the frame uniform: a 4×4 matrix and two vectors of four `f32`, the light and the
+/// size of the target.
+const UNIFORM_SIZE: u32 = 96;
 
 /// Bytes of a vertex position or normal: three `f32`.
 const VERTEX_STRIDE: u64 = 12;
@@ -223,6 +226,12 @@ pub struct Renderer {
     pipeline: wgpu::RenderPipeline,
     /// Draws the query boxes: depth tested, nothing written.
     query_pipeline: wgpu::RenderPipeline,
+    /// Draws ghosts: lit, blended, depth tested, nothing written.
+    ghost_pipeline: wgpu::RenderPipeline,
+    /// Draws translucent boxes: flat, blended, depth tested, nothing written.
+    box_pipeline: wgpu::RenderPipeline,
+    /// Draws the lines and markers of the overlay: blended, no depth test.
+    primitive_pipeline: wgpu::RenderPipeline,
     unit_cube: MeshBuffers,
     queries: Option<Queries>,
     readbacks: Vec<Readback>,
@@ -232,11 +241,19 @@ pub struct Renderer {
     max_buffer_size: u64,
     max_texture_side: u32,
     instances: Option<InstanceBuffer>,
+    /// The instance records of the ghosts and the translucent boxes.
+    ghost_instances: Option<InstanceBuffer>,
+    /// The records of the lines and markers.
+    primitive_instances: Option<InstanceBuffer>,
     depth: Option<DepthBuffer>,
     meshes: BTreeMap<MeshId, GpuMesh>,
     world: World,
     /// The last prepared frame, kept to reuse its allocations.
     draw_list: DrawList,
+    theme: Theme,
+    /// The overlay the host last set, drawn by every frame until it is replaced.
+    overlay: Overlay,
+    overlay_frame: OverlayFrame,
 }
 
 impl Renderer {
@@ -284,6 +301,9 @@ impl Renderer {
         });
         let pipeline = create_pipeline(device, &frame_layout, color_format, Pass::Opaque);
         let query_pipeline = create_pipeline(device, &frame_layout, color_format, Pass::Query);
+        let ghost_pipeline = create_pipeline(device, &frame_layout, color_format, Pass::Ghost);
+        let box_pipeline = create_pipeline(device, &frame_layout, color_format, Pass::Box);
+        let primitive_pipeline = create_primitive_pipeline(device, &frame_layout, color_format);
         let unit_cube = upload_buffers(
             device,
             &UNIT_CUBE,
@@ -297,6 +317,9 @@ impl Renderer {
             color_format,
             pipeline,
             query_pipeline,
+            ghost_pipeline,
+            box_pipeline,
+            primitive_pipeline,
             unit_cube,
             queries: None,
             readbacks: Vec::new(),
@@ -305,10 +328,15 @@ impl Renderer {
             max_buffer_size: limits.max_buffer_size,
             max_texture_side: limits.max_texture_dimension_2d,
             instances: None,
+            ghost_instances: None,
+            primitive_instances: None,
             depth: None,
             meshes: BTreeMap::new(),
             world: World::new(max_instances(limits.max_buffer_size)),
             draw_list: DrawList::default(),
+            theme: Theme::default(),
+            overlay: Overlay::default(),
+            overlay_frame: OverlayFrame::default(),
         })
     }
 
@@ -326,6 +354,67 @@ impl Renderer {
     /// [`RenderError::InvalidSettings`] when [`RenderSettings::is_valid`] fails.
     pub fn set_settings(&mut self, settings: RenderSettings) -> Result<(), RenderError> {
         self.world.set_settings(settings)
+    }
+
+    /// The colours of the viewport.
+    #[must_use]
+    pub fn theme(&self) -> Theme {
+        self.theme
+    }
+
+    /// Changes the colours of the selection, the hover, the ghosts and the overlay from the next
+    /// frame on. The background is the host's to use: it is the clear colour it hands to
+    /// [`Renderer::render`] ([`Theme::clear_color`]).
+    pub fn set_theme(&mut self, theme: Theme) {
+        self.theme = theme;
+        self.world.set_tints(theme.tints());
+    }
+
+    /// Sets how an object is drawn: in its own colour, hovered, selected or as a ghost. Cheap:
+    /// only the colour of its instance changes, nothing is uploaded again.
+    ///
+    /// # Errors
+    ///
+    /// [`RenderError::UnknownObject`] when the object is not in the renderer.
+    pub fn set_display_state(
+        &mut self,
+        id: ObjectId,
+        state: DisplayState,
+    ) -> Result<(), RenderError> {
+        self.world.set_state(id, state)
+    }
+
+    /// How an object is drawn.
+    ///
+    /// # Errors
+    ///
+    /// [`RenderError::UnknownObject`] when the object is not in the renderer.
+    pub fn display_state(&self, id: ObjectId) -> Result<DisplayState, RenderError> {
+        self.world.state(id)
+    }
+
+    /// Replaces the overlay, the transient geometry that every following frame draws over the
+    /// model until it is replaced or cleared. Cheap: the overlay is copied into buffers the
+    /// renderer keeps, and a ghost is one more instance of a mesh the renderer already holds.
+    ///
+    /// # Errors
+    ///
+    /// [`RenderError::UnknownObject`] when a ghost shows an object that is not in the renderer;
+    /// the previous overlay is kept.
+    pub fn set_overlay(&mut self, overlay: &Overlay) -> Result<(), RenderError> {
+        if let Some(missing) = overlay
+            .ghost_objects()
+            .find(|&id| self.world.state(id).is_err())
+        {
+            return Err(RenderError::UnknownObject(missing));
+        }
+        self.overlay.clone_from(overlay);
+        Ok(())
+    }
+
+    /// Removes the overlay: the next frame draws the model alone.
+    pub fn clear_overlay(&mut self) {
+        self.overlay.clear();
     }
 
     /// Validates `mesh` and uploads it to the GPU, with its coarse level (its bounding box,
@@ -458,13 +547,23 @@ impl Renderer {
             return Err(RenderError::InvalidClearColor);
         }
         let budget = self.collect_occlusion();
-        let projection = self.prepare(camera, size, budget)?;
+        let (projection, view) = self.prepare(camera, size, budget)?;
+        self.overlay_frame.prepare(
+            &self.overlay,
+            &self.theme,
+            &view,
+            near_plane(&camera.projection),
+            &self.world,
+            &mut self.draw_list,
+        );
         self.queue.write_buffer(
             &self.frame_buffer,
             0,
-            bytemuck::cast_slice(&frame_uniform(&projection)),
+            bytemuck::cast_slice(&frame_uniform(&projection, size)),
         );
         let instances = self.upload_instances();
+        let ghosts = self.upload_ghosts();
+        let primitives = self.upload_primitives();
         let queries = self.upload_queries();
         let depth = self.depth_view(size);
         let mut encoder = self
@@ -507,6 +606,7 @@ impl Renderer {
             if let Some(queries) = &queries {
                 self.draw_queries(&mut pass, &queries.boxes);
             }
+            self.draw_overlay(&mut pass, ghosts.as_ref(), primitives.as_ref());
         }
         let readback = queries.and_then(|queries| self.copy_results(&mut encoder, &queries));
         self.queue.submit([encoder.finish()]);
@@ -687,7 +787,7 @@ impl Renderer {
         camera: &Camera,
         size: [u32; 2],
         query_budget: usize,
-    ) -> Result<Matrix, RenderError> {
+    ) -> Result<(Matrix, ViewFrame), RenderError> {
         let view = ViewFrame::new(camera)?;
         let projection =
             projection_matrix(&camera.projection, f64::from(size[0]) / f64::from(size[1]))?;
@@ -698,7 +798,7 @@ impl Renderer {
             query_budget,
             &mut self.draw_list,
         );
-        Ok(projection)
+        Ok((projection, view))
     }
 
     fn check_size(&self, size: [u32; 2]) -> Result<(), RenderError> {
@@ -734,37 +834,47 @@ impl Renderer {
     /// Writes the instance records of the prepared frame, and only those, to the instance
     /// buffer, grown by doubling; `None` when the frame draws nothing.
     fn upload_instances(&mut self) -> Option<wgpu::Buffer> {
-        let bytes = self.draw_list.instance_bytes();
-        if bytes.is_empty() {
-            return None;
-        }
-        let count = bytes.len() as u64 / INSTANCE_STRIDE;
-        let buffer = if let Some(instances) = self
-            .instances
-            .as_ref()
-            .filter(|buffer| buffer.capacity >= count)
-        {
-            instances.buffer.clone()
-        } else {
-            // The world holds at most `max_instances` objects, which fit the largest buffer.
-            let capacity = count
-                .next_power_of_two()
-                .min(max_instances(self.max_buffer_size) as u64);
-            let buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
-                label: Some("render instances"),
-                size: capacity * INSTANCE_STRIDE,
-                usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
-                mapped_at_creation: false,
-            });
-            self.instances = Some(InstanceBuffer {
-                buffer: buffer.clone(),
-                capacity,
-            });
-            buffer
-        };
-        self.queue
-            .write_buffer(&buffer, 0, self.draw_list.instance_bytes());
-        Some(buffer)
+        upload_records(
+            &self.device,
+            &self.queue,
+            &mut self.instances,
+            self.draw_list.instance_bytes(),
+            &Records {
+                stride: INSTANCE_STRIDE,
+                max_buffer_size: self.max_buffer_size,
+                label: "render instances",
+            },
+        )
+    }
+
+    /// Writes the instance records of the ghosts and the translucent boxes.
+    fn upload_ghosts(&mut self) -> Option<wgpu::Buffer> {
+        upload_records(
+            &self.device,
+            &self.queue,
+            &mut self.ghost_instances,
+            self.draw_list.ghost_bytes(),
+            &Records {
+                stride: INSTANCE_STRIDE,
+                max_buffer_size: self.max_buffer_size,
+                label: "render ghosts",
+            },
+        )
+    }
+
+    /// Writes the records of the lines and markers.
+    fn upload_primitives(&mut self) -> Option<wgpu::Buffer> {
+        upload_records(
+            &self.device,
+            &self.queue,
+            &mut self.primitive_instances,
+            self.overlay_frame.primitive_bytes(),
+            &Records {
+                stride: PRIMITIVE_STRIDE,
+                max_buffer_size: self.max_buffer_size,
+                label: "render overlay primitives",
+            },
+        )
     }
 
     /// The depth buffer for a target of `size`, created on the first frame and on resizes.
@@ -794,6 +904,46 @@ impl Renderer {
         view
     }
 
+    /// The overlay pass: ghosts and translucent boxes, depth tested, then lines and markers on
+    /// top of everything.
+    fn draw_overlay(
+        &self,
+        pass: &mut wgpu::RenderPass<'_>,
+        ghosts: Option<&wgpu::Buffer>,
+        primitives: Option<&wgpu::Buffer>,
+    ) {
+        if ghosts.is_some() || primitives.is_some() {
+            // A frame that draws no object has not bound the frame uniform yet.
+            pass.set_bind_group(0, &self.frame_bind_group, &[]);
+        }
+        if let Some(ghosts) = ghosts {
+            pass.set_pipeline(&self.ghost_pipeline);
+            pass.set_vertex_buffer(2, ghosts.slice(..));
+            for bucket in &self.draw_list.ghost_buckets {
+                if let Some(mesh) = self.meshes.get(&bucket.mesh) {
+                    set_mesh(pass, &mesh.fine);
+                    pass.draw_indexed(
+                        0..mesh.fine.index_count,
+                        0,
+                        bucket.first..bucket.first + bucket.count,
+                    );
+                }
+            }
+            let (first, count) = self.draw_list.boxes;
+            if count > 0 {
+                pass.set_pipeline(&self.box_pipeline);
+                set_mesh(pass, &self.unit_cube);
+                pass.draw_indexed(0..self.unit_cube.index_count, 0, first..first + count);
+            }
+        }
+        let count = self.overlay_frame.primitive_count();
+        if let (Some(primitives), true) = (primitives, count > 0) {
+            pass.set_pipeline(&self.primitive_pipeline);
+            pass.set_vertex_buffer(0, primitives.slice(..));
+            pass.draw(0..6, 0..count);
+        }
+    }
+
     /// One instanced draw call per bucket of the prepared frame.
     fn draw(&self, pass: &mut wgpu::RenderPass<'_>, instances: &wgpu::Buffer) {
         pass.set_pipeline(&self.pipeline);
@@ -813,9 +963,7 @@ impl Renderer {
                     coarse
                 }
             };
-            pass.set_vertex_buffer(0, buffers.positions.slice(..));
-            pass.set_vertex_buffer(1, buffers.normals.slice(..));
-            pass.set_index_buffer(buffers.indices.slice(..), wgpu::IndexFormat::Uint32);
+            set_mesh(pass, buffers);
             pass.draw_indexed(
                 0..buffers.index_count,
                 0,
@@ -823,6 +971,57 @@ impl Renderer {
             );
         }
     }
+}
+
+/// Binds the vertices and indices of a mesh level.
+fn set_mesh(pass: &mut wgpu::RenderPass<'_>, buffers: &MeshBuffers) {
+    pass.set_vertex_buffer(0, buffers.positions.slice(..));
+    pass.set_vertex_buffer(1, buffers.normals.slice(..));
+    pass.set_index_buffer(buffers.indices.slice(..), wgpu::IndexFormat::Uint32);
+}
+
+/// What a growing buffer of records is made of.
+struct Records {
+    /// Bytes of a record.
+    stride: u64,
+    max_buffer_size: u64,
+    label: &'static str,
+}
+
+/// Writes `bytes`, whole records, to the buffer in `slot`, which grows by doubling when it is
+/// too small; `None` when there is nothing to write.
+fn upload_records(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    slot: &mut Option<InstanceBuffer>,
+    bytes: &[u8],
+    records: &Records,
+) -> Option<wgpu::Buffer> {
+    if bytes.is_empty() {
+        return None;
+    }
+    let count = bytes.len() as u64 / records.stride;
+    let buffer = if let Some(held) = slot.as_ref().filter(|held| held.capacity >= count) {
+        held.buffer.clone()
+    } else {
+        // The renderer bounds what it draws so that the records fit the largest buffer, with
+        // indices within u32.
+        let limit = (records.max_buffer_size / records.stride).min(u64::from(u32::MAX));
+        let capacity = count.next_power_of_two().min(limit);
+        let buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some(records.label),
+            size: capacity * records.stride,
+            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        *slot = Some(InstanceBuffer {
+            buffer: buffer.clone(),
+            capacity,
+        });
+        buffer
+    };
+    queue.write_buffer(&buffer, 0, bytes);
+    Some(buffer)
 }
 
 /// Uploads the vertices and indices of a mesh, validated or built by the renderer.
@@ -900,6 +1099,10 @@ enum Pass {
     /// The boxes of the occlusion queries: depth tested with `GreaterEqual`, so a box at the
     /// depth of what it holds still counts as visible; nothing written.
     Query,
+    /// Ghosts: lit like the objects, blended over them, depth tested, nothing written.
+    Ghost,
+    /// Translucent boxes: flat, blended, depth tested, nothing written.
+    Box,
 }
 
 fn create_pipeline(
@@ -909,6 +1112,7 @@ fn create_pipeline(
     pass: Pass,
 ) -> wgpu::RenderPipeline {
     let query = pass == Pass::Query;
+    let blended = matches!(pass, Pass::Ghost | Pass::Box);
     let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: Some("render shader"),
         source: wgpu::ShaderSource::Wgsl(include_str!("shader.wgsl").into()),
@@ -933,10 +1137,11 @@ fn create_pipeline(
     };
     let instance = instance_attributes();
     device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-        label: Some(if query {
-            "render query"
-        } else {
-            "render opaque"
+        label: Some(match pass {
+            Pass::Opaque => "render opaque",
+            Pass::Query => "render query",
+            Pass::Ghost => "render ghosts",
+            Pass::Box => "render boxes",
         }),
         layout: Some(&layout),
         vertex: wgpu::VertexState {
@@ -961,7 +1166,7 @@ fn create_pipeline(
         },
         depth_stencil: Some(wgpu::DepthStencilState {
             format: DEPTH_FORMAT,
-            depth_write_enabled: Some(!query),
+            depth_write_enabled: Some(pass == Pass::Opaque),
             // Reverse-Z: nearer is larger.
             depth_compare: Some(if query {
                 wgpu::CompareFunction::GreaterEqual
@@ -975,11 +1180,15 @@ fn create_pipeline(
         multisample: wgpu::MultisampleState::default(),
         fragment: Some(wgpu::FragmentState {
             module: &shader,
-            entry_point: Some("fs_main"),
+            entry_point: Some(if pass == Pass::Box {
+                "fs_flat"
+            } else {
+                "fs_main"
+            }),
             compilation_options: wgpu::PipelineCompilationOptions::default(),
             targets: &[Some(wgpu::ColorTargetState {
                 format: color_format,
-                blend: None,
+                blend: blended.then_some(wgpu::BlendState::ALPHA_BLENDING),
                 write_mask: if query {
                     wgpu::ColorWrites::empty()
                 } else {
@@ -992,12 +1201,86 @@ fn create_pipeline(
     })
 }
 
-/// The frame uniform: the projection, then the light direction with the ambient share.
-fn frame_uniform(projection: &Matrix) -> [f32; 20] {
-    let mut uniform = [0.0; 20];
+/// A length in pixels as `f32`.
+#[expect(
+    clippy::cast_precision_loss,
+    reason = "sizes are at most the device's texture limit, far below 2²⁴"
+)]
+fn pixels(length: u32) -> f32 {
+    length as f32
+}
+
+/// The pipeline of the lines and markers of the overlay: one instance per primitive, drawn as a
+/// quad of six vertices, blended, over everything (no depth test, nothing written).
+fn create_primitive_pipeline(
+    device: &wgpu::Device,
+    frame_layout: &wgpu::BindGroupLayout,
+    color_format: wgpu::TextureFormat,
+) -> wgpu::RenderPipeline {
+    let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+        label: Some("render shader"),
+        source: wgpu::ShaderSource::Wgsl(include_str!("shader.wgsl").into()),
+    });
+    let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+        label: Some("render overlay"),
+        bind_group_layouts: &[Some(frame_layout)],
+        immediate_size: 0,
+    });
+    let attributes: [wgpu::VertexAttribute; PRIMITIVE_ATTRIBUTES] =
+        core::array::from_fn(|index| wgpu::VertexAttribute {
+            format: wgpu::VertexFormat::Float32x4,
+            // At most 4 · 16 bytes: no truncation.
+            offset: index as u64 * 16,
+            shader_location: u32::try_from(index).unwrap_or(0),
+        });
+    device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        label: Some("render overlay primitives"),
+        layout: Some(&layout),
+        vertex: wgpu::VertexState {
+            module: &shader,
+            entry_point: Some("vs_primitive"),
+            compilation_options: wgpu::PipelineCompilationOptions::default(),
+            buffers: &[Some(wgpu::VertexBufferLayout {
+                array_stride: PRIMITIVE_STRIDE,
+                step_mode: wgpu::VertexStepMode::Instance,
+                attributes: &attributes,
+            })],
+        },
+        primitive: wgpu::PrimitiveState::default(),
+        // The pass has a depth attachment, so the pipeline declares it; nothing is tested or
+        // written, the overlay is drawn over the model whatever is in front.
+        depth_stencil: Some(wgpu::DepthStencilState {
+            format: DEPTH_FORMAT,
+            depth_write_enabled: Some(false),
+            depth_compare: Some(wgpu::CompareFunction::Always),
+            stencil: wgpu::StencilState::default(),
+            bias: wgpu::DepthBiasState::default(),
+        }),
+        multisample: wgpu::MultisampleState::default(),
+        fragment: Some(wgpu::FragmentState {
+            module: &shader,
+            entry_point: Some("fs_primitive"),
+            compilation_options: wgpu::PipelineCompilationOptions::default(),
+            targets: &[Some(wgpu::ColorTargetState {
+                format: color_format,
+                blend: Some(wgpu::BlendState::ALPHA_BLENDING),
+                write_mask: wgpu::ColorWrites::ALL,
+            })],
+        }),
+        multiview_mask: None,
+        cache: None,
+    })
+}
+
+/// The frame uniform: the projection, then the light direction with the ambient share, then the
+/// size of the target in pixels.
+fn frame_uniform(projection: &Matrix, size: [u32; 2]) -> [f32; 24] {
+    let mut uniform = [0.0; 24];
     uniform[..16].copy_from_slice(projection.as_flattened());
     uniform[16..19].copy_from_slice(&LIGHT_DIRECTION);
     uniform[19] = AMBIENT;
+    uniform[20] = pixels(size[0]);
+    uniform[21] = pixels(size[1]);
     uniform
 }
 
@@ -1120,10 +1403,10 @@ mod tests {
             [9.0, 10.0, 11.0, 12.0],
             [13.0, 14.0, 15.0, 16.0],
         ];
-        let frame = frame_uniform(&matrix);
+        let frame = frame_uniform(&matrix, [640, 480]);
         assert_eq!(&frame[..16], matrix.as_flattened());
         let [x, y, z] = LIGHT_DIRECTION;
-        assert_eq!(&frame[16..], &[x, y, z, AMBIENT]);
+        assert_eq!(&frame[16..22], &[x, y, z, AMBIENT, 640.0, 480.0]);
         assert!((x * x + y * y + z * z - 1.0).abs() < 1e-6);
         assert_eq!(size_of_val(&frame), UNIFORM_SIZE as usize);
     }

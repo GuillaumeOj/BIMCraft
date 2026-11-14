@@ -12,6 +12,7 @@ use crate::bvh::{Bvh, Leaf, Overlap};
 use crate::frustum::Frustum;
 use crate::lod::{Detail, DetailLevel, RenderSettings, SizeScale, choose};
 use crate::occlusion::{CLUSTER_LEAVES, Occlusion, beyond_near_plane};
+use crate::theme::{DisplayState, Tints};
 use crate::transform::{Matrix, ViewFrame, camera_relative_model_view};
 use crate::vector::{norm, sub};
 use crate::{Placement, Projection, RenderError};
@@ -49,6 +50,9 @@ pub struct FrameStats {
     pub fine: usize,
     /// Objects drawn with the coarse level of their mesh.
     pub coarse: usize,
+    /// Objects in the [`DisplayState::Ghost`] state that are drawn, translucent, in the overlay
+    /// pass; they are counted neither in `fine` nor in `coarse`.
+    pub ghosts: usize,
     /// Instanced draw calls: one per mesh and level drawn.
     pub draw_calls: usize,
     /// Clusters whose visibility the frame tests on the GPU, at most
@@ -73,6 +77,14 @@ pub(crate) struct DrawList {
     pub(crate) buckets: Vec<Bucket>,
     /// [`INSTANCE_FLOATS`] values per drawn object, ordered by bucket.
     pub(crate) instances: Vec<f32>,
+    /// The instance records of the ghosts, [`INSTANCE_FLOATS`] values each, in the order of
+    /// their buckets: those of the objects in the ghost state first, then the transient ones.
+    pub(crate) ghosts: Vec<f32>,
+    /// The runs of [`DrawList::ghosts`], always at the fine level.
+    pub(crate) ghost_buckets: Vec<Bucket>,
+    /// The instance records of the translucent boxes: the run of [`DrawList::ghosts`] after the
+    /// ghosts, as `(first, count)`.
+    pub(crate) boxes: (u32, u32),
     pub(crate) stats: FrameStats,
     /// The nodes of the clusters to test after drawing, the instance records of their boxes, and
     /// the number of the frame that tests them.
@@ -87,6 +99,11 @@ impl DrawList {
     /// Bytes of the instance records.
     pub(crate) fn instance_bytes(&self) -> &[u8] {
         bytemuck::cast_slice(&self.instances)
+    }
+
+    /// Bytes of the instance records of the ghosts and the boxes.
+    pub(crate) fn ghost_bytes(&self) -> &[u8] {
+        bytemuck::cast_slice(&self.ghosts)
     }
 
     /// Bytes of the instance records of the occlusion query boxes.
@@ -111,6 +128,7 @@ struct Object {
     mesh: MeshId,
     placement: Placement,
     color: [f32; 4],
+    state: DisplayState,
     /// The world bounds of its mesh.
     bounds: Aabb,
     leaf: Leaf,
@@ -136,6 +154,8 @@ pub(crate) struct World {
     /// The nodes the cluster walk has left to visit.
     clusters: Vec<u32>,
     settings: RenderSettings,
+    /// The colours of the display states.
+    tints: Tints,
     /// Whether the next frame chooses every level afresh, without hysteresis.
     fresh: bool,
     /// The most objects the renderer can draw in one frame.
@@ -158,6 +178,7 @@ impl World {
             occlusion: Occlusion::default(),
             clusters: Vec::new(),
             settings: RenderSettings::default(),
+            tints: Tints::default(),
             fresh: false,
             max_objects,
             next_id: 0,
@@ -248,6 +269,7 @@ impl World {
             mesh,
             placement,
             color,
+            state: DisplayState::Normal,
             bounds,
             leaf,
             detail: None,
@@ -256,6 +278,48 @@ impl World {
         // Ids grow, so pushing keeps the list in id order.
         info.objects.push((id, slot));
         Ok(id)
+    }
+
+    /// Sets the colours of the display states, from the next frame on.
+    pub(crate) fn set_tints(&mut self, tints: Tints) {
+        self.tints = tints;
+    }
+
+    /// Sets how an object is drawn. Cheap: nothing but the colour of its instance changes, and
+    /// an object leaving or entering the ghost state moves to the other pass.
+    pub(crate) fn set_state(
+        &mut self,
+        id: ObjectId,
+        state: DisplayState,
+    ) -> Result<(), RenderError> {
+        self.object_mut(id)?.state = state;
+        Ok(())
+    }
+
+    /// How an object is drawn.
+    pub(crate) fn state(&self, id: ObjectId) -> Result<DisplayState, RenderError> {
+        self.object(id).map(|object| object.state)
+    }
+
+    /// What a ghost of an object needs: its mesh, the origin of the mesh and its placement.
+    pub(crate) fn ghost_source(&self, id: ObjectId) -> Option<(MeshId, [f64; 3], Placement)> {
+        let object = self.object(id).ok()?;
+        let mesh = self.meshes.get(&object.mesh)?;
+        Some((object.mesh, mesh.origin, object.placement))
+    }
+
+    fn object(&self, id: ObjectId) -> Result<&Object, RenderError> {
+        self.index
+            .get(&id)
+            .and_then(|&slot| self.slots.get(slot as usize)?.as_ref())
+            .ok_or(RenderError::UnknownObject(id))
+    }
+
+    fn object_mut(&mut self, id: ObjectId) -> Result<&mut Object, RenderError> {
+        self.index
+            .get(&id)
+            .and_then(|&slot| self.slots.get_mut(slot as usize)?.as_mut())
+            .ok_or(RenderError::UnknownObject(id))
     }
 
     /// Moves an object, after checking the object, then the placement.
@@ -306,11 +370,7 @@ impl World {
 
     /// The level the object was drawn at in the last prepared frame; `None` when it was not drawn.
     pub(crate) fn drawn_level(&self, id: ObjectId) -> Result<Option<DetailLevel>, RenderError> {
-        let object = self
-            .index
-            .get(&id)
-            .and_then(|&slot| self.slots.get(slot as usize)?.as_ref())
-            .ok_or(RenderError::UnknownObject(id))?;
+        let object = self.object(id)?;
         let has_coarse = self
             .meshes
             .get(&object.mesh)
@@ -341,6 +401,9 @@ impl World {
         let scale = SizeScale::new(projection, size[1]);
         list.buckets.clear();
         list.instances.clear();
+        list.ghosts.clear();
+        list.ghost_buckets.clear();
+        list.boxes = (0, 0);
         list.stats = FrameStats {
             objects: self.len(),
             occlusion_queries: list.queries.len(),
@@ -351,6 +414,7 @@ impl World {
         for (&mesh_id, mesh) in &self.meshes {
             let radius = mesh.bounds.radius();
             let fine_start = list.instances.len();
+            let ghost_start = list.ghosts.len();
             list.coarse.clear();
             for &(_, slot) in &mesh.objects {
                 let Some(object) = self.slots[slot as usize].as_mut() else {
@@ -370,7 +434,16 @@ impl World {
                 let previous = if fresh { None } else { object.detail };
                 let detail = choose(scale.pixels(radius, distance), previous, &settings);
                 object.detail = Some(detail);
-                let target = match level(detail, mesh.has_coarse) {
+                let shown = level(detail, mesh.has_coarse);
+                if shown.is_some() && object.state == DisplayState::Ghost {
+                    list.stats.ghosts += 1;
+                    let model_view =
+                        camera_relative_model_view(view, mesh.origin, &object.placement);
+                    let color = self.tints.apply(object.state, object.color);
+                    push_instance(&mut list.ghosts, &model_view, color);
+                    continue;
+                }
+                let target = match shown {
                     None => {
                         list.stats.culled_small += 1;
                         continue;
@@ -385,13 +458,36 @@ impl World {
                     }
                 };
                 let model_view = camera_relative_model_view(view, mesh.origin, &object.placement);
-                push_instance(target, &model_view, object.color);
+                let color = self.tints.apply(object.state, object.color);
+                push_instance(target, &model_view, color);
             }
+            push_bucket(
+                list,
+                mesh_id,
+                DetailLevel::Fine,
+                ghost_start,
+                list.ghosts.len(),
+                true,
+            );
             let fine_end = list.instances.len();
-            push_bucket(list, mesh_id, DetailLevel::Fine, fine_start, fine_end);
+            push_bucket(
+                list,
+                mesh_id,
+                DetailLevel::Fine,
+                fine_start,
+                fine_end,
+                false,
+            );
             list.instances.extend_from_slice(&list.coarse);
             let coarse_end = list.instances.len();
-            push_bucket(list, mesh_id, DetailLevel::Coarse, fine_end, coarse_end);
+            push_bucket(
+                list,
+                mesh_id,
+                DetailLevel::Coarse,
+                fine_end,
+                coarse_end,
+                false,
+            );
         }
         list.stats.draw_calls = list.buckets.len();
     }
@@ -495,18 +591,30 @@ fn push_instance(target: &mut Vec<f32>, model_view: &Matrix, color: [f32; 4]) {
 }
 
 /// Records the run of instances between two offsets in floats, unless it is empty.
-fn push_bucket(list: &mut DrawList, mesh: MeshId, level: DetailLevel, start: usize, end: usize) {
+fn push_bucket(
+    list: &mut DrawList,
+    mesh: MeshId,
+    level: DetailLevel,
+    start: usize,
+    end: usize,
+    ghost: bool,
+) {
     if end == start {
         return;
     }
     // The renderer bounds the objects so that instance indices fit u32.
     let index = |floats: usize| u32::try_from(floats / INSTANCE_FLOATS).unwrap_or(u32::MAX);
-    list.buckets.push(Bucket {
+    let bucket = Bucket {
         mesh,
         level,
         first: index(start),
         count: index(end) - index(start),
-    });
+    };
+    if ghost {
+        list.ghost_buckets.push(bucket);
+    } else {
+        list.buckets.push(bucket);
+    }
 }
 
 #[cfg(test)]
@@ -566,6 +674,65 @@ mod tests {
                     .unwrap()
             })
             .collect()
+    }
+
+    #[test]
+    fn display_states_tint_instances_and_ghosts_leave_the_opaque_pass() {
+        let mut world = World::new(16);
+        let mesh = cube(&mut world, [0.0; 3], 12);
+        let objects = row(&mut world, mesh, 3);
+        let theme = crate::Theme::light();
+        world.set_tints(theme.tints());
+        assert_eq!(world.state(objects[0]), Ok(DisplayState::Normal));
+        world.set_state(objects[0], DisplayState::Selected).unwrap();
+        world.set_state(objects[1], DisplayState::Ghost).unwrap();
+        assert_eq!(world.state(objects[1]), Ok(DisplayState::Ghost));
+
+        let list = prepare(&mut world, [0.0; 3]);
+        // Two objects in the opaque pass, the selected one tinted; one ghost, translucent.
+        assert_eq!((list.stats.fine, list.stats.ghosts), (2, 1));
+        assert_eq!(list.instances.len(), 2 * INSTANCE_FLOATS);
+        assert_eq!(list.ghosts.len(), INSTANCE_FLOATS);
+        let tints = theme.tints();
+        assert_eq!(
+            list.instances[16..20],
+            tints.apply(DisplayState::Selected, WHITE)
+        );
+        assert_eq!(list.instances[36..40], WHITE);
+        assert_eq!(list.ghosts[16..20], tints.apply(DisplayState::Ghost, WHITE));
+        assert_eq!(list.ghost_buckets.len(), 1);
+        assert_eq!(
+            (list.ghost_buckets[0].mesh, list.ghost_buckets[0].count),
+            (mesh, 1)
+        );
+        // Ghosts are not opaque draw calls.
+        assert_eq!(list.buckets.len(), 1);
+        assert_eq!(list.buckets[0].count, 2);
+
+        // A ghost out of view or removed is not drawn; back to normal, it joins the opaque pass.
+        world.set_state(objects[1], DisplayState::Normal).unwrap();
+        let list = prepare(&mut world, [0.0; 3]);
+        assert_eq!((list.stats.fine, list.stats.ghosts), (3, 0));
+        assert!(list.ghost_buckets.is_empty());
+        world.remove_object(objects[2]).unwrap();
+        assert_eq!(
+            world.set_state(objects[2], DisplayState::Ghost),
+            Err(RenderError::UnknownObject(objects[2]))
+        );
+        assert_eq!(
+            world.state(objects[2]),
+            Err(RenderError::UnknownObject(objects[2]))
+        );
+        assert!(world.ghost_source(objects[2]).is_none());
+        let (found, origin, placement) = world.ghost_source(objects[0]).unwrap();
+        assert_eq!((found, origin), (mesh, [0.0; 3]));
+        assert!(
+            placement
+                .translation
+                .iter()
+                .zip([-3.0, 10.0, 0.0])
+                .all(|(a, b)| (a - b).abs() < 1e-12)
+        );
     }
 
     #[test]
