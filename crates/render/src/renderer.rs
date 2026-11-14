@@ -21,6 +21,7 @@ use std::sync::atomic::{AtomicU8, Ordering};
 use wgpu::util::DeviceExt as _;
 
 use crate::bounds::Aabb;
+use crate::clip::{CLIP_FLOATS, Clip};
 use crate::frustum::Frustum;
 use crate::lod::{DetailLevel, RenderSettings, has_coarse_level};
 use crate::overlay::{ClipVolume, Overlay, OverlayFrame, PRIMITIVE_ATTRIBUTES, PRIMITIVE_STRIDE};
@@ -46,7 +47,14 @@ const AMBIENT: f32 = 0.25;
 
 /// Bytes of the frame uniform: a 4×4 matrix and two vectors of four `f32`, the light and the
 /// size of the target.
-const UNIFORM_SIZE: u32 = 96;
+const UNIFORM_SIZE: u32 = 320;
+
+/// Where the clipping block starts in the frame uniform, in floats: after the projection, the
+/// light and the size of the target.
+const CLIP_START: usize = 24;
+
+/// The floats of the frame uniform.
+const FRAME_FLOATS: usize = CLIP_START + CLIP_FLOATS;
 
 /// Bytes of a vertex position or normal: three `f32`.
 const VERTEX_STRIDE: u64 = 12;
@@ -258,6 +266,8 @@ pub struct Renderer {
     /// The last prepared frame, kept to reuse its allocations.
     draw_list: DrawList,
     theme: Theme,
+    /// The planes frames clip with.
+    clip: Clip,
     /// The overlay the host last set, drawn by every frame until it is replaced.
     overlay: Overlay,
     overlay_frame: OverlayFrame,
@@ -348,6 +358,7 @@ impl Renderer {
             world: World::new(max_instances(limits.max_buffer_size)),
             draw_list: DrawList::default(),
             theme: Theme::default(),
+            clip: Clip::default(),
             overlay: Overlay::default(),
             overlay_frame: OverlayFrame::default(),
         })
@@ -381,6 +392,18 @@ impl Renderer {
     pub fn set_theme(&mut self, theme: Theme) {
         self.theme = theme;
         self.world.set_tints(theme.tints());
+    }
+
+    /// Sets the planes every following frame clips with, and how it shows the cut. An empty
+    /// [`Clip`] clips nothing.
+    pub fn set_clip(&mut self, clip: Clip) {
+        self.clip = clip;
+    }
+
+    /// The planes frames clip with.
+    #[must_use]
+    pub fn clip(&self) -> &Clip {
+        &self.clip
     }
 
     /// Sets how an object is drawn: in its own colour, hovered, selected or as a ghost. Cheap:
@@ -603,7 +626,11 @@ impl Renderer {
         self.queue.write_buffer(
             &self.frame_buffer,
             0,
-            bytemuck::cast_slice(&frame_uniform(&projection, size)),
+            bytemuck::cast_slice(&frame_uniform(
+                &projection,
+                size,
+                &self.clip.uniform(&view, self.theme.cut),
+            )),
         );
         let instances = self.upload_instances();
         let ghosts = self.upload_ghosts();
@@ -1344,9 +1371,14 @@ fn create_primitive_pipeline(
 }
 
 /// The frame uniform: the projection, then the light direction with the ambient share, then the
-/// size of the target in pixels.
-fn frame_uniform(projection: &Matrix, size: [u32; 2]) -> [f32; 24] {
-    let mut uniform = [0.0; 24];
+/// size of the target in pixels, then the clipping block ([`Clip::uniform`]).
+fn frame_uniform(
+    projection: &Matrix,
+    size: [u32; 2],
+    clip: &[f32; CLIP_FLOATS],
+) -> [f32; FRAME_FLOATS] {
+    let mut uniform = [0.0; FRAME_FLOATS];
+    uniform[CLIP_START..].copy_from_slice(clip);
     uniform[..16].copy_from_slice(projection.as_flattened());
     uniform[16..19].copy_from_slice(&LIGHT_DIRECTION);
     uniform[19] = AMBIENT;
@@ -1609,7 +1641,9 @@ mod tests {
             [9.0, 10.0, 11.0, 12.0],
             [13.0, 14.0, 15.0, 16.0],
         ];
-        let frame = frame_uniform(&matrix, [640, 480]);
+        let clip = [0.5; CLIP_FLOATS];
+        let frame = frame_uniform(&matrix, [640, 480], &clip);
+        assert_eq!(&frame[CLIP_START..], &clip);
         assert_eq!(&frame[..16], matrix.as_flattened());
         let [x, y, z] = LIGHT_DIRECTION;
         assert_eq!(&frame[16..22], &[x, y, z, AMBIENT, 640.0, 480.0]);

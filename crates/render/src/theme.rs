@@ -176,6 +176,9 @@ pub enum DisplayState {
     /// A translucent preview in the preview colour: not drawn with the opaque objects, so it
     /// hides nothing and can be hidden by them.
     Ghost,
+    /// Not drawn at all (hidden or not isolated): it stays in the renderer, so showing it again
+    /// is one call, but a frame skips it, and so do pick queries.
+    Hidden,
 }
 
 /// How much of the hover and selection colours replaces the colour of the object.
@@ -212,7 +215,8 @@ impl Tints {
             ]
         };
         match state {
-            DisplayState::Normal => base,
+            // Never drawn: the colour is not used.
+            DisplayState::Normal | DisplayState::Hidden => base,
             DisplayState::Hovered => mix(self.hover, HOVER_MIX),
             DisplayState::Selected => mix(self.selection, SELECTION_MIX),
             DisplayState::Ghost => {

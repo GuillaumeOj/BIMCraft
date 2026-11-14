@@ -46,6 +46,8 @@ pub struct FrameStats {
     pub culled_occluded: usize,
     /// Objects in view but smaller than the small-feature threshold.
     pub culled_small: usize,
+    /// Objects in view in the [`DisplayState::Hidden`] state.
+    pub hidden: usize,
     /// Objects drawn with their mesh.
     pub fine: usize,
     /// Objects drawn with the coarse level of their mesh.
@@ -442,6 +444,11 @@ impl World {
                     list.stats.culled_frustum += 1;
                     continue;
                 }
+                if object.state == DisplayState::Hidden {
+                    object.detail = None;
+                    list.stats.hidden += 1;
+                    continue;
+                }
                 if has_bit(&self.occluded, slot) {
                     object.detail = None;
                     list.stats.culled_occluded += 1;
@@ -510,7 +517,7 @@ impl World {
     }
 
     /// Calls `found` with every object whose world bounds meet `frustum`, whatever the culling
-    /// settings, occlusion and level of detail: what a pick may hit.
+    /// settings, occlusion and level of detail, but not the hidden ones: what a pick may hit.
     pub(crate) fn objects_in(&mut self, frustum: &Frustum, mut found: impl FnMut(ObjectId)) {
         let slots = &self.slots;
         self.bvh.query(
@@ -518,7 +525,11 @@ impl World {
             frustum.all_planes(),
             |bounds, mask| frustum.classify(bounds, mask),
             |slot| {
-                if let Some(object) = slots.get(slot as usize).and_then(Option::as_ref) {
+                if let Some(object) = slots
+                    .get(slot as usize)
+                    .and_then(Option::as_ref)
+                    .filter(|object| object.state != DisplayState::Hidden)
+                {
                     found(object.id);
                 }
             },
@@ -710,6 +721,27 @@ mod tests {
                     .unwrap()
             })
             .collect()
+    }
+
+    #[test]
+    fn hidden_objects_are_skipped_counted_and_never_picked() {
+        let mut world = World::new(16);
+        let mesh = cube(&mut world, [0.0; 3], 12);
+        let objects = row(&mut world, mesh, 3);
+        world.set_state(objects[1], DisplayState::Hidden).unwrap();
+        let list = prepare(&mut world, [0.0; 3]);
+        assert_eq!(
+            (list.stats.fine, list.stats.hidden, list.stats.objects),
+            (2, 1, 3)
+        );
+        assert_eq!(world.drawn_level(objects[1]), Ok(None));
+        let view = view_from([0.0; 3]);
+        let frustum = Frustum::new(&view, &PERSPECTIVE, 1.0);
+        let mut found = Vec::new();
+        world.objects_in(&frustum, |id| found.push(id));
+        assert!(!found.contains(&objects[1]) && found.len() == 2);
+        world.set_state(objects[1], DisplayState::Normal).unwrap();
+        assert_eq!(prepare(&mut world, [0.0; 3]).stats.fine, 3);
     }
 
     #[test]

@@ -28,6 +28,7 @@
 mod bounds;
 mod bvh;
 mod camera;
+mod clip;
 mod frustum;
 mod lod;
 mod mesh;
@@ -52,6 +53,7 @@ extern crate self as render;
 mod reference;
 
 pub use camera::{Camera, CameraError, Projection};
+pub use clip::{Clip, ClipError, ClipPlane, CutFaces, MAX_CLIP_PLANES};
 pub use lod::{DetailLevel, RenderSettings};
 pub use mesh::{MAX_MESH_INDICES, MAX_MESH_VERTICES, MeshData, MeshError};
 pub use overlay::{MAX_LINE_WIDTH, MAX_OVERLAY_ITEMS, Overlay, OverlayError, SnapKind, Tone};
