@@ -125,6 +125,7 @@ struct MeshInfo {
 
 /// An object, in a slot of [`World::slots`].
 struct Object {
+    id: ObjectId,
     mesh: MeshId,
     placement: Placement,
     color: [f32; 4],
@@ -266,6 +267,7 @@ impl World {
         let leaf = self.bvh.insert(bounds, slot);
         self.occlusion.invalidate();
         self.slots[slot as usize] = Some(Object {
+            id,
             mesh,
             placement,
             color,
@@ -299,6 +301,15 @@ impl World {
     /// How an object is drawn.
     pub(crate) fn state(&self, id: ObjectId) -> Result<DisplayState, RenderError> {
         self.object(id).map(|object| object.state)
+    }
+
+    /// How many objects are in the [`DisplayState::Ghost`] state.
+    pub(crate) fn ghost_state_count(&self) -> usize {
+        self.slots
+            .iter()
+            .flatten()
+            .filter(|object| object.state == DisplayState::Ghost)
+            .count()
     }
 
     /// What a ghost of an object needs: its mesh, the origin of the mesh and its placement.
@@ -493,6 +504,22 @@ impl World {
     }
 
     /// Sets the bit of every object in view, or of every object without frustum culling.
+    /// Calls `found` with every object whose world bounds meet `frustum`, whatever the culling
+    /// settings, occlusion and level of detail: what a pick may hit.
+    pub(crate) fn objects_in(&mut self, frustum: &Frustum, mut found: impl FnMut(ObjectId)) {
+        let slots = &self.slots;
+        self.bvh.query(
+            &mut self.pending,
+            frustum.all_planes(),
+            |bounds, mask| frustum.classify(bounds, mask),
+            |slot| {
+                if let Some(object) = slots.get(slot as usize).and_then(Option::as_ref) {
+                    found(object.id);
+                }
+            },
+        );
+    }
+
     fn find_visible(&mut self, frustum: &Frustum) {
         clear_bits(&mut self.visible, self.slots.len());
         if !self.settings.frustum_culling {
@@ -685,8 +712,10 @@ mod tests {
         world.set_tints(theme.tints());
         assert_eq!(world.state(objects[0]), Ok(DisplayState::Normal));
         world.set_state(objects[0], DisplayState::Selected).unwrap();
+        assert_eq!(world.ghost_state_count(), 0);
         world.set_state(objects[1], DisplayState::Ghost).unwrap();
         assert_eq!(world.state(objects[1]), Ok(DisplayState::Ghost));
+        assert_eq!(world.ghost_state_count(), 1);
 
         let list = prepare(&mut world, [0.0; 3]);
         // Two objects in the opaque pass, the selected one tinted; one ghost, translucent.

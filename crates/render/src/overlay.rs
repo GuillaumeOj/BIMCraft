@@ -19,7 +19,7 @@
 
 use crate::theme::{BOX_ALPHA, Theme};
 use crate::transform::{Matrix, ViewFrame, camera_relative_model_view, to_gpu};
-use crate::vector::{add, apply, mul, scale, sub};
+use crate::vector::{add, apply, dot, mul, scale, sub};
 use crate::world::{Bucket, DrawList, INSTANCE_FLOATS, MeshId, ObjectId, World};
 use crate::{DetailLevel, Placement, PlacementError, Projection};
 
@@ -283,6 +283,14 @@ impl Overlay {
         Ok(())
     }
 
+    /// The records the overlay needs on the GPU: lines and markers (a halo and an ink each), and
+    /// instances (its ghosts and boxes).
+    pub(crate) fn record_counts(&self) -> (u64, u64) {
+        let primitives = 2 * (self.lines.len() + self.markers.len());
+        let instances = self.ghosts.len() + self.boxes.len();
+        (primitives as u64, instances as u64)
+    }
+
     /// The objects the ghosts show.
     pub(crate) fn ghost_objects(&self) -> impl Iterator<Item = ObjectId> + '_ {
         self.ghosts.iter().map(|ghost| ghost.object)
@@ -328,34 +336,41 @@ impl OverlayFrame {
         bytemuck::cast_slice(&self.primitives)
     }
 
-    /// Prepares `overlay` for a frame seen through `view`, whose projection has the near plane
-    /// `near`: writes the primitives here, and the ghosts and the boxes into the draw list after
-    /// the ghost objects the world wrote.
+    /// Prepares `overlay` for a frame seen through `view`, whose lines are kept within `clip`:
+    /// writes the primitives here, and the ghosts and the boxes into the draw list after the
+    /// ghost objects the world wrote.
     pub(crate) fn prepare(
         &mut self,
         overlay: &Overlay,
         theme: &Theme,
         view: &ViewFrame,
-        near: f64,
+        clip: &ClipVolume,
         world: &World,
         list: &mut DrawList,
     ) {
         self.primitives.clear();
         for layer in [Layer::Halo, Layer::Ink] {
             for line in &overlay.lines {
-                self.push_line(line, layer, theme, view, near);
+                self.push_line(line, layer, theme, view, clip);
             }
             for marker in &overlay.markers {
-                self.push_marker(marker, layer, theme, view, near);
+                self.push_marker(marker, layer, theme, view, clip.near);
             }
         }
         self.prepare_ghosts(overlay, theme, view, world, list);
         prepare_boxes(overlay, theme, view, list);
     }
 
-    fn push_line(&mut self, line: &Line, layer: Layer, theme: &Theme, view: &ViewFrame, near: f64) {
+    fn push_line(
+        &mut self,
+        line: &Line,
+        layer: Layer,
+        theme: &Theme,
+        view: &ViewFrame,
+        clip: &ClipVolume,
+    ) {
         let (from, to) = (to_camera(view, line.from), to_camera(view, line.to));
-        let Some((from, to)) = clip_to_near(from, to, near) else {
+        let Some((from, to)) = clip.segment(from, to) else {
             return;
         };
         self.push_primitive(&Primitive {
@@ -551,18 +566,79 @@ fn to_camera(view: &ViewFrame, point: [f64; 3]) -> [f64; 3] {
     apply(&view.rotation, sub(point, view.eye))
 }
 
-/// The part of the segment in front of the near plane, or `None` when none is.
-fn clip_to_near(from: [f64; 3], to: [f64; 3], near: f64) -> Option<([f64; 3], [f64; 3])> {
-    let inside = |point: [f64; 3]| point[2] <= -near;
-    let cut = |inner: [f64; 3], outer: [f64; 3]| {
-        let t = (-near - inner[2]) / (outer[2] - inner[2]);
-        add(inner, scale(sub(outer, inner), t))
-    };
-    match (inside(from), inside(to)) {
-        (true, true) => Some((from, to)),
-        (true, false) => Some((from, cut(from, to))),
-        (false, true) => Some((cut(to, from), to)),
-        (false, false) => None,
+/// How much wider and taller than the view the region lines are clipped to is: the shader still
+/// draws the parts of a line near the edges of the view exactly, while no point it receives lies
+/// much beyond them.
+const GUARD_BAND: f64 = 4.0;
+
+/// The region of camera space a line of the overlay is clipped to, in `f64`, before anything is
+/// rounded to `f32`: in front of the near plane and within the view enlarged by [`GUARD_BAND`].
+/// A rubber band from a point near the eye to one 10⁷ m away thus reaches the GPU as a segment of
+/// a few times the view, which `f32` holds exactly enough (ADR 0020).
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct ClipVolume {
+    /// Distance of the near plane.
+    pub(crate) near: f64,
+    /// Planes `n · q + d ≥ 0` in camera coordinates, inside when every one holds.
+    planes: [([f64; 3], f64); 5],
+}
+
+impl ClipVolume {
+    /// The volume of a validated projection on a target of `aspect` (width over height).
+    pub(crate) fn new(projection: &Projection, aspect: f64) -> Self {
+        let near = match *projection {
+            Projection::Perspective { near, .. } | Projection::Orthographic { near, .. } => near,
+        };
+        let near_plane = ([0.0, 0.0, -1.0], -near);
+        let planes = match *projection {
+            Projection::Perspective { fov_y_radians, .. } => {
+                let tan_y = GUARD_BAND * libm::tan(fov_y_radians / 2.0);
+                let tan_x = tan_y * aspect;
+                [
+                    ([1.0, 0.0, -tan_x], 0.0),
+                    ([-1.0, 0.0, -tan_x], 0.0),
+                    ([0.0, 1.0, -tan_y], 0.0),
+                    ([0.0, -1.0, -tan_y], 0.0),
+                    near_plane,
+                ]
+            }
+            Projection::Orthographic { height, .. } => {
+                let half_y = GUARD_BAND * height / 2.0;
+                let half_x = half_y * aspect;
+                [
+                    ([1.0, 0.0, 0.0], half_x),
+                    ([-1.0, 0.0, 0.0], half_x),
+                    ([0.0, 1.0, 0.0], half_y),
+                    ([0.0, -1.0, 0.0], half_y),
+                    near_plane,
+                ]
+            }
+        };
+        Self { near, planes }
+    }
+
+    /// The part of the segment inside the volume (Liang–Barsky), or `None` when none is.
+    pub(crate) fn segment(&self, from: [f64; 3], to: [f64; 3]) -> Option<([f64; 3], [f64; 3])> {
+        let (mut enter, mut leave) = (0.0_f64, 1.0_f64);
+        for &(normal, offset) in &self.planes {
+            let start = dot(normal, from) + offset;
+            let end = dot(normal, to) + offset;
+            if start < 0.0 && end < 0.0 {
+                return None;
+            }
+            if start < 0.0 {
+                enter = enter.max(start / (start - end));
+            } else if end < 0.0 {
+                leave = leave.min(start / (start - end));
+            }
+        }
+        if enter > leave {
+            return None;
+        }
+        let along = |t: f64| add(from, scale(sub(to, from), t));
+        let first = if enter > 0.0 { along(enter) } else { from };
+        let last = if leave < 1.0 { along(leave) } else { to };
+        Some((first, last))
     }
 }
 
@@ -572,13 +648,6 @@ fn clip_to_near(from: [f64; 3], to: [f64; 3], near: f64) -> Option<([f64; 3], [f
 )]
 fn to_f32(value: f64) -> f32 {
     value as f32
-}
-
-/// The near distance of a projection.
-pub(crate) fn near_plane(projection: &Projection) -> f64 {
-    match *projection {
-        Projection::Perspective { near, .. } | Projection::Orthographic { near, .. } => near,
-    }
 }
 
 #[cfg(test)]
@@ -703,26 +772,127 @@ mod tests {
         assert_eq!(overlay.lines.len(), 2);
     }
 
+    /// The clip volume of [`view`]'s camera, on a square target.
+    fn clip() -> ClipVolume {
+        ClipVolume::new(
+            &Projection::Perspective {
+                fov_y_radians: 1.0,
+                near: 0.1,
+            },
+            1.0,
+        )
+    }
+
     #[test]
     fn segments_are_cut_at_the_near_plane() {
-        let near = 0.1;
+        let clip = clip();
+        let near = clip.near;
         let front = [0.0, 0.0, -2.0];
         let behind = [0.0, 0.0, 2.0];
-        assert_eq!(clip_to_near(front, front, near), Some((front, front)));
-        assert_eq!(clip_to_near(behind, behind, near), None);
+        assert_eq!(clip.segment(front, front), Some((front, front)));
+        assert_eq!(clip.segment(behind, behind), None);
         // Cut in the middle of the near plane, whichever end is behind.
-        let (kept, cut) = clip_to_near(front, behind, near).unwrap();
+        let (kept, cut) = clip.segment(front, behind).unwrap();
         assert_eq!(kept, front);
         assert!((cut[2] + near).abs() < 1e-12);
-        let (cut, kept) = clip_to_near(behind, front, near).unwrap();
+        let (cut, kept) = clip.segment(behind, front).unwrap();
         assert_eq!(kept, front);
         assert!((cut[2] + near).abs() < 1e-12);
         // The cut keeps the line of the segment.
-        let (_, cut) = clip_to_near([0.0, 0.0, -1.0], [2.0, 4.0, 1.0], near).unwrap();
+        let (_, cut) = clip.segment([0.0, 0.0, -1.0], [0.2, 0.4, 1.0]).unwrap();
         assert!(
-            (cut[0] - 0.9).abs() < 1e-12 && (cut[1] - 1.8).abs() < 1e-12,
+            (cut[0] - 0.09).abs() < 1e-12 && (cut[1] - 0.18).abs() < 1e-12,
             "{cut:?}"
         );
+    }
+
+    #[test]
+    fn segments_are_cut_at_the_guard_band() {
+        let clip = clip();
+        let band = GUARD_BAND * libm::tan(0.5);
+        // Far beyond the right of the view: cut where it leaves the band.
+        let (kept, cut) = clip.segment([0.0, 0.0, -1.0], [1e6, 0.0, -1.0]).unwrap();
+        assert_eq!(kept, [0.0, 0.0, -1.0]);
+        assert!((cut[0] - band).abs() < 1e-9, "{cut:?}");
+        // Entirely beside the band, on either axis, or entirely behind the eye: nothing.
+        assert_eq!(clip.segment([10.0, 0.0, -1.0], [20.0, 5.0, -1.0]), None);
+        assert_eq!(clip.segment([0.0, -10.0, -1.0], [0.0, -20.0, -2.0]), None);
+        // Crossing the whole view: both ends cut.
+        let (first, last) = clip.segment([-1e3, 0.0, -1.0], [1e3, 0.0, -1.0]).unwrap();
+        assert!((first[0] + band).abs() < 1e-9 && (last[0] - band).abs() < 1e-9);
+        // A parallel projection has a band of fixed width.
+        let parallel = ClipVolume::new(
+            &Projection::Orthographic {
+                height: 2.0,
+                near: 0.1,
+                far: 100.0,
+            },
+            2.0,
+        );
+        let (_, cut) = parallel
+            .segment([0.0, 0.0, -1.0], [0.0, 1e6, -1.0])
+            .unwrap();
+        assert!((cut[1] - GUARD_BAND).abs() < 1e-9, "{cut:?}");
+        let (_, cut) = parallel
+            .segment([0.0, 0.0, -1.0], [1e6, 0.0, -1.0])
+            .unwrap();
+        assert!((cut[0] - 2.0 * GUARD_BAND).abs() < 1e-9, "{cut:?}");
+    }
+
+    /// A rubber band from just in front of the eye to a point 10⁷ m away, crossing the near
+    /// plane, reaches the GPU as the same small segment whether the scene sits at the origin or
+    /// 10⁷ m from it.
+    #[test]
+    fn a_rubber_band_far_from_the_origin_is_clipped_like_one_at_the_origin() {
+        let records = |offset: f64| {
+            let camera = Camera {
+                eye: Point3::new(offset, offset - 5.0, offset),
+                target: Point3::new(offset, offset, offset),
+                up: Vector3::new(0.0, 0.0, 1.0),
+                projection: Projection::Perspective {
+                    fov_y_radians: 1.0,
+                    near: 0.1,
+                },
+            };
+            let mut overlay = Overlay::new();
+            overlay
+                .line(
+                    [offset + 0.5, offset - 5.5, offset],
+                    [offset + 1e7, offset + 1e7, offset - 1e6],
+                    3.0,
+                    Tone::Preview,
+                )
+                .unwrap();
+            let (mut frame, mut list) = (OverlayFrame::default(), DrawList::default());
+            let view = ViewFrame::new(&camera).unwrap();
+            let clip = ClipVolume::new(&camera.projection, 1.5);
+            frame.prepare(
+                &overlay,
+                &Theme::light(),
+                &view,
+                &clip,
+                &World::new(8),
+                &mut list,
+            );
+            frame.primitives
+        };
+        let near = records(0.0);
+        let far = records(1e7);
+        assert_eq!(near.len(), 2 * PRIMITIVE_FLOATS);
+        for (a, b) in near.iter().zip(&far) {
+            assert!(a.is_finite() && (a - b).abs() <= 1e-3, "{a} {b}");
+        }
+        // Both ends lie in front of the near plane and within the guard band.
+        let tan_y = GUARD_BAND * libm::tan(0.5);
+        let (band_x, band_y) = (tan_y * 1.5 + 1e-6, tan_y + 1e-6);
+        let ink = &near[PRIMITIVE_FLOATS..];
+        for point in
+            [&ink[0..3], &ink[4..7]].map(|p| p.iter().map(|&v| f64::from(v)).collect::<Vec<_>>())
+        {
+            assert!(point[2] <= -0.1 + 1e-6, "{point:?}");
+            assert!(point[0].abs() <= band_x * -point[2], "{point:?}");
+            assert!(point[1].abs() <= band_y * -point[2], "{point:?}");
+        }
     }
 
     #[test]
@@ -736,10 +906,24 @@ mod tests {
             .unwrap();
         let (mut frame, mut list) = (OverlayFrame::default(), DrawList::default());
         let world = World::new(8);
-        frame.prepare(&overlay, &Theme::light(), &view(), 0.1, &world, &mut list);
+        frame.prepare(
+            &overlay,
+            &Theme::light(),
+            &view(),
+            &clip(),
+            &world,
+            &mut list,
+        );
         assert_eq!(frame.primitive_count(), 0);
         overlay.marker([0.0, 0.0, 0.0], SnapKind::Endpoint).unwrap();
-        frame.prepare(&overlay, &Theme::light(), &view(), 0.1, &world, &mut list);
+        frame.prepare(
+            &overlay,
+            &Theme::light(),
+            &view(),
+            &clip(),
+            &world,
+            &mut list,
+        );
         // A halo and an ink record.
         assert_eq!(frame.primitive_count(), 2);
         assert_eq!(frame.primitive_bytes().len() as u64, 2 * PRIMITIVE_STRIDE);
@@ -754,7 +938,14 @@ mod tests {
             .unwrap();
         overlay.marker([0.0; 3], SnapKind::Face).unwrap();
         let (mut frame, mut list) = (OverlayFrame::default(), DrawList::default());
-        frame.prepare(&overlay, &theme, &view(), 0.1, &World::new(8), &mut list);
+        frame.prepare(
+            &overlay,
+            &theme,
+            &view(),
+            &clip(),
+            &World::new(8),
+            &mut list,
+        );
         let records: Vec<_> = frame.primitives.chunks(PRIMITIVE_FLOATS).collect();
         assert_eq!(records.len(), 4);
         let rgb = |record: &[f32]| [record[8], record[9], record[10]];
@@ -822,7 +1013,7 @@ mod tests {
             &overlay,
             &Theme::light(),
             &view(),
-            0.1,
+            &clip(),
             &World::new(8),
             &mut list,
         );
