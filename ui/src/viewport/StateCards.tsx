@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useLayoutEffect, useRef } from "react";
 import { useI18n } from "../i18n/I18nProvider";
 import { useShellState } from "../shell/ShellState";
 import { ErrorIcon } from "../ui/ErrorIcon";
@@ -67,7 +67,12 @@ export function FailedCard({ reason, repeated, onReload }: FailedProps) {
   const { notify } = useShellState();
   const reload = useRef<HTMLButtonElement>(null);
 
-  useEffect(() => reload.current?.focus(), []);
+  // The card takes the focus the view had (board 3.27d), and leaves it anywhere else alone.
+  // Before paint: the hidden canvas is about to lose it.
+  useLayoutEffect(() => {
+    const card = reload.current;
+    if (card?.closest(".vp")?.contains(document.activeElement)) card.focus();
+  }, []);
 
   // Only the cause and the browser: never model content (SEC-03).
   const copy = () => {

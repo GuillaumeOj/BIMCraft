@@ -145,6 +145,7 @@ describe("ViewportView", () => {
 
   it("stops on a device loss, focuses Reload, and starts a new viewport from it", async () => {
     const { core, viewport, user } = await ready();
+    screen.getByRole("application", { name: "3D view" }).focus();
     viewport.emit({ kind: "error", key: "device_lost" });
     const alert = await screen.findByRole("alert");
     expect(alert).toHaveTextContent("The 3D view stopped");
@@ -165,6 +166,8 @@ describe("ViewportView", () => {
     const { viewport, user } = await ready();
     viewport.emit({ kind: "error", key: "out_of_memory" });
     await screen.findByRole("alert");
+    // The focus was not in the view: it stays where it was.
+    expect(screen.getByRole("button", { name: "Reload view" })).not.toHaveFocus();
     await user.click(screen.getByRole("button", { name: "Reload view" }));
     await waitFor(() => expect(viewport.create).toHaveBeenCalledTimes(2));
     await waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument());
