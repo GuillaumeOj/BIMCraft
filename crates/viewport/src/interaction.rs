@@ -53,6 +53,9 @@ const DEFAULT_BLOCK_HEIGHT: f64 = 3.0;
 /// The longest typed distance, in metres: the bound of `elements.move`.
 const MAX_TYPED_DISTANCE: f64 = 1e6;
 
+/// The sides and height a block may have, in metres.
+const BLOCK_SIDES: core::ops::RangeInclusive<f64> = MIN_BLOCK_SIDE..=MAX_TYPED_DISTANCE;
+
 /// Frames a move's ghosts wait for the scene to show the moved elements, then vanish (the move
 /// may have been refused).
 pub(crate) const PENDING_FRAMES: u32 = 120;
@@ -87,6 +90,8 @@ enum Step {
     Height {
         first: Vec3,
         second: Vec3,
+        /// Whether the width was typed, so Esc goes back to the depth step and keeps it.
+        width_typed: bool,
     },
     /// A clipping plane waits for the face the user clicks.
     PickFace,
@@ -742,12 +747,14 @@ impl<S: SceneSink> Viewport<S> {
                     self.typed.clear();
                 }
             }
-            Step::SecondCorner { first, .. } => {
+            Step::SecondCorner { first, width } => {
                 if let Some(second) = self.second_corner() {
-                    self.confirm_footprint(first, second);
+                    // A width being typed when the corner is clicked counts as typed.
+                    let width_typed = width.is_some() || self.typed.value().is_some();
+                    self.confirm_footprint(first, second, width_typed);
                 }
             }
-            Step::Height { first, second } => {
+            Step::Height { first, second, .. } => {
                 if let Some(height) = self.pointer_height(first, second) {
                     self.commit_block(first, second, height);
                 }
@@ -899,11 +906,11 @@ impl<S: SceneSink> Viewport<S> {
                             first[1] + sign(pointer[1] - first[1]) * v,
                             first[2],
                         ];
-                        self.confirm_footprint(first, second);
+                        self.confirm_footprint(first, second, true);
                     }
                 }
             }
-            Step::Height { first, second } => {
+            Step::Height { first, second, .. } => {
                 // The default only when nothing was given: a refused value places nothing.
                 let height = if given {
                     value
@@ -920,9 +927,9 @@ impl<S: SceneSink> Viewport<S> {
 
     /// Esc: one tool step back, else the waiting preview, else the selection.
     fn cancel(&mut self) {
-        // While placing a block, Esc first empties what is being typed, then goes back one step.
-        let placing = matches!(self.step, Step::SecondCorner { .. } | Step::Height { .. });
-        if placing && self.typed.text().is_some() {
+        // While a tool takes values, Esc first empties what is being typed, then goes back one
+        // step: a move keeps its base point.
+        if self.takes_values() && self.typed.text().is_some() {
             self.typed.clear();
             self.refresh_pointer();
             return;
@@ -934,8 +941,16 @@ impl<S: SceneSink> Viewport<S> {
                 self.step = if direct { Step::Select } else { Step::MoveBase };
                 self.say(AnnouncementKey::MoveCancelled, Vec::new());
             }
-            Step::Height { first, .. } => {
-                self.step = Step::SecondCorner { first, width: None };
+            // Back to the step just left, with what it had before: a typed width is kept.
+            Step::Height {
+                first,
+                second,
+                width_typed,
+            } => {
+                self.step = Step::SecondCorner {
+                    first,
+                    width: width_typed.then(|| second[0] - first[0]),
+                };
             }
             // The depth step goes back to the width; the width step, to the first corner.
             Step::SecondCorner {
@@ -1070,13 +1085,18 @@ impl<S: SceneSink> Viewport<S> {
         })
     }
 
-    fn confirm_footprint(&mut self, first: Vec3, second: Vec3) {
+    fn confirm_footprint(&mut self, first: Vec3, second: Vec3, width_typed: bool) {
         let [width, depth] = footprint(first, second);
-        if width < MIN_BLOCK_SIDE || depth < MIN_BLOCK_SIDE {
+        // Clicked or typed, a side obeys the limits of a typed one, as the height does.
+        if !BLOCK_SIDES.contains(&width) || !BLOCK_SIDES.contains(&depth) {
             return;
         }
         self.typed.clear();
-        self.step = Step::Height { first, second };
+        self.step = Step::Height {
+            first,
+            second,
+            width_typed,
+        };
         self.say(
             AnnouncementKey::PlaceSize,
             vec![
@@ -1101,7 +1121,7 @@ impl<S: SceneSink> Viewport<S> {
     }
 
     fn commit_block(&mut self, first: Vec3, second: Vec3, height: f64) {
-        if !(MIN_BLOCK_SIDE..=MAX_TYPED_DISTANCE).contains(&height) {
+        if !BLOCK_SIDES.contains(&height) {
             return;
         }
         let [width, depth] = footprint(first, second);
@@ -1262,7 +1282,7 @@ impl<S: SceneSink> Viewport<S> {
                     }
                 }
             }
-            Step::Height { first, second } => {
+            Step::Height { first, second, .. } => {
                 if let Some(height) = self.pointer_height(first, second) {
                     let min = [first[0].min(second[0]), first[1].min(second[1]), first[2]];
                     let max = [
@@ -1329,7 +1349,7 @@ impl<S: SceneSink> Viewport<S> {
                     typed,
                 })
             }
-            Step::Height { first, second } => Some(PreviewLabel {
+            Step::Height { first, second, .. } => Some(PreviewLabel {
                 at: cursor?,
                 key: LabelKey::PlaceHeight,
                 values: vec![("height", Value::Number(self.pointer_height(first, second)?))],

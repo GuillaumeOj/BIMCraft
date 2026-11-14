@@ -1534,6 +1534,83 @@ mod tests {
         }
     }
 
+    /// The pixel where the GPU draws the world point `q`: `P · V · (q − eye)`, then the viewport
+    /// transform, from the top left.
+    fn drawn_at(camera: &Camera, size: [u32; 2], q: [f64; 3]) -> [f64; 2] {
+        let view = ViewFrame::new(camera).unwrap();
+        let [width, height] = size.map(f64::from);
+        let projection = projection_matrix(&camera.projection, width / height).unwrap();
+        let p = crate::vector::apply(&view.rotation, crate::vector::sub(q, view.eye));
+        let clip: [f64; 4] = core::array::from_fn(|row| {
+            (0..3)
+                .map(|k| f64::from(projection[k][row]) * p[k])
+                .sum::<f64>()
+                + f64::from(projection[3][row])
+        });
+        let [x, y] = [clip[0] / clip[3], clip[1] / clip[3]];
+        [
+            f64::midpoint(x, 1.0) * width,
+            f64::midpoint(1.0, -y) * height,
+        ]
+    }
+
+    #[test]
+    fn a_rectangle_finds_what_is_drawn_under_it_in_any_view() {
+        use crate::bounds::Aabb;
+        use crate::bvh::Overlap;
+
+        let size = [400, 300];
+        let target = [5.0, 3.0, 1.5];
+        // A Top view looking down −z with north up, as the viewport builds it (its forward is
+        // not exactly vertical), an isometric view from the south-east, and one from below.
+        let views = [
+            ([5.0, 3.0 - 1e-12, 40.0], [0.0, 1.0, 0.0]),
+            ([25.0, -17.0, 18.0], [0.0, 0.0, 1.0]),
+            ([-10.0, 20.0, -12.0], [0.0, 0.0, 1.0]),
+        ];
+        let projections = [
+            Projection::Perspective {
+                fov_y_radians: 0.87,
+                near: 0.04,
+            },
+            Projection::Orthographic {
+                height: 14.0,
+                near: 0.001,
+                far: 100.0,
+            },
+        ];
+        for (eye, up) in views {
+            for projection in projections {
+                let camera = Camera {
+                    eye: geom::Point3::new(eye[0], eye[1], eye[2]),
+                    target: geom::Point3::new(target[0], target[1], target[2]),
+                    up: geom::Vector3::new(up[0], up[1], up[2]),
+                    projection,
+                };
+                for q in [target, [2.0, 1.0, 0.0], [8.0, 6.0, 3.0], [1.0, 7.0, 6.0]] {
+                    let [x, y] = drawn_at(&camera, size, q);
+                    let speck = Aabb {
+                        min: q.map(|v| v - 1e-3),
+                        max: q.map(|v| v + 1e-3),
+                    };
+                    let found = |dx: f64| {
+                        let rect = [x + dx - 1.0, y - 1.0, x + dx + 1.0, y + 1.0];
+                        let frustum = rect_frustum(&camera, size, rect).unwrap();
+                        !matches!(
+                            frustum.classify(&speck, frustum.all_planes()),
+                            Overlap::Outside
+                        )
+                    };
+                    assert!(found(0.0), "{eye:?} {projection:?} {q:?} at {x} {y}");
+                    assert!(
+                        !found(20.0) && !found(-20.0),
+                        "{eye:?} {projection:?} {q:?}"
+                    );
+                }
+            }
+        }
+    }
+
     #[test]
     fn a_rectangle_must_be_finite_and_upright() {
         let camera = Camera {
@@ -1650,5 +1727,61 @@ mod tests {
         assert_eq!(&frame[16..22], &[x, y, z, AMBIENT, 640.0, 480.0]);
         assert!((x * x + y * y + z * z - 1.0).abs() < 1e-6);
         assert_eq!(size_of_val(&frame), UNIFORM_SIZE as usize);
+    }
+
+    /// The offsets of the WGSL `Frame` struct, from the shader as the GPU compiles it, against
+    /// the floats [`frame_uniform`] and [`Clip::uniform`] write (native: naga comes with wgpu-core).
+    #[cfg(not(target_family = "wasm"))]
+    #[test]
+    fn the_frame_uniform_matches_the_shader_layout() {
+        use crate::clip::{CLIP_PARAMS, CUT_COLOR, MAX_CLIP_PLANES};
+        use wgpu::naga;
+
+        let module = naga::front::wgsl::parse_str(include_str!("shader.wgsl")).unwrap();
+        naga::valid::Validator::new(
+            naga::valid::ValidationFlags::all(),
+            naga::valid::Capabilities::empty(),
+        )
+        .validate(&module)
+        .unwrap();
+        let mut layouter = naga::proc::Layouter::default();
+        layouter.update(module.to_ctx()).unwrap();
+        let (handle, frame) = module
+            .types
+            .iter()
+            .find(|(_, ty)| ty.name.as_deref() == Some("Frame"))
+            .unwrap();
+        let naga::TypeInner::Struct { members, span } = &frame.inner else {
+            panic!("Frame is a struct");
+        };
+        let offsets: Vec<(&str, u32)> = members
+            .iter()
+            .map(|member| (member.name.as_deref().unwrap(), member.offset / 4))
+            .collect();
+        let floats = |at: usize| u32::try_from(at).unwrap();
+        assert_eq!(
+            offsets,
+            [
+                ("projection", 0),
+                ("light", 16),
+                ("viewport", 20),
+                ("planes", floats(CLIP_START)),
+                ("clip", floats(CLIP_START + CLIP_PARAMS)),
+                ("cut_color", floats(CLIP_START + CUT_COLOR)),
+            ]
+        );
+        assert_eq!(*span, UNIFORM_SIZE);
+        assert_eq!(layouter[handle].size, UNIFORM_SIZE);
+        assert_eq!(FRAME_FLOATS * 4, UNIFORM_SIZE as usize);
+        // The planes are an array of MAX_CLIP_PLANES vectors of four.
+        let planes = members
+            .iter()
+            .find(|member| member.name.as_deref() == Some("planes"))
+            .unwrap();
+        assert!(matches!(
+            module.types[planes.ty].inner,
+            naga::TypeInner::Array { size: naga::ArraySize::Constant(n), stride: 16, .. }
+                if n.get() == u32::try_from(MAX_CLIP_PLANES).unwrap()
+        ));
     }
 }

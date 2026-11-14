@@ -4,26 +4,24 @@
 // Helpers of a test: a failure is a test failure.
 #![allow(clippy::panic, clippy::unwrap_used)]
 
-use render::{DisplayState, MeshData, Placement, RenderError, Renderer, Theme};
+#[path = "../../render/tests/support/mod.rs"]
+#[allow(
+    dead_code,
+    reason = "the renderer's GPU test support: its box meshes serve its own tests"
+)]
+mod support;
+
+use std::collections::BTreeMap;
+
+use render::{DisplayState, MeshData, Placement, Renderer, Theme};
 use scene_wire::{Element, Mesh, SceneDelta};
+use support::{FORMAT, Target, device};
 use viewport::{
-    Button, ElementId, InputEvent, Intent, Modifiers, Preview, PreviewLine, RendererSink,
-    SceneSink, SinkError, Tool, ViewCommand, Viewport, ViewportEvent,
+    Button, ElementId, InputEvent, Intent, Modifiers, Preset, Preview, PreviewLine, ProjectionMode,
+    RendererSink, SceneSink, SinkError, Tool, ViewCommand, Viewport, ViewportEvent,
 };
 
-const FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
 const SIZE: [u32; 2] = [96, 64];
-
-fn device() -> (wgpu::Device, wgpu::Queue) {
-    match pollster::block_on(render::headless_device()) {
-        Ok(device) => device,
-        Err(error @ RenderError::NoAdapter { .. }) => panic!(
-            "the GPU tests need a GPU adapter, software ones included (lavapipe on Linux: \
-             scripts/linux-gpu-deps.sh; WARP on Windows; Metal on macOS): {error}"
-        ),
-        Err(error) => panic!("the GPU tests could not create a device: {error}"),
-    }
-}
 
 fn cube(id: u64) -> Mesh {
     let mut positions = Vec::new();
@@ -43,7 +41,13 @@ fn cube(id: u64) -> Mesh {
                 n[axis] = side * 2.0;
                 normals.push(n);
             }
-            indices.extend_from_slice(&[base, base + 1, base + 2, base, base + 2, base + 3]);
+            // Counterclockwise seen from outside, as geom tessellates.
+            let order = if side < 0.0 {
+                [0, 2, 1, 0, 3, 2]
+            } else {
+                [0, 1, 2, 0, 2, 3]
+            };
+            indices.extend(order.map(|corner| base + corner));
         }
     }
     Mesh {
@@ -237,4 +241,122 @@ fn the_renderer_sink_maps_ids_and_refuses_unknown_ones() {
         .unwrap();
     sink.remove_object(id(1)).unwrap();
     sink.remove_mesh(1).unwrap();
+}
+
+/// The full scene of the e2e tests (`ui/e2e/fixtures/README.md`): blocks 1 and 2 are 4 × 2 × 3 m
+/// at (0, 0, 0) and (6, 0, 0), block 3 is 2 × 2 × 6 m at (0, 6, 0).
+const BLOCKS: &[u8] = include_bytes!("../../../ui/e2e/fixtures/scene-blocks.bin");
+
+/// The target of the picking test.
+const PICK_SIZE: [u32; 2] = [192, 128];
+
+/// Renders the viewport's view into `target` and reads its pixels back, row by row from the
+/// top left.
+fn frame(
+    viewport: &mut Viewport<RendererSink>,
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    target: &Target,
+) -> Vec<[u8; 4]> {
+    let camera = viewport.camera();
+    let clear = Theme::light().clear_color();
+    viewport
+        .sink_mut()
+        .renderer_mut()
+        .render(&target.view, target.size, &camera, clear)
+        .unwrap();
+    target.read(device, queue).as_chunks::<4>().0.to_vec()
+}
+
+/// Clicks the centre of pixel `[x, y]` and leaves the view, so no hover tints the next frame.
+fn click_pixel(viewport: &mut Viewport<RendererSink>, [x, y]: [u32; 2]) {
+    let pos = [f64::from(x) + 0.5, f64::from(y) + 0.5];
+    let mods = Modifiers::default();
+    viewport.input(InputEvent::PointerMove { pos, mods });
+    viewport.input(InputEvent::PointerDown {
+        pos,
+        button: Button::Primary,
+        mods,
+    });
+    viewport.input(InputEvent::PointerUp {
+        pos,
+        button: Button::Primary,
+        mods,
+    });
+    viewport.input(InputEvent::PointerLeave);
+}
+
+/// In every preset and both projections, after a zoom fit over the e2e blocks, a click selects
+/// what is drawn under the pointer: nothing over the background, else the block that turns to
+/// the selection colour there once selected, and no other block's pixels change.
+#[test]
+fn a_click_selects_what_is_drawn_under_it_in_every_view() {
+    let (device, queue) = device();
+    let renderer = Renderer::new(&device, &queue, FORMAT).unwrap();
+    let mut viewport = Viewport::new(RendererSink::new(renderer), PICK_SIZE.map(f64::from), 1.0);
+    viewport.set_theme(Theme::light());
+    viewport.apply_scene(BLOCKS).unwrap();
+    let target = Target::new(&device, PICK_SIZE);
+    let [width, height] = PICK_SIZE;
+    let at = |pixels: &[[u8; 4]], x: u32, y: u32| pixels[(y * width + x) as usize];
+    let presets = [
+        Preset::Top,
+        Preset::Front,
+        Preset::Back,
+        Preset::Left,
+        Preset::Right,
+        Preset::IsoSe,
+        Preset::IsoSw,
+        Preset::IsoNe,
+        Preset::IsoNw,
+    ];
+    for mode in [ProjectionMode::Perspective, ProjectionMode::Parallel] {
+        for preset in presets {
+            viewport.command(ViewCommand::Select(Vec::new()));
+            viewport.command(ViewCommand::Projection(mode));
+            viewport.command(ViewCommand::ViewPreset(preset));
+            viewport.command(ViewCommand::ZoomFit);
+            let before = frame(&mut viewport, &device, &queue, &target);
+            let background = at(&before, 0, 0);
+            // The picked pixels of each block, away from every edge of the frame.
+            let mut picked: BTreeMap<ElementId, Vec<[u32; 2]>> = BTreeMap::new();
+            for y in (4..height - 4).step_by(8) {
+                for x in (4..width - 4).step_by(8) {
+                    let colour = at(&before, x, y);
+                    let flat = [(x - 3, y), (x + 3, y), (x, y - 3), (x, y + 3)]
+                        .iter()
+                        .all(|&(nx, ny)| at(&before, nx, ny) == colour);
+                    if !flat {
+                        continue;
+                    }
+                    click_pixel(&mut viewport, [x, y]);
+                    let selection = viewport.selection().to_vec();
+                    let context = format!("{mode:?} {preset:?} at {x} {y}");
+                    if colour == background {
+                        assert!(selection.is_empty(), "{context}: {selection:?}");
+                        continue;
+                    }
+                    let [element] = selection[..] else {
+                        panic!("{context}: {selection:?}");
+                    };
+                    picked.entry(element).or_default().push([x, y]);
+                }
+            }
+            assert!(picked.len() >= 2, "{mode:?} {preset:?}: {picked:?}");
+            for element in picked.keys() {
+                viewport.command(ViewCommand::Select(vec![*element]));
+                let selected = frame(&mut viewport, &device, &queue, &target);
+                for (other, others) in &picked {
+                    for &[x, y] in others {
+                        let changed = at(&selected, x, y) != at(&before, x, y);
+                        assert_eq!(
+                            changed,
+                            other == element,
+                            "{mode:?} {preset:?}: {element:?} selected, {other:?} picked at {x} {y}"
+                        );
+                    }
+                }
+            }
+        }
+    }
 }

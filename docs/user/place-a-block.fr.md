@@ -25,7 +25,7 @@ Quelques mots employés sur cette page :
 | Option | Effet |
 | --- | --- |
 | Valeurs saisies | Dimensions en mètres, avec un point comme séparateur décimal. Chaque valeur se termine par **Entrée**, jamais par Tab. |
-| **Échap** | Revient d'une étape : de la hauteur à l'emprise, puis au premier angle, puis hors de l'outil. |
+| **Échap** | Efface d'abord la valeur en cours de saisie. Revient ensuite d'une étape : de la hauteur à l'emprise, puis au premier angle, puis hors de l'outil. Une largeur saisie est conservée : depuis la hauteur, Échap revient à la profondeur, et un second Échap à la largeur. |
 | Maintenir **Alt** | Suspend l'accroche tant que la touche est maintenue. |
 | `S` | Active ou désactive l'accroche. |
 

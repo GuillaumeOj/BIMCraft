@@ -706,6 +706,9 @@ fn the_validity_checks_agree_with_the_decoder() {
     let mut empty = triangle(1);
     empty.indices.clear();
     assert!(!mesh_is_valid(&empty));
+    let mut unpaired = triangle(1);
+    unpaired.normals.pop();
+    assert!(!mesh_is_valid(&unpaired));
 
     assert!(placement_is_valid(&IDENTITY, &[1.0, 2.0, 3.0]));
     assert!(!placement_is_valid(&IDENTITY, &[2e9, 0.0, 0.0]));

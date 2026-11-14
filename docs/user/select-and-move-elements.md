@@ -39,7 +39,7 @@ There is no way yet to pick an element with the keyboard alone; keyboard users w
 
 **Result:** the elements move, and a message such as "Moved 1 element by 2.500 m" appears with an **Undo** button.
 
-Press **Esc** to cancel a move before it ends.
+Press **Esc** to cancel a move before it ends. If you are typing a distance, the first **Esc** only clears it: the move keeps its base point and follows the pointer again; a second **Esc** cancels the move.
 
 ## Options
 
