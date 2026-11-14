@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import type { Locator, Page } from "@playwright/test";
+import { expect, type Locator, type Page } from "@playwright/test";
 
 // Scene deltas written by a Rust test from known documents (fixtures/README.md).
 const fixture = (name: string) => [
@@ -142,19 +142,49 @@ export const status = (page: Page) => page.locator("#vp-status");
 export const calls = (page: Page, method: string) =>
   page.evaluate((name) => window.__core.calls.filter((call) => call.method === name), method);
 
+/** How long a click has to show its selection in the status bar: the event comes a frame later. */
+const SELECTION_WAIT_MS = 250;
+/** The floating panels and the tool bar cover these margins of the canvas. */
+const MARGIN = { left: 280, right: 320, top: 60, bottom: 130 };
+const STEP = 40;
+
 /**
- * Clicks the canvas on a grid of points around its centre until one selects an element: the
- * camera frames the whole model, but where each block lands on screen is the renderer's business.
+ * Clicks the canvas on a grid, from its centre outwards, until one click selects an element. The
+ * camera frames the whole model, but where each block lands on screen (and which gaps lie
+ * between them, for example in a top view) is the renderer's business, so the grid covers the
+ * whole free area. Each click is given a moment to show its selection before the next one, which
+ * would clear it on empty space.
  */
 export async function selectAnElement(page: Page, canvas: Locator) {
   const box = await canvas.boundingBox();
   if (box === null) throw new Error("the canvas has no box");
-  for (const dy of [0, -40, 40, -80, 80]) {
-    for (const dx of [0, -40, 40, -80, 80, -120, 120]) {
-      const point = { x: box.x + box.width / 2 + dx, y: box.y + box.height / 2 + dy };
-      await page.mouse.click(point.x, point.y);
-      if (/1 element selected/.test((await status(page).textContent()) ?? "")) return point;
-    }
+  const centre = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+  const reach = {
+    x: Math.min(centre.x - box.x - MARGIN.left, box.x + box.width - MARGIN.right - centre.x),
+    y: Math.min(centre.y - box.y - MARGIN.top, box.y + box.height - MARGIN.bottom - centre.y),
+  };
+  const offsets: [number, number][] = [];
+  for (let dy = -reach.y; dy <= reach.y; dy += STEP) {
+    for (let dx = -reach.x; dx <= reach.x; dx += STEP) offsets.push([dx, dy]);
   }
-  throw new Error("no click selected an element");
+  offsets.sort((a, b) => Math.hypot(...a) - Math.hypot(...b));
+  const tried: string[] = [];
+  for (const [dx, dy] of offsets) {
+    const point = { x: centre.x + dx, y: centre.y + dy };
+    await page.mouse.click(point.x, point.y);
+    const selected = await expect(status(page))
+      .toHaveText(/1 element selected/, { timeout: SELECTION_WAIT_MS })
+      .then(
+        () => true,
+        () => false,
+      );
+    if (selected) return point;
+    tried.push(`${Math.round(point.x)},${Math.round(point.y)}`);
+  }
+  // What the failure needs to be understood: where it clicked, and what the view said.
+  const text = await status(page).textContent();
+  throw new Error(
+    `no click selected an element: canvas ${JSON.stringify(box)}, ${tried.length} points tried ` +
+      `(${tried.slice(0, 12).join(" ")}…), status "${text}"`,
+  );
 }

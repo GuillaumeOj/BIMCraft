@@ -46,7 +46,9 @@ test("cut the model with a section box: type an extent, drag a face, turn it off
   await expect(active).not.toBeChecked();
   await expect(field(page, "Max X")).toBeHidden();
 
-  await active.check();
+  // The checkbox follows the state the view reports a frame later, so it is clicked, then awaited.
+  await active.click();
+  await expect(active).toBeChecked();
   await expect(page.getByText("Section box active")).toBeVisible();
   await expect(
     page.getByText(/Section box · drag a handle or type values in the View panel/),
@@ -90,7 +92,7 @@ test("hide a category from the Visibility list, then reset", async ({ page }) =>
   await showViewPanel(page);
   await expect(page.getByText("Everything is visible", { exact: true }).last()).toBeVisible();
 
-  const opener = page.getByRole("button", { name: "Visibility" });
+  const opener = page.getByRole("button", { name: "Visibility", exact: true });
   await opener.click();
   const popover = page.getByRole("dialog", { name: "Visibility" });
   const row = popover.getByRole("switch", { name: /^Block/ });
