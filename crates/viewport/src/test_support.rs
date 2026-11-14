@@ -211,29 +211,19 @@ impl SceneSink for FakeSink {
                     x >= rect[0] && x <= rect[2] && y >= rect[1] && y <= rect[3]
                 })
             });
-            if corner_in || ray_meets_box(&ray, sub(min, view.eye), sub(max, view.eye)) {
+            if corner_in
+                || crate::pick::ray_meets_box(
+                    &ray,
+                    sub(min, view.eye),
+                    sub(max, view.eye),
+                    f64::INFINITY,
+                )
+            {
                 found(id);
             }
         }
         Ok(())
     }
-}
-
-fn ray_meets_box(ray: &crate::view::Ray, min: Vec3, max: Vec3) -> bool {
-    let (mut enter, mut leave) = (0.0_f64, f64::INFINITY);
-    for a in 0..3 {
-        if ray.direction[a].abs() < 1e-300 {
-            if ray.origin[a] < min[a] || ray.origin[a] > max[a] {
-                return false;
-            }
-            continue;
-        }
-        let t0 = (min[a] - ray.origin[a]) / ray.direction[a];
-        let t1 = (max[a] - ray.origin[a]) / ray.direction[a];
-        enter = enter.max(t0.min(t1));
-        leave = leave.min(t0.max(t1));
-    }
-    enter <= leave
 }
 
 /// The id of element `n`.

@@ -178,7 +178,7 @@ impl SceneCache {
         {
             return Err(SceneError::UnknownMesh);
         }
-        if delta.full {
+        if delta.full || removed_meshes.is_empty() {
             return Ok(());
         }
         // After the delta, the elements still held that it neither removes nor changes keep

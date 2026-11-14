@@ -83,7 +83,7 @@ impl CameraController {
     /// The camera for a scene within `scene`: the parallel view stands back far enough to see
     /// all of it.
     pub(crate) fn camera(&self, scene: Option<Sphere>) -> Camera {
-        let (forward, up) = (forward(self.yaw, self.pitch), up(self.yaw, self.pitch));
+        let (forward, up) = (self.forward(), self.up());
         let (eye, projection) = match self.mode {
             ProjectionMode::Perspective => (
                 sub(self.target, scale(forward, self.distance)),
@@ -122,14 +122,11 @@ impl CameraController {
         let offset = sub(self.target, pivot);
         let local = [
             dot(offset, self.right()),
-            dot(offset, up(self.yaw, self.pitch)),
+            dot(offset, self.up()),
             dot(offset, self.forward()),
         ];
         let turned = add(
-            add(
-                scale(next.right(), local[0]),
-                scale(up(next.yaw, next.pitch), local[1]),
-            ),
+            add(scale(next.right(), local[0]), scale(next.up(), local[1])),
             scale(next.forward(), local[2]),
         );
         next.target = add(pivot, turned);
@@ -139,10 +136,7 @@ impl CameraController {
     /// Slides the view by `right` and `up` metres in the plane of the screen.
     pub(crate) fn pan(&mut self, right: f64, up_by: f64, scene: Option<Sphere>) {
         let mut next = *self;
-        let shift = add(
-            scale(self.right(), right),
-            scale(up(self.yaw, self.pitch), up_by),
-        );
+        let shift = add(scale(self.right(), right), scale(self.up(), up_by));
         next.target = add(self.target, shift);
         self.adopt(next, scene);
     }
@@ -217,8 +211,12 @@ impl CameraController {
         self.adopt(next, scene);
     }
 
+    fn up(&self) -> Vec3 {
+        up(self.yaw, self.pitch)
+    }
+
     fn right(&self) -> Vec3 {
-        cross(self.forward(), up(self.yaw, self.pitch))
+        cross(self.forward(), self.up())
     }
 
     /// Takes `next` if its camera is valid.

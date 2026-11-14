@@ -82,8 +82,8 @@ pub(crate) fn snap(query: &Query<'_>, sink: &mut impl SceneSink) -> Option<Snap>
         &view,
         &ray,
         &elements,
-        query.skip,
         query.pickable,
+        f64::INFINITY,
     ) {
         return Some(found(SnapKind::Face, hit.relative));
     }
@@ -156,15 +156,9 @@ fn vertex_or_edge(
 /// Whether nothing among `elements` hides the point (relative to the eye) from the eye.
 fn visible(query: &Query<'_>, view: &View, elements: &[ElementId], relative: Vec3) -> bool {
     let (ray, distance) = ray_to(view, relative);
-    let blocker = nearest(
-        query.cache,
-        view,
-        &ray,
-        elements,
-        query.skip,
-        query.pickable,
-    );
-    blocker.is_none_or(|hit| hit.t >= distance - (1e-6 * distance + 1e-6))
+    // Only a face before the point (beyond rounding) hides it: the search stops there.
+    let before = distance - (1e-6 * distance + 1e-6);
+    nearest(query.cache, view, &ray, elements, query.pickable, before).is_none()
 }
 
 /// The ray from the eye (perspective) or from the image plane (parallel) to a point, and the

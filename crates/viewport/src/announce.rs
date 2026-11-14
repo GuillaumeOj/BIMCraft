@@ -14,65 +14,58 @@ pub(crate) const INTERVAL: u32 = 30;
 pub(crate) struct Announcer {
     /// Frames left before the next announcement may go out.
     wait: u32,
-    pending: Option<Announcement>,
+    /// The announcement waiting for its frame, and whether it is a snap kind.
+    pending: Option<(Announcement, bool)>,
     last_snap: Option<SnapKind>,
 }
 
 impl Announcer {
-    /// Queues `announcement`: out now when the interval has passed, else when it does, unless a
-    /// newer one replaces it.
-    pub(crate) fn say(&mut self, announcement: Announcement, out: &mut Vec<Announcement>) {
-        if self.wait == 0 {
-            out.push(announcement);
-            self.wait = INTERVAL;
-        } else if !(is_snap(&announcement) && self.pending.as_ref().is_some_and(|p| !is_snap(p))) {
-            self.pending = Some(announcement);
-        }
+    /// The outcome of an action: out now when the interval has passed, else when it does,
+    /// unless a newer one replaces it.
+    pub(crate) fn say(&mut self, announcement: Announcement) -> Option<Announcement> {
+        self.queue(announcement, false)
     }
 
     /// Announces the snap kind if it changed; `None` (no snap) is silent but resets it.
-    pub(crate) fn snap(&mut self, kind: Option<SnapKind>, out: &mut Vec<Announcement>) {
+    pub(crate) fn snap(&mut self, kind: Option<SnapKind>) -> Option<Announcement> {
         if kind == self.last_snap {
-            return;
+            return None;
         }
         self.last_snap = kind;
-        if let Some(kind) = kind {
-            self.say(
-                Announcement {
-                    key: AnnouncementKey::of_snap(kind),
-                    values: Vec::new(),
-                },
-                out,
-            );
-        }
+        let announcement = Announcement {
+            key: AnnouncementKey::of_snap(kind?),
+            values: Vec::new(),
+        };
+        self.queue(announcement, true)
     }
 
-    /// One frame passed.
-    pub(crate) fn tick(&mut self, out: &mut Vec<Announcement>) {
+    /// One frame passed: the waiting announcement, when its frame has come.
+    pub(crate) fn tick(&mut self) -> Option<Announcement> {
         self.wait = self.wait.saturating_sub(1);
-        if self.wait == 0
-            && let Some(announcement) = self.pending.take()
-        {
-            out.push(announcement);
-            self.wait = INTERVAL;
+        if self.wait > 0 {
+            return None;
         }
+        let (announcement, _) = self.pending.take()?;
+        self.wait = INTERVAL;
+        Some(announcement)
     }
 
     /// Whether an announcement waits for its frame.
     pub(crate) fn is_waiting(&self) -> bool {
         self.pending.is_some()
     }
-}
 
-fn is_snap(announcement: &Announcement) -> bool {
-    matches!(
-        announcement.key,
-        AnnouncementKey::SnapEndpoint
-            | AnnouncementKey::SnapMidpoint
-            | AnnouncementKey::SnapEdge
-            | AnnouncementKey::SnapFace
-            | AnnouncementKey::SnapGround
-    )
+    fn queue(&mut self, announcement: Announcement, snap: bool) -> Option<Announcement> {
+        if self.wait == 0 {
+            self.wait = INTERVAL;
+            return Some(announcement);
+        }
+        // A snap kind never replaces a waiting outcome.
+        if !(snap && self.pending.as_ref().is_some_and(|&(_, waiting)| !waiting)) {
+            self.pending = Some((announcement, snap));
+        }
+        None
+    }
 }
 
 #[cfg(test)]
@@ -90,23 +83,23 @@ mod tests {
     fn announcements_are_throttled_by_frames_and_the_newest_wins() {
         let mut announcer = Announcer::default();
         let mut out = Vec::new();
-        announcer.say(say(AnnouncementKey::SelectionCount), &mut out);
+        out.extend(announcer.say(say(AnnouncementKey::SelectionCount)));
         assert_eq!(out.len(), 1);
-        announcer.say(say(AnnouncementKey::ViewPreset), &mut out);
-        announcer.say(say(AnnouncementKey::ViewProjection), &mut out);
+        out.extend(announcer.say(say(AnnouncementKey::ViewPreset)));
+        out.extend(announcer.say(say(AnnouncementKey::ViewProjection)));
         assert!(announcer.is_waiting());
         for _ in 1..INTERVAL {
-            announcer.tick(&mut out);
+            out.extend(announcer.tick());
         }
         assert_eq!(out.len(), 1);
-        announcer.tick(&mut out);
+        out.extend(announcer.tick());
         assert_eq!(out[1].key, AnnouncementKey::ViewProjection);
         assert!(!announcer.is_waiting());
         // Quiet frames reopen the window.
         for _ in 0..INTERVAL {
-            announcer.tick(&mut out);
+            out.extend(announcer.tick());
         }
-        announcer.say(say(AnnouncementKey::SelectionCleared), &mut out);
+        out.extend(announcer.say(say(AnnouncementKey::SelectionCleared)));
         assert_eq!(out.len(), 3);
     }
 
@@ -114,19 +107,19 @@ mod tests {
     fn the_snap_kind_is_announced_only_when_it_changes() {
         let mut announcer = Announcer::default();
         let mut out = Vec::new();
-        announcer.snap(Some(SnapKind::Endpoint), &mut out);
-        announcer.snap(Some(SnapKind::Endpoint), &mut out);
+        out.extend(announcer.snap(Some(SnapKind::Endpoint)));
+        out.extend(announcer.snap(Some(SnapKind::Endpoint)));
         assert_eq!(out.len(), 1);
         assert_eq!(out[0].key, AnnouncementKey::SnapEndpoint);
-        announcer.snap(None, &mut out);
+        out.extend(announcer.snap(None));
         assert!(!announcer.is_waiting());
-        announcer.snap(Some(SnapKind::Endpoint), &mut out);
+        out.extend(announcer.snap(Some(SnapKind::Endpoint)));
         assert!(announcer.is_waiting());
         // An outcome replaces a waiting snap; a snap does not replace a waiting outcome.
-        announcer.say(say(AnnouncementKey::MoveDistance), &mut out);
-        announcer.snap(Some(SnapKind::Face), &mut out);
+        out.extend(announcer.say(say(AnnouncementKey::MoveDistance)));
+        out.extend(announcer.snap(Some(SnapKind::Face)));
         for _ in 0..INTERVAL {
-            announcer.tick(&mut out);
+            out.extend(announcer.tick());
         }
         assert_eq!(
             out.last().map(|a| a.key),

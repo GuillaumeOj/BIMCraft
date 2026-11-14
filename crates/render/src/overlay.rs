@@ -17,6 +17,7 @@
 //! a marker 10⁷ m from the origin sits on the pixel it should. A ghost is a draw of the mesh the
 //! renderer already holds, with one more instance record: moving a preview uploads no mesh.
 
+use crate::frustum::camera_planes;
 use crate::theme::{BOX_ALPHA, Theme};
 use crate::transform::{Matrix, ViewFrame, camera_relative_model_view, to_gpu};
 use crate::vector::{add, apply, dot, mul, scale, sub};
@@ -586,35 +587,12 @@ pub(crate) struct ClipVolume {
 impl ClipVolume {
     /// The volume of a validated projection on a target of `aspect` (width over height).
     pub(crate) fn new(projection: &Projection, aspect: f64) -> Self {
-        let near = match *projection {
-            Projection::Perspective { near, .. } | Projection::Orthographic { near, .. } => near,
-        };
-        let near_plane = ([0.0, 0.0, -1.0], -near);
-        let planes = match *projection {
-            Projection::Perspective { fov_y_radians, .. } => {
-                let tan_y = GUARD_BAND * libm::tan(fov_y_radians / 2.0);
-                let tan_x = tan_y * aspect;
-                [
-                    ([1.0, 0.0, -tan_x], 0.0),
-                    ([-1.0, 0.0, -tan_x], 0.0),
-                    ([0.0, 1.0, -tan_y], 0.0),
-                    ([0.0, -1.0, -tan_y], 0.0),
-                    near_plane,
-                ]
-            }
-            Projection::Orthographic { height, .. } => {
-                let half_y = GUARD_BAND * height / 2.0;
-                let half_x = half_y * aspect;
-                [
-                    ([1.0, 0.0, 0.0], half_x),
-                    ([-1.0, 0.0, 0.0], half_x),
-                    ([0.0, 1.0, 0.0], half_y),
-                    ([0.0, -1.0, 0.0], half_y),
-                    near_plane,
-                ]
-            }
-        };
-        Self { near, planes }
+        let band = [-GUARD_BAND, -GUARD_BAND, GUARD_BAND, GUARD_BAND];
+        let (planes, _) = camera_planes(projection, aspect, band);
+        Self {
+            near: -planes[4].1,
+            planes: [planes[0], planes[1], planes[2], planes[3], planes[4]],
+        }
     }
 
     /// The part of the segment inside the volume (Liang–Barsky), or `None` when none is.

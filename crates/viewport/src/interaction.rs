@@ -92,7 +92,6 @@ enum Gesture {
     None,
     /// A button is down and has not moved beyond the drag threshold.
     Pressed {
-        button: Button,
         start: [f64; 2],
         mods: Modifiers,
     },
@@ -428,10 +427,8 @@ impl<S: SceneSink> Viewport<S> {
 
     /// One frame passed: sends due announcements and ages a waiting preview.
     pub fn tick(&mut self) -> Tick {
-        let mut said = Vec::new();
-        self.announcer.tick(&mut said);
-        self.events
-            .extend(said.into_iter().map(ViewportEvent::Announce));
+        let said = self.announcer.tick();
+        self.announce(said);
         if let Some(pending) = &mut self.pending {
             pending.frames = pending.frames.saturating_sub(1);
             if pending.frames == 0 {
@@ -471,10 +468,13 @@ impl<S: SceneSink> Viewport<S> {
     }
 
     fn say(&mut self, key: AnnouncementKey, values: Vec<(&'static str, Value)>) {
-        let mut said = Vec::new();
-        self.announcer.say(Announcement { key, values }, &mut said);
+        let said = self.announcer.say(Announcement { key, values });
+        self.announce(said);
+    }
+
+    fn announce(&mut self, announcement: Option<Announcement>) {
         self.events
-            .extend(said.into_iter().map(ViewportEvent::Announce));
+            .extend(announcement.map(ViewportEvent::Announce));
     }
 
     fn set_alt(&mut self, alt: bool) {
@@ -552,7 +552,6 @@ impl<S: SceneSink> Viewport<S> {
             &camera,
             self.size,
             pos,
-            &|_| false,
             &Everything,
         )?;
         Some((
@@ -564,9 +563,9 @@ impl<S: SceneSink> Viewport<S> {
 
     fn snap_at(&mut self, pos: [f64; 2]) -> Option<Snap> {
         let camera = self.camera();
-        let moving: Vec<ElementId> = match self.step {
-            Step::MoveTarget { .. } => self.selection.clone(),
-            _ => Vec::new(),
+        let moving: &[ElementId] = match self.step {
+            Step::MoveTarget { .. } => &self.selection,
+            _ => &[],
         };
         let query = Query {
             cache: &self.cache,
@@ -596,11 +595,7 @@ impl<S: SceneSink> Viewport<S> {
                 last: pos,
                 depth: self.pan_depth(pos),
             },
-            Button::Primary => Gesture::Pressed {
-                button,
-                start: pos,
-                mods,
-            },
+            Button::Primary => Gesture::Pressed { start: pos, mods },
         };
     }
 
@@ -672,17 +667,10 @@ impl<S: SceneSink> Viewport<S> {
         self.cursor = Some(pos);
         let gesture = core::mem::replace(&mut self.gesture, Gesture::None);
         match gesture {
-            Gesture::Pressed {
-                button: pressed, ..
-            } if pressed == button => self.click(pos, mods),
+            Gesture::Pressed { .. } if button == Button::Primary => self.click(pos, mods),
             Gesture::Drag => {
                 self.refresh_pointer();
-                if let Some(target) = self.move_target() {
-                    self.commit_move(target);
-                }
-                if matches!(self.step, Step::MoveTarget { direct: true, .. }) {
-                    self.step = Step::Select;
-                }
+                self.commit_move(self.move_target());
             }
             _ => {}
         }
@@ -703,7 +691,7 @@ impl<S: SceneSink> Viewport<S> {
             }
             Step::MoveTarget { .. } => {
                 if let Some(target) = self.move_target() {
-                    self.commit_move(target);
+                    self.commit_move(Some(target));
                 }
             }
             Step::FirstCorner => {
@@ -742,11 +730,8 @@ impl<S: SceneSink> Viewport<S> {
         } else {
             self.set_hover(None);
             self.snap = self.snap_at(pos);
-            let mut said = Vec::new();
-            self.announcer
-                .snap(self.snap.and_then(|snap| snap.kind), &mut said);
-            self.events
-                .extend(said.into_iter().map(ViewportEvent::Announce));
+            let said = self.announcer.snap(self.snap.and_then(|snap| snap.kind));
+            self.announce(said);
         }
     }
 
@@ -844,10 +829,7 @@ impl<S: SceneSink> Viewport<S> {
             Step::MoveTarget { base, .. } => {
                 let direction = self.snap.and_then(|snap| normalize(sub(snap.point, base)));
                 if let (Some(v), Some(direction)) = (value, direction) {
-                    self.commit_move(add(base, scale(direction, v)));
-                    if matches!(self.step, Step::MoveTarget { direct: true, .. }) {
-                        self.step = Step::Select;
-                    }
+                    self.commit_move(Some(add(base, scale(direction, v))));
                 }
             }
             Step::SecondCorner { first, width } => {
@@ -939,13 +921,18 @@ impl<S: SceneSink> Viewport<S> {
         }
     }
 
-    fn commit_move(&mut self, target: Vec3) {
+    /// Sends the move to `target`, if it moves anything. A direct move (a drag) ends either way;
+    /// the Move tool waits for another target.
+    fn commit_move(&mut self, target: Option<Vec3>) {
         let Step::MoveTarget { base, direct } = self.step else {
             return;
         };
-        let translation = sub(target, base);
+        let translation = target.map_or([0.0; 3], |target| sub(target, base));
         let distance = norm(translation);
         if distance.is_nan() || distance <= 1e-9 || self.selection.is_empty() {
+            if direct {
+                self.step = Step::Select;
+            }
             return;
         }
         let ids = self.selection.clone();
@@ -1013,7 +1000,7 @@ impl<S: SceneSink> Viewport<S> {
     }
 
     fn confirm_footprint(&mut self, first: Vec3, second: Vec3) {
-        let (width, depth) = ((second[0] - first[0]).abs(), (second[1] - first[1]).abs());
+        let [width, depth] = footprint(first, second);
         if width < MIN_BLOCK_SIDE || depth < MIN_BLOCK_SIDE {
             return;
         }
@@ -1046,11 +1033,8 @@ impl<S: SceneSink> Viewport<S> {
         if !(MIN_BLOCK_SIDE..=MAX_TYPED_DISTANCE).contains(&height) {
             return;
         }
-        let size = [
-            (second[0] - first[0]).abs(),
-            (second[1] - first[1]).abs(),
-            height,
-        ];
+        let [width, depth] = footprint(first, second);
+        let size = [width, depth, height];
         let location = [
             f64::midpoint(first[0], second[0]),
             f64::midpoint(first[1], second[1]),
@@ -1234,15 +1218,16 @@ impl<S: SceneSink> Viewport<S> {
     fn build_label(&self) -> Option<PreviewLabel> {
         let typed = self.typed.text().map(str::to_owned);
         let view = self.view();
-        let css = |pixel: [f64; 3]| [pixel[0] / self.ratio, pixel[1] / self.ratio];
-        let cursor = self
-            .cursor
-            .map(|pos| [pos[0] / self.ratio, pos[1] / self.ratio]);
+        let css = |[x, y]: [f64; 2]| [x / self.ratio, y / self.ratio];
+        let cursor = self.cursor.map(css);
         match self.step {
             Step::MoveTarget { base, .. } => {
                 let target = self.move_target()?;
                 let middle = scale(add(base, target), 0.5);
-                let at = view.project(sub(middle, view.eye)).map(css).or(cursor)?;
+                let at = view
+                    .project(sub(middle, view.eye))
+                    .map(|[x, y, _]| css([x, y]))
+                    .or(cursor)?;
                 Some(PreviewLabel {
                     at,
                     key: LabelKey::MoveDistance,
@@ -1251,13 +1236,13 @@ impl<S: SceneSink> Viewport<S> {
                 })
             }
             Step::SecondCorner { first, .. } => {
-                let second = self.second_corner()?;
+                let [width, depth] = footprint(first, self.second_corner()?);
                 Some(PreviewLabel {
                     at: cursor?,
                     key: LabelKey::PlaceSize,
                     values: vec![
-                        ("width", Value::Number((second[0] - first[0]).abs())),
-                        ("depth", Value::Number((second[1] - first[1]).abs())),
+                        ("width", Value::Number(width)),
+                        ("depth", Value::Number(depth)),
                     ],
                     typed,
                 })
@@ -1271,6 +1256,11 @@ impl<S: SceneSink> Viewport<S> {
             _ => None,
         }
     }
+}
+
+/// The width and depth of the footprint between two opposite corners.
+fn footprint(first: Vec3, second: Vec3) -> [f64; 2] {
+    [(second[0] - first[0]).abs(), (second[1] - first[1]).abs()]
 }
 
 /// A side in device pixels, between 1 and 65 535 (NaN gives 1).

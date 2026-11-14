@@ -7,7 +7,7 @@
 use render::Camera;
 
 use crate::ElementId;
-use crate::cache::{CachedElement, CachedMesh, SceneCache};
+use crate::cache::{CachedElement, CachedMesh, SceneCache, world_bounds};
 use crate::math::{Vec3, add, apply, cross, dot, normalize, scale, sub, widen};
 use crate::sink::SceneSink;
 use crate::view::{Ray, View};
@@ -100,30 +100,33 @@ pub(crate) fn candidates(
     found
 }
 
-/// The nearest triangle `ray` meets among `elements`, beyond `min_t`, which `pickable`
-/// accepts and `skip` does not name.
+/// The nearest triangle `ray` meets among `elements` closer than `before`, which `pickable`
+/// accepts. An element whose bounds the ray misses, or meets only beyond the best hit so far,
+/// is not looked into.
 pub(crate) fn nearest(
     cache: &SceneCache,
     view: &View,
     ray: &Ray,
     elements: &[ElementId],
-    skip: &dyn Fn(ElementId) -> bool,
     pickable: &dyn Pickable,
+    before: f64,
 ) -> Option<Hit> {
     let mut best: Option<Hit> = None;
     for &id in elements {
-        if skip(id) {
-            continue;
-        }
         let Some((element, mesh)) = cache.element(id) else {
             continue;
         };
+        let limit = best.map_or(before, |best| best.t);
+        let (min, max) = world_bounds(element, mesh);
+        if !ray_meets_box(ray, sub(min, view.eye), sub(max, view.eye), limit) {
+            continue;
+        }
         let placed = Placed::new(element, mesh, view.eye);
         for triangle in placed.triangles() {
             let Some((t, normal)) = intersect(ray, &triangle) else {
                 continue;
             };
-            if best.is_some_and(|best| t >= best.t) {
+            if t >= best.map_or(before, |best| best.t) {
                 continue;
             }
             let relative = ray.at(t);
@@ -142,19 +145,46 @@ pub(crate) fn nearest(
     best
 }
 
-/// What is under the pixel `pos`: the nearest pickable face of an element not skipped.
+/// What is under the pixel `pos`: the nearest pickable face.
 pub(crate) fn pick(
     cache: &SceneCache,
     sink: &mut impl SceneSink,
     camera: &Camera,
     size: [u32; 2],
     pos: [f64; 2],
-    skip: &dyn Fn(ElementId) -> bool,
     pickable: &dyn Pickable,
 ) -> Option<Hit> {
     let view = View::new(camera, size);
     let elements = candidates(sink, camera, size, pos, 0.5);
-    nearest(cache, &view, &view.ray(pos), &elements, skip, pickable)
+    nearest(
+        cache,
+        &view,
+        &view.ray(pos),
+        &elements,
+        pickable,
+        f64::INFINITY,
+    )
+}
+
+/// Whether the ray meets the box (relative to the eye) before `limit` (slab test). The box is
+/// grown by a hair, so rounding never hides a face on its boundary.
+pub(crate) fn ray_meets_box(ray: &Ray, min: Vec3, max: Vec3, limit: f64) -> bool {
+    let (mut enter, mut leave) = (0.0_f64, limit);
+    for axis in 0..3 {
+        let margin = 1e-9 * (max[axis] - min[axis]).abs().max(1.0);
+        let (low, high) = (min[axis] - margin, max[axis] + margin);
+        let (origin, direction) = (ray.origin[axis], ray.direction[axis]);
+        if direction == 0.0 {
+            if origin < low || origin > high {
+                return false;
+            }
+            continue;
+        }
+        let (t0, t1) = ((low - origin) / direction, (high - origin) / direction);
+        enter = enter.max(t0.min(t1));
+        leave = leave.min(t0.max(t1));
+    }
+    enter <= leave
 }
 
 /// Where `ray` crosses the triangle (both sides), with the unit normal facing the ray

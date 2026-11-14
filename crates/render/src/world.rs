@@ -144,6 +144,8 @@ pub(crate) struct World {
     slots: Vec<Option<Object>>,
     free: Vec<u32>,
     index: BTreeMap<ObjectId, u32>,
+    /// How many objects are in the [`DisplayState::Ghost`] state.
+    ghosts: usize,
     bvh: Bvh,
     /// The nodes a frustum query has left to classify, with their plane masks.
     pending: Vec<(u32, u8)>,
@@ -172,6 +174,7 @@ impl World {
             slots: Vec::new(),
             free: Vec::new(),
             index: BTreeMap::new(),
+            ghosts: 0,
             bvh: Bvh::new(),
             pending: Vec::new(),
             visible: Vec::new(),
@@ -294,7 +297,14 @@ impl World {
         id: ObjectId,
         state: DisplayState,
     ) -> Result<(), RenderError> {
-        self.object_mut(id)?.state = state;
+        let object = self.object_mut(id)?;
+        let was_ghost = object.state == DisplayState::Ghost;
+        object.state = state;
+        match (was_ghost, state == DisplayState::Ghost) {
+            (false, true) => self.ghosts += 1,
+            (true, false) => self.ghosts -= 1,
+            _ => {}
+        }
         Ok(())
     }
 
@@ -305,11 +315,7 @@ impl World {
 
     /// How many objects are in the [`DisplayState::Ghost`] state.
     pub(crate) fn ghost_state_count(&self) -> usize {
-        self.slots
-            .iter()
-            .flatten()
-            .filter(|object| object.state == DisplayState::Ghost)
-            .count()
+        self.ghosts
     }
 
     /// What a ghost of an object needs: its mesh, the origin of the mesh and its placement.
@@ -503,7 +509,6 @@ impl World {
         list.stats.draw_calls = list.buckets.len();
     }
 
-    /// Sets the bit of every object in view, or of every object without frustum culling.
     /// Calls `found` with every object whose world bounds meet `frustum`, whatever the culling
     /// settings, occlusion and level of detail: what a pick may hit.
     pub(crate) fn objects_in(&mut self, frustum: &Frustum, mut found: impl FnMut(ObjectId)) {
@@ -520,6 +525,7 @@ impl World {
         );
     }
 
+    /// Sets the bit of every object in view, or of every object without frustum culling.
     fn find_visible(&mut self, frustum: &Frustum) {
         clear_bits(&mut self.visible, self.slots.len());
         if !self.settings.frustum_culling {
@@ -575,6 +581,9 @@ impl World {
 
     fn release(&mut self, slot: u32) {
         if let Some(object) = self.slots.get_mut(slot as usize).and_then(Option::take) {
+            if object.state == DisplayState::Ghost {
+                self.ghosts -= 1;
+            }
             self.occlusion.invalidate();
             self.bvh.remove(object.leaf);
             self.free.push(slot);
@@ -716,6 +725,9 @@ mod tests {
         world.set_state(objects[1], DisplayState::Ghost).unwrap();
         assert_eq!(world.state(objects[1]), Ok(DisplayState::Ghost));
         assert_eq!(world.ghost_state_count(), 1);
+        // Setting the same state again counts once.
+        world.set_state(objects[1], DisplayState::Ghost).unwrap();
+        assert_eq!(world.ghost_state_count(), 1);
 
         let list = prepare(&mut world, [0.0; 3]);
         // Two objects in the opaque pass, the selected one tinted; one ghost, translucent.
@@ -740,10 +752,14 @@ mod tests {
 
         // A ghost out of view or removed is not drawn; back to normal, it joins the opaque pass.
         world.set_state(objects[1], DisplayState::Normal).unwrap();
+        assert_eq!(world.ghost_state_count(), 0);
         let list = prepare(&mut world, [0.0; 3]);
         assert_eq!((list.stats.fine, list.stats.ghosts), (3, 0));
         assert!(list.ghost_buckets.is_empty());
+        // A removed ghost is no longer counted.
+        world.set_state(objects[2], DisplayState::Ghost).unwrap();
         world.remove_object(objects[2]).unwrap();
+        assert_eq!(world.ghost_state_count(), 0);
         assert_eq!(
             world.set_state(objects[2], DisplayState::Ghost),
             Err(RenderError::UnknownObject(objects[2]))
