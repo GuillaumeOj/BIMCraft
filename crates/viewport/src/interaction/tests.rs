@@ -985,6 +985,27 @@ fn a_block_can_be_typed() {
 }
 
 #[test]
+fn a_typed_side_too_long_for_enter_is_refused_on_a_click_too() {
+    for confirm_width in [false, true] {
+        let mut viewport = viewport(1.0);
+        viewport.set_tool(Tool::PlaceBlock);
+        click_on(&mut viewport, [-3.0, -3.0, 0.0], NONE);
+        hover_on(&mut viewport, [-1.0, -2.0, 0.0]);
+        if confirm_width {
+            type_text(&mut viewport, "4");
+            key(&mut viewport, Key::Enter);
+        }
+        type_text(&mut viewport, "2000000");
+        click_on(&mut viewport, [-1.0, -2.0, 0.0], NONE);
+        assert_eq!(
+            viewport.tool_step(),
+            ToolStep::SecondCorner,
+            "{confirm_width}"
+        );
+    }
+}
+
+#[test]
 fn the_height_follows_the_pointer() {
     let mut viewport = viewport(1.0);
     viewport.set_tool(Tool::PlaceBlock);

@@ -1082,7 +1082,9 @@ impl<S: SceneSink> Viewport<S> {
 
     fn confirm_footprint(&mut self, first: Vec3, second: Vec3, typed_width: Option<f64>) {
         let [width, depth] = footprint(first, second);
-        if width < MIN_BLOCK_SIDE || depth < MIN_BLOCK_SIDE {
+        // A side typed then clicked is refused as Enter refuses it.
+        let sides = MIN_BLOCK_SIDE..=MAX_TYPED_DISTANCE;
+        if !sides.contains(&width) || !sides.contains(&depth) {
             return;
         }
         self.typed.clear();

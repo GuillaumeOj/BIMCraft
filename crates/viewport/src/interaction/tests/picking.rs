@@ -217,8 +217,9 @@ fn the_top_view_has_north_up_and_east_right() {
         viewport.command(ViewCommand::ViewPreset(Preset::Top));
         viewport.command(ViewCommand::ZoomFit);
         let screen = Screen::new(&viewport.camera(), viewport.size());
+        let boxes = boxes(&viewport);
         let centre = |n: usize| {
-            let [min, max] = boxes(&viewport)[n].1;
+            let [min, max] = boxes[n].1;
             screen.pixel(scale(add(min, max), 0.5))
         };
         // Block 2 is east of block 1: to its right, on the same row.
