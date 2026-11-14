@@ -1774,9 +1774,12 @@ mod tests {
         assert_eq!(layouter[handle].size, UNIFORM_SIZE);
         assert_eq!(FRAME_FLOATS * 4, UNIFORM_SIZE as usize);
         // The planes are an array of MAX_CLIP_PLANES vectors of four.
-        let planes = module.types[members[3].ty].inner.clone();
+        let planes = members
+            .iter()
+            .find(|member| member.name.as_deref() == Some("planes"))
+            .unwrap();
         assert!(matches!(
-            planes,
+            module.types[planes.ty].inner,
             naga::TypeInner::Array { size: naga::ArraySize::Constant(n), stride: 16, .. }
                 if n.get() == u32::try_from(MAX_CLIP_PLANES).unwrap()
         ));

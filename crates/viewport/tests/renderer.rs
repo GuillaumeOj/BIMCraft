@@ -4,26 +4,24 @@
 // Helpers of a test: a failure is a test failure.
 #![allow(clippy::panic, clippy::unwrap_used)]
 
-use render::{DisplayState, MeshData, Placement, RenderError, Renderer, Theme};
+#[path = "../../render/tests/support/mod.rs"]
+#[allow(
+    dead_code,
+    reason = "the renderer's GPU test support: its box meshes serve its own tests"
+)]
+mod support;
+
+use std::collections::BTreeMap;
+
+use render::{DisplayState, MeshData, Placement, Renderer, Theme};
 use scene_wire::{Element, Mesh, SceneDelta};
+use support::{FORMAT, Target, device};
 use viewport::{
     Button, ElementId, InputEvent, Intent, Modifiers, Preset, Preview, PreviewLine, ProjectionMode,
     RendererSink, SceneSink, SinkError, Tool, ViewCommand, Viewport, ViewportEvent,
 };
 
-const FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
 const SIZE: [u32; 2] = [96, 64];
-
-fn device() -> (wgpu::Device, wgpu::Queue) {
-    match pollster::block_on(render::headless_device()) {
-        Ok(device) => device,
-        Err(error @ RenderError::NoAdapter { .. }) => panic!(
-            "the GPU tests need a GPU adapter, software ones included (lavapipe on Linux: \
-             scripts/linux-gpu-deps.sh; WARP on Windows; Metal on macOS): {error}"
-        ),
-        Err(error) => panic!("the GPU tests could not create a device: {error}"),
-    }
-}
 
 fn cube(id: u64) -> Mesh {
     let mut positions = Vec::new();
@@ -249,72 +247,25 @@ fn the_renderer_sink_maps_ids_and_refuses_unknown_ones() {
 /// at (0, 0, 0) and (6, 0, 0), block 3 is 2 × 2 × 6 m at (0, 6, 0).
 const BLOCKS: &[u8] = include_bytes!("../../../ui/e2e/fixtures/scene-blocks.bin");
 
-/// The target of the picking test: 192 px rows are 768 bytes, a multiple of the copy alignment.
+/// The target of the picking test.
 const PICK_SIZE: [u32; 2] = [192, 128];
 
-/// Renders the viewport's view and reads the pixels back, row by row from the top left.
+/// Renders the viewport's view into `target` and reads its pixels back, row by row from the
+/// top left.
 fn frame(
     viewport: &mut Viewport<RendererSink>,
     device: &wgpu::Device,
     queue: &wgpu::Queue,
+    target: &Target,
 ) -> Vec<[u8; 4]> {
-    let [width, height] = PICK_SIZE;
-    let extent = wgpu::Extent3d {
-        width,
-        height,
-        depth_or_array_layers: 1,
-    };
-    let texture = device.create_texture(&wgpu::TextureDescriptor {
-        label: Some("picking test target"),
-        size: extent,
-        mip_level_count: 1,
-        sample_count: 1,
-        dimension: wgpu::TextureDimension::D2,
-        format: FORMAT,
-        usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
-        view_formats: &[],
-    });
-    let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
     let camera = viewport.camera();
     let clear = Theme::light().clear_color();
     viewport
         .sink_mut()
         .renderer_mut()
-        .render(&view, PICK_SIZE, &camera, clear)
+        .render(&target.view, target.size, &camera, clear)
         .unwrap();
-    let row = width * 4;
-    let buffer = device.create_buffer(&wgpu::BufferDescriptor {
-        label: Some("picking test readback"),
-        size: u64::from(row * height),
-        usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
-        mapped_at_creation: false,
-    });
-    let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
-    encoder.copy_texture_to_buffer(
-        texture.as_image_copy(),
-        wgpu::TexelCopyBufferInfo {
-            buffer: &buffer,
-            layout: wgpu::TexelCopyBufferLayout {
-                offset: 0,
-                bytes_per_row: Some(row),
-                rows_per_image: Some(height),
-            },
-        },
-        extent,
-    );
-    queue.submit([encoder.finish()]);
-    let (sender, receiver) = std::sync::mpsc::channel();
-    buffer.map_async(wgpu::MapMode::Read, .., move |result| {
-        sender.send(result).unwrap();
-    });
-    device.poll(wgpu::PollType::wait_indefinitely()).unwrap();
-    receiver.recv().unwrap().unwrap();
-    buffer
-        .get_mapped_range(..)
-        .unwrap()
-        .as_chunks::<4>()
-        .0
-        .to_vec()
+    target.read(device, queue).as_chunks::<4>().0.to_vec()
 }
 
 /// Clicks the centre of pixel `[x, y]` and leaves the view, so no hover tints the next frame.
@@ -345,6 +296,7 @@ fn a_click_selects_what_is_drawn_under_it_in_every_view() {
     let mut viewport = Viewport::new(RendererSink::new(renderer), PICK_SIZE.map(f64::from), 1.0);
     viewport.set_theme(Theme::light());
     viewport.apply_scene(BLOCKS).unwrap();
+    let target = Target::new(&device, PICK_SIZE);
     let [width, height] = PICK_SIZE;
     let at = |pixels: &[[u8; 4]], x: u32, y: u32| pixels[(y * width + x) as usize];
     let presets = [
@@ -364,10 +316,10 @@ fn a_click_selects_what_is_drawn_under_it_in_every_view() {
             viewport.command(ViewCommand::Projection(mode));
             viewport.command(ViewCommand::ViewPreset(preset));
             viewport.command(ViewCommand::ZoomFit);
-            let before = frame(&mut viewport, &device, &queue);
+            let before = frame(&mut viewport, &device, &queue, &target);
             let background = at(&before, 0, 0);
             // The picked pixels of each block, away from every edge of the frame.
-            let mut picked: Vec<(ElementId, Vec<[u32; 2]>)> = Vec::new();
+            let mut picked: BTreeMap<ElementId, Vec<[u32; 2]>> = BTreeMap::new();
             for y in (4..height - 4).step_by(8) {
                 for x in (4..width - 4).step_by(8) {
                     let colour = at(&before, x, y);
@@ -387,16 +339,13 @@ fn a_click_selects_what_is_drawn_under_it_in_every_view() {
                     let [element] = selection[..] else {
                         panic!("{context}: {selection:?}");
                     };
-                    match picked.iter_mut().find(|(id, _)| *id == element) {
-                        Some((_, pixels)) => pixels.push([x, y]),
-                        None => picked.push((element, vec![[x, y]])),
-                    }
+                    picked.entry(element).or_default().push([x, y]);
                 }
             }
             assert!(picked.len() >= 2, "{mode:?} {preset:?}: {picked:?}");
-            for (element, _) in &picked {
+            for element in picked.keys() {
                 viewport.command(ViewCommand::Select(vec![*element]));
-                let selected = frame(&mut viewport, &device, &queue);
+                let selected = frame(&mut viewport, &device, &queue, &target);
                 for (other, others) in &picked {
                     for &[x, y] in others {
                         let changed = at(&selected, x, y) != at(&before, x, y);
