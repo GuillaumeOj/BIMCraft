@@ -19,8 +19,8 @@ use tauri_plugin_updater::{Error, Update, UpdaterExt};
 /// The longest an update check may take.
 const CHECK_TIMEOUT: Duration = Duration::from_secs(30);
 
-/// The longest a download may stall (connecting, or between two chunks): a large package on a
-/// slow line may take longer than [`CHECK_TIMEOUT`] as a whole.
+/// The longest a check or a download may stall (connecting, or between two chunks): a large
+/// package on a slow line may take longer than [`CHECK_TIMEOUT`] as a whole.
 const STALL_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// `builder` with the updater plugin when the program built with `config` can update itself,
@@ -71,9 +71,9 @@ impl<R: Runtime> Updates for PluginUpdates<R> {
                 .check()
                 .await
                 .map_err(|failure| error(Phase::Check, &failure))?;
-            Ok(update.map(|mut update| {
-                // The check's timeout would cut a long download short; stalls still time out.
-                update.timeout = None;
+            // The plugin gives the update no overall timeout, so a long download is not cut
+            // short; the client's stall timeouts still apply to it.
+            Ok(update.map(|update| {
                 let pub_date = update
                     .date
                     .and(update.raw_json.get("pub_date"))
@@ -113,7 +113,10 @@ impl<R: Runtime> Package for PluginPackage<R> {
             .install(bytes)
             .map_err(|failure| error(Phase::Install, &failure))?;
         // Windows never gets here: the installer has taken over and the program has exited.
-        self.app.restart()
+        // `restart` would park this thread for good; this asks the event loop instead, which
+        // restarts the program once the command has answered.
+        self.app.request_restart();
+        Ok(())
     }
 }
 
@@ -260,6 +263,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(debug_assertions)]
     fn a_debug_build_gets_no_updater_plugin_nor_updates() {
         let mut config = Config::default();
         config.plugins.0.insert(

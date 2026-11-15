@@ -10,7 +10,7 @@
 
 use std::future::Future;
 use std::pin::Pin;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::{Duration, Instant};
 
@@ -144,8 +144,8 @@ pub trait Package: Send + Sync {
         on_chunk: &'a mut (dyn FnMut(usize, Option<u64>) + Send),
     ) -> BoxFuture<'a, Result<Vec<u8>, UpdateError>>;
 
-    /// Installs the downloaded `bytes` and restarts the program; returns only on failure, or in
-    /// tests.
+    /// Installs the downloaded `bytes` and asks the program to restart, which it does once the
+    /// command has answered.
     ///
     /// # Errors
     ///
@@ -157,24 +157,57 @@ pub trait Package: Send + Sync {
 pub struct UpdateHost {
     version: String,
     updates: Option<Box<dyn Updates>>,
-    offer: Mutex<Option<Arc<Offer>>>,
+    current: Mutex<Current>,
+    // Checks started so far: each check's number, so that the latest one asked wins.
+    checks: AtomicU64,
     now: Box<dyn Fn() -> Instant + Send + Sync>,
 }
 
-/// The offer of the last check, and its download.
+#[derive(Default)]
+struct Current {
+    offer: Option<Arc<Offer>>,
+    // The number of the check whose answer `offer` is.
+    check: u64,
+}
+
+/// The offer of a check, and its download.
 struct Offer {
-    found: UpdateOffer,
+    version: String,
     package: Box<dyn Package>,
     // Held for the whole download, so a second download waits for the first.
     download: AsyncMutex<Download>,
     // Downloads of this offer that finished, failed or not.
     finished: AtomicU64,
+    installing: AtomicBool,
 }
 
 enum Download {
     NotStarted,
     Failed(UpdateError),
     Done(Vec<u8>),
+}
+
+impl Offer {
+    fn new(version: String, package: Box<dyn Package>) -> Self {
+        Self {
+            version,
+            package,
+            download: AsyncMutex::new(Download::NotStarted),
+            finished: AtomicU64::new(0),
+            installing: AtomicBool::new(false),
+        }
+    }
+
+    /// Whether a check that offers `version` again keeps this offer: when its package is
+    /// downloaded or downloading. Otherwise the new answer replaces it, so that a manifest
+    /// corrected for the same version (a new signature, say) is used.
+    fn kept_for(&self, version: &str) -> bool {
+        self.version == version
+            && self
+                .download
+                .try_lock()
+                .map_or(true, |download| matches!(*download, Download::Done(_)))
+    }
 }
 
 impl UpdateHost {
@@ -185,7 +218,8 @@ impl UpdateHost {
         Self {
             version: version.into(),
             updates,
-            offer: Mutex::new(None),
+            current: Mutex::new(Current::default()),
+            checks: AtomicU64::new(0),
             now: Box::new(Instant::now),
         }
     }
@@ -201,28 +235,31 @@ impl UpdateHost {
 
     /// Checks `channel` for a newer version and keeps it as the offer, replacing the previous
     /// one; a package downloaded for another version is dropped. A failed check keeps the
-    /// previous offer.
+    /// previous offer, and so does a check answered after a check asked later.
     ///
     /// # Errors
     ///
     /// [`ErrorCode::Unavailable`], [`ErrorCode::Network`] or [`ErrorCode::Manifest`].
     pub async fn check(&self, channel: Channel) -> Result<Option<UpdateOffer>, UpdateError> {
-        let found = self.updates()?.check(channel.endpoint()).await?;
-        let mut current = self.offer.lock().unwrap_or_else(PoisonError::into_inner);
+        let updates = self.updates()?;
+        let number = self.checks.fetch_add(1, Ordering::AcqRel) + 1;
+        let found = updates.check(channel.endpoint()).await?;
+        let mut current = self.current.lock().unwrap_or_else(PoisonError::into_inner);
+        if number < current.check {
+            return Ok(found.map(|found| found.offer));
+        }
+        current.check = number;
         let Some(found) = found else {
-            *current = None;
+            current.offer = None;
             return Ok(None);
         };
-        let same_version = current
+        let kept = current
+            .offer
             .as_ref()
-            .is_some_and(|offer| offer.found.version == found.offer.version);
-        if !same_version {
-            *current = Some(Arc::new(Offer {
-                found: found.offer.clone(),
-                package: found.package,
-                download: AsyncMutex::new(Download::NotStarted),
-                finished: AtomicU64::new(0),
-            }));
+            .is_some_and(|offer| offer.kept_for(&found.offer.version));
+        if !kept {
+            let offer = Offer::new(found.offer.version.clone(), found.package);
+            current.offer = Some(Arc::new(offer));
         }
         Ok(Some(found.offer))
     }
@@ -234,8 +271,8 @@ impl UpdateHost {
     ///
     /// # Errors
     ///
-    /// [`ErrorCode::Unavailable`], [`ErrorCode::NoUpdate`], [`ErrorCode::Network`] or
-    /// [`ErrorCode::Signature`].
+    /// [`ErrorCode::Unavailable`], [`ErrorCode::NoUpdate`] (also when a check replaces the
+    /// offer during the download), [`ErrorCode::Network`] or [`ErrorCode::Signature`].
     pub async fn download(
         &self,
         progress: &mut (dyn FnMut(UpdateProgress) + Send),
@@ -244,29 +281,31 @@ impl UpdateHost {
         let offer = self.current_offer().ok_or_else(no_update)?;
         let finished_before = offer.finished.load(Ordering::Acquire);
         let mut download = offer.download.lock().await;
-        match &*download {
-            Download::Done(_) => return Ok(()),
+        let result = match &*download {
+            Download::Done(_) => Ok(()),
             Download::Failed(error) if offer.finished.load(Ordering::Acquire) > finished_before => {
-                return Err(error.clone());
+                Err(error.clone())
             }
-            Download::NotStarted | Download::Failed(_) => {}
-        }
-        let result = self.fetch(&*offer.package, progress).await;
-        offer.finished.fetch_add(1, Ordering::AcqRel);
-        match result {
-            Ok(bytes) => {
-                *download = Download::Done(bytes);
-                Ok(())
+            Download::NotStarted | Download::Failed(_) => {
+                let result = self.fetch(&offer, progress).await;
+                offer.finished.fetch_add(1, Ordering::AcqRel);
+                let (state, result) = match result {
+                    Ok(bytes) => (Download::Done(bytes), Ok(())),
+                    Err(error) => (Download::Failed(error.clone()), Err(error)),
+                };
+                *download = state;
+                result
             }
-            Err(error) => {
-                *download = Download::Failed(error.clone());
-                Err(error)
-            }
+        };
+        if self.is_current(&offer) {
+            result
+        } else {
+            Err(replaced())
         }
     }
 
-    /// Installs the downloaded package and restarts the program: on success, it returns only
-    /// in tests.
+    /// Installs the downloaded package and asks the program to restart. A second call while
+    /// the first installs does nothing.
     ///
     /// # Errors
     ///
@@ -274,12 +313,18 @@ impl UpdateHost {
     pub fn install(&self) -> Result<(), UpdateError> {
         self.updates()?;
         let offer = self.current_offer().ok_or_else(not_downloaded)?;
-        // A download still running holds the lock: the package is not there yet.
-        let download = offer.download.try_lock().map_err(|_| not_downloaded())?;
-        match &*download {
-            Download::Done(bytes) => offer.package.install(bytes),
-            Download::NotStarted | Download::Failed(_) => Err(not_downloaded()),
+        if offer.installing.swap(true, Ordering::AcqRel) {
+            return Ok(());
         }
+        // A download still running holds the lock: the package is not there yet.
+        let result = match offer.download.try_lock().as_deref() {
+            Ok(Download::Done(bytes)) => offer.package.install(bytes),
+            _ => Err(not_downloaded()),
+        };
+        if result.is_err() {
+            offer.installing.store(false, Ordering::Release);
+        }
+        result
     }
 
     fn updates(&self) -> Result<&dyn Updates, UpdateError> {
@@ -292,36 +337,55 @@ impl UpdateHost {
     }
 
     fn current_offer(&self) -> Option<Arc<Offer>> {
-        self.offer
+        self.current
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
+            .offer
             .clone()
     }
 
+    fn is_current(&self, offer: &Arc<Offer>) -> bool {
+        self.current_offer()
+            .is_some_and(|current| Arc::ptr_eq(&current, offer))
+    }
+
+    /// Downloads the package of `offer`. Progress is reported while `offer` is current only, so
+    /// that the events of a download a check made obsolete never mix with the next one's.
     async fn fetch(
         &self,
-        package: &dyn Package,
+        offer: &Arc<Offer>,
         progress: &mut (dyn FnMut(UpdateProgress) + Send),
     ) -> Result<Vec<u8>, UpdateError> {
         let mut status = UpdateProgress {
             downloaded: 0,
             total: None,
         };
+        let mut sent = None;
         let mut throttle = Throttle::default();
         let bytes = {
             let mut on_chunk = |length: usize, total: Option<u64>| {
                 let length = u64::try_from(length).unwrap_or(u64::MAX);
                 status.downloaded = status.downloaded.saturating_add(length);
                 status.total = total;
-                if throttle.ready((self.now)()) {
+                if self.is_current(offer) && throttle.ready((self.now)()) {
                     progress(status);
+                    sent = Some(status);
                 }
             };
-            package.download(&mut on_chunk).await?
+            offer.package.download(&mut on_chunk).await?
         };
-        progress(status);
+        if sent != Some(status) && self.is_current(offer) {
+            progress(status);
+        }
         Ok(bytes)
     }
+}
+
+fn replaced() -> UpdateError {
+    UpdateError::new(
+        ErrorCode::NoUpdate,
+        "a later check replaced the offer while its package downloaded",
+    )
 }
 
 fn no_update() -> UpdateError {

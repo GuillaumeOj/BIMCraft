@@ -60,19 +60,12 @@ impl Package for FakePackage {
     ) -> BoxFuture<'a, Result<Vec<u8>, UpdateError>> {
         Box::pin(async move {
             self.script.downloaded.fetch_add(1, Ordering::SeqCst);
+            if let Some(gate) = &self.script.gate {
+                opened(gate).await;
+            }
             for &(length, total, delay) in &self.script.chunks {
                 self.clock.advance(delay);
                 on_chunk(length, total);
-            }
-            if let Some(gate) = &self.script.gate {
-                poll_fn(|_| {
-                    if gate.load(Ordering::SeqCst) {
-                        Poll::Ready(())
-                    } else {
-                        Poll::Pending
-                    }
-                })
-                .await;
             }
             let mut downloads = self.script.downloads.lock().unwrap();
             if downloads.len() > 1 {
@@ -89,6 +82,18 @@ impl Package for FakePackage {
     }
 }
 
+/// Waits until `gate` is open.
+async fn opened(gate: &AtomicBool) {
+    poll_fn(|_| {
+        if gate.load(Ordering::SeqCst) {
+            Poll::Ready(())
+        } else {
+            Poll::Pending
+        }
+    })
+    .await;
+}
+
 /// A scripted check: a version and its package, no update, or a failure.
 type CheckAnswer = Result<Option<(&'static str, Arc<Script>)>, UpdateError>;
 
@@ -97,13 +102,20 @@ struct FakeUpdates {
     checks: Mutex<VecDeque<CheckAnswer>>,
     endpoints: Arc<Mutex<Vec<&'static str>>>,
     clock: Clock,
+    // The first check to come takes this gate and answers once it opens.
+    gate: Mutex<Option<Arc<AtomicBool>>>,
 }
 
 impl Updates for FakeUpdates {
     fn check(&self, endpoint: &'static str) -> BoxFuture<'_, Result<Option<Found>, UpdateError>> {
         Box::pin(async move {
             self.endpoints.lock().unwrap().push(endpoint);
-            let answer = self.checks.lock().unwrap().pop_front().unwrap()?;
+            let answer = self.checks.lock().unwrap().pop_front().unwrap();
+            let gate = self.gate.lock().unwrap().take();
+            if let Some(gate) = gate {
+                opened(&gate).await;
+            }
+            let answer = answer?;
             Ok(answer.map(|(version, script)| Found {
                 offer: offer(version),
                 package: Box::new(FakePackage {
@@ -145,12 +157,18 @@ struct Fixture {
 
 /// An updatable host at version 0.3.0 whose checks answer `checks` in turn.
 fn updatable_host(checks: Vec<CheckAnswer>) -> Fixture {
+    host_with_gate(checks, None)
+}
+
+/// [`updatable_host`], whose first check answers once `gate` opens.
+fn host_with_gate(checks: Vec<CheckAnswer>, gate: Option<Arc<AtomicBool>>) -> Fixture {
     let clock = Clock::new();
     let endpoints = Arc::new(Mutex::new(Vec::new()));
     let updates = FakeUpdates {
         checks: Mutex::new(checks.into()),
         endpoints: Arc::clone(&endpoints),
         clock: clock.clone(),
+        gate: Mutex::new(gate),
     };
     let mut host = UpdateHost::new("0.3.0", Some(Box::new(updates)));
     host.now = Box::new(move || clock.now());
@@ -299,6 +317,7 @@ fn a_missing_or_blank_updater_key_is_no_key() {
 }
 
 #[test]
+#[cfg(debug_assertions)]
 fn a_debug_build_never_updates_itself_even_with_a_key() {
     assert!(!can_update(&config_with(Some(
         json!({ "pubkey": "dW50cnVzdGVk" })
@@ -621,6 +640,149 @@ fn a_failed_install_reports_why() {
     block_on(fixture.host.check(Channel::Stable)).unwrap();
     download(&fixture.host).0.unwrap();
     assert_eq!(code(fixture.host.install()), ErrorCode::Install);
+}
+
+#[test]
+fn a_check_answered_after_a_later_one_is_returned_but_not_kept() {
+    let gate = Arc::new(AtomicBool::new(false));
+    let beta = package();
+    let stable = package();
+    let fixture = host_with_gate(
+        vec![
+            Ok(Some(("0.5.0-beta.1", Arc::clone(&beta)))),
+            Ok(Some(("0.4.0", Arc::clone(&stable)))),
+        ],
+        Some(Arc::clone(&gate)),
+    );
+    let host = &fixture.host;
+    let mut slow = std::pin::pin!(host.check(Channel::Beta));
+    assert!(poll_once(slow.as_mut()).is_pending());
+    assert_eq!(
+        block_on(host.check(Channel::Stable)),
+        Ok(Some(offer("0.4.0")))
+    );
+    gate.store(true, Ordering::SeqCst);
+    assert_eq!(block_on(slow), Ok(Some(offer("0.5.0-beta.1"))));
+    download(host).0.unwrap();
+    host.install().unwrap();
+    assert_eq!(stable.installed.lock().unwrap().len(), 1);
+    assert_eq!(beta.downloaded.load(Ordering::SeqCst), 0);
+}
+
+#[test]
+fn the_same_version_offered_again_after_a_failed_download_uses_the_new_package() {
+    let broken = script(vec![Err(failure(ErrorCode::Signature))]);
+    let resigned = package();
+    let fixture = updatable_host(vec![
+        Ok(Some(("0.4.0", Arc::clone(&broken)))),
+        Ok(Some(("0.4.0", Arc::clone(&resigned)))),
+    ]);
+    block_on(fixture.host.check(Channel::Stable)).unwrap();
+    assert_eq!(code(download(&fixture.host).0), ErrorCode::Signature);
+    block_on(fixture.host.check(Channel::Stable)).unwrap();
+    assert_eq!(download(&fixture.host).0, Ok(()));
+    assert_eq!(broken.downloaded.load(Ordering::SeqCst), 1);
+    assert_eq!(resigned.downloaded.load(Ordering::SeqCst), 1);
+}
+
+#[test]
+fn the_same_version_offered_again_while_downloading_keeps_that_download() {
+    let gate = Arc::new(AtomicBool::new(false));
+    let first = Arc::new(Script {
+        downloads: Mutex::new(vec![Ok(b"package".to_vec())].into()),
+        gate: Some(Arc::clone(&gate)),
+        ..Script::default()
+    });
+    let fixture = updatable_host(vec![
+        Ok(Some(("0.4.0", Arc::clone(&first)))),
+        Ok(Some(("0.4.0", package()))),
+    ]);
+    let host = &fixture.host;
+    block_on(host.check(Channel::Stable)).unwrap();
+    let mut ignore = |_| {};
+    let mut running = std::pin::pin!(host.download(&mut ignore));
+    assert!(poll_once(running.as_mut()).is_pending());
+    block_on(host.check(Channel::Stable)).unwrap();
+    gate.store(true, Ordering::SeqCst);
+    assert_eq!(block_on(running), Ok(()));
+    host.install().unwrap();
+    assert_eq!(first.installed.lock().unwrap().len(), 1);
+}
+
+#[test]
+fn a_download_whose_offer_a_check_replaces_fails_and_reports_no_progress() {
+    let gate = Arc::new(AtomicBool::new(false));
+    let older = Arc::new(Script {
+        chunks: vec![(5, Some(5), Duration::ZERO)],
+        downloads: Mutex::new(vec![Ok(b"older".to_vec())].into()),
+        gate: Some(Arc::clone(&gate)),
+        ..Script::default()
+    });
+    let fixture = updatable_host(vec![
+        Ok(Some(("0.4.0", older))),
+        Ok(Some(("0.4.1", package()))),
+    ]);
+    let host = &fixture.host;
+    block_on(host.check(Channel::Stable)).unwrap();
+    let mut events = Vec::new();
+    let result = {
+        let mut record = |progress| events.push(progress);
+        let mut running = std::pin::pin!(host.download(&mut record));
+        assert!(poll_once(running.as_mut()).is_pending());
+        block_on(host.check(Channel::Stable)).unwrap();
+        gate.store(true, Ordering::SeqCst);
+        block_on(running)
+    };
+    assert_eq!(code(result), ErrorCode::NoUpdate);
+    assert!(events.is_empty());
+    assert_eq!(code(host.install()), ErrorCode::NotDownloaded);
+}
+
+#[test]
+fn the_final_progress_is_not_repeated_when_the_last_chunk_reported_it() {
+    let package = Arc::new(Script {
+        chunks: vec![
+            (3, Some(7), Duration::ZERO),
+            (4, Some(7), PROGRESS_INTERVAL),
+        ],
+        downloads: Mutex::new(vec![Ok(b"package".to_vec())].into()),
+        ..Script::default()
+    });
+    let fixture = updatable_host(vec![Ok(Some(("0.4.0", package)))]);
+    block_on(fixture.host.check(Channel::Stable)).unwrap();
+    let (result, events) = download(&fixture.host);
+    assert_eq!(result, Ok(()));
+    let progress = |downloaded| UpdateProgress {
+        downloaded,
+        total: Some(7),
+    };
+    assert_eq!(events, [progress(3), progress(7)]);
+}
+
+#[test]
+fn a_second_install_while_the_first_runs_does_nothing() {
+    let package = package();
+    let fixture = updatable_host(vec![Ok(Some(("0.4.0", Arc::clone(&package))))]);
+    block_on(fixture.host.check(Channel::Stable)).unwrap();
+    download(&fixture.host).0.unwrap();
+    fixture.host.install().unwrap();
+    assert_eq!(fixture.host.install(), Ok(()));
+    assert_eq!(package.installed.lock().unwrap().len(), 1);
+}
+
+#[test]
+fn an_install_can_be_tried_again_after_a_failure() {
+    let package = Arc::new(Script {
+        downloads: Mutex::new(vec![Ok(b"package".to_vec())].into()),
+        install: Some(failure(ErrorCode::Install)),
+        ..Script::default()
+    });
+    let fixture = updatable_host(vec![Ok(Some(("0.4.0", Arc::clone(&package))))]);
+    block_on(fixture.host.check(Channel::Stable)).unwrap();
+    download(&fixture.host).0.unwrap();
+    assert_eq!(code(fixture.host.install()), ErrorCode::Install);
+    assert_eq!(code(fixture.host.install()), ErrorCode::Install);
+    assert_eq!(package.installed.lock().unwrap().len(), 2);
 }
 
 // The throttle.

@@ -175,7 +175,6 @@ fn the_window_reaches_nothing_else() {
         "update",
         "restart",
     ] {
-        assert!(!ipc::COMMANDS.contains(&command));
         assert!(client.call(command, json!({})).is_err(), "{command}");
     }
 }

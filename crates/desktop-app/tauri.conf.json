@@ -22,6 +22,11 @@
       "devCsp": null
     }
   },
+  "plugins": {
+    "updater": {
+      "requireSignedVersion": true
+    }
+  },
   "bundle": {
     "icon": [
       "icons/icon.png",
