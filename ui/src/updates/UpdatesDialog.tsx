@@ -60,6 +60,9 @@ function useInitialFocus(viewKey: string) {
   return root;
 }
 
+/** The Windows installer shows its own window during the restart (ux-flow.md section 11). */
+const isWindows = () => /windows/i.test(navigator.userAgent);
+
 function RestartConfirmation({ titleId, updates }: { titleId: string; updates: Updates }) {
   const { t } = useI18n();
   const root = useInitialFocus("confirm");
@@ -71,6 +74,7 @@ function RestartConfirmation({ titleId, updates }: { titleId: string; updates: U
       </h2>
       <div className="dialog-body">
         <p>{t("updates.confirm.body", { version })}</p>
+        {isWindows() && <p>{t("updates.restart.windowsNote")}</p>}
       </div>
       <div className="dialog-footer">
         <div className="dialog-actions">

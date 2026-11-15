@@ -388,6 +388,45 @@ describe("errors", () => {
   });
 });
 
+describe("lead decisions", () => {
+  it("shows the Windows installer note in the confirmation on Windows only", async () => {
+    const agent = vi.spyOn(navigator, "userAgent", "get");
+    for (const [ua, shown] of [
+      ["Mozilla/5.0 (Windows NT 10.0; Win64; x64)", true],
+      ["Mozilla/5.0 (Macintosh; Intel Mac OS X)", false],
+    ] as const) {
+      agent.mockReturnValue(ua);
+      const api = fakeUpdates();
+      const { user, unmount } = await renderApp(api);
+      await openDialog(user);
+      await user.click(inDialog("Check now"));
+      await user.click(await screen.findByRole("button", { name: "Download and install" }));
+      await api.finishDownload();
+      await user.click(await screen.findByRole("button", { name: "Restart now" }));
+      const note = /an installer window shows its progress/;
+      expect(!!screen.queryByText(note)).toBe(shown);
+      unmount();
+    }
+  });
+
+  it("shows a start-up check failure when the user opened the dialog meanwhile", async () => {
+    localStorage.removeItem(AUTO_CHECK_STORAGE_KEY);
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const api = fakeUpdates();
+    let fail: (error: unknown) => void = () => undefined;
+    api.checkForUpdate = vi.fn(
+      () => new Promise<UpdateOffer | null>((_, reject) => (fail = reject)),
+    );
+    const { user } = await renderApp(api);
+    await act(() => vi.advanceTimersByTimeAsync(5500));
+    await user.click(screen.getByRole("button", { name: "Updates" }));
+    expect(screen.getByText("Checking for updates…")).toBeInTheDocument();
+    await act(async () => fail(new UpdateError("network", "x")));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Could not reach");
+    expect(inDialog("Try again")).toBeInTheDocument();
+  });
+});
+
 describe("settings", () => {
   it("remembers the channel, checks the new channel at once and keeps it across reloads", async () => {
     const api = fakeUpdates();

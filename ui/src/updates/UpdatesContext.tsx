@@ -86,6 +86,9 @@ export function UpdatesProvider({
   const [startupDue, setStartupDue] = useState(false);
   const [announcement, setAnnouncement] = useState("");
   const startupDone = useRef(false);
+  // Read when a check ends: a start-up check fails silently only while nobody is looking.
+  const dialogOpenRef = useRef(false);
+  dialogOpenRef.current = dialogOpen;
   const announced = useRef(new Set<string>());
   const updatable = info?.updatable === true;
 
@@ -104,7 +107,11 @@ export function UpdatesProvider({
         const offer = await api.checkForUpdate(on);
         dispatch({ type: "checked", offer, at: Date.now() });
       } catch (error) {
-        dispatch({ type: "checkFailed", code: codeOf(error), silent });
+        dispatch({
+          type: "checkFailed",
+          code: codeOf(error),
+          silent: silent && !dialogOpenRef.current,
+        });
       }
     },
     [api],

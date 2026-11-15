@@ -616,5 +616,6 @@
   "updates.error.other": "Un problème est survenu avec la mise à jour. Relancez la recherche pour continuer.",
   "updates.announce.available": "Fabrilo {version} est disponible. Ouvrez Mises à jour pour le télécharger.",
   "updates.announce.ready": "Fabrilo {version} est prêt à être installé. Ouvrez Mises à jour pour redémarrer.",
-  "updates.announce.failed": "La mise à jour n'a pas pu être téléchargée. Ouvrez Mises à jour pour les détails."
+  "updates.announce.failed": "La mise à jour n'a pas pu être téléchargée. Ouvrez Mises à jour pour les détails.",
+  "updates.restart.windowsNote": "Sous Windows, une fenêtre d'installation affiche sa progression quelques secondes avant que Fabrilo ne se rouvre."
 }

@@ -616,5 +616,6 @@
   "updates.error.other": "Something went wrong with the update. Check again to continue.",
   "updates.announce.available": "Fabrilo {version} is available. Open Updates to download it.",
   "updates.announce.ready": "Fabrilo {version} is ready to install. Open Updates to restart.",
-  "updates.announce.failed": "The update could not be downloaded. Open Updates for details."
+  "updates.announce.failed": "The update could not be downloaded. Open Updates for details.",
+  "updates.restart.windowsNote": "On Windows, an installer window shows its progress for a few seconds before Fabrilo opens again."
 }
