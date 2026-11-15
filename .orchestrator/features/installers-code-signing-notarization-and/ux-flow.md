@@ -61,13 +61,15 @@ stateDiagram-v2
     Confirm --> Ready: Cancel / Esc
     Confirm --> Restarting: Restart now
     Restarting --> [*]: program exits and reopens
-    Restarting --> ErrorInstall: install / not_downloaded
-    ErrorInstall --> Ready: Try again (shows the confirmation-free Ready screen)
+    Restarting --> ErrorInstall: install
+    Restarting --> ErrorNotDownloaded: not_downloaded
+    ErrorInstall --> Confirm: Try again (the package is still downloaded)
+    ErrorNotDownloaded --> Downloading: Try again (the package is gone: download it again)
 ```
 
-Pill by state: Idle / UpToDate / ErrorCheck / AvailableHidden → **Updates** (ghost). Available → **Update available** (pill). Downloading → **Downloading {percent}%** (pill). Ready, Confirm, Restarting, ErrorInstall → **Restart to update** (pill). ErrorDownload → **Update failed** (pill, danger tone).
+Pill by state: Idle / UpToDate / ErrorCheck / AvailableHidden → **Updates** (ghost). Available → **Update available** (pill). Downloading → **Downloading {percent}%** (pill). Ready, Confirm, Restarting, ErrorInstall → **Restart to update** (pill). ErrorNotDownloaded → **Update failed** (pill, danger tone). ErrorDownload → **Update failed** (pill, danger tone).
 
-Retry rules: a failed check retries the check; a failed download (`network`, `signature`) retries `update_download`; `no_update` retries a check; a failed install returns to the Ready screen with the error above it (the package is still downloaded), so the user decides again.
+Retry rules: a failed check retries the check; a failed download (`network`, `signature`) retries `update_download`; `no_update` retries a check; a failed install (`install`) stays on the Ready screen with the error above it (the package is still downloaded) and **Try again** reopens the restart confirmation, so the user decides again; `not_downloaded` means the host has no package, so **Try again** downloads it again (retrying the install would fail the same way).
 
 ## 3. Updates dialog layout (all states)
 
@@ -77,7 +79,7 @@ Top to bottom, in one scroll-free column (the release notes box is the only scro
 2. Version line.
 3. Channel fieldset: `SegmentedToggle` (Stable · Beta), then the help line of the chosen channel, then the optional beta/stable note.
 4. Switch **Check for updates automatically** and its help line.
-5. Status area (`role="status"`, `aria-live="polite"`, always in the DOM): the state's headline and details. Errors use a `Banner` (`role="alert"`) inside it, because the user has just asked for something.
+5. Status area (`role="status"`, `aria-live="polite"`, always in the DOM): the state's headline and details. Errors use a `Banner` (`role="alert"`) placed right after the status area, **not inside it**: nesting an alert in a polite live region makes screen readers announce the text twice.
 6. Release notes box (Available only): label "What's new in {version}", plain text, `white-space: pre-wrap`, max height about 8 lines, `tabindex="0"` so keyboard users can scroll it.
 7. Footer: the state's actions, **Check now** as the secondary action on the left when the state allows it, primary on the right.
 
@@ -98,7 +100,8 @@ Focus rule for all states: the dialog opens with focus on the first enabled prim
 | **Error — offline** (`network`) | Banner "Could not reach the update server. Check your internet connection and try again." | **Try again**, Close | Try again | alert (Banner) |
 | **Error — signature** (`signature`) | Banner "The downloaded update could not be verified, so it was not installed. Your current version is unchanged." + hint | **Try again**, Close | Try again | alert |
 | **Error — manifest** (`manifest`) | Banner "The update information could not be read right now." + hint | **Try again**, Close | Try again | alert |
-| **Error — install** (`install`, `not_downloaded`) | Ready screen with Banner "BIMCraft could not install the update. Your current version is unchanged." + hint | **Try again** (= back to the confirmation), Close | Try again | alert |
+| **Error — install** (`install`) | Ready screen with Banner "BIMCraft could not install the update. Your current version is unchanged." + hint | **Try again** (= back to the confirmation), Close | Try again | alert |
+| **Error — not downloaded** (`not_downloaded`) | Banner "BIMCraft could not install the update. Your current version is unchanged." + hint, on the Available screen | **Try again** (= download again), Close | Try again | alert |
 | **Error — other** (`no_update`, `unavailable` when a call is still made) | Banner "Something went wrong with the update. Check again to continue." | **Check now** | Check now | alert |
 | **Beta selected** | Channel line + beta note (always shown while Beta is chosen) | unchanged | unchanged | none |
 | **Stable chosen while running a beta** (version has a `-` suffix) | Note "You are running a beta. It stays installed until a newer Stable version is released." | unchanged | unchanged | none |
@@ -149,7 +152,7 @@ Keys suggest the catalogue names (`updates.*`, both catalogues, UI-04). `{…}` 
 | `updates.channel.fromBetaNote` | You are running a beta. It stays installed until a newer Stable version is released. |
 | `updates.channel.locked` | The channel cannot change while an update is being checked, downloaded or waiting for a restart. |
 | `updates.auto.label` | Check for updates automatically |
-| `updates.auto.help` | BIMCraft checks once each time it starts. It never downloads or installs anything without asking you. The check only fetches a public file: nothing about you or your project is sent. |
+| `updates.auto.help` | BIMCraft checks once each time it starts. It never downloads or installs anything without asking you. The check only fetches a public file: no project data and no account information is sent (the server sees your IP address, like any website). |
 | `updates.checkNow` | Check now |
 | `updates.idle` | Select Check now to look for a newer version. |
 | `updates.checking` | Checking for updates… |
@@ -179,7 +182,7 @@ Keys suggest the catalogue names (`updates.*`, both catalogues, UI-04). `{…}` 
 | --- | --- |
 | `updates.confirm.title` | Restart BIMCraft now? |
 | `updates.confirm.body` | BIMCraft closes and reopens as version {version}. Open dialogs and changes you have not applied yet, such as a build-up you are still editing, are lost. |
-| `updates.confirm.recovery` | BIMCraft keeps a recovery copy of your work while you edit. After the restart, open your project again: if BIMCraft finds a recovery copy, it offers to restore it. See "Recover unsaved work" in the user guide. |
+| `updates.confirm.recovery` | BIMCraft keeps a recovery copy of your work while you edit. After the restart, open your project again: if BIMCraft finds a recovery copy, it offers to restore it. See "Recover unsaved work" in the user guide. **Show this paragraph only once the interface really autosaves**: today (`docs/user/recover-unsaved-work.md`) the autosave is not wired to the UI, so the paragraph would promise a copy that does not exist; until then the body alone is shown. |
 | `updates.confirm.restart` | Restart now |
 | `updates.confirm.cancel` | Cancel |
 
@@ -206,7 +209,7 @@ No sentence says that the model is saved or that the user should save first: the
 | `updates.announce.ready` | BIMCraft {version} is ready to install. Open Updates to restart. |
 | `updates.announce.failed` | The update could not be downloaded. Open Updates for details. |
 
-Error mapping: `network` → network; `signature` → signature; `manifest` → manifest; `install` and `not_downloaded` → install; `no_update`, `unavailable` → other. The host `message` is never shown.
+Error mapping: `network` → network; `signature` → signature; `manifest` → manifest; `install` and `not_downloaded` → install (same text; `not_downloaded` retries the download, `install` retries the restart); `no_update`, `unavailable` → other. The host `message` is never shown.
 
 ## 7. Settings persistence and start-up
 
