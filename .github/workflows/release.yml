@@ -2,8 +2,8 @@
 # update channels when a release is published (ENG-05, SEC-05). The maintainer's guide, the secrets
 # and the known limits: docs/dev/release.md.
 # - Tag push v*: verify, build-macos, build-windows, sbom, release (a draft: nothing reaches users).
-# - Release published, unpublished or deleted: channels recomputes updates/stable.json and beta.json
-#   on GitHub Pages from the published releases.
+# - Release published, edited (its notes or pre-release flag), unpublished or deleted: channels
+#   recomputes updates/stable.json and beta.json on GitHub Pages from the published releases.
 # - Pull request (release files) and workflow_dispatch: a dry run, unsigned, with a throw-away
 #   updater key and no secrets; its installers are kept as workflow artifacts.
 # Untrusted values (tag names, release fields) reach scripts through `env:` only. Secrets live in
@@ -15,15 +15,19 @@ on:
   push:
     tags: ["v*"]
   release:
-    types: [published, released, prereleased, unpublished, deleted]
+    # `prereleased` would repeat `published`; GitHub sends drafts' edits and deletions to no workflow.
+    types: [published, released, edited, unpublished, deleted]
   workflow_dispatch:
   pull_request:
     paths:
       - .github/workflows/release.yml
+      - .github/actions/setup-rust/**
       - .signpath/**
       - crates/desktop-app/**
       - crates/host-desktop/**
       - scripts/release/**
+      # TAURI_CLI_VERSION, bumped by Renovate.
+      - scripts/tool-versions.env
 
 permissions:
   contents: read
@@ -73,15 +77,6 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: ./.github/actions/setup-rust
-      - name: Add the two macOS targets of a universal build
-        run: rustup target add aarch64-apple-darwin x86_64-apple-darwin
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
-        with:
-          bun-version: ${{ env.BUN_VERSION }}
-      - uses: taiki-e/install-action@f7e5d7c961414b23f5b25b2da9294395d08513ad # v2.87.26
-        with:
-          tool: tauri-cli@${{ env.TAURI_CLI_VERSION }}
       - name: Check the signing secrets (fail closed)
         if: env.PUBLISH == 'true'
         env:
@@ -95,6 +90,15 @@ jobs:
           APPLE_API_KEY: ${{ vars.APPLE_API_KEY }}
           APPLE_API_ISSUER: ${{ vars.APPLE_API_ISSUER }}
         run: scripts/release/require-env.sh TAURI_SIGNING_PRIVATE_KEY TAURI_SIGNING_PRIVATE_KEY_PASSWORD UPDATER_PUBLIC_KEY APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_SIGNING_IDENTITY APPLE_API_KEY_P8 APPLE_API_KEY APPLE_API_ISSUER
+      - uses: ./.github/actions/setup-rust
+      - name: Add the two macOS targets of a universal build
+        run: rustup target add aarch64-apple-darwin x86_64-apple-darwin
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      - uses: taiki-e/install-action@f7e5d7c961414b23f5b25b2da9294395d08513ad # v2.87.26
+        with:
+          tool: tauri-cli@${{ env.TAURI_CLI_VERSION }}
       - name: Make a throw-away updater key (dry run)
         if: env.PUBLISH != 'true'
         run: scripts/release/dry-run-updater-key.sh
@@ -103,6 +107,13 @@ jobs:
           UPDATER_PUBLIC_KEY: ${{ env.PUBLISH == 'true' && vars.UPDATER_PUBLIC_KEY || env.DRY_RUN_UPDATER_PUBLIC_KEY }}
         run: |
           jq -n --arg key "$UPDATER_PUBLIC_KEY" '{plugins: {updater: {pubkey: $key}}}' > "$RUNNER_TEMP/updater.conf.json"
+      - name: Build the interface
+        working-directory: ui
+        run: bun install --frozen-lockfile && bunx vite build
+      # Compiled without any secret in the environment: no build script or dependency sees a key.
+      - name: Build the program
+        working-directory: crates/desktop-app
+        run: cargo tauri build --ci --no-bundle --target universal-apple-darwin --config "$RUNNER_TEMP/updater.conf.json" -- --locked
       - name: Write the notarization API key to a temporary file
         if: env.PUBLISH == 'true'
         env:
@@ -111,13 +122,10 @@ jobs:
           umask 077
           printf '%s\n' "$APPLE_API_KEY_P8" > "$RUNNER_TEMP/AuthKey.p8"
           echo "APPLE_API_KEY_PATH=$RUNNER_TEMP/AuthKey.p8" >> "$GITHUB_ENV"
-      - name: Build the interface
-        working-directory: ui
-        run: bun install --frozen-lockfile && bunx vite build
       # Tauri imports the certificate into a temporary keychain with a random password and deletes
       # it afterwards, signs with the hardened runtime, notarizes, staples, then signs the update
       # package for this version. A dry run has none of the Apple values: the app is not signed.
-      - name: Build, sign and notarize the app
+      - name: Bundle, sign and notarize the app
         working-directory: crates/desktop-app
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ env.PUBLISH == 'true' && secrets.TAURI_SIGNING_PRIVATE_KEY || env.DRY_RUN_UPDATER_KEY }}
@@ -132,7 +140,7 @@ jobs:
           for name in APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_SIGNING_IDENTITY APPLE_API_KEY APPLE_API_ISSUER; do
             [ -n "${!name}" ] || unset "$name"
           done
-          cargo tauri build --ci --target universal-apple-darwin --bundles app,dmg --config "$RUNNER_TEMP/updater.conf.json" -- --locked
+          cargo tauri bundle --ci --target universal-apple-darwin --bundles app,dmg --config "$RUNNER_TEMP/updater.conf.json"
       - name: Delete the notarization API key
         if: always()
         run: rm -f "$RUNNER_TEMP/AuthKey.p8"
@@ -179,13 +187,6 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: ./.github/actions/setup-rust
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
-        with:
-          bun-version: ${{ env.BUN_VERSION }}
-      - uses: taiki-e/install-action@f7e5d7c961414b23f5b25b2da9294395d08513ad # v2.87.26
-        with:
-          tool: tauri-cli@${{ env.TAURI_CLI_VERSION }}
       - name: Check the signing secrets (fail closed)
         if: env.PUBLISH == 'true'
         env:
@@ -196,6 +197,13 @@ jobs:
           SIGNPATH_ORGANIZATION_ID: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
           SIGNPATH_PROJECT_SLUG: ${{ vars.SIGNPATH_PROJECT_SLUG }}
         run: scripts/release/require-env.sh TAURI_SIGNING_PRIVATE_KEY TAURI_SIGNING_PRIVATE_KEY_PASSWORD UPDATER_PUBLIC_KEY SIGNPATH_API_TOKEN SIGNPATH_ORGANIZATION_ID SIGNPATH_PROJECT_SLUG
+      - uses: ./.github/actions/setup-rust
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      - uses: taiki-e/install-action@f7e5d7c961414b23f5b25b2da9294395d08513ad # v2.87.26
+        with:
+          tool: tauri-cli@${{ env.TAURI_CLI_VERSION }}
       - name: Make a throw-away updater key (dry run)
         if: env.PUBLISH != 'true'
         run: scripts/release/dry-run-updater-key.sh
@@ -385,7 +393,7 @@ jobs:
         with:
           bun-version: ${{ env.BUN_VERSION }}
       - name: Check the published release's pre-release flag
-        if: contains(fromJSON('["published", "released", "prereleased"]'), github.event.action)
+        if: github.event.action != 'unpublished' && github.event.action != 'deleted'
         env:
           TAG: ${{ github.event.release.tag_name }}
           PRERELEASE: ${{ github.event.release.prerelease }}

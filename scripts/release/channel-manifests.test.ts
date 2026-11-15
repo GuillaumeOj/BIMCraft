@@ -117,6 +117,20 @@ describe("main", () => {
     log.mockRestore();
   });
 
+  test("downloads a release once when both channels name it", () => {
+    const log = spyOn(console, "log").mockImplementation(() => {});
+    const { dir, file } = releasesFile([release("v1.0.0")]);
+    const downloads: string[] = [];
+    const download = (t: string) => {
+      downloads.push(t);
+      return latest(t.slice(1));
+    };
+    expect(main([file, join(dir, "updates")], download)).toBe(0);
+    expect(downloads).toEqual(["v1.0.0"]);
+    expect(read(dir, "beta").version).toBe("1.0.0");
+    log.mockRestore();
+  });
+
   test("writes a manifest that offers nothing when a channel has no release", () => {
     const log = spyOn(console, "log").mockImplementation(() => {});
     const { dir, file } = releasesFile([release("v0.1.0-beta.1")]);

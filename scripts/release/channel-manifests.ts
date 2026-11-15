@@ -85,8 +85,15 @@ export function main(args: string[], download: (tag: string) => string = ghDownl
   try {
     const channels = selectChannels(parseReleases(readFileSync(releases, "utf8")));
     mkdirSync(out, { recursive: true });
+    // Both channels often name the same release: download its latest.json once.
+    const latest = new Map<string, string>();
+    const fetchLatest = (tag: string): string => {
+      const fetched = latest.get(tag) ?? download(tag);
+      latest.set(tag, fetched);
+      return fetched;
+    };
     for (const [channel, release] of Object.entries(channels)) {
-      const manifest = release === null ? EMPTY_MANIFEST : channelManifest(release, download(release.tag_name));
+      const manifest = release === null ? EMPTY_MANIFEST : channelManifest(release, fetchLatest(release.tag_name));
       writeFileSync(join(out, `${channel}.json`), `${JSON.stringify(manifest, null, 2)}\n`);
       console.log(`${channel}: ${release?.tag_name ?? "no release yet"}`);
     }

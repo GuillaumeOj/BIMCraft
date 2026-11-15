@@ -20,7 +20,7 @@ Settings to apply once the GitHub repository exists. They make CI the final gate
 ## Releases
 
 - Create the environment `release` (limited to `v*` tags) with the secrets and variables of the release workflow: `TAURI_SIGNING_PRIVATE_KEY`, `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`, `APPLE_CERTIFICATE`, `APPLE_CERTIFICATE_PASSWORD`, `APPLE_API_KEY_P8` and `SIGNPATH_API_TOKEN` (secrets); `UPDATER_PUBLIC_KEY`, `APPLE_SIGNING_IDENTITY`, `APPLE_API_KEY`, `APPLE_API_ISSUER`, `SIGNPATH_ORGANIZATION_ID` and `SIGNPATH_PROJECT_SLUG` (variables). How to produce each one: [release.md](release.md#how-to-produce-the-secrets).
-- Set Pages to deploy from GitHub Actions (Settings → Pages → Source: GitHub Actions): it serves the update channels.
+- Set Pages to deploy from GitHub Actions (Settings → Pages → Source: GitHub Actions): it serves the update channels. Then add the tag rule `v*` to the deployment branches and tags of the `github-pages` environment: the update channels are deployed from release tags, which its default rule (the default branch only) refuses.
 - The release workflow's dry run (pull requests on the release files) is not a required check.
 
 ## Labels

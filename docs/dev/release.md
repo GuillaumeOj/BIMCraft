@@ -39,7 +39,7 @@ If a build fails, fix the cause on `main`, delete the tag (and the draft release
 
 ### Withdraw a release
 
-Unpublish it (edit → "Save as draft") or delete it. Every release event recomputes the channels from the published releases, so the channel goes back to the previous version. Installed copies that already updated keep the withdrawn version: copies never go down a version, so fix forward with a higher one.
+Unpublish it (edit → "Save as draft") or delete it. Every event on a published release (published, edited, unpublished, deleted) recomputes the channels from the published releases, so the channel goes back to the previous version. Installed copies that already updated keep the withdrawn version: copies never go down a version, so fix forward with a higher one.
 
 ### Channels
 
@@ -47,13 +47,13 @@ Unpublish it (edit → "Save as draft") or delete it. Every release event recomp
 
 ## The dry run
 
-Pull requests that touch the release files (`.github/workflows/release.yml`, `.signpath/**`, `scripts/release/**`, `crates/desktop-app/**`, `crates/host-desktop/**`) and a manual run (Actions → Release → Run workflow) run the build without any secret: unsigned bundles, update packages signed with a throw-away key that nobody keeps, every check that does not need a secret, and the files as workflow artifacts (`release-macos`, `release-windows`, `release-sbom`). No release is created. The dry run is not a required check. Pull requests from forks never get secrets (`pull_request`, never `pull_request_target`).
+Pull requests that touch the release files (`.github/workflows/release.yml`, `.github/actions/setup-rust/**`, `.signpath/**`, `scripts/release/**`, `scripts/tool-versions.env`, `crates/desktop-app/**`, `crates/host-desktop/**`) and a manual run (Actions → Release → Run workflow) run the build without any secret: unsigned bundles, update packages signed with a throw-away key that nobody keeps, every check that does not need a secret, and the files as workflow artifacts (`release-macos`, `release-windows`, `release-sbom`). No release is created. The dry run is not a required check. Pull requests from forks never get secrets (`pull_request`, never `pull_request_target`).
 
 ## How the workflow works
 
 - **Fail closed.** On a tag push, a step at the start of each build job fails when any secret or variable it needs is missing (`scripts/release/require-env.sh`). The workflow never publishes an unsigned file.
 - **Secrets** live in the `release` environment, limited to `v*` tags, and are used only by `build-macos` and `build-windows` on tag pushes. Each job has least-privilege permissions: `contents: write` only for `release`, `pages: write` and `id-token: write` only for `channels`, `actions: read` for `build-windows` (SignPath downloads its artifacts). Untrusted values (tag names, release fields) reach scripts only through `env:`.
-- **macOS.** `cargo tauri build --target universal-apple-darwin`. Tauri imports the certificate into a temporary keychain with a random password and deletes it afterwards; the `.p8` API key is written to a temporary file and deleted at the end of the job. Then `codesign --verify --deep --strict`, `spctl --assess` and `xcrun stapler validate` check the app.
+- **macOS.** `cargo tauri build --no-bundle --target universal-apple-darwin` compiles with no secret in the environment, so no build script of a dependency can read a key; `cargo tauri bundle` then gets the keys and packs, signs and notarizes. Windows does the same: its compiling steps never see a key. Tauri imports the certificate into a temporary keychain with a random password and deletes it afterwards; the `.p8` API key is written to a temporary file and deleted at the end of the job. Then `codesign --verify --deep --strict`, `spctl --assess` and `xcrun stapler validate` check the app.
 - **Windows, two SignPath rounds.** The program inside an installer must be signed before the installer is built:
   1. `cargo tauri build --no-bundle` builds `fabrilo.exe`; it goes to SignPath (artifact configuration `program`) and the signed file replaces the unsigned one;
   2. `cargo tauri bundle --no-binary-patching` packs it into the installers, which go to SignPath (artifact configuration `installers`);
@@ -118,7 +118,7 @@ Creating a Developer ID certificate needs the *Account Holder* role of the Fusil
 
 ### GitHub Pages
 
-Settings → Pages → Build and deployment → Source: **GitHub Actions**. The `channels` job deploys `updates/stable.json` and `updates/beta.json` at the next published release.
+Settings → Pages → Build and deployment → Source: **GitHub Actions**. Then Settings → Environments → `github-pages` → Deployment branches and tags: add the tag rule `v*`. GitHub creates that environment for the default branch only, and the `channels` job runs on the release's tag, so without the rule every deployment is refused ("Tag … is not allowed to deploy to github-pages"). The `channels` job deploys `updates/stable.json` and `updates/beta.json` at the next published release.
 
 ## Troubleshooting
 
