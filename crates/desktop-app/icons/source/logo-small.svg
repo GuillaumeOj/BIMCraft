@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+<title>BIMCraft</title>
+<!-- BIMCraft app icon, simplified for 16, 24 and 32 px: the same building and fades as logo.svg,
+     drawn with shapes at least about one pixel wide at 32 px (window bands instead of windows,
+     thick columns and starter bars, no stirrups or mesh). -->
+<defs>
+<linearGradient id="fade-facade" gradientUnits="userSpaceOnUse" x1="512" y1="880" x2="512" y2="180"><stop offset="0.38" stop-color="#FFFFFF"/><stop offset="0.52" stop-color="#000000"/></linearGradient>
+<linearGradient id="fade-frame" gradientUnits="userSpaceOnUse" x1="512" y1="880" x2="512" y2="180"><stop offset="0.60" stop-color="#FFFFFF"/><stop offset="0.74" stop-color="#000000"/></linearGradient>
+<mask id="mask-facade" maskUnits="userSpaceOnUse" x="0" y="0" width="1024" height="1024"><rect width="1024" height="1024" fill="url(#fade-facade)"/></mask>
+<mask id="mask-frame" maskUnits="userSpaceOnUse" x="0" y="0" width="1024" height="1024"><rect width="1024" height="1024" fill="url(#fade-frame)"/></mask>
+</defs>
+<!-- layer:background -->
+<rect width="1024" height="1024" rx="230" fill="#0F6B5E"/>
+<!-- /layer -->
+<!-- layer:rebar -->
+<g transform="translate(512 512) scale(1.18) translate(-510 -507)" fill="#B4F5E4">
+<g transform="matrix(-0.866 -0.5 0 1 540 850)">
+<rect x="9" y="-480" width="14" height="480"/><rect x="139" y="-480" width="14" height="480"/><rect x="259" y="-480" width="14" height="480"/>
+<rect y="-406" width="280" height="12"/>
+</g>
+<g transform="matrix(0.866 -0.5 0 1 540 850)">
+<rect x="98" y="-480" width="14" height="480"/><rect x="188" y="-480" width="14" height="480"/>
+<rect y="-406" width="210" height="12"/>
+</g>
+</g>
+<!-- /layer -->
+<!-- layer:frame -->
+<g transform="translate(512 512) scale(1.18) translate(-510 -507)" mask="url(#mask-frame)">
+<g transform="matrix(-0.866 -0.5 0 1 540 850)">
+<rect y="-400" width="280" height="400" fill="#093A33"/>
+<g fill="#C9C3B7"><rect y="-400" width="32" height="400"/><rect x="130" y="-400" width="32" height="400"/><rect x="248" y="-400" width="32" height="400"/><rect y="-400" width="280" height="24"/><rect y="-280" width="280" height="24"/><rect y="-160" width="280" height="24"/></g>
+</g>
+<g transform="matrix(0.866 -0.5 0 1 540 850)">
+<rect y="-400" width="210" height="400" fill="#093A33"/>
+<g fill="#C9C3B7"><rect y="-400" width="32" height="400"/><rect x="89" y="-400" width="32" height="400"/><rect x="178" y="-400" width="32" height="400"/><rect y="-400" width="210" height="24"/><rect y="-280" width="210" height="24"/><rect y="-160" width="210" height="24"/></g>
+</g>
+<g transform="matrix(-0.866 -0.5 0.866 -0.5 540 450)"><rect width="280" height="210" fill="#E0DBD1"/></g>
+</g>
+<!-- /layer -->
+<!-- layer:facade -->
+<g transform="translate(512 512) scale(1.18) translate(-510 -507)" mask="url(#mask-facade)">
+<g transform="matrix(-0.866 -0.5 0 1 540 850)">
+<rect y="-400" width="280" height="400" fill="#FFFFFF"/>
+<g fill="#0E574D"><rect x="24" y="-80" width="232" height="56"/><rect x="24" y="-200" width="232" height="48"/><rect x="24" y="-310" width="232" height="48"/></g>
+</g>
+<g transform="matrix(0.866 -0.5 0 1 540 850)">
+<rect y="-400" width="210" height="400" fill="#D5E5E1"/>
+<g fill="#0E574D"><rect x="22" y="-80" width="166" height="56"/><rect x="22" y="-200" width="166" height="48"/><rect x="22" y="-310" width="166" height="48"/></g>
+</g>
+<g transform="matrix(-0.866 -0.5 0.866 -0.5 540 450)"><rect width="280" height="210" fill="#EEF3F2"/></g>
+</g>
+<!-- /layer -->
+</svg>

@@ -21,3 +21,16 @@ The file is stored with Git LFS (`*.figcraft` in `.gitattributes`). Run `git lfs
 - When the code has to differ from the design — accessibility (`UI-06`), longer French strings (`UI-04`), command-palette or shortcut reachability (`UI-03`) — note the difference in the pull request so the design can be updated.
 - Text in the design is a layout placeholder; strings still go through the translation files (`UI-04`).
 - Change the design in the FigCraft file and commit it with the code that needs it. Because it is a binary file, avoid two branches editing it at once.
+
+## App icon
+
+The app icon is an isometric building seen like an X-ray: the finished facade at the bottom fades into the bare concrete frame, which fades into the rebar cage and its starter bars at the top.
+
+- **Masters:** [`crates/desktop-app/icons/source/logo.svg`](../../crates/desktop-app/icons/source/logo.svg) is the full drawing, used from 48 px up. [`logo-small.svg`](../../crates/desktop-app/icons/source/logo-small.svg) is the same building simplified for 16, 24 and 32 px (window bands, thick columns, no stirrups or mesh), because the details turn to noise there. Edit both together. The web favicon (`ui/public/favicon.svg`) is a copy of the small master.
+- **Layers:** each master marks its layers with `<!-- layer:<name> -->` … `<!-- /layer -->` comments: `background`, `rebar`, `frame` and `facade`, from back to front. Keep shapes flat (no shadows or highlights) and keep the background a single `#RRGGBB` fill: macOS adds the glass, light and depth itself.
+- **Generated files:** after changing a master, run `bun run icons` in `ui/` (or `bun scripts/build-icons.ts`) and commit the results. It uses the pinned Tauri CLI to write, in `crates/desktop-app/icons/`:
+  - `32x32.png` (from the small master), `128x128.png`, `128x128@2x.png` and `icon.png` for Linux and the window icon;
+  - `icon.ico` for Windows, with 16, 24 and 32 px images from the small master and 48, 64 and 256 px from the full one;
+  - `icon.icns`, the macOS icon before macOS 26, shrunk onto Apple's 824 px icon grid;
+  - `BIMCraft.icon`, an Icon Composer file for macOS 26 and later: the master's background colour as the fill, and one glass group per layer (`facade`, `frame`, `rebar`, as 1024 px PNG images). When bundling on macOS, Tauri compiles it with `actool` (Xcode 26 or later) into `Assets.car`, which gives the Liquid Glass icon in its default, dark, clear and tinted appearances.
+- **Preview:** open `BIMCraft.icon` in Icon Composer (Xcode 26 or later) to check the glass appearances, and look at the 16 and 32 px PNG files at full zoom.
