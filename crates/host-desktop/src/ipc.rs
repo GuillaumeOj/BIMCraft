@@ -3,10 +3,15 @@
 //! The window calls the [`COMMAND`] command with one message and gets the response back, or
 //! `null` for notifications. Change notifications reach every window as [`NOTIFICATION`]
 //! events, whose payload is the notification message.
+//!
+//! The same handler serves the [`update`](crate::update) commands, which are not JSON-RPC
+//! methods: updating the program is not a document operation, so plugins, scripts and network
+//! clients of the document API never reach them.
 
 use tauri::{AppHandle, Builder, Emitter, Runtime, State};
 
 use crate::DocumentHost;
+use crate::update;
 
 /// The Tauri command that carries a JSON-RPC message from the window.
 pub const COMMAND: &str = "api";
@@ -35,6 +40,16 @@ fn api<R: Runtime>(
 /// bytes (api-contract.md section 1): an `ArrayBuffer` in JavaScript, never parsed there as JSON.
 pub const SCENE_COMMAND: &str = "scene";
 
+/// The commands the window may call: [`COMMAND`], [`SCENE_COMMAND`] and the update commands.
+pub const COMMANDS: [&str; 6] = [
+    COMMAND,
+    SCENE_COMMAND,
+    "app_info",
+    "update_check",
+    "update_download",
+    "update_install",
+];
+
 // Tauri hands commands their arguments by value.
 #[allow(clippy::needless_pass_by_value)]
 #[tauri::command(async)]
@@ -46,9 +61,21 @@ fn scene(
     Ok(tauri::ipc::Response::new(bytes))
 }
 
-/// `builder` serving `host` to its windows.
-pub fn serve<R: Runtime>(builder: Builder<R>, host: DocumentHost) -> Builder<R> {
-    builder
+/// `builder` serving `host` to its windows, and the program's update state, whose updates come
+/// from `updates`, or which cannot update itself when that is `None` (see [`update::can_update`]).
+pub fn serve<R: Runtime>(
+    builder: Builder<R>,
+    host: DocumentHost,
+    updates: Option<update::UpdatesSource<R>>,
+) -> Builder<R> {
+    update::register(builder, updates)
         .manage(host)
-        .invoke_handler(tauri::generate_handler![api, scene])
+        .invoke_handler(tauri::generate_handler![
+            api,
+            scene,
+            update::app_info,
+            update::update_check,
+            update::update_download,
+            update::update_install
+        ])
 }

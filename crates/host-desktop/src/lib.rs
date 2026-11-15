@@ -7,6 +7,7 @@
 //! - [`ProcessCompute`] runs each solver as a child process (spec §9).
 //! - [`DocumentHost`] serves a document to the window over JSON-RPC, and [`ipc`] carries the
 //!   messages over Tauri's IPC (UI-01, API-04). The `desktop-app` crate opens the window.
+//! - [`update`] checks, downloads and installs the program's updates by channel (ENG-05).
 
 // ARCH-02: the host is where the core meets the operating system, so it opts out of the APIs that
 // clippy.toml bans in core crates. See docs/dev/quality.md.
@@ -19,6 +20,7 @@ mod executor;
 pub mod ipc;
 mod scene_channel;
 mod storage;
+pub mod update;
 
 pub use clock::SystemClock;
 pub use compute::ProcessCompute;

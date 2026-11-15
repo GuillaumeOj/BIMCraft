@@ -49,6 +49,14 @@ allow = [
 crate = "libfuzzer-sys"
 allow = ["NCSA"]
 
+# webpki-root-certs is Mozilla's list of root certificates, as data, under CDLA-Permissive-2.0, a
+# permissive data licence (attribution only). The updater's HTTPS client (reqwest with rustls)
+# verifies certificates with rustls-platform-verifier, which needs it only on wasm32: the program
+# never builds there, but cargo deny checks every target.
+[[licenses.exceptions]]
+crate = "webpki-root-certs"
+allow = ["CDLA-Permissive-2.0"]
+
 [bans]
 multiple-versions = "warn"
 wildcards = "deny"
