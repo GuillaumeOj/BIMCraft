@@ -7,6 +7,7 @@ import { GeorefProvider } from "./georef/GeorefContext";
 import { I18nProvider } from "./i18n/I18nProvider";
 import { Shell } from "./shell/Shell";
 import { ShellStateProvider } from "./shell/ShellState";
+import { UpdatesProvider } from "./updates/UpdatesContext";
 
 const container = document.getElementById("root");
 if (container === null) {
@@ -18,9 +19,11 @@ createRoot(container).render(
     <I18nProvider>
       <ApiProvider client={api}>
         <ShellStateProvider>
-          <GeorefProvider>
-            <Shell />
-          </GeorefProvider>
+          <UpdatesProvider>
+            <GeorefProvider>
+              <Shell />
+            </GeorefProvider>
+          </UpdatesProvider>
         </ShellStateProvider>
       </ApiProvider>
     </I18nProvider>

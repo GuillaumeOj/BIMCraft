@@ -51,3 +51,18 @@ export { inDesktopWindow, openInSystemBrowser } from "./opener";
 export type * from "./protocol.gen";
 export { type SceneFailure, type SceneFeed, type SceneSink, startSceneFeed } from "./scene";
 export { tauriTransport } from "./tauri";
+export {
+  type AppInfo,
+  appInfo,
+  type Channel,
+  checkForUpdate,
+  downloadUpdate,
+  installUpdate,
+  UPDATE_ERROR_CODES,
+  UpdateError,
+  type UpdateErrorCode,
+  type UpdateOffer,
+  type UpdateProgress,
+  type UpdatesApi,
+  updatesApi,
+} from "./updates";
