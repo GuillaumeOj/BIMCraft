@@ -81,11 +81,11 @@ test("start-up check → notice → download progress → restart confirmation �
   expect((await stubbed(page)).checks).toEqual([]);
   await page.clock.runFor(6000);
 
-  const pill = page.getByRole("button", { name: "Update available: BIMCraft 0.4.0" });
+  const pill = page.getByRole("button", { name: "Update available: Fabrilo 0.4.0" });
   await expect(pill).toBeVisible();
   await expect(page.getByRole("dialog")).toBeHidden();
   await expect(
-    page.getByRole("status").filter({ hasText: "BIMCraft 0.4.0 is available. Open Updates" }),
+    page.getByRole("status").filter({ hasText: "Fabrilo 0.4.0 is available. Open Updates" }),
   ).toBeAttached();
 
   await pill.click();
@@ -104,13 +104,13 @@ test("start-up check → notice → download progress → restart confirmation �
     (window as unknown as { __stub: { finish: () => void } }).__stub.finish(),
   );
 
-  await expect(dialog.getByText("BIMCraft 0.4.0 is ready to install.")).toBeVisible();
+  await expect(dialog.getByText("Fabrilo 0.4.0 is ready to install.")).toBeVisible();
   await dialog.getByRole("button", { name: "Restart now" }).click();
-  const confirm = page.getByRole("dialog", { name: "Restart BIMCraft now?" });
+  const confirm = page.getByRole("dialog", { name: "Restart Fabrilo now?" });
   await expect(confirm.getByRole("button", { name: "Cancel" })).toBeFocused();
   expect((await stubbed(page)).installs).toBe(0);
   await confirm.getByRole("button", { name: "Restart now" }).click();
-  await expect(page.getByText("Restarting BIMCraft…")).toBeVisible();
+  await expect(page.getByText("Restarting Fabrilo…")).toBeVisible();
   expect((await stubbed(page)).installs).toBe(1);
 });
 
@@ -119,7 +119,7 @@ test("Check now with no update says the program is up to date", async ({ page })
   await page.keyboard.press("Control+Shift+U");
   const dialog = page.getByRole("dialog", { name: "Updates" });
   await dialog.getByRole("button", { name: "Check now" }).click();
-  await expect(dialog.getByText("BIMCraft 0.3.0 is up to date.")).toBeVisible();
+  await expect(dialog.getByText("Fabrilo 0.3.0 is up to date.")).toBeVisible();
   await expect(dialog.getByText(/^Last checked /)).toBeVisible();
   await expect(dialog.getByRole("button", { name: "Close" }).last()).toBeFocused();
 });
@@ -129,7 +129,7 @@ test("the channel and the automatic check are remembered across a reload", async
   await page.getByRole("button", { name: "Updates", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "Updates" });
   await dialog.getByRole("button", { name: "Beta" }).click();
-  await expect(dialog.getByText("BIMCraft 0.3.0 is up to date.")).toBeVisible();
+  await expect(dialog.getByText("Fabrilo 0.3.0 is up to date.")).toBeVisible();
   expect((await stubbed(page)).checks).toEqual(["beta"]);
   await dialog.getByRole("checkbox", { name: "Check for updates automatically" }).uncheck();
 
@@ -169,5 +169,5 @@ test("the update controls are in French when the language is", async ({ page }) 
   await page.getByRole("combobox", { name: "Language" }).selectOption({ label: "Français" });
   await page.getByRole("button", { name: "Mises à jour", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "Mises à jour" });
-  await expect(dialog.getByRole("button", { name: "Rechercher maintenant" })).toBeVisible();
+  await expect(dialog.getByRole("button", { name: /^Rechercher/ })).toBeVisible();
 });

@@ -5,6 +5,7 @@
 # Getting started
 
 - [Install Fabrilo](getting-started.md)
+- [Update Fabrilo](update-fabrilo.md)
 - [Change the interface language](change-the-interface-language.md)
 - [Use the workspace with the keyboard](use-the-workspace-with-the-keyboard.md)
 
@@ -33,6 +34,7 @@
 
 # Français
 
+- [Mettre à jour Fabrilo](update-fabrilo.fr.md)
 - [Se déplacer dans la vue 3D](navigate-the-3d-view.fr.md)
 - [Sélectionner et déplacer des éléments](select-and-move-elements.fr.md)
 - [Placer un bloc](place-a-block.fr.md)
