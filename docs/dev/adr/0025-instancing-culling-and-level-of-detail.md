@@ -1,4 +1,4 @@
-# 0024. Instancing, culling and level of detail
+# 0025. Instancing, culling and level of detail
 
 - Status: Accepted
 - Requirements: VP-02, NFR-02 (also VP-04, GEO-07, ARCH-01, ENG-04)

@@ -1,4 +1,4 @@
-# 0025. Viewport in WebAssembly with a binary scene channel
+# 0026. Viewport in WebAssembly with a binary scene channel
 
 - Status: Accepted
 - Requirements: VP-01, NFR-03 (also VP-02, GEO-05, UI-01, ARCH-01, ARCH-02, SEC-03)
@@ -6,7 +6,7 @@
 
 ## Context
 
-The 3D viewport must follow the pointer at frame rate: hover highlights, snap markers, a move preview that tracks the cursor, orbit and pan. NFR-03 asks for moving an element in well under a frame budget plus the core's share. The UI is React in a webview (Tauri on the desktop, a browser for the web build); the core is Rust. [ADR 0020](0020-camera-relative-rendering.md) and [ADR 0024](0024-instancing-culling-and-level-of-detail.md) already fixed how the renderer draws: `f64` camera-relative transforms, instancing, culling.
+The 3D viewport must follow the pointer at frame rate: hover highlights, snap markers, a move preview that tracks the cursor, orbit and pan. NFR-03 asks for moving an element in well under a frame budget plus the core's share. The UI is React in a webview (Tauri on the desktop, a browser for the web build); the core is Rust. [ADR 0020](0020-camera-relative-rendering.md) and [ADR 0025](0025-instancing-culling-and-level-of-detail.md) already fixed how the renderer draws: `f64` camera-relative transforms, instancing, culling.
 
 Two questions remained: where the interaction code (picking, snapping, tools, camera) runs, and how geometry reaches the renderer. Doing the interaction in TypeScript would duplicate the geometry kernel's tolerances in a second language, put pointer events through React, and force picking against meshes held in JavaScript. Sending geometry as JSON-RPC would make it several times larger and slow to parse (specification §14's risk table).
 

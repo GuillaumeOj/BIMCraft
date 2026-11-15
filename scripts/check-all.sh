@@ -189,7 +189,7 @@ check_ui() {
   (
     cd ui
     bun install --frozen-lockfile
-    # The typecheck reads the generated bindings of the viewport (ADR 0025).
+    # The typecheck reads the generated bindings of the viewport (ADR 0026).
     bun run build:viewport
     bunx biome ci .
     # Everything, then the app code alone without Node types (it runs in the browser).

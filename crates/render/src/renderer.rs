@@ -5,7 +5,7 @@
 //! on the CPU in `f64` the camera-relative model-view of every object drawn
 //! ([`crate::transform`]); only that small result reaches the GPU in `f32`, as one instance
 //! record per object. Objects that share a mesh and a level are drawn by one instanced draw call
-//! (`docs/dev/adr/0024-instancing-culling-and-level-of-detail.md`). Depth is reverse-Z in a
+//! (`docs/dev/adr/0025-instancing-culling-and-level-of-detail.md`). Depth is reverse-Z in a
 //! `Depth32Float` buffer, compared with `Greater` and cleared to 0
 //! (`docs/dev/adr/0020-camera-relative-rendering.md`).
 //!

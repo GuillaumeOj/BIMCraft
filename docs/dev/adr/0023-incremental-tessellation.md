@@ -28,7 +28,7 @@ No entity of the core schema had a representation when this was decided (the `Bl
 
 ### Local frame and placement (amendment, 3D viewport)
 
-Generators return their solids in the element's **local frame** and an `f64` rigid `Placement` (rotation matrix and translation) that carries that frame to the world (`Generated::placement`, the identity by default); `ElementMesh` keeps both. Staleness, dependency keys and `SceneUpdate` are unchanged. Elements with identical local geometry then produce identical meshes, which the host deduplicates and the renderer instances, and a move changes only the placement. The first built-in generator, `block::body` (`scene::builtin`), makes the box of a `Block` of the core schema: centred in x and y, standing on z = 0, so its size alone decides the mesh. The scene channel that serves meshes and placements is in `.orchestrator/features/epic-3d-viewport/api-contract.md` until ADR 0025 records it.
+Generators return their solids in the element's **local frame** and an `f64` rigid `Placement` (rotation matrix and translation) that carries that frame to the world (`Generated::placement`, the identity by default); `ElementMesh` keeps both. Staleness, dependency keys and `SceneUpdate` are unchanged. Elements with identical local geometry then produce identical meshes, which the host deduplicates and the renderer instances, and a move changes only the placement. The first built-in generator, `block::body` (`scene::builtin`), makes the box of a `Block` of the core schema: centred in x and y, standing on z = 0, so its size alone decides the mesh. The scene channel that serves meshes and placements is in `.orchestrator/features/epic-3d-viewport/api-contract.md` until ADR 0026 records it.
 
 ### Dependency keys
 

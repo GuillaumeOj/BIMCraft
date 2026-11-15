@@ -1,6 +1,6 @@
 # The 3D viewport: build and run
 
-The viewport is the `viewport` crate compiled to WebAssembly and driven from the React UI ([ADR 0025](adr/0025-viewport-in-webassembly-with-a-binary-scene-channel.md)). Its interaction logic is plain Rust, tested natively; only `crates/viewport/src/web/` knows the browser.
+The viewport is the `viewport` crate compiled to WebAssembly and driven from the React UI ([ADR 0026](adr/0026-viewport-in-webassembly-with-a-binary-scene-channel.md)). Its interaction logic is plain Rust, tested natively; only `crates/viewport/src/web/` knows the browser.
 
 ## One-time setup
 

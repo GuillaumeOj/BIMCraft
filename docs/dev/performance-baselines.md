@@ -25,7 +25,7 @@ Remove includes returning the removed values. The insert figure was taken while 
 
 ## Frame preparation (VP-02, NFR-02)
 
-The CPU part of a frame of the renderer ([ADR 0024](adr/0024-instancing-culling-and-level-of-detail.md)): frustum culling through the hierarchy, the walk of the occlusion clusters, the choice of each object's level of detail, and the writing of the instance records of the objects drawn. The model is the reference model of `crates/render/tests/support/reference.rs`: 10 storeys, 100,150 elements, 15 meshes, at a national-grid offset. The view is full HD (1920 × 1080) with a 60° vertical field of view and the default settings. NFR-02 leaves this work 4 ms of the 16.7 ms of a frame at 60 fps; the GPU gets the rest.
+The CPU part of a frame of the renderer ([ADR 0025](adr/0025-instancing-culling-and-level-of-detail.md)): frustum culling through the hierarchy, the walk of the occlusion clusters, the choice of each object's level of detail, and the writing of the instance records of the objects drawn. The model is the reference model of `crates/render/tests/support/reference.rs`: 10 storeys, 100,150 elements, 15 meshes, at a national-grid offset. The view is full HD (1920 × 1080) with a 60° vertical field of view and the default settings. NFR-02 leaves this work 4 ms of the 16.7 ms of a frame at 60 fps; the GPU gets the rest.
 
 ### Method
 

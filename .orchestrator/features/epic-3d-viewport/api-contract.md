@@ -139,7 +139,7 @@ Clipping conventions (B8):
 - `section_box_reset` keeps the enabled flag.
 - `section_box_extents` with min ≥ max on any axis, or with non-finite values, is ignored: the UI validates first (board 3.26, "Le minimum doit être inférieur au maximum").
 - `show {by: "selection"}` un-hides what "hide selection" hid, because hidden elements cannot be selected.
-- Cut faces are back faces seen through a cut, filled with solid `vp-cut` (design README rule 6, not shaded). With faces oriented inconsistently, a stray tint can appear; ADR 0026 records it.
+- Cut faces are back faces seen through a cut, filled with solid `vp-cut` (design README rule 6, not shaded). With faces oriented inconsistently, a stray tint can appear; ADR 0027 records it.
 
 ```ts
 

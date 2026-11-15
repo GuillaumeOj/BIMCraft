@@ -1,6 +1,6 @@
 //! Level of detail and small-feature culling: which version of a mesh an object draws, from its
 //! projected size in pixels, with hysteresis (VP-02,
-//! `docs/dev/adr/0024-instancing-culling-and-level-of-detail.md`).
+//! `docs/dev/adr/0025-instancing-culling-and-level-of-detail.md`).
 
 use crate::Projection;
 

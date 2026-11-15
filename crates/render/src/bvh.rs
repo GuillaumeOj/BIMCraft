@@ -1,5 +1,5 @@
 //! A bounding volume hierarchy over the world bounds of the objects, updated incrementally
-//! (VP-02, `docs/dev/adr/0024-instancing-culling-and-level-of-detail.md`).
+//! (VP-02, `docs/dev/adr/0025-instancing-culling-and-level-of-detail.md`).
 //!
 //! It is the dynamic tree of `Box2D` (Erin Catto) in three dimensions: each leaf holds one item,
 //! an insertion descends towards the sibling whose enlarged surface area costs least, and the

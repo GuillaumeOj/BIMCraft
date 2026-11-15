@@ -1,6 +1,6 @@
-# Notes for ADR 0025 (B7), from B6
+# Notes for ADR 0026 (B7), from B6
 
-What the `viewport` crate (B6) decided that ADR 0025 "Viewport in WebAssembly with a binary scene channel" should record.
+What the `viewport` crate (B6) decided that ADR 0026 "Viewport in WebAssembly with a binary scene channel" should record.
 
 ## MVP limits
 

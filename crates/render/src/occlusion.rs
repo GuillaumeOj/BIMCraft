@@ -1,6 +1,6 @@
 //! Occlusion culling, CPU side: which clusters of objects the previous frames found hidden, which
 //! of them to skip, and which to test again (VP-02,
-//! `docs/dev/adr/0024-instancing-culling-and-level-of-detail.md`).
+//! `docs/dev/adr/0025-instancing-culling-and-level-of-detail.md`).
 //!
 //! A *cluster* is a compact node of the object hierarchy with at most [`CLUSTER_LEAVES`] objects
 //! below it ([`crate::bvh::Bvh::clusters`]). Each frame the GPU tests the bounding boxes of

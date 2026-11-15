@@ -34,9 +34,9 @@ Out of scope: WebGL2 fallback (VP-05, V1: on a webview without WebGPU, notably L
 
 | # | Sub-issue | Delivers | User docs |
 | --- | --- | --- | --- |
-| 1 | #70 VP-02 | Instancing, frustum culling, LOD and small-feature culling, occlusion culling in `render`; the synthetic reference model and the frame-time benchmark; ADR 0024. | N/A (internal change) |
-| 2 | #71 VP-01 | The scene feed (element-local meshes and placements, the `scene-wire` binary format, the host's `scene` channel), the block element and the `elements.move` command, the `viewport` crate (camera controller, picking, snapping, previews, overlays) compiled to wasm, the viewport in the UI with navigation, selection, place-block and move; e2e; ADR 0025. | `navigate-the-3d-view`, `select-and-move-elements`, `place-a-block` (EN + FR) |
-| 3 | #72 VP-03 | Clipping planes, section box, cut-face tint and visibility in `render` and `viewport`; the section box and visibility UI of boards 3.1 and 3.2; e2e; ADR 0026. | `cut-the-model-with-a-section-box`, `hide-and-isolate-elements` (EN + FR) |
+| 1 | #70 VP-02 | Instancing, frustum culling, LOD and small-feature culling, occlusion culling in `render`; the synthetic reference model and the frame-time benchmark; ADR 0025. | N/A (internal change) |
+| 2 | #71 VP-01 | The scene feed (element-local meshes and placements, the `scene-wire` binary format, the host's `scene` channel), the block element and the `elements.move` command, the `viewport` crate (camera controller, picking, snapping, previews, overlays) compiled to wasm, the viewport in the UI with navigation, selection, place-block and move; e2e; ADR 0026. | `navigate-the-3d-view`, `select-and-move-elements`, `place-a-block` (EN + FR) |
+| 3 | #72 VP-03 | Clipping planes, section box, cut-face tint and visibility in `render` and `viewport`; the section box and visibility UI of boards 3.1 and 3.2; e2e; ADR 0027. | `cut-the-model-with-a-section-box`, `hide-and-isolate-elements` (EN + FR) |
 
 The wasm embedding and the binary channel have no sub-issue of their own; they ship in PR 2 with #71, which cannot be tested without them (decision **D2**). Tasks depend on each other across sub-issues (B4 needs B1, F1 needs the F0 e2e setup), so merges follow dependencies, not the stack: groundwork merged before a PR's boundary (for example `scene-wire` or the WebGPU e2e setup inside PR 1) ships in that PR and its body says which later sub-issue it prepares. The lead names the boundary commits and names the three boundary commits in the PR request; the stack goes out with `bun scripts/push-pr.ts --stack` (`Closes #70` / `#71` / `#72`, milestone, project). Commits reference their issue and requirement IDs (`feat(render): instance objects that share a mesh (VP-02, Refs #70)`). The epic #67 closes when the last PR merges. `.orchestrator/` does not ship: the lead removes this feature's folder in a final commit before the PR request.
 
@@ -57,7 +57,7 @@ The core schema has no element with a representation yet (ADR 0023: "No entity o
 - The frame loop is `requestAnimationFrame` driven from Rust, and draws only when something changed (camera, scene, preview, visibility, resize).
 - Finished actions leave the viewport as **intents** (`move`, `place_block`), which the UI sends as commands through the command API (UI-01, API-01). The core re-meshes the elements (GEO-05) and the change comes back through the scene channel, which replaces the preview.
 - Build: `scripts/build-viewport.sh` runs `cargo build -p viewport --target wasm32-unknown-unknown --release` then `wasm-bindgen --target web` into `ui/src/viewport/pkg/` (generated, git-ignored, ignored by Biome and typos). The UI build, the Vitest run (which mocks the module) and the Playwright web server call it first. `wasm-bindgen-cli` is pinned in `scripts/tool-versions.env` at the version of `wasm-bindgen` in `Cargo.lock` (0.2.129), with its `# renovate:` comment, installed by `scripts/setup.sh` and CI; the UI and e2e CI jobs gain the Rust toolchain and the `wasm32-unknown-unknown` target. New direct dependencies `wasm-bindgen`, `web-sys`, `js-sys`, `wasm-bindgen-futures` are already in `Cargo.lock` through `wgpu`; the commit body justifies them (AGENTS.md §4).
-- **ADR 0025 "Viewport in WebAssembly with a binary scene channel"** records D2–D5.
+- **ADR 0026 "Viewport in WebAssembly with a binary scene channel"** records D2–D5.
 
 ### D3. Element-local meshes and placements, so instancing is possible (GEO-05 kept)
 
@@ -72,7 +72,7 @@ The core schema has no element with a representation yet (ADR 0023: "No entity o
 - **Occlusion culling**: GPU occlusion queries (`wgpu::QueryType::Occlusion`, available on WebGPU and native) on the bounding boxes of spatial clusters, with the previous frame's results (temporal coherence) and a conservative rule: a cluster not yet tested, or newly in view, is drawn. The backend's plan fixes the clustering and the query budget per frame.
 - **Reference model**: a deterministic synthetic generator of a 10-storey office building of about 100,000 elements (columns, beams, slabs, walls, windows and doors as boxes and extrusions, heavy repetition, as in spec §14), in the `render` crate's bench support (test-only code, no schema needed).
 - **Benchmarks, tracked**: criterion benches `render/benches/frame.rs` (CPU frame preparation on the reference model while orbiting: culling, LOD, instance buffers; target < 4 ms median, leaving the GPU the rest of the 16.7 ms) and, when a hardware adapter is present, GPU frame time. A non-blocking scheduled CI job runs the benches and uploads criterion's output as an artefact; `docs/dev/performance-baselines.md` records the method and the reference numbers (and `docs/dev/quality.md#benchmarks`, which says CI does not run benchmarks, is updated for the scheduled job). Tests assert behaviour, not time: culling and LOD decisions are checked on fixed cameras (how many objects drawn, which level), and a GPU test checks that the culled frame equals the unculled frame pixel by pixel.
-- **ADR 0024 "Instancing, culling and level of detail"**.
+- **ADR 0025 "Instancing, culling and level of detail"**.
 
 ### D5. Picking, snapping and previews in Rust (VP-01, NFR-03, #71)
 
@@ -87,7 +87,7 @@ The core schema has no element with a representation yet (ADR 0023: "No entity o
 - **Clipping planes** in the fragment shader: up to 6 planes for the section box plus up to 6 user planes, passed camera-relative (`f64` on the CPU, `f32` uniform). Cut faces: back faces that become visible through a cut are drawn in a flat tint (the boards' "Cut faces: Tinted"). The section box is an oriented box (axis-aligned with the project for the MVP), edited by dragging face handles in the viewport (with snapping, Shift for 100 mm steps as in board 3.1) or by typing extents in the View panel; "Fit box to selection", "Reset box", "Turn off".
 - **Visibility**: per-object flags computed from three inputs, in this order: hidden categories, hidden disciplines, hidden selection; then isolation (by categories, disciplines or selection) shows only what is isolated. Hidden objects are neither drawn nor picked nor snapped to. Esc or "End isolate" ends isolation; "Reset visibility" clears everything.
 - Visibility and the section box are view state held by the viewport, mirrored to the UI for its panels; they are lost when the window closes (saved views come later).
-- **ADR 0026 "Clipping and visibility in the viewport"** (short).
+- **ADR 0027 "Clipping and visibility in the viewport"** (short).
 
 ### D7. The binary scene channel
 
@@ -121,13 +121,13 @@ The lead first brings `main` into the integration branch (it lacks `crates/scene
 | Id | Node | Task | Depends on | PR |
 | --- | --- | --- | --- | --- |
 | B1 | back | `scene-wire` crate: format, encoder, validating decoder, proptest, fuzz target | — | 2 |
-| B2 | back | `render`: instancing, frustum culling, LOD and small-feature culling, reference model, frame bench, scheduled bench job, ADR 0024 (plan first, opus) | — | 1 |
+| B2 | back | `render`: instancing, frustum culling, LOD and small-feature culling, reference model, frame bench, scheduled bench job, ADR 0025 (plan first, opus) | — | 1 |
 | B3 | back | `render`: occlusion culling (opus) | B2 | 1 |
 | B4 | back | `scene` local meshes and placements, `Block` entity and `block::body`, `elements.move`, host scene channel with dedup, NFR-03 bench (plan first) | B1 | 2 |
 | B5 | back | `render`: overlay pass and per-object highlight/ghost states | B3 | 2 |
 | B6 | back | `viewport` crate: scene cache, camera controller, picking, snapping, previews, intents, typed input (plan first, opus) | B1, B5 | 2 |
-| B7 | back | `viewport` wasm glue, `scripts/build-viewport.sh`, tool pin, CI jobs, ADR 0025 | B6 | 2 |
-| B8 | back | `render` + `viewport`: clipping planes, section box, cut tint, visibility, ADR 0026 | B7 | 3 |
+| B7 | back | `viewport` wasm glue, `scripts/build-viewport.sh`, tool pin, CI jobs, ADR 0026 | B6 | 2 |
+| B8 | back | `render` + `viewport`: clipping planes, section box, cut tint, visibility, ADR 0027 | B7 | 3 |
 | X1 | ux | Flows and wireframes for the missing viewport states (`ux-brief.md`) | — | — |
 | U1 | ui | High-fidelity boards, light and dark, exports | X1 | — |
 | F1 | front | Viewport in the shell: lazy wasm mount, scene feed in `ui/src/api/`, navigation controls, selection, place block, move, live region, no-WebGPU state, i18n, tests, e2e (WebGPU on CI first), user docs | B4, B7, U1 | 2 |

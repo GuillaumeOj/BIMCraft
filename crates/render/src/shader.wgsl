@@ -1,7 +1,7 @@
 // The opaque pass of the renderer (VP-02, VP-04): `clip = P · (MV · v)` in f32, where MV is the
 // camera-relative model-view matrix computed in f64 on the CPU (docs/dev/adr/0020-camera-relative-rendering.md),
 // so no value here is a world coordinate. MV and the colour come per instance: objects sharing a
-// mesh are one instanced draw (docs/dev/adr/0024-instancing-culling-and-level-of-detail.md). Lambert shading plus ambient, lit on both sides because
+// mesh are one instanced draw (docs/dev/adr/0025-instancing-culling-and-level-of-detail.md). Lambert shading plus ambient, lit on both sides because
 // back faces are drawn (BIM solids are not always consistently oriented).
 //
 // The overlay pass (see overlay.rs) reuses vs_main for ghosts (fs_main, blended) and for

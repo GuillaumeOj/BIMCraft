@@ -3,7 +3,7 @@ import type { ViewportHandle, ViewportModule } from "./types";
 let loading: Promise<ViewportModule> | undefined;
 
 /**
- * Loads the viewport's WebAssembly module (ADR 0025) the first time it is asked for, and the same
+ * Loads the viewport's WebAssembly module (ADR 0026) the first time it is asked for, and the same
  * module after that. This is the only place that imports `./pkg/`: the dynamic import keeps the
  * module (about 250 kB gzipped) out of the start-up bundle until a viewport mounts.
  */

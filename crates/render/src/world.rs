@@ -1,7 +1,7 @@
 //! The CPU side of the renderer: the meshes and objects it holds, their bounds in a hierarchy,
 //! and the preparation of each frame, which culls (outside the view, hidden behind others, too
 //! small), chooses levels of detail, and writes the instance records and the occlusion queries
-//! (VP-02, `docs/dev/adr/0024-instancing-culling-and-level-of-detail.md`).
+//! (VP-02, `docs/dev/adr/0025-instancing-culling-and-level-of-detail.md`).
 //!
 //! Nothing here touches the GPU, so every decision is tested without a device.
 

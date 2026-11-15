@@ -1,4 +1,4 @@
-# 0026. Clipping and visibility in the viewport
+# 0027. Clipping and visibility in the viewport
 
 - Status: Accepted
 - Requirements: VP-03 (also VP-01, VP-02, VP-04, GEO-07, UI-06)
@@ -6,7 +6,7 @@
 
 ## Context
 
-Users cut the model with a section box and clipping planes to see inside it, and hide or isolate elements to read a crowded model. These are view state, not model state: they are lost when the window closes, and no command of the core is involved. The cut must work at any distance from the origin ([ADR 0020](0020-camera-relative-rendering.md)), must not slow the orbit of a large model ([ADR 0024](0024-instancing-culling-and-level-of-detail.md)), and what is hidden or cut away must never be picked or snapped to ([ADR 0025](0025-viewport-in-webassembly-with-a-binary-scene-channel.md): picking and snapping are CPU work in the viewport).
+Users cut the model with a section box and clipping planes to see inside it, and hide or isolate elements to read a crowded model. These are view state, not model state: they are lost when the window closes, and no command of the core is involved. The cut must work at any distance from the origin ([ADR 0020](0020-camera-relative-rendering.md)), must not slow the orbit of a large model ([ADR 0025](0025-instancing-culling-and-level-of-detail.md)), and what is hidden or cut away must never be picked or snapped to ([ADR 0026](0026-viewport-in-webassembly-with-a-binary-scene-channel.md): picking and snapping are CPU work in the viewport).
 
 ## Decision
 

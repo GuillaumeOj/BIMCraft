@@ -1,5 +1,5 @@
 #!/bin/sh
-# Builds the viewport for the browser (ADR 0025): a release build of the `viewport` crate for
+# Builds the viewport for the browser (ADR 0026): a release build of the `viewport` crate for
 # wasm32-unknown-unknown, then wasm-bindgen's `web` bindings into ui/src/viewport/pkg/ (not
 # committed). The UI imports that folder only through ui/src/viewport/.
 # Usage: scripts/build-viewport.sh            builds, and prints the size of the module
