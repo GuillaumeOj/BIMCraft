@@ -1,20 +1,309 @@
-# Attaches a CycloneDX SBOM to every published release (SEC-05).
-# Actions are pinned to commit SHAs; tool versions come from scripts/tool-versions.env (AGENTS.md §4).
+# Builds, signs and notarizes the installers of a version tag into a draft release, and publishes the
+# update channels when a release is published (ENG-05, SEC-05). The maintainer's guide, the secrets
+# and the known limits: docs/dev/release.md.
+# - Tag push v*: verify, build-macos, build-windows, sbom, release (a draft: nothing reaches users).
+# - Release published, unpublished or deleted: channels recomputes updates/stable.json and beta.json
+#   on GitHub Pages from the published releases.
+# - Pull request (release files) and workflow_dispatch: a dry run, unsigned, with a throw-away
+#   updater key and no secrets; its installers are kept as workflow artifacts.
+# Untrusted values (tag names, release fields) reach scripts through `env:` only. Secrets live in
+# the `release` environment, used on tag pushes only. Actions are pinned to commit SHAs; tool
+# versions come from scripts/tool-versions.env (AGENTS.md §4).
 name: Release
 
 on:
+  push:
+    tags: ["v*"]
   release:
-    types: [published]
+    types: [published, released, prereleased, unpublished, deleted]
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - .github/workflows/release.yml
+      - .signpath/**
+      - crates/desktop-app/**
+      - crates/host-desktop/**
+      - scripts/release/**
 
 permissions:
   contents: read
 
+concurrency:
+  group: release-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  CARGO_TERM_COLOR: always
+  # Signed, released artefacts only from a tag push; everything else is a dry run.
+  PUBLISH: ${{ github.event_name == 'push' }}
+
 jobs:
+  verify:
+    name: Tag and version
+    if: github.event_name != 'release'
+    runs-on: ubuntu-24.04
+    outputs:
+      tag: ${{ steps.version.outputs.tag }}
+      version: ${{ steps.version.outputs.version }}
+      prerelease: ${{ steps.version.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Load tool versions
+        run: grep -E '^[A-Z_]+=' scripts/tool-versions.env >> "$GITHUB_ENV"
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      - id: version
+        env:
+          # A dry run takes the tag the version would have.
+          TAG: ${{ github.event_name == 'push' && github.ref_name || '' }}
+        run: bun scripts/release/check-version.ts
+
+  build-macos:
+    name: macOS (universal)
+    needs: verify
+    runs-on: macos-15
+    environment: ${{ github.event_name == 'push' && 'release' || '' }}
+    env:
+      VERSION: ${{ needs.verify.outputs.version }}
+      BUNDLE: target/universal-apple-darwin/release/bundle
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-rust
+      - name: Add the two macOS targets of a universal build
+        run: rustup target add aarch64-apple-darwin x86_64-apple-darwin
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      - uses: taiki-e/install-action@f7e5d7c961414b23f5b25b2da9294395d08513ad # v2.87.26
+        with:
+          tool: tauri-cli@${{ env.TAURI_CLI_VERSION }}
+      - name: Check the signing secrets (fail closed)
+        if: env.PUBLISH == 'true'
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          UPDATER_PUBLIC_KEY: ${{ vars.UPDATER_PUBLIC_KEY }}
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ vars.APPLE_SIGNING_IDENTITY }}
+          APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+          APPLE_API_KEY: ${{ vars.APPLE_API_KEY }}
+          APPLE_API_ISSUER: ${{ vars.APPLE_API_ISSUER }}
+        run: scripts/release/require-env.sh TAURI_SIGNING_PRIVATE_KEY TAURI_SIGNING_PRIVATE_KEY_PASSWORD UPDATER_PUBLIC_KEY APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_SIGNING_IDENTITY APPLE_API_KEY_P8 APPLE_API_KEY APPLE_API_ISSUER
+      - name: Make a throw-away updater key (dry run)
+        if: env.PUBLISH != 'true'
+        run: scripts/release/dry-run-updater-key.sh
+      - name: Write the updater public key into the configuration
+        env:
+          UPDATER_PUBLIC_KEY: ${{ env.PUBLISH == 'true' && vars.UPDATER_PUBLIC_KEY || env.DRY_RUN_UPDATER_PUBLIC_KEY }}
+        run: |
+          jq -n --arg key "$UPDATER_PUBLIC_KEY" '{plugins: {updater: {pubkey: $key}}}' > "$RUNNER_TEMP/updater.conf.json"
+      - name: Write the notarization API key to a temporary file
+        if: env.PUBLISH == 'true'
+        env:
+          APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+        run: |
+          umask 077
+          printf '%s\n' "$APPLE_API_KEY_P8" > "$RUNNER_TEMP/AuthKey.p8"
+          echo "APPLE_API_KEY_PATH=$RUNNER_TEMP/AuthKey.p8" >> "$GITHUB_ENV"
+      - name: Build the interface
+        working-directory: ui
+        run: bun install --frozen-lockfile && bunx vite build
+      # Tauri imports the certificate into a temporary keychain with a random password and deletes
+      # it afterwards, signs with the hardened runtime, notarizes, staples, then signs the update
+      # package for this version. A dry run has none of the Apple values: the app is not signed.
+      - name: Build, sign and notarize the app
+        working-directory: crates/desktop-app
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ env.PUBLISH == 'true' && secrets.TAURI_SIGNING_PRIVATE_KEY || env.DRY_RUN_UPDATER_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ vars.APPLE_SIGNING_IDENTITY }}
+          APPLE_API_KEY: ${{ vars.APPLE_API_KEY }}
+          APPLE_API_ISSUER: ${{ vars.APPLE_API_ISSUER }}
+        run: |
+          # Tauri treats a set but empty variable as a value; a dry run must not have them.
+          for name in APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_SIGNING_IDENTITY APPLE_API_KEY APPLE_API_ISSUER; do
+            [ -n "${!name}" ] || unset "$name"
+          done
+          cargo tauri build --ci --target universal-apple-darwin --bundles app,dmg --config "$RUNNER_TEMP/updater.conf.json" -- --locked
+      - name: Delete the notarization API key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/AuthKey.p8"
+      - name: Check the app's signature, notarization and stapled ticket
+        if: env.PUBLISH == 'true'
+        run: |
+          codesign --verify --deep --strict --verbose=2 "$BUNDLE/macos/Fabrilo.app"
+          spctl --assess --type execute --verbose=2 "$BUNDLE/macos/Fabrilo.app"
+          xcrun stapler validate "$BUNDLE/macos/Fabrilo.app"
+      - name: Collect the release files
+        run: |
+          mkdir -p "$RUNNER_TEMP/release"
+          cp "$BUNDLE"/dmg/*.dmg "$RUNNER_TEMP/release/"
+          cp "$BUNDLE/macos/Fabrilo.app.tar.gz" "$RUNNER_TEMP/release/Fabrilo_${VERSION}_universal.app.tar.gz"
+          cp "$BUNDLE/macos/Fabrilo.app.tar.gz.sig" "$RUNNER_TEMP/release/Fabrilo_${VERSION}_universal.app.tar.gz.sig"
+      - name: Check the update package's signature
+        env:
+          UPDATER_PUBLIC_KEY: ${{ env.PUBLISH == 'true' && vars.UPDATER_PUBLIC_KEY || env.DRY_RUN_UPDATER_PUBLIC_KEY }}
+        run: bun scripts/release/verify-signature.ts "$RUNNER_TEMP/release/Fabrilo_${VERSION}_universal.app.tar.gz"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-macos
+          path: ${{ runner.temp }}/release/
+          if-no-files-found: error
+
+  build-windows:
+    name: Windows (x64)
+    needs: verify
+    runs-on: windows-2025
+    environment: ${{ github.event_name == 'push' && 'release' || '' }}
+    permissions:
+      contents: read
+      # SignPath downloads the artifacts to sign with this job's token.
+      actions: read
+    defaults:
+      run:
+        shell: bash
+    env:
+      VERSION: ${{ needs.verify.outputs.version }}
+      # WiX accepts numeric versions only: beta releases ship the NSIS installer alone.
+      BUNDLES: ${{ needs.verify.outputs.prerelease == 'true' && 'nsis' || 'nsis,msi' }}
+      BUNDLE: target/release/bundle
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-rust
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      - uses: taiki-e/install-action@f7e5d7c961414b23f5b25b2da9294395d08513ad # v2.87.26
+        with:
+          tool: tauri-cli@${{ env.TAURI_CLI_VERSION }}
+      - name: Check the signing secrets (fail closed)
+        if: env.PUBLISH == 'true'
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          UPDATER_PUBLIC_KEY: ${{ vars.UPDATER_PUBLIC_KEY }}
+          SIGNPATH_API_TOKEN: ${{ secrets.SIGNPATH_API_TOKEN }}
+          SIGNPATH_ORGANIZATION_ID: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          SIGNPATH_PROJECT_SLUG: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+        run: scripts/release/require-env.sh TAURI_SIGNING_PRIVATE_KEY TAURI_SIGNING_PRIVATE_KEY_PASSWORD UPDATER_PUBLIC_KEY SIGNPATH_API_TOKEN SIGNPATH_ORGANIZATION_ID SIGNPATH_PROJECT_SLUG
+      - name: Make a throw-away updater key (dry run)
+        if: env.PUBLISH != 'true'
+        run: scripts/release/dry-run-updater-key.sh
+      - name: Write the updater public key into the configuration
+        env:
+          UPDATER_PUBLIC_KEY: ${{ env.PUBLISH == 'true' && vars.UPDATER_PUBLIC_KEY || env.DRY_RUN_UPDATER_PUBLIC_KEY }}
+        run: |
+          jq -n --arg key "$UPDATER_PUBLIC_KEY" '{plugins: {updater: {pubkey: $key}}}' > "$RUNNER_TEMP/updater.conf.json"
+      - name: Build the interface
+        working-directory: ui
+        run: bun install --frozen-lockfile && bunx vite build
+
+      # Round 1: the program, signed before the installers pack it.
+      - name: Build the program
+        working-directory: crates/desktop-app
+        run: cargo tauri build --ci --no-bundle --config "$RUNNER_TEMP/updater.conf.json" -- --locked
+      - name: Stage the program for signing
+        run: mkdir -p "$RUNNER_TEMP/program" && cp target/release/fabrilo.exe "$RUNNER_TEMP/program/"
+      - id: program
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: signpath-program
+          path: ${{ runner.temp }}/program/
+          if-no-files-found: error
+      - name: Sign the program (SignPath, waits for approval)
+        if: env.PUBLISH == 'true'
+        uses: signpath/github-action-submit-signing-request@f6d04783b4569d051e0c80105fe66e82819d0092 # v3.0
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: release-signing
+          artifact-configuration-slug: program
+          github-artifact-id: ${{ steps.program.outputs.artifact-id }}
+          wait-for-completion: true
+          wait-for-completion-timeout-in-seconds: 7200
+          output-artifact-directory: ${{ runner.temp }}/program-signed
+      - name: Put the signed program in place
+        if: env.PUBLISH == 'true'
+        run: cp "$RUNNER_TEMP/program-signed/fabrilo.exe" target/release/fabrilo.exe
+
+      # Round 2: the installers around the signed program. Writing the bundle type into the program
+      # would break its signature, and Tauri's updater signature would be computed before SignPath
+      # changes the installer: both are turned off here (docs/dev/release.md).
+      - name: Build the installers
+        working-directory: crates/desktop-app
+        run: |
+          cargo tauri bundle --ci --no-binary-patching --bundles "$BUNDLES" \
+            --config "$RUNNER_TEMP/updater.conf.json" --config '{"bundle":{"createUpdaterArtifacts":false}}'
+      - name: Stage the installers for signing
+        run: |
+          mkdir -p "$RUNNER_TEMP/installers"
+          cp "$BUNDLE"/nsis/*-setup.exe "$RUNNER_TEMP/installers/"
+          if [ "$BUNDLES" = nsis,msi ]; then cp "$BUNDLE"/msi/*.msi "$RUNNER_TEMP/installers/"; fi
+      - id: installers
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: signpath-installers
+          path: ${{ runner.temp }}/installers/
+          if-no-files-found: error
+      - name: Sign the installers (SignPath, waits for approval)
+        if: env.PUBLISH == 'true'
+        uses: signpath/github-action-submit-signing-request@f6d04783b4569d051e0c80105fe66e82819d0092 # v3.0
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: release-signing
+          artifact-configuration-slug: installers
+          github-artifact-id: ${{ steps.installers.outputs.artifact-id }}
+          wait-for-completion: true
+          wait-for-completion-timeout-in-seconds: 7200
+          output-artifact-directory: ${{ runner.temp }}/installers-signed
+      - name: Put the signed installers in place
+        if: env.PUBLISH == 'true'
+        run: cp -f "$RUNNER_TEMP"/installers-signed/* "$RUNNER_TEMP/installers/"
+      - name: Check the Authenticode signatures
+        if: env.PUBLISH == 'true'
+        shell: pwsh
+        run: |
+          $files = @(Get-Item target/release/fabrilo.exe) + @(Get-ChildItem "$env:RUNNER_TEMP/installers")
+          foreach ($file in $files) {
+            $signature = Get-AuthenticodeSignature -FilePath $file.FullName
+            Write-Output "$($file.Name): $($signature.Status) ($($signature.SignerCertificate.Subject))"
+            if ($signature.Status -ne 'Valid') { throw "$($file.Name) is not validly signed" }
+          }
+      - name: Sign the update package (the signed NSIS installer) for this version
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ env.PUBLISH == 'true' && secrets.TAURI_SIGNING_PRIVATE_KEY || env.DRY_RUN_UPDATER_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          for setup in "$RUNNER_TEMP"/installers/*-setup.exe; do
+            cargo tauri signer sign --app-version "$VERSION" "$setup"
+          done
+      - name: Check the update package's signature
+        env:
+          UPDATER_PUBLIC_KEY: ${{ env.PUBLISH == 'true' && vars.UPDATER_PUBLIC_KEY || env.DRY_RUN_UPDATER_PUBLIC_KEY }}
+        run: bun scripts/release/verify-signature.ts "$RUNNER_TEMP"/installers/*-setup.exe
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-windows
+          path: ${{ runner.temp }}/installers/
+          if-no-files-found: error
+
   sbom:
     name: SBOM
+    needs: verify
     runs-on: ubuntu-24.04
-    permissions:
-      contents: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -24,9 +313,92 @@ jobs:
         with:
           tool: cargo-cyclonedx@${{ env.CARGO_CYCLONEDX_VERSION }}
       - run: scripts/sbom.sh "$RUNNER_TEMP/sbom"
-      - name: Attach the SBOM to the release
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-sbom
+          path: ${{ runner.temp }}/sbom/
+          if-no-files-found: error
+
+  release:
+    name: Draft release
+    if: github.event_name == 'push'
+    needs: [verify, build-macos, build-windows, sbom]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    env:
+      TAG: ${{ needs.verify.outputs.tag }}
+      VERSION: ${{ needs.verify.outputs.version }}
+      PRERELEASE: ${{ needs.verify.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Load tool versions
+        run: grep -E '^[A-Z_]+=' scripts/tool-versions.env >> "$GITHUB_ENV"
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: release-*
+          path: ${{ runner.temp }}/assets
+          merge-multiple: true
+      - name: Write the update manifest
+        env:
+          REPO: ${{ github.repository }}
+        run: bun scripts/release/update-manifest.ts "$RUNNER_TEMP/assets" "$RUNNER_TEMP/assets/latest.json"
+      - name: Write the checksums
+        working-directory: ${{ runner.temp }}/assets
+        run: sha256sum -- * > "$RUNNER_TEMP/SHA256SUMS.txt" && mv "$RUNNER_TEMP/SHA256SUMS.txt" .
+      - name: Create the draft release
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
+        run: |
+          flags=(--draft --verify-tag --generate-notes --title "Fabrilo $VERSION")
+          if [ "$PRERELEASE" = true ]; then flags+=(--prerelease); fi
+          gh release create "$TAG" "${flags[@]}" "$RUNNER_TEMP"/assets/*
+
+  channels:
+    name: Update channels
+    if: github.event_name == 'release'
+    runs-on: ubuntu-24.04
+    # One at a time, never cancelled: the last event's manifests win.
+    concurrency:
+      group: update-channels
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Load tool versions
+        run: grep -E '^[A-Z_]+=' scripts/tool-versions.env >> "$GITHUB_ENV"
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      - name: Check the published release's pre-release flag
+        if: contains(fromJSON('["published", "released", "prereleased"]'), github.event.action)
+        env:
           TAG: ${{ github.event.release.tag_name }}
-        run: gh release upload "$TAG" "$RUNNER_TEMP"/sbom/*.cdx.json --clobber
+          PRERELEASE: ${{ github.event.release.prerelease }}
+        run: bun scripts/release/check-version.ts --published
+      - name: Write the channel manifests
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh api --paginate "repos/$GH_REPO/releases" --jq '.[] | {tag_name, draft, prerelease, body}' > "$RUNNER_TEMP/releases.jsonl"
+          bun scripts/release/channel-manifests.ts "$RUNNER_TEMP/releases.jsonl" "$RUNNER_TEMP/site/updates"
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: ${{ runner.temp }}/site
+      - id: deploy
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1

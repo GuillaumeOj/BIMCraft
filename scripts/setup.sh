@@ -30,6 +30,7 @@ check cargo-cyclonedx "cargo install --locked cargo-cyclonedx@$CARGO_CYCLONEDX_V
 check cargo-deny "cargo install --locked cargo-deny@$CARGO_DENY_VERSION"
 check cargo-fuzz "cargo install --locked cargo-fuzz@$CARGO_FUZZ_VERSION"
 check cargo-llvm-cov "cargo install --locked cargo-llvm-cov@$CARGO_LLVM_COV_VERSION"
+check cargo-tauri "cargo install --locked tauri-cli@$TAURI_CLI_VERSION"
 check taplo   "cargo install --locked taplo-cli@$TAPLO_VERSION"
 check typos   "cargo install --locked typos-cli@$TYPOS_VERSION"
 check gitleaks "https://github.com/gitleaks/gitleaks/releases/tag/v$GITLEAKS_VERSION"
