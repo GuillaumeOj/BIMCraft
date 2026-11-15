@@ -29,23 +29,30 @@ Out of scope (later issues): Linux packages (the Linux desktop is V1, spec §15)
 
 ### D2. Release flow (`.github/workflows/release.yml`)
 
-1. **Tag push `v*`** → job `verify` (tag shape and version, D1) → matrix `build` on `windows-2025` and `macos-15`:
-   - build the UI (`ui/dist`) and bundle with the Tauri CLI (`cargo tauri build`, `tauri-cli` pinned in `scripts/tool-versions.env`, installed with `taiki-e/install-action`); macOS with `--target universal-apple-darwin`;
-   - sign: macOS through Tauri's built-in signing and notarization (Developer ID certificate imported into a temporary keychain; notarization with an App Store Connect API key); Windows through `bundle.windows.signCommand`, which calls a script in `scripts/release/` (D3);
-   - Tauri signs each update package with the updater private key (`TAURI_SIGNING_PRIVATE_KEY`) and writes the `.sig` files;
-   - verify before upload: `codesign --verify --deep --strict`, `spctl -a -vv`, `xcrun stapler validate` on macOS; `Get-AuthenticodeSignature` = `Valid` on every `.exe`/`.msi` on Windows. A failed check fails the job.
-   - job `sbom` (moved from today's `release: published` trigger) and job `release`: create a **draft** GitHub release for the tag (pre-release when beta) and attach the installers, the update packages and their `.sig`, `latest.json` (the Tauri static update manifest for this version, built by `scripts/release/update-manifest.ts` from the `.sig` files and the asset URLs), `SHA256SUMS.txt` and the SBOM.
+1. **Tag push `v*`** → job `verify` (tag shape and version, D1) → jobs `build-macos` (`macos-15`) and `build-windows` (`windows-2025`); `tauri-cli` is pinned in `scripts/tool-versions.env` and installed with `taiki-e/install-action`:
+   - **macOS**: build the UI (`ui/dist`) and `cargo tauri build --target universal-apple-darwin`. Tauri signs (Developer ID Application certificate of **Fusily**, imported into a temporary keychain, hardened runtime) and notarizes (App Store Connect API key) the app, then staples the ticket; Tauri signs the update package (`.app.tar.gz`) with the updater key (`TAURI_SIGNING_PRIVATE_KEY`) and writes its `.sig`.
+   - **Windows**, in two signing rounds through SignPath (D3), because the program inside an installer must be signed before the installer is built:
+     1. `cargo tauri build --no-bundle` builds `bimcraft.exe`; it is uploaded as a workflow artifact and submitted to SignPath (`signpath/github-action-submit-signing-request`, artifact configuration `program`); the signed file replaces the unsigned one in `target/release/`;
+     2. `cargo tauri bundle` packs that signed program into the NSIS installer and the MSI; both go to SignPath (artifact configuration `installers`) and come back signed;
+     3. `cargo tauri signer sign` signs the **signed** NSIS installer (the Windows update package) with the updater key and writes its `.sig` (Tauri's own updater signature would be computed before SignPath changes the file, so it is not used on Windows).
+   - **Verify before upload**: `codesign --verify --deep --strict`, `spctl -a -vv` and `xcrun stapler validate` on macOS; `Get-AuthenticodeSignature` = `Valid` on the program, the installer and the MSI on Windows; `cargo tauri signer verify`-equivalent check of every `.sig` against `UPDATER_PUBLIC_KEY`. A failed check fails the job.
+   - Job `sbom` (moved from today's `release: published` trigger) and job `release`: create a **draft** GitHub release for the tag (pre-release when beta) and attach the installers, the update packages and their `.sig`, `latest.json` (the Tauri static update manifest for this version, built by `scripts/release/update-manifest.ts` from the `.sig` files and the asset URLs), `SHA256SUMS.txt` and the SBOM.
 2. **The maintainer reviews and publishes the draft.** Nothing reaches users before that.
 3. **`release: published`** → job `channels`: `scripts/release/channel-manifests.ts` reads the published releases (`gh api`), picks the newest stable and the newest of all (stable or beta), and writes `updates/stable.json` and `updates/beta.json` (copies of the chosen releases' `latest.json`). They are deployed to **GitHub Pages** (`actions/upload-pages-artifact` + `actions/deploy-pages`). The beta channel is therefore never behind stable.
 4. **Fail closed**: on a tag push, a missing signing secret fails the job. The workflow never publishes an unsigned artefact.
 5. **Dry run**: `workflow_dispatch` and `pull_request` (paths: `.github/workflows/release.yml`, `scripts/release/**`, `crates/desktop-app/**`) run `build` without secrets: unsigned bundles with a throw-away updater key, uploaded as workflow artifacts, no release. Not a required check. Pull requests from forks get no secrets (`pull_request`, never `pull_request_target`).
 6. Least-privilege permissions per job (`contents: write` only for `release` and `sbom`; `pages: write` + `id-token: write` only for `channels`). Secrets live in a GitHub **environment** `release`, limited to `v*` tags, used only by the jobs that sign. Actions pinned by SHA (AGENTS.md §4).
 
-### D3. Windows code signing: Azure Artifact Signing (decision to confirm)
+### D3. Windows code signing: SignPath Foundation (user decision)
 
-`bundle.windows.signCommand` runs `scripts/release/sign-windows.ps1 "%1"` on each binary Tauri produces (program, installer, uninstaller, MSI). The script signs with **Azure Artifact Signing** (formerly Trusted Signing; Microsoft-managed certificate, SHA-256, RFC 3161 timestamp), authenticated by OIDC federation from GitHub Actions to an Azure app registration, so no long-lived Azure secret is stored. It fails when it cannot sign. Keeping the provider behind one script means a switch (SignPath Foundation, an OV certificate in a cloud HSM) changes only that script and the secrets.
+BIMCraft applies to the **SignPath Foundation** programme (free code signing for open-source projects; the certificate is issued to the foundation, which checks that every signed file was built by this repository's GitHub Actions from its public source). Consequences for the workflow:
 
-Costs and eligibility are the user's call; see "Decisions for the user".
+- Signing goes through SignPath's GitHub action as a **trusted build system**: the files to sign are uploaded as a workflow artifact, SignPath fetches them from GitHub, signs them according to an *artifact configuration* (which files inside the artifact to sign, with which options) and returns a signed artifact. The artifact configurations are kept in the repository too (`.signpath/artifact-configurations/program.xml` and `installers.xml`), so they are reviewed like code, and pasted into SignPath by the maintainer.
+- The signing policy `release-signing` requires a **manual approval** by a project approver in SignPath for each request: the release job waits for it (`wait-for-completion`, timeout 2 h). The release guide says so.
+- The dry run does not call SignPath (no secrets on pull requests): it produces unsigned files.
+- Only the SignPath steps of `build-windows` and the secrets depend on the provider; switching later (an OV certificate in a cloud HSM, Azure Artifact Signing) replaces those steps only.
+
+The NSIS uninstaller is generated by the installer on the user's computer and is not signed by SignPath; this is a known limit of external signing and is noted in the release guide.
 
 ### D4. Updater: channels, endpoints and security
 
@@ -59,9 +66,9 @@ Costs and eligibility are the user's call; see "Decisions for the user".
 ### D5. Where the code goes
 
 - **`host-desktop`** (critical crate, ≥ 98 % lines): a new `update` module with the channel → endpoint table, the update state (none / available / downloaded), the command handlers of `api-contract.md` and their typed errors. The network and install calls go through a small trait implemented by `tauri-plugin-updater` and by a test fake, so every branch is tested without network. Registration next to `ipc::serve`.
-- **`desktop-app`**: registers the updater plugin; `build.rs` declares the new commands; `capabilities/main.json` grants exactly them (no JavaScript updater or process plugin: the UI goes through our commands only). `tauri.conf.json` gets the `bundle` targets and options (`nsis`, `msi`, `dmg`, `app`; `createUpdaterArtifacts: true`, macOS `minimumSystemVersion`, hardened runtime, Windows WebView2 install mode and `signCommand`).
+- **`desktop-app`**: registers the updater plugin; `build.rs` declares the new commands; `capabilities/main.json` grants exactly them (no JavaScript updater or process plugin: the UI goes through our commands only). `tauri.conf.json` gets the `bundle` targets and options (`nsis`, `msi`, `dmg`, `app`; `createUpdaterArtifacts: true`, macOS `minimumSystemVersion`, hardened runtime, Windows WebView2 install mode).
 - **New dependency**: `tauri-plugin-updater` (official Tauri plugin, MIT/Apache-2.0, maintained with Tauri; uses `reqwest` with rustls). Justified in the commit; `cargo deny check` stays clean (any advisory or duplicate handled the way `docs/dev/desktop.md` already does for Tauri).
-- **`scripts/release/`**: `check-version.ts`, `update-manifest.ts`, `channel-manifests.ts` with `bun test` suites (`*.test.ts`, like the other scripts), and `sign-windows.ps1`.
+- **`scripts/release/`**: `check-version.ts`, `update-manifest.ts`, `channel-manifests.ts` with `bun test` suites (`*.test.ts`, like the other scripts). **`.signpath/artifact-configurations/`**: the two SignPath artifact configurations.
 - **UI**: `ui/src/api/updates.ts` (critical: ≥ 98 % lines and branches), the only code that calls the update commands; the update notice and the "Updates" dialog in a new `ui/src/updates/` folder; strings in both message catalogues (UI-04).
 
 ### D6. Tests
@@ -72,13 +79,48 @@ Costs and eligibility are the user's call; see "Decisions for the user".
 - Playwright e2e on the stubbed Tauri IPC: start → notice → download progress → restart confirmation; check on demand with no update; channel change persisted; error state.
 - The release workflow itself is verified by the dry run (`actionlint` in `repo` already lints it) and, once the secrets exist, by a first beta tag cut by the maintainer.
 
-## Decisions for the user (asked at spec approval)
+## Decisions taken with the user (spec review)
 
-1. **Windows signing provider**: Azure Artifact Signing (about US$10 a month; Microsoft validates the identity; open to organisations with three years of verifiable history in the EU, UK, US or Canada, and to individuals only in the US and Canada) — **recommended if Fusily or you are eligible**. Alternative: SignPath Foundation (free for open-source projects, certificate issued to the foundation, approval process, signing through their GitHub action). Only `sign-windows.ps1` and the secrets differ.
-2. **Apple Developer Program** membership (US$99 a year) for the Developer ID certificate and notarization.
-3. **Update check default**: on (check at each start, never download without asking), with a switch to turn it off. Recommended.
-4. **GitHub Pages** hosts the two channel manifests (`/updates/*.json`); you enable Pages with "GitHub Actions" as source.
-5. You create the secrets after merge (listed in `docs/dev/release.md`): the updater key pair (`cargo tauri signer generate`), the Apple certificate and API key, the Azure (or SignPath) credentials. Until then only the dry run works; the acceptance criterion "release workflow produces signed artefacts" is proven by your first beta tag.
+1. Windows signing: **SignPath Foundation** (D3).
+2. macOS: the **Apple Developer Program account of Fusily**: the Developer ID certificate, and so the name macOS shows for the developer, is Fusily's.
+3. Automatic update check on by default (at each start, never downloads without asking), with a switch to turn it off.
+4. GitHub Pages hosts the channel manifests (`/updates/*.json`).
+5. The user creates the secrets after merge, following the procedure below, which back-2 also writes into `docs/dev/release.md`. Until then only the dry run works; the acceptance criterion "release workflow produces signed artefacts" is proven by the first beta tag.
+
+## How to produce the secrets
+
+All secrets go into the GitHub **environment** `release` (Settings → Environments → New environment `release`; Deployment branches and tags → "Selected branches and tags" → add the tag rule `v*`; optionally yourself as required reviewer). Values marked *variable* are environment variables, not secrets (they are not confidential and are shown in logs).
+
+### Updater key pair (Tauri)
+
+The update packages are signed with this key; every installed copy trusts the public key it was built with.
+
+1. Install the pinned Tauri CLI: `cargo install tauri-cli --version =<TAURI_CLI_VERSION from scripts/tool-versions.env> --locked`.
+2. `cargo tauri signer generate -w ~/.tauri/bimcraft-updater.key` and enter a strong password when asked. It writes `bimcraft-updater.key` (private) and `bimcraft-updater.key.pub` (public).
+3. Secret `TAURI_SIGNING_PRIVATE_KEY` = the content of `bimcraft-updater.key`; secret `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` = the password; variable `UPDATER_PUBLIC_KEY` = the content of `bimcraft-updater.key.pub`.
+4. Keep an offline backup of the private key and its password (password manager). **If it is lost, installed copies can no longer update**: users would have to reinstall by hand. Never commit it.
+
+### Apple (Fusily's Developer Program account)
+
+Creating a Developer ID certificate needs the *Account Holder* role of the Fusily team (or an admin with "Access to Certificates" for Developer ID).
+
+1. **Certificate signing request**: on a Mac, Keychain Access → Keychain Access menu → Certificate Assistant → Request a Certificate From a Certificate Authority → your email, common name "Fusily", "Saved to disk".
+2. **Certificate**: developer.apple.com → Account → Certificates, IDs & Profiles → Certificates → + → **Developer ID Application** (G2 Sub-CA) → upload the request → download the `.cer` and double-click it to add it to the login keychain.
+3. **Export**: in Keychain Access, My Certificates → "Developer ID Application: Fusily (TEAMID)" → expand, select the certificate *and* its private key → Export 2 items… → `.p12` with a strong password.
+4. Secret `APPLE_CERTIFICATE` = `base64 -i DeveloperID.p12 | pbcopy` (paste the clipboard); secret `APPLE_CERTIFICATE_PASSWORD` = the export password; variable `APPLE_SIGNING_IDENTITY` = the exact certificate name, `Developer ID Application: Fusily (TEAMID)` (`security find-identity -v -p codesigning` prints it).
+5. **Notarization API key**: appstoreconnect.apple.com → Users and Access → Integrations → App Store Connect API → Team Keys → + → name "BIMCraft CI", access "Developer" → Generate → download the `.p8` (only possible once). Secret `APPLE_API_KEY_P8` = the content of the `.p8` file; variable `APPLE_API_KEY` = its Key ID; variable `APPLE_API_ISSUER` = the Issuer ID shown above the list. The workflow writes the `.p8` to a temporary file for Tauri (`APPLE_API_KEY_PATH`) and deletes it at the end.
+6. The keychain password used in CI is generated at random in the job: nothing to create.
+
+### SignPath Foundation
+
+1. Apply at signpath.org → "Apply for Open Source code signing" with the repository URL, licence (MIT) and a short description. Approval takes some days; it may require that a first release exists (the unsigned dry-run output can be published as a pre-release for that if asked).
+2. Once accepted, in app.signpath.io: install the **SignPath GitHub App** on the repository and add GitHub as trusted build system of the project; in the project `bimcraft`, create the artifact configurations `program` and `installers` from the files in `.signpath/artifact-configurations/`, and check the signing policy slug `release-signing` (manual approval by you).
+3. Create a CI user (Users → Add CI user, submitter on `release-signing`) and generate its **API token**: secret `SIGNPATH_API_TOKEN`. Variable `SIGNPATH_ORGANIZATION_ID` = the organization ID shown in Settings; variable `SIGNPATH_PROJECT_SLUG` = `bimcraft`.
+4. At each release, approve the two signing requests in SignPath (email notification); the workflow waits for them.
+
+### GitHub Pages
+
+Settings → Pages → Build and deployment → Source: **GitHub Actions**. The `channels` job deploys `updates/stable.json` and `updates/beta.json` at the next published release.
 
 ## Delivery
 
@@ -89,7 +131,7 @@ One pull request for #66, `Refs #66` and `ENG-05` in every commit; `Closes #66` 
 | Task | Node | Depends on | Content |
 | --- | --- | --- | --- |
 | back-1 | back | — | `host-desktop::update` + plugin registration, commands and capability per `api-contract.md`, tests ≥ 98 %, `docs/dev/desktop.md` |
-| back-2 | back | back-1 | Bundle config, `release.yml`, `scripts/release/*` + tests, tool version, `docs/dev/release.md` + `github-setup.md`, install guide EN + FR |
+| back-2 | back | back-1 | Bundle config, `release.yml` (SignPath two-round Windows signing, Fusily notarization), `scripts/release/*` + tests, `.signpath/` configurations, tool version, `docs/dev/release.md` (with the secrets procedure above) + `github-setup.md`, install guide EN + FR |
 | ux-1 | ux | — | Update flow and states (`ux-brief.md` → wireframes) |
 | ui-1 | ui | ux-1 | FigCraft boards (light + dark) on page "8 · Extensibility and system", exported to `design/` |
 | front-1 | front | ui-1 | `ui/src/api/updates.ts`, update notice and Updates dialog, palette entry, i18n, Vitest + e2e, "Update BIMCraft" user page EN + FR |
