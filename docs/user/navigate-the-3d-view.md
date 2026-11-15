@@ -74,6 +74,9 @@ The graphics card stopped responding, or the model was too big for it. Your mode
 **The view stays on "Loading the 3D view…".**
 After ten seconds it says "Still working…" and offers **Cancel**. Cancel, then choose **Reload view**.
 
+**A link to the guide does not open.**
+BIMCraft opens guide pages in your web browser, and needs an internet connection for them. If it cannot, it shows the address of the page so you can copy it into your browser.
+
 **Letters such as `P` or `S` do nothing.**
 These shortcuts are off while a dialog is open or while you type in a text field. Close the dialog or click the 3D view first. If **Single-key shortcuts** is unticked, they work only while the 3D view has the keyboard (see below).
 

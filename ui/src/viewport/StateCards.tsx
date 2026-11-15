@@ -3,7 +3,7 @@ import { useI18n } from "../i18n/I18nProvider";
 import { useShellState } from "../shell/ShellState";
 import { ErrorIcon } from "../ui/ErrorIcon";
 import { shortcutProps } from "../ui/shortcut";
-import { GUIDE_PLACE_BLOCK, GUIDE_TROUBLESHOOTING } from "./guide";
+import { GUIDE_PLACE_BLOCK, GUIDE_TROUBLESHOOTING, openGuide } from "./guide";
 import { WarningIcon } from "./icons";
 import type { FailureReason } from "./useViewportSession";
 
@@ -29,7 +29,7 @@ export function LoadingCard({ slow, onCancel }: { slow: boolean; onCancel: () =>
 /** An empty model (board 3.27a): what to do next. */
 export function EmptyCard({ onPlaceBlock }: { onPlaceBlock: () => void }) {
   const { t } = useI18n();
-  const { singleKeys } = useShellState();
+  const { singleKeys, notify } = useShellState();
   const label = t("viewport.empty.button");
   return (
     <div className="vp-card vp-card-centre">
@@ -43,7 +43,14 @@ export function EmptyCard({ onPlaceBlock }: { onPlaceBlock: () => void }) {
       >
         {label}
       </button>
-      <a href={GUIDE_PLACE_BLOCK} target="_blank" rel="noreferrer">
+      <a
+        href={GUIDE_PLACE_BLOCK}
+        target="_blank"
+        rel="noreferrer"
+        onClick={(event) =>
+          openGuide(event, GUIDE_PLACE_BLOCK, (url) => notify(t("viewport.guide.failed", { url })))
+        }
+      >
         {t("viewport.empty.guide")}
       </a>
     </div>
@@ -53,6 +60,7 @@ export function EmptyCard({ onPlaceBlock }: { onPlaceBlock: () => void }) {
 /** No WebGPU on this computer (board 3.27c): plain words and the troubleshooting guide. */
 export function UnavailableCard() {
   const { t } = useI18n();
+  const { notify } = useShellState();
   return (
     <div className="vp-card vp-card-centre">
       <h2 className="vp-card-title">
@@ -60,7 +68,17 @@ export function UnavailableCard() {
         {t("viewport.unavailable.title")}
       </h2>
       <p>{t("viewport.unavailable.body")}</p>
-      <a className="button" href={GUIDE_TROUBLESHOOTING} target="_blank" rel="noreferrer">
+      <a
+        className="button"
+        href={GUIDE_TROUBLESHOOTING}
+        target="_blank"
+        rel="noreferrer"
+        onClick={(event) =>
+          openGuide(event, GUIDE_TROUBLESHOOTING, (url) =>
+            notify(t("viewport.guide.failed", { url })),
+          )
+        }
+      >
         {t("viewport.unavailable.guide")}
       </a>
     </div>

@@ -47,6 +47,7 @@ export {
   setPropertyValue,
   undoLastStep,
 } from "./materials";
+export { inDesktopWindow, openInSystemBrowser } from "./opener";
 export type * from "./protocol.gen";
 export { type SceneFailure, type SceneFeed, type SceneSink, startSceneFeed } from "./scene";
 export { tauriTransport } from "./tauri";

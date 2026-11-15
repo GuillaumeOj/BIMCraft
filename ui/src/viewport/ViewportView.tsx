@@ -45,30 +45,45 @@ const MOVE_FAILURES: Record<MoveRefusal | "failed", MessageKey> = {
 };
 
 /**
- * "N faces moved": which faces of the section box changed position since it was switched on or
- * last reset, read from the successive states the viewport reports.
+ * "N faces moved": which faces of the section box the user dragged since it was switched on or
+ * last changed from the panel. A change of the box counts only while the viewport announces a
+ * dragged face, so what Fit to selection, Reset or a typed extent does to the box is not counted.
  */
 function useFacesMoved() {
   const moved = useRef(new Set<number>());
   const lastBox = useRef<SectionBox | null>(null);
+  const dragging = useRef(false);
   const [facesMoved, setFacesMoved] = useState(0);
   const trackFaces = useCallback((box: SectionBox | null) => {
     const before = lastBox.current;
     lastBox.current = box;
     if (box === null || !box.enabled || before === null || !before.enabled) {
       moved.current.clear();
-    } else {
+      dragging.current = false;
+    } else if (dragging.current) {
       for (const face of changedFaces(before, box)) moved.current.add(face);
     }
     setFacesMoved(moved.current.size);
   }, []);
-  // A new box starts a new count; what the viewport then changes is counted from its next state.
+  /** The viewport announced a dragged face: the changes of the box that follow are drags. */
+  const dragged = useCallback(() => {
+    dragging.current = true;
+  }, []);
+  /** The panel changed the box: the count starts again, and what follows is not a drag. */
   const resetFaces = useCallback(() => {
     moved.current.clear();
+    dragging.current = false;
     setFacesMoved(0);
   }, []);
-  return { facesMoved, trackFaces, resetFaces };
+  return { facesMoved, trackFaces, dragged, resetFaces };
 }
+
+/** The commands that change the section box other than by a drag of a face. */
+const BOX_CHANGES = new Set<ViewCommand["kind"]>([
+  "section_box_reset",
+  "section_box_fit_selection",
+  "section_box_extents",
+]);
 
 /** Whether the viewport draws no element at all. */
 const isEmpty = (view: ViewState) => view.categories.every((category) => category.count === 0);
@@ -99,6 +114,32 @@ const INITIAL_VIEW: ViewState = {
   clipPlanes: [],
   cutFaces: "tinted",
 };
+
+/** What Esc does at each step that shows a hint, when no value is being typed. */
+const ESC_HINTS: Partial<Record<ToolStep, MessageKey>> = {
+  first_corner: "viewport.hint.esc.cancel",
+  base_point: "viewport.hint.esc.cancel",
+  second_corner: "viewport.hint.esc.previous",
+  height: "viewport.hint.esc.previous",
+  target_point: "viewport.hint.esc.previous",
+};
+
+/**
+ * The hint above the tool bar for `step`: what to do, then what Esc does, which is to clear the
+ * value first while one is being typed.
+ */
+function stepHint(
+  t: Translate,
+  step: ToolStep,
+  labelKey: PreviewLabel["key"] | null,
+  typing: boolean,
+): string | null {
+  const hint =
+    step === "second_corner" && labelKey === "place.depth" ? "viewport.hint.depth" : HINTS[step];
+  if (hint === undefined) return null;
+  const esc = typing ? "viewport.hint.esc.clear" : ESC_HINTS[step];
+  return esc === undefined ? t(hint) : `${t(hint)} · ${t(esc)}`;
+}
 
 /** Pointers lower than this above the bottom edge get their chip above them: the band of the tool bar and the hint. */
 const BOTTOM_BAND = 150;
@@ -138,11 +179,13 @@ export function ViewportView() {
   const [tool, setTool] = useState<Tool>("select");
   const [step, setStep] = useState<ToolStep>("idle");
   const [view, setView] = useState(INITIAL_VIEW);
-  const { facesMoved, trackFaces, resetFaces } = useFacesMoved();
+  const { facesMoved, trackFaces, dragged, resetFaces } = useFacesMoved();
   const [visibilityOpen, setVisibilityOpen] = useState(false);
   const [announcement, setAnnouncement] = useState({ text: "", serial: 0 });
   // Which value the pointer chip names: the hint bar follows it while the depth is typed.
   const [labelKey, setLabelKey] = useState<PreviewLabel["key"] | null>(null);
+  // Whether a value is being typed: Esc then clears it before it steps back.
+  const [typing, setTyping] = useState(false);
   const chip = useRef<HTMLDivElement>(null);
   const lastView = useRef<ViewState | null>(null);
   const { projection, snapping } = view;
@@ -166,6 +209,7 @@ export function ViewportView() {
         onViewState(event.state);
         break;
       case "announce":
+        if (event.key === "section_box.face_moved") dragged();
         setAnnouncement((previous) => ({
           text: announcementText(t, language, event.key, event.values),
           serial: previous.serial + 1,
@@ -174,6 +218,7 @@ export function ViewportView() {
       case "preview_label":
         drawPreview(chip.current, event.label, event.label === null ? "" : chipText(event.label));
         setLabelKey(event.label?.key ?? null);
+        setTyping(event.label?.typed != null);
         break;
       case "intent":
         runIntent(event.intent);
@@ -193,9 +238,7 @@ export function ViewportView() {
 
   const command = useCallback(
     (value: ViewCommand) => {
-      if (value.kind === "section_box_reset" || value.kind === "section_box_fit_selection") {
-        resetFaces();
-      }
+      if (BOX_CHANGES.has(value.kind)) resetFaces();
       handle.current?.command(value);
     },
     [handle, resetFaces],
@@ -341,8 +384,7 @@ export function ViewportView() {
     document.querySelector<HTMLElement>(`[${VISIBILITY_TRIGGER}]`)?.focus();
   }, []);
 
-  const hint =
-    step === "second_corner" && labelKey === "place.depth" ? "viewport.hint.depth" : HINTS[step];
+  const hintText = stepHint(t, step, labelKey, typing);
   const status = statusText(t, {
     phase: phase.kind,
     sceneLoaded,
@@ -381,7 +423,7 @@ export function ViewportView() {
       )}
       {ready && sceneLoaded && empty === false && <NavigationHint />}
       <div className="vp-bottom">
-        {hint !== undefined && <p className="vp-hint">{t(hint)}</p>}
+        {hintText !== null && <p className="vp-hint">{hintText}</p>}
         <Toolbar tool={tool} disabled={!ready} onSelect={chooseTool} />
       </div>
       <p className="vp-status" id="vp-status">
