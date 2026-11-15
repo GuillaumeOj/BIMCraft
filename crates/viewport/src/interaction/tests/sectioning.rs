@@ -207,6 +207,90 @@ fn a_hidden_element_stays_hidden_when_a_delta_recreates_it_and_forgets_removed_o
     assert_eq!(hidden_states(&viewport), [id(1)]);
 }
 
+fn removal(revision: u64, ids: &[ElementId]) -> SceneDelta {
+    SceneDelta {
+        revision,
+        base: revision - 1,
+        removed_elements: ids.iter().map(|id| id.0).collect(),
+        ..SceneDelta::default()
+    }
+}
+
+#[test]
+fn an_isolation_whose_elements_are_all_gone_ends_and_a_partial_one_stays() {
+    let mut viewport = categorised();
+    viewport.command(ViewCommand::Hide(VisibilityTarget::Categories(names(&[
+        "Wall",
+    ]))));
+    click_on(&mut viewport, CORNER_2, NONE);
+    viewport.command(ViewCommand::Isolate(VisibilityTarget::Selection));
+    assert!(view_state(&viewport).isolating);
+    viewport.drain_events();
+    viewport.apply_delta(&removal(2, &[id(2)])).unwrap();
+    let state = view_state(&viewport);
+    assert!(!state.isolating);
+    // The hidden set is kept, and the scene shows again.
+    assert_eq!(hidden_states(&viewport), [id(1)]);
+    let keys = announced(&mut viewport, &[]);
+    assert!(
+        keys.contains(&AnnouncementKey::VisibilityHidden),
+        "{keys:?}"
+    );
+    assert!(
+        !keys.contains(&AnnouncementKey::VisibilityReset),
+        "{keys:?}"
+    );
+    // Undoing the deletion brings the element back without isolating it again.
+    let back = SceneDelta {
+        revision: 3,
+        base: 2,
+        strings: vec!["Slab".to_owned(), "arch".to_owned()],
+        elements: vec![element(2, 7, [3.0, 0.0, 0.5])],
+        ..SceneDelta::default()
+    };
+    viewport.apply_delta(&back).unwrap();
+    assert!(!view_state(&viewport).isolating);
+
+    // Two isolated, one deleted: the isolation stays over the other.
+    let mut viewport = categorised();
+    viewport.command(ViewCommand::Isolate(VisibilityTarget::Disciplines(names(
+        &["arch"],
+    ))));
+    click_on(&mut viewport, CORNER_1, NONE);
+    viewport.command(ViewCommand::Isolate(VisibilityTarget::Selection));
+    assert_eq!(hidden_states(&viewport), [id(2)]);
+    viewport.apply_delta(&removal(2, &[id(2)])).unwrap();
+    assert!(view_state(&viewport).isolating);
+    assert!(hidden_states(&viewport).is_empty());
+}
+
+#[test]
+fn a_category_isolation_whose_elements_are_all_gone_ends() {
+    let mut viewport = categorised();
+    viewport.command(ViewCommand::Isolate(VisibilityTarget::Categories(names(
+        &["Wall"],
+    ))));
+    assert_eq!(hidden_states(&viewport), [id(2)]);
+    viewport.drain_events();
+    viewport.apply_delta(&removal(2, &[id(1)])).unwrap();
+    assert!(!view_state(&viewport).isolating);
+    assert!(hidden_states(&viewport).is_empty());
+    let keys = announced(&mut viewport, &[]);
+    assert!(keys.contains(&AnnouncementKey::VisibilityReset), "{keys:?}");
+}
+
+#[test]
+fn a_discipline_isolation_whose_elements_are_all_gone_ends() {
+    let mut viewport = categorised();
+    viewport.command(ViewCommand::Isolate(VisibilityTarget::Disciplines(names(
+        &["arch"],
+    ))));
+    viewport.apply_delta(&removal(2, &[id(1)])).unwrap();
+    assert!(view_state(&viewport).isolating);
+    viewport.apply_delta(&removal(3, &[id(2)])).unwrap();
+    assert!(!view_state(&viewport).isolating);
+}
+
 #[test]
 fn the_section_box_fits_the_scene_clips_and_hides_nothing_inside() {
     let mut viewport = categorised();

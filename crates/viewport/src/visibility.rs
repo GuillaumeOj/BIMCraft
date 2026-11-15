@@ -130,6 +130,26 @@ impl Visibility {
             ids.retain(|&id| held(id));
         }
     }
+
+    /// Ends an isolation that names nothing the scene still holds, since it would show an empty
+    /// scene; returns whether it did. `holds_category` and `holds_discipline` tell whether the
+    /// scene has an element of that name.
+    pub(crate) fn end_isolation_if_empty(
+        &mut self,
+        holds_category: impl Fn(&str) -> bool,
+        holds_discipline: impl Fn(&str) -> bool,
+    ) -> bool {
+        let empty = match &self.isolation {
+            None => return false,
+            Some(Isolation::Elements(ids)) => ids.is_empty(),
+            Some(Isolation::Categories(names)) => !names.iter().any(|n| holds_category(n)),
+            Some(Isolation::Disciplines(names)) => !names.iter().any(|n| holds_discipline(n)),
+        };
+        if empty {
+            self.isolation = None;
+        }
+        empty
+    }
 }
 
 #[cfg(test)]
@@ -203,5 +223,21 @@ mod tests {
         v.retain_elements(|e| e == id(2) || e == id(3));
         assert_eq!(v.hidden_element_count(), 1);
         assert!(v.visible(id(3), "x", "y") && !v.visible(id(4), "x", "y"));
+        assert!(!v.end_isolation_if_empty(|_| false, |_| false));
+        v.retain_elements(|e| e == id(2));
+        assert!(v.end_isolation_if_empty(|_| false, |_| false));
+        assert!(!v.is_isolating() && v.visible(id(4), "x", "y"));
+        assert!(!v.end_isolation_if_empty(|_| false, |_| false));
+    }
+
+    #[test]
+    fn a_category_or_discipline_isolation_ends_when_the_scene_lost_its_names() {
+        let mut v = Visibility::default();
+        v.isolate(&Target::Categories(names(&["Wall", "Slab"])));
+        assert!(!v.end_isolation_if_empty(|n| n == "Slab", |_| false));
+        assert!(v.end_isolation_if_empty(|_| false, |_| true));
+        v.isolate(&Target::Disciplines(names(&["arch"])));
+        assert!(!v.end_isolation_if_empty(|_| false, |n| n == "arch"));
+        assert!(v.end_isolation_if_empty(|_| true, |_| false));
     }
 }
