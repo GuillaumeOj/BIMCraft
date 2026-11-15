@@ -15,6 +15,7 @@ export type Loaded<T> = { status: "loading" } | { status: "ready"; value: T } | 
 /**
  * The project list (filtered by `search` and `category`) and the detail of the selected material,
  * read again after every change of the model. An older answer never replaces a newer one.
+ * `settleQuery` applies a search set by the code at once, without the delay of typing.
  */
 export function useMaterialsData(
   search: string,
@@ -23,7 +24,7 @@ export function useMaterialsData(
   onDetailError: (error: unknown) => void,
 ) {
   const api = useApi();
-  const query = useDebounced(search, 200);
+  const [query, settleQuery] = useDebounced(search, 200);
   const [list, setList] = useState<Loaded<MaterialSummary[]>>({ status: "loading" });
   const [detail, setDetail] = useState<MaterialDetail | null>(null);
   const listRequest = useRef(0);
@@ -66,5 +67,5 @@ export function useMaterialsData(
     };
   }, [api]);
 
-  return { query, list, detail, reload };
+  return { query, settleQuery, list, detail, reload };
 }

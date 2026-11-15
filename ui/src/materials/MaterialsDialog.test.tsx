@@ -1,4 +1,4 @@
-import { act, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "../api";
 import { OVERRIDE_STORAGE_KEY } from "../i18n/I18nProvider";
@@ -644,6 +644,31 @@ describe("adding while the list is filtered", () => {
     await user.click(await grade(/^C25\/30/));
     await user.click(screen.getByRole("button", { name: "Add to project" }));
     expect(await screen.findByRole("heading", { name: "C25/30" })).toBeInTheDocument();
+    expect(await option(/^C25\/30/)).toHaveAttribute("aria-selected", "true");
+  });
+
+  it("keeps the new material selected when the search lands from its delay as it is cleared", async () => {
+    const { user } = open(seeded(S355));
+    await user.click(await screen.findByRole("button", { name: "Add from library…" }));
+    await user.click(await grade(/^C25\/30/));
+    vi.useFakeTimers();
+    try {
+      fireEvent.change(screen.getByRole("searchbox"), { target: { value: "s35" } });
+      // The add clears the search; the delayed "s35" lands before that is drawn, so a list
+      // for "s35", without C25/30, comes in after the one that holds it.
+      await act(async () => {
+        fireEvent.click(screen.getByRole("button", { name: "Add to project" }));
+        for (let turn = 0; turn < 10; turn += 1) await Promise.resolve();
+        vi.advanceTimersByTime(200);
+      });
+      await act(async () => undefined);
+      await act(async () => {
+        vi.advanceTimersByTime(200);
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(await option(/^S355/)).toHaveAttribute("aria-selected", "false");
     expect(await option(/^C25\/30/)).toHaveAttribute("aria-selected", "true");
   });
 

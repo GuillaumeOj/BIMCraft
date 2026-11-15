@@ -53,7 +53,12 @@ export function MaterialsDialog({
   const opened = useRef(false);
 
   const fail = useCallback((error: unknown) => setBanner(failureMessage(error)), []);
-  const { query, list, detail, reload } = useMaterialsData(search, category, selected, fail);
+  const { query, settleQuery, list, detail, reload } = useMaterialsData(
+    search,
+    category,
+    selected,
+    fail,
+  );
 
   const items = list.status === "ready" ? list.value : [];
   const empty =
@@ -97,7 +102,9 @@ export function MaterialsDialog({
 
   const created = (id: EntityId, name: string, undoable: boolean) => {
     setBanner(null);
+    // At once: a search still waiting to land would bring back a list without the new material.
     setSearch("");
+    settleQuery("");
     setCategory(null);
     pendingSelection.current = id;
     setSelected(id);

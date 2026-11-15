@@ -40,7 +40,7 @@ export function LibraryBrowser({ back, onAdded, onFailure }: Props) {
   const { t } = useI18n();
   const api = useApi();
   const [search, setSearch] = useState("");
-  const query = useDebounced(search, 200);
+  const [query] = useDebounced(search, 200);
   const [category, setCategory] = useState<MaterialCategory | null>(null);
   const [page, setPage] = useState<Page>({ status: "loading" });
   const [selected, setSelected] = useState<GradeSummary | null>(null);
