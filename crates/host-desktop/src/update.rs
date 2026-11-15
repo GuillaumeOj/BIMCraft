@@ -8,8 +8,6 @@
 //! that carry an updater public key ([`can_update`]). The host never starts a check, a download
 //! or an install by itself.
 
-use std::future::Future;
-use std::pin::Pin;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::{Duration, Instant};
@@ -69,6 +67,7 @@ pub struct UpdateOffer {
 
 /// How far a download is: the payload of [`PROGRESS`] events.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[cfg_attr(test, derive(Deserialize))]
 #[serde(rename_all = "camelCase")]
 pub struct UpdateProgress {
     /// Bytes received so far.
@@ -118,8 +117,7 @@ impl UpdateError {
     }
 }
 
-/// A future the update traits return; boxed so that the traits stay object-safe.
-pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
+pub use platform::BoxFuture;
 
 /// Where updates come from: checks a channel's manifest.
 pub trait Updates: Send + Sync {
@@ -367,7 +365,7 @@ impl UpdateHost {
                 let length = u64::try_from(length).unwrap_or(u64::MAX);
                 status.downloaded = status.downloaded.saturating_add(length);
                 status.total = total;
-                if self.is_current(offer) && throttle.ready((self.now)()) {
+                if throttle.ready((self.now)()) && self.is_current(offer) {
                     progress(status);
                     sent = Some(status);
                 }

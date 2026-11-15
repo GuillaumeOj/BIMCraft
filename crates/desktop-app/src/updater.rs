@@ -52,11 +52,12 @@ impl<R: Runtime> Updates for PluginUpdates<R> {
         Box::pin(async move {
             let endpoint = Url::parse(endpoint)
                 .map_err(|parse| UpdateError::new(ErrorCode::Unavailable, parse.to_string()))?;
+            let failed = |failure: Error| error(Phase::Check, &failure);
             let updater = self
                 .app
                 .updater_builder()
                 .endpoints(vec![endpoint])
-                .map_err(|failure| error(Phase::Check, &failure))?
+                .map_err(failed)?
                 .timeout(CHECK_TIMEOUT)
                 // Explicit, whatever the configuration says: only a newer version is an update.
                 .version_comparator(|current, release| release.version > current)
@@ -66,11 +67,8 @@ impl<R: Runtime> Updates for PluginUpdates<R> {
                         .read_timeout(STALL_TIMEOUT)
                 })
                 .build()
-                .map_err(|failure| error(Phase::Check, &failure))?;
-            let update = updater
-                .check()
-                .await
-                .map_err(|failure| error(Phase::Check, &failure))?;
+                .map_err(failed)?;
+            let update = updater.check().await.map_err(failed)?;
             // The plugin gives the update no overall timeout, so a long download is not cut
             // short; the client's stall timeouts still apply to it.
             Ok(update.map(|update| {
@@ -131,7 +129,7 @@ fn offer(version: &str, pub_date: Option<&str>, notes: Option<&str>) -> UpdateOf
 }
 
 /// The step of an update that failed.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug)]
 enum Phase {
     Check,
     Download,

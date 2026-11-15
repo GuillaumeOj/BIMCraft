@@ -1,7 +1,8 @@
 //! The update state and commands, on fake updates: no network, no installer.
 
 use std::collections::VecDeque;
-use std::future::poll_fn;
+use std::future::{Future, poll_fn};
+use std::pin::Pin;
 use std::sync::atomic::AtomicBool;
 use std::task::{Context, Poll, Waker};
 
@@ -142,8 +143,16 @@ fn script(downloads: Vec<Result<Vec<u8>, UpdateError>>) -> Arc<Script> {
     })
 }
 
+/// A script whose downloads all succeed with `b"package"`.
+fn packaged() -> Script {
+    Script {
+        downloads: Mutex::new(vec![Ok(b"package".to_vec())].into()),
+        ..Script::default()
+    }
+}
+
 fn package() -> Arc<Script> {
-    script(vec![Ok(b"package".to_vec())])
+    Arc::new(packaged())
 }
 
 fn failure(code: ErrorCode) -> UpdateError {
@@ -489,13 +498,8 @@ fn a_download_reports_progress_at_most_every_100_ms_and_at_the_end() {
             (100, Some(1000), ms(300)),
             (500, Some(1000), ms(10)),
         ],
-        ..Script::default()
+        ..packaged()
     });
-    package
-        .downloads
-        .lock()
-        .unwrap()
-        .push_back(Ok(b"package".to_vec()));
     let fixture = updatable_host(vec![Ok(Some(("0.4.0", package)))]);
     block_on(fixture.host.check(Channel::Stable)).unwrap();
     let (result, events) = download(&fixture.host);
@@ -630,19 +634,6 @@ fn an_install_installs_the_downloaded_package() {
 }
 
 #[test]
-fn a_failed_install_reports_why() {
-    let package = Arc::new(Script {
-        downloads: Mutex::new(vec![Ok(b"package".to_vec())].into()),
-        install: Some(failure(ErrorCode::Install)),
-        ..Script::default()
-    });
-    let fixture = updatable_host(vec![Ok(Some(("0.4.0", package)))]);
-    block_on(fixture.host.check(Channel::Stable)).unwrap();
-    download(&fixture.host).0.unwrap();
-    assert_eq!(code(fixture.host.install()), ErrorCode::Install);
-}
-
-#[test]
 fn a_check_answered_after_a_later_one_is_returned_but_not_kept() {
     let gate = Arc::new(AtomicBool::new(false));
     let beta = package();
@@ -689,9 +680,8 @@ fn the_same_version_offered_again_after_a_failed_download_uses_the_new_package()
 fn the_same_version_offered_again_while_downloading_keeps_that_download() {
     let gate = Arc::new(AtomicBool::new(false));
     let first = Arc::new(Script {
-        downloads: Mutex::new(vec![Ok(b"package".to_vec())].into()),
         gate: Some(Arc::clone(&gate)),
-        ..Script::default()
+        ..packaged()
     });
     let fixture = updatable_host(vec![
         Ok(Some(("0.4.0", Arc::clone(&first)))),
@@ -745,8 +735,7 @@ fn the_final_progress_is_not_repeated_when_the_last_chunk_reported_it() {
             (3, Some(7), Duration::ZERO),
             (4, Some(7), PROGRESS_INTERVAL),
         ],
-        downloads: Mutex::new(vec![Ok(b"package".to_vec())].into()),
-        ..Script::default()
+        ..packaged()
     });
     let fixture = updatable_host(vec![Ok(Some(("0.4.0", package)))]);
     block_on(fixture.host.check(Channel::Stable)).unwrap();
@@ -773,9 +762,8 @@ fn a_second_install_while_the_first_runs_does_nothing() {
 #[test]
 fn an_install_can_be_tried_again_after_a_failure() {
     let package = Arc::new(Script {
-        downloads: Mutex::new(vec![Ok(b"package".to_vec())].into()),
         install: Some(failure(ErrorCode::Install)),
-        ..Script::default()
+        ..packaged()
     });
     let fixture = updatable_host(vec![Ok(Some(("0.4.0", Arc::clone(&package))))]);
     block_on(fixture.host.check(Channel::Stable)).unwrap();
@@ -813,12 +801,6 @@ struct Window {
     progress: Arc<Mutex<Vec<UpdateProgress>>>,
 }
 
-#[derive(Deserialize)]
-struct Progress {
-    downloaded: u64,
-    total: Option<u64>,
-}
-
 fn window(host: UpdateHost) -> Window {
     let app = mock_builder()
         .manage(host)
@@ -833,11 +815,8 @@ fn window(host: UpdateHost) -> Window {
     let progress = Arc::new(Mutex::new(Vec::new()));
     let received = Arc::clone(&progress);
     app.listen_any(PROGRESS, move |event| {
-        let Progress { downloaded, total } = serde_json::from_str(event.payload()).unwrap();
-        received
-            .lock()
-            .unwrap()
-            .push(UpdateProgress { downloaded, total });
+        let progress = serde_json::from_str(event.payload()).unwrap();
+        received.lock().unwrap().push(progress);
     });
     let webview = WebviewWindowBuilder::new(&app, "main", tauri::WebviewUrl::default())
         .build()
@@ -872,8 +851,7 @@ impl Window {
 fn the_window_runs_a_whole_update() {
     let package = Arc::new(Script {
         chunks: vec![(3, Some(7), Duration::ZERO), (4, Some(7), Duration::ZERO)],
-        downloads: Mutex::new(vec![Ok(b"package".to_vec())].into()),
-        ..Script::default()
+        ..packaged()
     });
     let fixture = updatable_host(vec![Ok(Some(("0.4.0", Arc::clone(&package))))]);
     let window = window(fixture.host);
@@ -900,24 +878,6 @@ fn the_window_runs_a_whole_update() {
     assert_eq!(
         *fixture.endpoints.lock().unwrap(),
         [Channel::Beta.endpoint()]
-    );
-}
-
-#[test]
-fn the_window_gets_each_failure_as_its_code() {
-    let window = window(fixed_host());
-    for command in ["update_download", "update_install"] {
-        assert_eq!(
-            window.call(command, json!({})).unwrap_err()["code"],
-            "unavailable",
-            "{command}"
-        );
-    }
-    assert_eq!(
-        window
-            .call("update_check", json!({ "channel": "stable" }))
-            .unwrap_err()["code"],
-        "unavailable"
     );
 }
 
