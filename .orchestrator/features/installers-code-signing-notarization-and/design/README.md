@@ -20,7 +20,7 @@ Boards 8.7 to 8.19 on page **8 · Extensibility and system** of the FigCraft des
 | 8.18 Updates — Beta channel (+ "Stable chosen while running a beta" variant) | `8.18-updates-beta-channel-light.png` | `8.18-updates-beta-channel-dark.png` |
 | 8.19 Command palette — Check for updates | `8.19-command-palette-check-for-updates-light.png` | `8.19-command-palette-check-for-updates-dark.png` |
 
-New components: `components-progress-switch-update-button.png`.
+New components: `components-progress-switch-update-button.png` (light) and `components-progress-switch-update-button-dark.png` (dark).
 
 States without their own board:
 
@@ -34,7 +34,7 @@ States without their own board:
 
 1. Header: "Updates" (15 px Semi Bold, h2) and the Close icon button (aria-label "Close").
 2. Body, 20 px side padding, 16 px between groups: version line (13 px); channel fieldset (legend 12 px Semi Bold `color/ink2`, Segmented toggle Stable · Beta, help 12 px `color/muted`, optional note); the automatic-check switch with its label (13 px) and help (12 px `color/muted`); status area (`role="status"`, top rule `color/line`, headline 13 px Semi Bold, details 12 px `color/muted`); then the error Banner (`role="alert"`, **after** the status area, never inside) with its hint, or the release notes.
-3. Release notes (Available only): label "What's new in {version}" + a box `color/raised` with a 1 px `color/field-line` border (3:1, it is a focusable scroll area), 132 px high, plain text with `pre-wrap`, 12/18 px.
+3. Release notes (Available only): label "What's new in {version}" + a box `color/raised` with a 1 px `color/field-line` border (3:1, it is a focusable scroll area), at most 132 px high (it shrinks to short notes), plain text with `pre-wrap`, 12/18 px.
 4. Footer, top rule `color/line`: **Check now** (secondary) on the left when the state allows it, spacer, then the state's actions with the primary one last.
 
 Channel locked (checking, downloading, ready, install error): the Segmented toggle is shown at 40 % opacity (disabled) and the line "The channel cannot change while an update is being checked, downloaded or waiting for a restart." appears under the help.
@@ -45,7 +45,7 @@ From the Brand guide: `UI / Button primary`, `UI / Button secondary`, `UI / Butt
 
 New, added to Brand guide card "8 · Form and dialog components":
 
-- **`UI / Progress bar`** — `Kind=Determinate` (indicator width = percent) and `Kind=Indeterminate` (a 30 % segment that slides; static under `prefers-reduced-motion`). 8 px high, radius 4, track `color/soft` with a 1 px `color/field-line` border, indicator `color/acc`. Fills the dialog width. `role="progressbar"`, `aria-label` "Download progress", `aria-valuenow`/`aria-valuetext` ("16.8 MB of 40 MB"); indeterminate: no `aria-valuenow`, `aria-valuetext` "16.8 MB downloaded".
+- **`UI / Progress bar`** — `Kind=Determinate` (indicator width = percent) and `Kind=Indeterminate` (a 30 % segment that slides; static under `prefers-reduced-motion`). 8 px high, radius 4, track `color/soft` with a 1 px `color/field-line` border, indicator `color/acc`. Fills the dialog width. `role="progressbar"`, `aria-label` "Download progress", `aria-valuenow`/`aria-valuetext` ("17 MB of 40 MB"); indeterminate: no `aria-valuenow`, `aria-valuetext` "17 MB downloaded".
 - **`UI / Switch`** — `On=true` (track `color/acc`, knob `color/on-acc`) and `On=false` (track `color/surface`, 1 px `color/field-line` border, knob `color/muted`). 32 × 18 px; the label sits to its right and is part of the hit area. `role="switch"` + `aria-checked`, or a checkbox styled as a switch.
 - **`UI / Update button`** — the title-bar entry: `State=Idle` (ghost "Updates"), `Available` and `Ready` (pill, `color/acc` + `color/on-acc`, 6 px dot), `Downloading` (pill, `color/acc-tint` + `color/acc-ink`, 1 px `color/acc` border), `Failed` (pill, `color/err-tint` + `color/err`, 1 px `color/err` border, Error icon). Height 28 px, radius 14, 13 px Semi Bold label, hugs its text. The dot and the icon make the state readable without colour.
 
@@ -68,7 +68,7 @@ Contrast, computed from the `Mode` token values (WCAG 2.2; text needs 4.5:1, UI 
 
 Disabled controls (Check now while checking, the channel toggle while locked) are 40 % opacity and exempt; the locked reason is written next to them.
 
-Focus: each board shows the state's initial focus with `Focus/Ring` (2 px `color/acc` ring, 2 px gap): Close (up to date, downloading), Download and install (available), Restart now (ready), **Cancel** (restart confirmation), Try again (errors), the Beta segment (8.18, just chosen), the pill (8.7). Checking has focus on the dialog container (no ring drawn). Tab order: Close (X) → channel → switch → release notes box → footer actions.
+Focus: each board shows the state's initial focus with `Focus/Ring` (2 px `color/acc` ring, 2 px gap): Close (up to date, downloading), Download and install (available), Restart now (ready), **Cancel** (restart confirmation), Try again (errors), Close (8.18: choosing Beta starts a check, which disables the channel control and moves focus to Close), and the pill's focus look when the user tabs to it (8.7; the pill never takes focus by itself). Checking has focus on the dialog container (no ring drawn). Tab order: Close (X) → channel → switch → release notes box → footer actions.
 
 ## French length (UI-04)
 
@@ -76,7 +76,10 @@ Checked on board 8.7 with indicative French: "Download and install" 146 px → "
 
 ## Notes for front
 
-- The title bar on these boards uses the design's header (menu, breadcrumb, Search commands, Export) plus the shell's real controls: **Console**, the **Updates** entry, the **Language** list, in that order, as in `ui/src/shell/Shell.tsx`.
+- The title bar on these boards uses the design's header (menu, breadcrumb, Search commands, Export) plus the shell's controls in their real order (`ui/src/shell/Shell.tsx`): **Materials**, **Build-ups**, **Location**, **Console**, the **Updates** entry, the **Language** list. The Updates entry goes between Console and the Language list, as in `wireframes/01-title-bar-entry.svg`.
+- Sizes and dates on the boards are sample values formatted with the rules of `ux-flow.md` section 5: "17 MB of 40 MB" (one decimal only under 10) and `Intl.DateTimeFormat` in the interface language (English: "Nov 15, 2026, 9:42 AM", "Nov 12, 2026").
+- The percentage at the right of the progress text (8.11) has no key in `ux-flow.md` yet: it needs one (for example `updates.progress.percent` = "{percent}%"), asked of lead; it is hidden when the total is unknown (8.12).
+- New colour tokens: `color/acc-tint`, `color/acc-ink`, `color/err-tint` and `color/soft` are not in `ui/src/shell/theme.css` yet; take their Light and Dark values from the `Mode` collection and add their pairs (table above) to `contrast.test.ts`. `color/acc` is `--bc-verdigris`, `color/on-acc` is `--bc-on-verdigris`, `color/err` is `--bc-danger`.
 - The restart confirmation shows only the body sentence: the recovery-copy paragraph (`updates.confirm.recovery`) stays hidden until the interface really autosaves (`ux-flow.md` section 6).
 - Release notes are plain text; the bullets on board 8.10 are the manifest's own "- " characters, not HTML lists.
 - The spinner (8.9) and the indeterminate bar (8.12) stop moving under `prefers-reduced-motion`; the text carries the state.
