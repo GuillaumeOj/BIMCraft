@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="600" height="330" viewBox="0 0 600 330"><rect width="100%" height="100%" fill="#f4f4f4"/><text x="20" y="24" font-family="Helvetica, Arial, sans-serif" font-size="12" font-weight="bold" fill="#a33" text-anchor="start">07 Restart confirmation (replaces the Updates dialog)</text>
+<rect x="20" y="36" width="560" height="270" rx="10" fill="#fff" stroke="#333" stroke-width="2"/>
+<text x="44" y="72" font-family="Helvetica, Arial, sans-serif" font-size="18" font-weight="bold" fill="#222" text-anchor="start">Restart BIMCraft now?</text>
+<text x="44" y="106" font-family="Helvetica, Arial, sans-serif" font-size="13" font-weight="normal" fill="#222" text-anchor="start">BIMCraft closes and reopens as version {version}. Open dialogs and changes</text>
+<text x="44" y="124" font-family="Helvetica, Arial, sans-serif" font-size="13" font-weight="normal" fill="#222" text-anchor="start">you have not applied yet, such as a build-up you are still editing, are lost.</text>
+<text x="44" y="156" font-family="Helvetica, Arial, sans-serif" font-size="13" font-weight="normal" fill="#444" text-anchor="start">BIMCraft keeps a recovery copy of your work while you edit. After the restart,</text>
+<text x="44" y="174" font-family="Helvetica, Arial, sans-serif" font-size="13" font-weight="normal" fill="#444" text-anchor="start">open your project again: if BIMCraft finds a recovery copy, it offers to restore it.</text>
+<text x="44" y="192" font-family="Helvetica, Arial, sans-serif" font-size="13" font-weight="normal" fill="#444" text-anchor="start">See &#x27;Recover unsaved work&#x27; in the user guide. (plain text, no Save promise)</text>
+<rect x="370" y="232" width="90" height="32" rx="6" fill="#fff" stroke="#555" stroke-width="1.5"/>
+<text x="415.0" y="252.5" font-family="Helvetica, Arial, sans-serif" font-size="13" font-weight="normal" fill="#222" text-anchor="middle">Cancel</text>
+<rect x="470" y="232" width="100" height="32" rx="6" fill="#2b5fd9" stroke="#2b5fd9" stroke-width="1.5"/>
+<text x="520.0" y="252.5" font-family="Helvetica, Arial, sans-serif" font-size="13" font-weight="bold" fill="#fff" text-anchor="middle">Restart now</text>
+<text x="44" y="292" font-family="Helvetica, Arial, sans-serif" font-size="11" font-weight="normal" fill="#a33" text-anchor="start">initial focus: Cancel. Esc = Cancel. Restart now -&gt; &#x27;Restarting BIMCraft…&#x27; in the Updates dialog.</text></svg>
