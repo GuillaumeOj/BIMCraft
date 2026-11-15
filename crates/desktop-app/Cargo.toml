@@ -21,6 +21,10 @@ host-desktop = { workspace = true }
 tauri = { workspace = true, features = ["wry", "x11", "compression"] }
 # Help links open in the system browser; capabilities/main.json limits it to the user guide.
 tauri-plugin-opener = { workspace = true }
+tauri-plugin-updater = { workspace = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }
 
 [build-dependencies]
 tauri-build = { workspace = true }

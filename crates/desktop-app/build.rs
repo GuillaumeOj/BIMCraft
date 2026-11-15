@@ -7,8 +7,16 @@
 use std::io::{self, Write};
 
 fn main() {
-    // Only the API command is exposed to the window, and only through capabilities/.
-    let manifest = tauri_build::AppManifest::new().commands(&["api"]);
+    // Only the API and scene commands and the update commands are exposed to the window, and
+    // only through capabilities/ (host_desktop::ipc::COMMANDS, which a build script cannot import).
+    let manifest = tauri_build::AppManifest::new().commands(&[
+        "api",
+        "scene",
+        "app_info",
+        "update_check",
+        "update_download",
+        "update_install",
+    ]);
     // Releases link the C runtime statically on Windows, so they run without the Visual C++
     // redistributable. Tauri does that by putting an empty msvcrt.lib in this script's output
     // folder, and Cargo links every workspace doctest with that folder on its search path, so the

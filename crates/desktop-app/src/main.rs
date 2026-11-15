@@ -1,7 +1,7 @@
 //! The desktop program: the web interface in a native window, on a new document (UI-01).
 //!
-//! `host-desktop` holds the document and its IPC; this program only opens the window. See
-//! docs/dev/desktop.md.
+//! `host-desktop` holds the document, its IPC and the update state; this program opens the
+//! window and plugs Tauri's updater into that state (`updater`). See docs/dev/desktop.md.
 
 // ARCH-02: the program is the host. It reports to the terminal, and the code Tauri generates for
 // it uses threads.
@@ -15,6 +15,8 @@ use std::process::ExitCode;
 
 use host_desktop::{DocumentHost, ipc};
 
+mod updater;
+
 fn main() -> ExitCode {
     exit_code(run(), &mut io::stderr())
 }
@@ -22,11 +24,12 @@ fn main() -> ExitCode {
 /// Opens the window on a new document and runs until it closes.
 fn run() -> Result<(), Box<dyn Error>> {
     let host = DocumentHost::open_new()?;
-    ipc::serve(
+    let context = tauri::generate_context!();
+    let (builder, updates) = updater::register(
         tauri::Builder::default().plugin(tauri_plugin_opener::init()),
-        host,
-    )
-    .run(tauri::generate_context!())?;
+        context.config(),
+    );
+    ipc::serve(builder, host, updates).run(context)?;
     Ok(())
 }
 

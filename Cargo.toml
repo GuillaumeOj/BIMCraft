@@ -61,6 +61,13 @@ tauri = { version = "=2.12.5", default-features = false }
 tauri-build = { version = "=2.7.4", default-features = false }
 # Opens the user guide's help links in the system browser (VP-01); desktop-app only.
 tauri-plugin-opener = { version = "=2.7.2", default-features = false }
+# Checks, downloads and installs the program's updates (ENG-05). rustls-tls instead of the default
+# set: no native TLS or OpenSSL, and no zip support, which only Tauri v1-style update packages use;
+# system-proxy so that offices behind a proxy can still update.
+tauri-plugin-updater = { version = "=2.14.1", default-features = false, features = [
+  "rustls-tls",
+  "system-proxy",
+] }
 tempfile = "=3.27.0"
 thiserror = "=2.0.21"
 toml = "=1.1.8"
