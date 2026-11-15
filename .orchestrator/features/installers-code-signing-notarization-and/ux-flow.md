@@ -239,3 +239,15 @@ Low fidelity, light mode only; ui draws light and dark.
 - `design/wireframes/07-restart-confirmation.svg`
 - `design/wireframes/08-dialog-error.svg` — offline; the signature, manifest and install variants change only the Banner text and hint.
 - `design/wireframes/09-dialog-beta.svg` — Beta chosen, and the "running a beta, Stable chosen" note.
+
+## 11. Lead decisions (after the ui-1 review)
+
+These settle section 9 and the points ui-1 left open; they override anything above that disagrees.
+
+1. **Links stay plain text.** No "open URL" command is added: the window keeps exactly the four update commands.
+2. **Palette entries** are added when the command palette exists; until then the title-bar button and the shortcut are the ways in.
+3. **Windows installer window**: the restart confirmation gets one more line on Windows only, `updates.restart.windowsNote`: "On Windows, an installer window shows its progress for a few seconds before BIMCraft opens again." (French in the catalogue.)
+4. **Restart confirmation replaces the Updates dialog** (unchanged). Focus: **Cancel** closes the confirmation and reopens the Updates dialog with focus on its **Restart now** button; after a failed install the Updates dialog reopens on the Ready screen with the error and focus on **Try again**; closing the Updates dialog then returns focus to the element that first opened it (the title-bar button/pill, or the viewport when it came from the palette or the shortcut). The front keeps the opener reference across the swap.
+5. **Pill during Checking**: no change. The button keeps its current look and label ("Updates", or the pill of an earlier offer); checking is shown only inside the dialog.
+6. **Start-up check while the dialog is open**: when the user opened the dialog while the silent start-up check runs, the dialog shows Checking, and a failure is then shown like an on-demand check (error Banner and Try again): the user is looking. With the dialog closed it stays silent.
+7. **MSI installations on Beta** (spec D2): the `manifest` error text covers it; the update guide explains that MSI installations follow the stable channel only.
