@@ -80,7 +80,8 @@ test("cut the model with a section box: type an extent, drag a face, turn it off
     .getByRole("button", { name: "Parallel" })
     .click();
   await page.getByRole("button", { name: "Zoom fit" }).click();
-  await page.getByRole("button", { name: "Reset" }).click();
+  // Exact: "View presets" and "Reset visibility" contain "reset" too.
+  await page.getByRole("button", { name: "Reset", exact: true }).click();
   const before = await values(page);
   await dragAFace(page, canvas);
   await expect(status(page)).toHaveText("Section box · 1 face moved");
