@@ -1,7 +1,9 @@
 import { expect, test } from "@playwright/test";
-import { calls, open, selectAnElement, status } from "./support/viewport";
+import { calls, open, reportViewStops, selectAnElement, status } from "./support/viewport";
 
 test.use({ locale: "en-GB", viewport: { width: 1440, height: 900 } });
+
+reportViewStops();
 
 test("navigate the model and select an element", async ({ page }) => {
   const canvas = await open(page, "blocks");

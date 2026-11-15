@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { expect, type Locator, type Page } from "@playwright/test";
+import { expect, type Locator, type Page, type TestInfo, test } from "@playwright/test";
 
 // Scene deltas written by a Rust test from known documents (fixtures/README.md).
 const fixture = (name: string) => [
@@ -187,4 +187,63 @@ export async function selectAnElement(page: Page, canvas: Locator) {
     `no click selected an element: canvas ${JSON.stringify(box)}, ${tried.length} points tried ` +
       `(${tried.slice(0, 12).join(" ")}…), status "${text}"`,
   );
+}
+
+const logs = new WeakMap<Page, { kept: string[]; dropped: number }>();
+/** A GPU fault can log on every frame: the first lines name the cause, the rest only repeat it. */
+const KEPT_LINES = 200;
+
+/**
+ * Keeps the warnings and errors the page logs: the viewport logs GPU validation errors as
+ * warnings.
+ */
+function watchViewStops(page: Page) {
+  const logged = { kept: [] as string[], dropped: 0 };
+  logs.set(page, logged);
+  const keep = (line: string) => {
+    if (logged.kept.length < KEPT_LINES) logged.kept.push(line);
+    else logged.dropped += 1;
+  };
+  page.on("console", (message) => {
+    const type = message.type();
+    if (type === "warning" || type === "error") keep(`${type}: ${message.text()}`);
+  });
+  page.on("pageerror", (error) => keep(`page error: ${error.message}`));
+  page.on("crash", () => keep("the page crashed"));
+}
+
+/**
+ * Attaches to a failed test the 3D view's status and error card, and what the page logged. The
+ * View panel shows only what a running view reports, so a view that stopped makes its controls
+ * vanish: the attachment says why, where the failure itself only says "element(s) not found".
+ * A crashed page can no longer be read: the log then says so.
+ */
+async function attachViewStop(page: Page, testInfo: TestInfo) {
+  if (testInfo.status === testInfo.expectedStatus) return;
+  const read = (locator: Locator) =>
+    locator
+      .allInnerTexts()
+      .then((texts) => texts.join(" / "))
+      .catch(() => "(the page can no longer be read)");
+  const [shown, card] = await Promise.all([
+    read(status(page)),
+    read(page.locator(".vp-card-error")),
+  ]);
+  const state = [`Status: ${shown || "none"}`, `Error card: ${card || "none"}`];
+  const logged = logs.get(page);
+  const lines = logged?.kept ?? [];
+  const dropped = logged?.dropped ? [`(${logged.dropped} more lines not kept)`] : [];
+  await testInfo.attach("3D view", {
+    body: [...state, "", ...lines, ...dropped].join("\n"),
+    contentType: "text/plain",
+  });
+}
+
+/**
+ * Has every test of the calling spec report, when it fails, whether the 3D view stopped and why:
+ * a GPU fault on CI's software renderer otherwise fails far from its cause.
+ */
+export function reportViewStops() {
+  test.beforeEach(({ page }) => watchViewStops(page));
+  test.afterEach(({ page }, testInfo) => attachViewStop(page, testInfo));
 }

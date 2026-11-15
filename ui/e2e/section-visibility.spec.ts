@@ -1,7 +1,9 @@
 import { expect, type Locator, type Page, test } from "@playwright/test";
-import { open, selectAnElement, status } from "./support/viewport";
+import { open, reportViewStops, selectAnElement, status } from "./support/viewport";
 
 test.use({ locale: "en-GB", viewport: { width: 1440, height: 900 } });
+
+reportViewStops();
 
 const extents = ["Min X", "Max X", "Min Y", "Max Y", "Min Z", "Max Z"];
 
@@ -55,11 +57,11 @@ test("cut the model with a section box: type an extent, drag a face, turn it off
   ).toBeVisible();
   await expect(field(page, "Max X")).toBeVisible();
 
-  // A typed extent is the keyboard equivalent of a drag.
+  // A typed extent moves the box, but only a drag counts as a moved face: the status stays.
   await field(page, "Max X").fill("12.5");
   await field(page, "Max X").press("Enter");
   await expect(field(page, "Max X")).toHaveValue("12.500");
-  await expect(status(page)).toHaveText("Section box · 1 face moved");
+  await expect(status(page)).toHaveText("No selection · Snap on");
 
   // A minimum that is not below the maximum is refused with a reason.
   await field(page, "Min Z").fill("99");
@@ -79,6 +81,7 @@ test("cut the model with a section box: type an extent, drag a face, turn it off
   await page.getByRole("button", { name: "Reset" }).click();
   const before = await values(page);
   await dragAFace(page, canvas);
+  await expect(status(page)).toHaveText("Section box · 1 face moved");
   expect(await values(page)).not.toEqual(before);
 
   // Alt+B switches the box off from anywhere.
