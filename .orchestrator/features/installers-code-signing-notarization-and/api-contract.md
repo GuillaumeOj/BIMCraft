@@ -49,7 +49,7 @@ interface UpdateError {
 
 - args: `{ channel: Channel }`
 - result: `UpdateOffer | null` — `null` when the running version is the newest of that channel (equal or higher; never a downgrade).
-- The host keeps the offer for `update_download`. A new check replaces it (and drops any downloaded package of another version).
+- The host keeps the offer for `update_download`. A new check replaces it (and drops any downloaded package of another version). When two checks overlap, each caller still gets its own answer but the host keeps the **latest** check's offer: the UI ignores the answer of a check it has superseded.
 - Errors: `unavailable`, `network`, `manifest`.
 - Timeout: 30 s.
 
@@ -63,7 +63,7 @@ interface UpdateError {
 ### `update_install`
 
 - args: none
-- Installs the downloaded package and restarts the program. On success it does not return (the program exits); the UI must therefore have asked the user first (UX brief).
+- Installs the downloaded package and restarts the program; the UI must therefore have asked the user first (UX brief). On Windows the installer ends the program before the command answers. On macOS (and Linux) it resolves `null` and the program restarts right after: the UI treats that `null` as "restarting" and shows no further state.
 - Errors: `unavailable`, `not_downloaded`, `install`.
 
 ## Rules
