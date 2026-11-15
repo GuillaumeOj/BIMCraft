@@ -11,7 +11,6 @@ import {
   failureKind,
   formatBytes,
   percentDownloaded,
-  retryOf,
 } from "./updateState";
 import "./updates.css";
 
@@ -398,8 +397,7 @@ function Footer({ updates }: { updates: Updates }) {
     });
   const close = (initial = false) => button(t("updates.close"), updates.closeDialog, { initial });
   const tryAgain = button(t("updates.retry"), updates.retry, { primary: true, initial: true });
-  const retryIsCheck =
-    failure !== null && retryOf(state) === "check" && failureKind(failure) === "other";
+  const retryIsCheck = failure !== null && failureKind(failure) === "other";
 
   let left: ReactNode = null;
   let right: ReactNode = null;
