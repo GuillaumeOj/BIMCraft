@@ -91,7 +91,7 @@ Focus rule for all states: the dialog opens with focus on the first enabled prim
 | --- | --- | --- | --- | --- |
 | **Idle** (no check yet this session, or start-up check failed) | Version, channel, switch; status "Select Check now to look for a newer version." | **Check now** | Check now | none |
 | **Checking** | Status with spinner "Checking for updates…" | Check now disabled (`aria-disabled`, keeps its place), channel and switch stay usable except channel (disabled) | dialog container | "Checking for updates…" |
-| **Up to date** | "BIMCraft {version} is up to date." and "Last checked {time}." | **Check now**, Close | Close | "BIMCraft {version} is up to date." |
+| **Up to date** | "BIMCraft {version} is up to date." and "Last checked {time}." | **Close**, Check now | Close | "BIMCraft {version} is up to date." |
 | **Available** | "BIMCraft {version} is available." "Released {date}." hint, release notes box | **Download and install**, **Later**, Check now | Download and install | Dialog: none extra (focus moves). Pill when the dialog is closed (start-up check): "BIMCraft {version} is available. Open Updates to download it." once per version per session |
 | **Downloading** | "Downloading BIMCraft {version}…", progress bar, size text, hint "You can close this window; the download continues." | **Close** (no cancel: the host has none). Channel disabled. | Close | "Downloading BIMCraft {version}…" once; progress is not announced continuously (the bar exposes `aria-valuenow` and `aria-valuetext`) |
 | **Ready to restart** | "BIMCraft {version} is ready to install." "Restart BIMCraft to finish the update." | **Restart now**, **Later** | Restart now | Dialog open: "BIMCraft {version} is ready to install." Dialog closed: "BIMCraft {version} is ready to install. Open Updates to restart." |
@@ -168,6 +168,7 @@ Keys suggest the catalogue names (`updates.*`, both catalogues, UI-04). `{…}` 
 | `updates.downloading` | Downloading BIMCraft {version}… |
 | `updates.progress.known` | {downloaded} of {total} |
 | `updates.progress.unknown` | {downloaded} downloaded |
+| `updates.progress.percent` | {percent}% (next to the size text, only when the total is known) |
 | `updates.progress.label` | Download progress |
 | `updates.downloadingHint` | You can close this window. The download continues. |
 | `updates.ready` | BIMCraft {version} is ready to install. |

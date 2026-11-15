@@ -5,7 +5,7 @@
 <text x="44" y="124" font-family="Helvetica, Arial, sans-serif" font-size="13" font-weight="normal" fill="#222" text-anchor="start">you have not applied yet, such as a build-up you are still editing, are lost.</text>
 <text x="44" y="156" font-family="Helvetica, Arial, sans-serif" font-size="13" font-weight="normal" fill="#444" text-anchor="start">BIMCraft keeps a recovery copy of your work while you edit. After the restart,</text>
 <text x="44" y="174" font-family="Helvetica, Arial, sans-serif" font-size="13" font-weight="normal" fill="#444" text-anchor="start">open your project again: if BIMCraft finds a recovery copy, it offers to restore it.</text>
-<text x="44" y="192" font-family="Helvetica, Arial, sans-serif" font-size="13" font-weight="normal" fill="#444" text-anchor="start">See &#x27;Recover unsaved work&#x27; in the user guide. (plain text, no Save promise)</text>
+<text x="44" y="192" font-family="Helvetica, Arial, sans-serif" font-size="13" font-weight="normal" fill="#444" text-anchor="start">See &#x27;Recover unsaved work&#x27; in the user guide. (hidden until the UI autosaves)</text>
 <rect x="370" y="232" width="90" height="32" rx="6" fill="#fff" stroke="#555" stroke-width="1.5"/>
 <text x="415.0" y="252.5" font-family="Helvetica, Arial, sans-serif" font-size="13" font-weight="normal" fill="#222" text-anchor="middle">Cancel</text>
 <rect x="470" y="232" width="100" height="32" rx="6" fill="#2b5fd9" stroke="#2b5fd9" stroke-width="1.5"/>
