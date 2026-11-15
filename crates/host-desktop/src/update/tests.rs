@@ -204,11 +204,11 @@ fn code<T: std::fmt::Debug>(result: Result<T, UpdateError>) -> ErrorCode {
 fn each_channel_has_its_fixed_manifest() {
     assert_eq!(
         Channel::Stable.endpoint(),
-        "https://guillaumeoj.github.io/BIMCraft/updates/stable.json"
+        "https://guillaumeoj.github.io/Fabrilo/updates/stable.json"
     );
     assert_eq!(
         Channel::Beta.endpoint(),
-        "https://guillaumeoj.github.io/BIMCraft/updates/beta.json"
+        "https://guillaumeoj.github.io/Fabrilo/updates/beta.json"
     );
 }
 
@@ -290,6 +290,43 @@ fn only_release_builds_with_a_key_update_themselves() {
     assert!(updatable(false, Some("key")));
     assert!(!updatable(true, Some("key")));
     assert!(!updatable(false, None));
+}
+
+#[test]
+fn a_copy_under_program_files_does_not_update_itself() {
+    let root = std::path::Path::new("root");
+    let folders = [root.join("Program Files"), root.join("Program Files (x86)")];
+    for exe in [
+        root.join("Program Files")
+            .join("Fabrilo")
+            .join("fabrilo.exe"),
+        root.join("PROGRAM FILES (X86)")
+            .join("Fabrilo")
+            .join("fabrilo.exe"),
+    ] {
+        assert!(per_machine(&exe, &folders), "{exe:?}");
+    }
+    for exe in [
+        root.join("Users")
+            .join("ana")
+            .join("AppData")
+            .join("Local")
+            .join("Fabrilo")
+            .join("fabrilo.exe"),
+        root.join("Program Files Extra").join("fabrilo.exe"),
+    ] {
+        assert!(!per_machine(&exe, &folders), "{exe:?}");
+    }
+    assert!(!per_machine(
+        &root.join("Program Files").join("fabrilo.exe"),
+        &[]
+    ));
+}
+
+#[test]
+fn a_program_outside_program_files_is_not_a_per_machine_installation() {
+    // The test program runs from the build folder, wherever the Program Files folders are.
+    assert!(!installed_per_machine());
 }
 
 fn config_with(updater: Option<serde_json::Value>) -> tauri::Config {
