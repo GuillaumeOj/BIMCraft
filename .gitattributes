@@ -11,3 +11,5 @@ crates/interop-ifc/schema/*.exp -text
 fuzz/seeds/scene_wire_decode/* binary
 # Scene delta fixtures written by crates/host-desktop/tests/scene_fixtures.rs.
 ui/e2e/fixtures/*.bin binary
+# Signed by the Tauri CLI: the signatures cover these exact bytes.
+scripts/release/fixtures/* -text
