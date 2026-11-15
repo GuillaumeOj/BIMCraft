@@ -28,6 +28,9 @@ const TEXT_PAIRS = [
   ["ink", "warn-tint"],
   // The chips the 3D view draws next to the pointer.
   ["vp-chip-ink", "vp-chip"],
+  // The update pill: downloading, failed.
+  ["acc-ink", "acc-tint"],
+  ["danger", "err-tint"],
 ] as const;
 
 // Interface parts against their surroundings (WCAG 2.2 AA: 3:1): the focus outline and the borders of form fields.
@@ -42,6 +45,8 @@ const NON_TEXT_PAIRS = [
   ["vp-hover", "vp-halo"],
   ["vp-snap", "vp-halo"],
   ["vp-ghost", "vp-halo"],
+  // The progress indicator on its track (the track's border is the field-line pair above).
+  ["verdigris", "soft"],
 ] as const;
 
 describe("contrastRatio", () => {
