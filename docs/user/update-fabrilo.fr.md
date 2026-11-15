@@ -4,7 +4,8 @@ Fabrilo peut chercher une version plus récente, la télécharger et l’install
 
 ## Avant de commencer
 
-- Fabrilo doit avoir été installé avec son installateur (voir [Installer Fabrilo](getting-started.md)). Une copie de Fabrilo lancée par des développeurs à partir du code source n’a pas de commandes de mise à jour : le bouton **Mises à jour** n’apparaît tout simplement pas.
+- Fabrilo doit avoir été installé avec son installateur (voir [Installer Fabrilo](getting-started.fr.md)). Une copie de Fabrilo lancée par des développeurs à partir du code source n’a pas de commandes de mise à jour : le bouton **Mises à jour** n’apparaît tout simplement pas.
+- Sous Windows, seule une copie installée avec l’installateur `.exe` se met à jour elle-même. Une copie installée avec le paquet MSI n’a pas non plus de bouton **Mises à jour** (voir plus bas).
 - Il faut une connexion internet pour chercher et télécharger. Sans elle, Fabrilo continue de fonctionner et vous pourrez mettre à jour plus tard.
 
 ## Étapes
@@ -51,7 +52,7 @@ Choisir un canal lance aussitôt une recherche sur ce canal. Le canal ne peut pa
 
 **Revenir de Bêta à Stable.** Fabrilo n’installe jamais une version plus ancienne : choisir **Stable** ne retire donc pas la bêta que vous utilisez. La bêta reste installée jusqu’à la publication d’une version Stable plus récente qu’elle ; Fabrilo vous propose alors cette version. Pour revenir plus tôt, installez la version Stable depuis la page des versions (Releases) du projet Fabrilo sur GitHub.
 
-**Si vous avez installé avec le paquet MSI.** Le paquet MSI (l’installation pour tous les utilisateurs, destinée aux services informatiques) ne reçoit que les mises à jour Stable. Sur Bêta, sa recherche se termine par « Les informations de mise à jour n’ont pas pu être lues pour le moment ». Choisissez **Stable**. Les versions bêta ne sont fournies que par l’installateur `.exe`.
+**Si vous avez installé avec le paquet MSI.** Le paquet MSI (l’installation pour tous les utilisateurs, destinée aux services informatiques) ne se met pas à jour lui-même : Fabrilo n’affiche pas de bouton **Mises à jour**. Votre service informatique installe chaque nouvelle version avec son nouveau paquet MSI. Pour recevoir les mises à jour automatiquement, installez plutôt Fabrilo avec l’installateur `.exe` (voir [Installer Fabrilo](getting-started.fr.md)). Les versions bêta ne sont fournies que par l’installateur `.exe`.
 
 ## Ce que la recherche envoie
 
@@ -80,13 +81,13 @@ Le téléchargement a été endommagé ou modifié en route. Votre version actue
 Choisissez **Réessayer**. Si cela échoue encore, téléchargez l’installateur depuis la page des versions et lancez-le : il remplace l’ancienne version et garde vos réglages. Votre version actuelle reste inchangée tant que l’installation n’a pas réussi.
 
 **« Les informations de mise à jour n’ont pas pu être lues pour le moment. »**
-Réessayez plus tard. Si vous utilisez Bêta avec une installation MSI, passez sur **Stable** (voir plus haut).
+Réessayez plus tard. Les informations de mise à jour sont publiées avec chaque nouvelle version ; si le message reste plusieurs jours, téléchargez le dernier installateur depuis la page des versions (Releases) du projet Fabrilo sur GitHub.
 
 **Il n’y a pas de bouton Mises à jour.**
-Cette copie de Fabrilo ne peut pas se mettre à jour elle-même (par exemple une copie de développement). Installez Fabrilo avec son installateur.
+Cette copie de Fabrilo ne peut pas se mettre à jour elle-même : une copie de développement, ou une copie installée avec le paquet MSI (voir plus haut). Installez Fabrilo avec l’installateur `.exe` sous Windows ou le `.dmg` sous macOS.
 
 ## Voir aussi
 
-- [Installer Fabrilo](getting-started.md)
+- [Installer Fabrilo](getting-started.fr.md)
 - [Utiliser l’espace de travail au clavier](use-the-workspace-with-the-keyboard.md)
 - [Récupérer un travail non enregistré](recover-unsaved-work.md)

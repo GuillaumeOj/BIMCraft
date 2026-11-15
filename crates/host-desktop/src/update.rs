@@ -37,8 +37,8 @@ impl Channel {
     #[must_use]
     pub fn endpoint(self) -> &'static str {
         match self {
-            Self::Stable => "https://guillaumeoj.github.io/BIMCraft/updates/stable.json",
-            Self::Beta => "https://guillaumeoj.github.io/BIMCraft/updates/beta.json",
+            Self::Stable => "https://guillaumeoj.github.io/Fabrilo/updates/stable.json",
+            Self::Beta => "https://guillaumeoj.github.io/Fabrilo/updates/beta.json",
         }
     }
 }
@@ -434,14 +434,44 @@ fn updater_key(config: &tauri::Config) -> Option<&str> {
 
 /// Whether the program built with `config` can update itself: release builds with an updater
 /// public key (`plugins.updater.pubkey`) only, so that development and CI windows never replace
-/// themselves.
+/// themselves, and not a per-machine (MSI) installation on Windows ([`per_machine`]).
 #[must_use]
 pub fn can_update(config: &tauri::Config) -> bool {
-    updatable(cfg!(debug_assertions), updater_key(config))
+    updatable(cfg!(debug_assertions), updater_key(config)) && !installed_per_machine()
+}
+
+/// Whether this program runs from a per-machine (MSI) installation ([`per_machine`]).
+fn installed_per_machine() -> bool {
+    std::env::current_exe().is_ok_and(|exe| per_machine(&exe, &program_files()))
 }
 
 fn updatable(debug: bool, key: Option<&str>) -> bool {
     !debug && key.is_some()
+}
+
+/// The Windows "Program Files" folders, from the environment Windows sets for every process (none
+/// elsewhere).
+fn program_files() -> Vec<std::path::PathBuf> {
+    ["ProgramFiles", "ProgramW6432", "ProgramFiles(x86)"]
+        .into_iter()
+        .filter_map(std::env::var_os)
+        .filter(|folder| !folder.is_empty())
+        .map(std::path::PathBuf::from)
+        .collect()
+}
+
+/// Whether `exe` runs from under one of the `program_files` folders, where only the MSI package
+/// installs it. The Windows update package is the per-user NSIS installer: the release workflow
+/// cannot write the bundle type into the signed program, so the updater cannot tell an MSI copy
+/// apart, and running that installer would add a second, per-user copy. IT departments deploy
+/// each MSI themselves. Windows paths ignore case.
+fn per_machine(exe: &std::path::Path, program_files: &[std::path::PathBuf]) -> bool {
+    let lower =
+        |path: &std::path::Path| std::path::PathBuf::from(path.to_string_lossy().to_lowercase());
+    let exe = lower(exe);
+    program_files
+        .iter()
+        .any(|folder| exe.starts_with(lower(folder)))
 }
 
 /// `app_info`: the running program. `async`, like every update command, so it never runs on the
@@ -492,7 +522,7 @@ pub(crate) fn register<R: Runtime>(
     // A plugin's setup runs as the application is built, with its handle, before any window
     // can call a command; the builder's own setup hook waits for the event loop.
     builder.plugin(
-        tauri::plugin::Builder::<R>::new("bimcraft-updates")
+        tauri::plugin::Builder::<R>::new("fabrilo-updates")
             .setup(move |app, _| {
                 let version = app.package_info().version.to_string();
                 app.manage(UpdateHost::new(version, source.map(|source| source(app))));

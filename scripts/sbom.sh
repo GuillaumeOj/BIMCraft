@@ -1,6 +1,6 @@
 #!/bin/sh
 # Writes a CycloneDX SBOM (one JSON file per workspace crate) into the given directory (SEC-05).
-# The release workflow attaches these files to every published release.
+# The release workflow attaches these files to the draft release of every version tag.
 # Usage: scripts/sbom.sh <out-dir>
 set -eu
 

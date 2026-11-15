@@ -34,6 +34,7 @@
 
 # Français
 
+- [Installer Fabrilo](getting-started.fr.md)
 - [Mettre à jour Fabrilo](update-fabrilo.fr.md)
 - [Se déplacer dans la vue 3D](navigate-the-3d-view.fr.md)
 - [Sélectionner et déplacer des éléments](select-and-move-elements.fr.md)

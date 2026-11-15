@@ -5,6 +5,7 @@ Fabrilo can look for a newer version, download it and install it for you. It nev
 ## Before you start
 
 - Fabrilo must have been installed with its installer (see [Install Fabrilo](getting-started.md)). A copy of Fabrilo that is run by developers from source code has no update controls: the **Updates** button is simply not there.
+- On Windows, only a copy installed with the `.exe` installer updates itself. A copy installed with the MSI package has no **Updates** button either (see below).
 - You need an internet connection to check and download. Without one, Fabrilo keeps working and you can update later.
 
 ## Steps
@@ -51,7 +52,7 @@ Choosing a channel starts a check on that channel at once. You cannot change the
 
 **Going back from Beta to Stable.** Fabrilo never installs an older version, so choosing **Stable** does not remove the beta you are running. The beta stays installed until a Stable version that is newer than it is released; Fabrilo then offers that version. To go back sooner, install the Stable version from the Releases page of the Fabrilo project on GitHub.
 
-**If you installed with the MSI package.** The MSI package (the all-users installation for IT departments) only receives Stable updates. On Beta, its check ends with "The update information could not be read right now". Choose **Stable**. Beta versions come as the `.exe` installer only.
+**If you installed with the MSI package.** The MSI package (the all-users installation for IT departments) does not update itself: Fabrilo shows no **Updates** button. Your IT department installs each new version with its new MSI package. To get updates automatically, install Fabrilo with the `.exe` installer instead (see [Install Fabrilo](getting-started.md)). Beta versions come as the `.exe` installer only.
 
 ## What the check sends
 
@@ -80,10 +81,10 @@ The download was damaged or altered on its way. Your current version is unchange
 Choose **Try again**. If it still fails, download the installer from the Releases page and run it: it replaces the old version and keeps your settings. Your current version is unchanged until the installation succeeds.
 
 **"The update information could not be read right now."**
-Try again later. If you use Beta with an MSI installation, switch to **Stable** (see above).
+Try again later. The update information is published with each new version; if the message stays for days, download the latest installer from the Releases page of the Fabrilo project on GitHub.
 
 **There is no Updates button.**
-This copy of Fabrilo cannot update itself (for example a development copy). Install Fabrilo with its installer.
+This copy of Fabrilo cannot update itself: a development copy, or a copy installed with the MSI package (see above). Install Fabrilo with the `.exe` installer on Windows or the `.dmg` on macOS.
 
 ## See also
 
