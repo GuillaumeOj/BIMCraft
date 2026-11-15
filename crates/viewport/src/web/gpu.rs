@@ -27,6 +27,11 @@ pub(super) async fn adapter_available() -> bool {
 
 /// The device, the surface of the canvas and the target the renderer draws into.
 pub(super) struct Gpu {
+    // Kept for the viewport's lifetime, though never read: when the browser collects the
+    // instance or the adapter behind a live device, Dawn loses the device ("A valid external
+    // Instance reference no longer exists"), seen in CI as the 3D view stopping at random.
+    _instance: wgpu::Instance,
+    _adapter: wgpu::Adapter,
     device: wgpu::Device,
     queue: wgpu::Queue,
     surface: wgpu::Surface<'static>,
@@ -70,6 +75,8 @@ impl Gpu {
         surface.configure(&device, &config);
         let render_format = config.format.add_srgb_suffix();
         Ok(Self {
+            _instance: instance,
+            _adapter: adapter,
             device,
             queue,
             surface,
