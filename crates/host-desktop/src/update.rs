@@ -295,6 +295,8 @@ impl UpdateHost {
                 result
             }
         };
+        // Released at once: an install or a check reads a held lock as a download running.
+        drop(download);
         if self.is_current(&offer) {
             result
         } else {
