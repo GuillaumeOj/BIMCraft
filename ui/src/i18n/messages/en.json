@@ -553,5 +553,6 @@
   "viewport.toast.moveUnknown": "This element no longer exists. It may have been deleted.",
   "viewport.hint.esc.cancel": "Esc: cancel",
   "viewport.hint.esc.previous": "Esc: previous step",
-  "viewport.hint.esc.clear": "Esc: clear the value"
+  "viewport.hint.esc.clear": "Esc: clear the value",
+  "viewport.guide.failed": "The guide could not be opened. Its address is {url}"
 }

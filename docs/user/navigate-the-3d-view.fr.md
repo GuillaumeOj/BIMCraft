@@ -74,6 +74,9 @@ La carte graphique ne répond plus, ou le modèle est trop volumineux pour elle.
 **La vue reste sur « Chargement de la vue 3D… ».**
 Au bout de dix secondes, elle affiche « Toujours en cours… » et propose **Annuler**. Annulez, puis choisissez **Recharger la vue**.
 
+**Un lien vers le guide ne s'ouvre pas.**
+BIMCraft ouvre les pages du guide dans votre navigateur web et a besoin d'une connexion internet pour cela. S'il n'y parvient pas, il affiche l'adresse de la page pour que vous puissiez la copier dans votre navigateur.
+
 **Les lettres comme `P` ou `S` ne font rien.**
 Ces raccourcis sont inactifs quand une boîte de dialogue est ouverte ou pendant la saisie dans un champ. Fermez la boîte de dialogue ou cliquez d'abord dans la vue 3D. Si **Raccourcis à une touche** est décoché, elles ne fonctionnent que lorsque la vue 3D a le clavier (voir plus haut).
 

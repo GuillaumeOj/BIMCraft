@@ -553,5 +553,6 @@
   "viewport.toast.moveUnknown": "Cet élément n’existe plus. Il a peut-être été supprimé.",
   "viewport.hint.esc.cancel": "Échap : annuler",
   "viewport.hint.esc.previous": "Échap : étape précédente",
-  "viewport.hint.esc.clear": "Échap : effacer la valeur"
+  "viewport.hint.esc.clear": "Échap : effacer la valeur",
+  "viewport.guide.failed": "Le guide n’a pas pu être ouvert. Son adresse est {url}"
 }
