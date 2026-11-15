@@ -41,9 +41,10 @@ export const assetUrl = (repo: string, tag: string, file: string): string =>
 export function buildManifest(input: ManifestInput): Manifest {
   const platforms = Object.fromEntries(
     Object.entries(PLATFORMS).map(([platform, os]) => {
-      const { file, signature } = input[os];
-      if (signature.trim() === "") throw new Error(`the signature of ${file} is empty`);
-      return [platform, { signature: signature.trim(), url: assetUrl(input.repo, input.tag, file) }];
+      const { file } = input[os];
+      const signature = input[os].signature.trim();
+      if (signature === "") throw new Error(`the signature of ${file} is empty`);
+      return [platform, { signature, url: assetUrl(input.repo, input.tag, file) }];
     }),
   );
   return { version: input.version, pub_date: input.pubDate.toISOString(), platforms };

@@ -39,9 +39,14 @@ export function cargoVersion(manifest: string): string {
 const shapes = "vX.Y.Z (stable) or vX.Y.Z-beta.N (beta)";
 
 /** The release `tag` starts, when it is well formed and names `version`. */
-export function checkTag(tag: string, version: string): Release {
+function requireReleaseTag(tag: string): Release {
   const release = parseTag(tag);
   if (release === null) throw new Error(`tag "${tag}" is not a release tag: use ${shapes}`);
+  return release;
+}
+
+export function checkTag(tag: string, version: string): Release {
+  const release = requireReleaseTag(tag);
   if (release.version !== version) {
     throw new Error(`tag "${tag}" does not match version "${version}" of ${MANIFEST}: bump it first`);
   }
@@ -50,8 +55,7 @@ export function checkTag(tag: string, version: string): Release {
 
 /** The published release `tag`, when its pre-release flag matches its tag shape. */
 export function checkPublished(tag: string, prerelease: boolean): Release {
-  const release = parseTag(tag);
-  if (release === null) throw new Error(`tag "${tag}" is not a release tag: use ${shapes}`);
+  const release = requireReleaseTag(tag);
   if (release.prerelease !== prerelease) {
     const expected = release.prerelease ? "be a pre-release" : "not be a pre-release";
     throw new Error(`release "${tag}" must ${expected}: fix the flag on GitHub`);

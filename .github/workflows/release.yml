@@ -93,23 +93,10 @@ jobs:
       - uses: ./.github/actions/setup-rust
       - name: Add the two macOS targets of a universal build
         run: rustup target add aarch64-apple-darwin x86_64-apple-darwin
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+      - uses: ./.github/actions/setup-release-build
         with:
-          bun-version: ${{ env.BUN_VERSION }}
-      - uses: taiki-e/install-action@f7e5d7c961414b23f5b25b2da9294395d08513ad # v2.87.26
-        with:
-          tool: tauri-cli@${{ env.TAURI_CLI_VERSION }}
-      - name: Make a throw-away updater key (dry run)
-        if: env.PUBLISH != 'true'
-        run: scripts/release/dry-run-updater-key.sh
-      - name: Write the updater public key into the configuration
-        env:
-          UPDATER_PUBLIC_KEY: ${{ env.PUBLISH == 'true' && vars.UPDATER_PUBLIC_KEY || env.DRY_RUN_UPDATER_PUBLIC_KEY }}
-        run: |
-          jq -n --arg key "$UPDATER_PUBLIC_KEY" '{plugins: {updater: {pubkey: $key}}}' > "$RUNNER_TEMP/updater.conf.json"
-      - name: Build the interface
-        working-directory: ui
-        run: bun install --frozen-lockfile && bunx vite build
+          publish: ${{ env.PUBLISH }}
+          updater-public-key: ${{ vars.UPDATER_PUBLIC_KEY }}
       # Compiled without any secret in the environment: no build script or dependency sees a key.
       - name: Build the program
         working-directory: crates/desktop-app
@@ -157,8 +144,6 @@ jobs:
           cp "$BUNDLE/macos/Fabrilo.app.tar.gz" "$RUNNER_TEMP/release/Fabrilo_${VERSION}_universal.app.tar.gz"
           cp "$BUNDLE/macos/Fabrilo.app.tar.gz.sig" "$RUNNER_TEMP/release/Fabrilo_${VERSION}_universal.app.tar.gz.sig"
       - name: Check the update package's signature
-        env:
-          UPDATER_PUBLIC_KEY: ${{ env.PUBLISH == 'true' && vars.UPDATER_PUBLIC_KEY || env.DRY_RUN_UPDATER_PUBLIC_KEY }}
         run: bun scripts/release/verify-signature.ts "$RUNNER_TEMP/release/Fabrilo_${VERSION}_universal.app.tar.gz"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -198,31 +183,20 @@ jobs:
           SIGNPATH_PROJECT_SLUG: ${{ vars.SIGNPATH_PROJECT_SLUG }}
         run: scripts/release/require-env.sh TAURI_SIGNING_PRIVATE_KEY TAURI_SIGNING_PRIVATE_KEY_PASSWORD UPDATER_PUBLIC_KEY SIGNPATH_API_TOKEN SIGNPATH_ORGANIZATION_ID SIGNPATH_PROJECT_SLUG
       - uses: ./.github/actions/setup-rust
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+      - uses: ./.github/actions/setup-release-build
         with:
-          bun-version: ${{ env.BUN_VERSION }}
-      - uses: taiki-e/install-action@f7e5d7c961414b23f5b25b2da9294395d08513ad # v2.87.26
-        with:
-          tool: tauri-cli@${{ env.TAURI_CLI_VERSION }}
-      - name: Make a throw-away updater key (dry run)
-        if: env.PUBLISH != 'true'
-        run: scripts/release/dry-run-updater-key.sh
-      - name: Write the updater public key into the configuration
-        env:
-          UPDATER_PUBLIC_KEY: ${{ env.PUBLISH == 'true' && vars.UPDATER_PUBLIC_KEY || env.DRY_RUN_UPDATER_PUBLIC_KEY }}
-        run: |
-          jq -n --arg key "$UPDATER_PUBLIC_KEY" '{plugins: {updater: {pubkey: $key}}}' > "$RUNNER_TEMP/updater.conf.json"
-      - name: Build the interface
-        working-directory: ui
-        run: bun install --frozen-lockfile && bunx vite build
+          publish: ${{ env.PUBLISH }}
+          updater-public-key: ${{ vars.UPDATER_PUBLIC_KEY }}
 
       # Round 1: the program, signed before the installers pack it.
       - name: Build the program
         working-directory: crates/desktop-app
         run: cargo tauri build --ci --no-bundle --config "$RUNNER_TEMP/updater.conf.json" -- --locked
       - name: Stage the program for signing
+        if: env.PUBLISH == 'true'
         run: mkdir -p "$RUNNER_TEMP/program" && cp target/release/fabrilo.exe "$RUNNER_TEMP/program/"
       - id: program
+        if: env.PUBLISH == 'true'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: signpath-program
@@ -257,8 +231,9 @@ jobs:
         run: |
           mkdir -p "$RUNNER_TEMP/installers"
           cp "$BUNDLE"/nsis/*-setup.exe "$RUNNER_TEMP/installers/"
-          if [ "$BUNDLES" = nsis,msi ]; then cp "$BUNDLE"/msi/*.msi "$RUNNER_TEMP/installers/"; fi
+          case ",$BUNDLES," in *,msi,*) cp "$BUNDLE"/msi/*.msi "$RUNNER_TEMP/installers/" ;; esac
       - id: installers
+        if: env.PUBLISH == 'true'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: signpath-installers
@@ -299,8 +274,6 @@ jobs:
             cargo tauri signer sign --app-version "$VERSION" "$setup"
           done
       - name: Check the update package's signature
-        env:
-          UPDATER_PUBLIC_KEY: ${{ env.PUBLISH == 'true' && vars.UPDATER_PUBLIC_KEY || env.DRY_RUN_UPDATER_PUBLIC_KEY }}
         run: bun scripts/release/verify-signature.ts "$RUNNER_TEMP"/installers/*-setup.exe
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -310,7 +283,6 @@ jobs:
 
   sbom:
     name: SBOM
-    needs: verify
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -358,7 +330,8 @@ jobs:
         run: bun scripts/release/update-manifest.ts "$RUNNER_TEMP/assets" "$RUNNER_TEMP/assets/latest.json"
       - name: Write the checksums
         working-directory: ${{ runner.temp }}/assets
-        run: sha256sum -- * > "$RUNNER_TEMP/SHA256SUMS.txt" && mv "$RUNNER_TEMP/SHA256SUMS.txt" .
+        # The glob is expanded before the redirection creates the file, so it does not list itself.
+        run: sha256sum -- * > SHA256SUMS.txt
       - name: Create the draft release
         env:
           GH_TOKEN: ${{ github.token }}

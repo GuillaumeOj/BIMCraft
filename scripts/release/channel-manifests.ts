@@ -22,19 +22,8 @@ export type Channels = { stable: GitHubRelease | null; beta: GitHubRelease | nul
 /** A manifest that offers no update: its version is lower than any program's. */
 export const EMPTY_MANIFEST = { version: "0.0.0", platforms: {} };
 
-const numbers = (version: string): number[] => version.split(/[.-]/).flatMap((part) => (/^\d+$/.test(part) ? [Number(part)] : []));
-
 /** Semver order of two release tags: a beta comes before its stable version. */
-export function compareTags(a: Tag, b: Tag): number {
-  const [x, y] = [numbers(a.version), numbers(b.version)];
-  for (let i = 0; i < 3; i += 1) {
-    const difference = (x[i] ?? 0) - (y[i] ?? 0);
-    if (difference !== 0) return difference;
-  }
-  // A stable version has no beta number: it sorts after every beta of itself.
-  const [betaA, betaB] = [x[3] ?? Number.POSITIVE_INFINITY, y[3] ?? Number.POSITIVE_INFINITY];
-  return betaA === betaB ? 0 : betaA < betaB ? -1 : 1;
-}
+export const compareTags = (a: Tag, b: Tag): number => Bun.semver.order(a.version, b.version);
 
 /**
  * The newest published stable release and the newest published release of all. Drafts, tags that

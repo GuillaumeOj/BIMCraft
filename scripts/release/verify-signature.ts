@@ -61,8 +61,8 @@ function parseSignature(base64: string): Signature {
 export const signedVersion = (trustedComment: string): string | null =>
   trustedComment
     .split("\t")
-    .map((field) => (field.startsWith("version:") ? field.slice("version:".length) : null))
-    .find((version) => version !== null) ?? null;
+    .find((field) => field.startsWith("version:"))
+    ?.slice("version:".length) ?? null;
 
 /**
  * Checks that `signature` (the base64 content of a `.sig` file) signs `data` with `publicKey` (the
