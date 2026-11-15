@@ -43,7 +43,7 @@ Unpublish it (edit → "Save as draft") or delete it. Every event on a published
 
 ### Channels
 
-`stable.json` is the `latest.json` of the newest published stable release; `beta.json` that of the newest published release, stable or beta, so the beta channel is never behind stable. Each gets the release notes. A channel with no release yet gets a manifest whose version is `0.0.0`, which never offers an update. Drafts, tags of another shape and releases whose pre-release flag disagrees with their tag are ignored; publishing such a release fails the `channels` job.
+`stable.json` is the `latest.json` of the newest published stable release; `beta.json` that of the newest published release, stable or beta, so the beta channel is never behind stable. Each gets the release notes. The job checks out the default branch, not the release's tag: it always runs the scripts of `main`, and it still works when the tag of a deleted release is gone too. A channel with no release yet gets a manifest whose version is `0.0.0`, which never offers an update. Drafts, tags of another shape and releases whose pre-release flag disagrees with their tag are ignored; publishing such a release fails the `channels` job.
 
 ## The dry run
 
