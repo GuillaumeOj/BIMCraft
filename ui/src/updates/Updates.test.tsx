@@ -5,6 +5,7 @@ import { Shell } from "../shell/Shell";
 import { fakeCore } from "../test-support/fakeCore";
 import { renderWithCore } from "../test-support/render";
 import { AUTO_CHECK_STORAGE_KEY, CHANNEL_STORAGE_KEY } from "./settings";
+import { useUpdates } from "./UpdatesContext";
 
 const OFFER: UpdateOffer = {
   version: "0.4.0",
@@ -426,6 +427,48 @@ describe("lead decisions", () => {
     await act(async () => fail(new UpdateError("network", "x")));
     expect(await screen.findByRole("alert")).toHaveTextContent("Could not reach");
     expect(inDialog("Try again")).toBeInTheDocument();
+  });
+});
+
+describe("overlapping checks", () => {
+  function Probe() {
+    const { checkNow, state } = useUpdates();
+    return (
+      <>
+        <button type="button" onClick={checkNow}>
+          probe
+        </button>
+        <output>{state.phase}</output>
+      </>
+    );
+  }
+
+  type Call = { resolve: (offer: UpdateOffer | null) => void; reject: (error: unknown) => void };
+
+  async function start() {
+    const api = fakeUpdates();
+    const calls: Call[] = [];
+    api.checkForUpdate = vi.fn(
+      () => new Promise<UpdateOffer | null>((resolve, reject) => calls.push({ resolve, reject })),
+    );
+    const { user } = renderWithCore(<Probe />, fakeCore(), api);
+    await user.click(screen.getByRole("button", { name: "probe" }));
+    await user.click(screen.getByRole("button", { name: "probe" }));
+    return calls;
+  }
+
+  it("ignores an older answer that arrives after a newer one", async () => {
+    const calls = await start();
+    await act(async () => calls[1]?.resolve(null));
+    await act(async () => calls[0]?.resolve(OFFER));
+    expect(screen.getByText("upToDate")).toBeInTheDocument();
+  });
+
+  it("ignores an older failure too", async () => {
+    const calls = await start();
+    await act(async () => calls[1]?.resolve(OFFER));
+    await act(async () => calls[0]?.reject(new UpdateError("network", "x")));
+    expect(screen.getByText("available")).toBeInTheDocument();
   });
 });
 

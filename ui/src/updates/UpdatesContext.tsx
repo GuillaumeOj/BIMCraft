@@ -87,6 +87,7 @@ export function UpdatesProvider({
   const [announcement, setAnnouncement] = useState("");
   const startupDone = useRef(false);
   // Read when a check ends: a start-up check fails silently only while nobody is looking.
+  const checkCounter = useRef(0);
   const dialogOpenRef = useRef(false);
   dialogOpenRef.current = dialogOpen;
   const announced = useRef(new Set<string>());
@@ -100,13 +101,18 @@ export function UpdatesProvider({
     };
   }, [api]);
 
+  // Only the check asked last may answer: the host keeps that offer, so an older answer arriving
+  // late would show a version that cannot be downloaded.
   const runCheck = useCallback(
     async (on: Channel, silent: boolean) => {
+      checkCounter.current += 1;
+      const mine = checkCounter.current;
       dispatch({ type: "checkStarted" });
       try {
         const offer = await api.checkForUpdate(on);
-        dispatch({ type: "checked", offer, at: Date.now() });
+        if (mine === checkCounter.current) dispatch({ type: "checked", offer, at: Date.now() });
       } catch (error) {
+        if (mine !== checkCounter.current) return;
         dispatch({
           type: "checkFailed",
           code: codeOf(error),
