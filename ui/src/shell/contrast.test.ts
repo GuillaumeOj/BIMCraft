@@ -45,7 +45,7 @@ const NON_TEXT_PAIRS = [
   ["vp-hover", "vp-halo"],
   ["vp-snap", "vp-halo"],
   ["vp-ghost", "vp-halo"],
-  // The progress indicator on its track, and the track's border.
+  // The progress indicator on its track (the track's border is the field-line pair above).
   ["verdigris", "soft"],
 ] as const;
 

@@ -9,7 +9,6 @@ import { ShellStateProvider } from "../shell/ShellState";
 import { UpdatesProvider } from "../updates/UpdatesContext";
 import type { fakeCore } from "./fakeCore";
 
-/** Renders `ui` with the providers the app has: language, API client and georeference. */
 /** What `appInfo` reports without the Tauri IPC: nothing can be updated, so no update UI. */
 const NO_UPDATES: UpdatesApi = {
   appInfo: async () => ({ version: "0.0.0-dev", updatable: false }),
@@ -18,6 +17,7 @@ const NO_UPDATES: UpdatesApi = {
   installUpdate: async () => undefined,
 };
 
+/** Renders `ui` with the providers the app has: language, API client, updates and georeference. */
 export function renderWithCore(
   ui: ReactElement,
   core: ReturnType<typeof fakeCore>,

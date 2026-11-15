@@ -569,7 +569,7 @@
   "updates.channel.stable": "Stable",
   "updates.channel.beta": "Bêta",
   "updates.channel.stableHelp": "Recommandé. Des versions qui ont été testées.",
-  "updates.channel.betaHelp": "Accès anticipé aux nouvelles fonctions. Elle peut contenir des bogues.",
+  "updates.channel.betaHelp": "Accès anticipé aux nouvelles fonctions. Il peut contenir des bogues.",
   "updates.channel.betaNote": "Choisissez Bêta seulement si vous acceptez des problèmes occasionnels. Vous pouvez revenir à Stable à tout moment.",
   "updates.channel.fromBetaNote": "Vous utilisez une version bêta. Elle reste installée jusqu'à la publication d'une version Stable plus récente.",
   "updates.channel.locked": "Le canal ne peut pas changer pendant la recherche, le téléchargement ou l'attente d'un redémarrage.",

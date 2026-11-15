@@ -274,11 +274,7 @@ function StatusArea({ updates }: { updates: Updates }) {
       );
       break;
     case "downloading":
-      lines = (
-        <>
-          <p className="updates-headline">{t("updates.downloading", { version: offered })}</p>
-        </>
-      );
+      lines = <p className="updates-headline">{t("updates.downloading", { version: offered })}</p>;
       break;
     case "ready":
       lines = (

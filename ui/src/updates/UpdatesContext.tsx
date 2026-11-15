@@ -21,6 +21,7 @@ import { useI18n } from "../i18n/I18nProvider";
 import { useShellState } from "../shell/ShellState";
 import { readAutoCheck, readChannel, writeAutoCheck, writeChannel } from "./settings";
 import {
+  channelLocked,
   initialUpdateState,
   pillKind,
   retryOf,
@@ -160,11 +161,13 @@ export function UpdatesProvider({
 
   const setChannel = useCallback(
     (next: Channel) => {
+      // Choosing the channel already selected must not discard the current offer with a new check.
+      if (next === channel) return;
       writeChannel(next);
       setChannelState(next);
       void runCheck(next, false);
     },
-    [runCheck],
+    [channel, runCheck],
   );
 
   const setAutoCheck = useCallback((on: boolean) => {
@@ -175,10 +178,9 @@ export function UpdatesProvider({
   const openDialog = useCallback(
     (options: { check?: boolean } = {}) => {
       setDialogOpen(true);
-      const busy = ["checking", "downloading", "ready", "confirm", "restarting"];
-      if (options.check === true && !busy.includes(state.phase)) void runCheck(channel, false);
+      if (options.check === true && !channelLocked(state)) void runCheck(channel, false);
     },
-    [channel, runCheck, state.phase],
+    [channel, runCheck, state],
   );
 
   const retry = useCallback(() => {

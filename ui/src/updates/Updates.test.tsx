@@ -490,6 +490,14 @@ describe("settings", () => {
     );
   });
 
+  it("does not check again when the channel already selected is chosen", async () => {
+    const api = fakeUpdates();
+    const { user } = await renderApp(api);
+    await openDialog(user);
+    await user.click(within(dialog()).getByRole("button", { name: "Stable" }));
+    expect(api.checkForUpdate).not.toHaveBeenCalled();
+  });
+
   it("locks the channel while downloading", async () => {
     const api = fakeUpdates();
     const { user } = await renderApp(api);
