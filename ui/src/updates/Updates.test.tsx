@@ -325,6 +325,8 @@ describe("errors", () => {
       "The downloaded update could not be verified, so it was not installed. Your current version is unchanged.",
     );
     expect(screen.getByText(/download Fabrilo again/)).toBeInTheDocument();
+    // The offer stays above the banner.
+    expect(screen.getByText("Fabrilo 0.4.0 is available.")).toBeInTheDocument();
     expect(inDialog("Try again")).toHaveFocus();
     await user.click(inDialog("Try again"));
     expect(api.downloadUpdate).toHaveBeenCalledTimes(2);

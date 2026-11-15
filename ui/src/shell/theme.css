@@ -22,10 +22,10 @@
   --bc-warn-tint: #fceadc;
   --bc-on-danger: #ffffff;
   /* Update notice and progress (boards 8.7-8.13): the verdigris and danger tints, the progress track. */
-  --bc-acc-tint: #d6ece7;
-  --bc-acc-ink: #0b4f45;
-  --bc-err-tint: #fbe4e1;
-  --bc-soft: #e6e8eb;
+  --bc-acc-tint: #d6eee9;
+  --bc-acc-ink: #0b5247;
+  --bc-err-tint: #fbe4e2;
+  --bc-soft: #e7e9eb;
   /* Borders of form fields: --bc-line is only 1.46:1, below the 3:1 of WCAG 1.4.11. */
   --bc-field-line: #858b94;
   /* 3D view colours (the `color/vp-*` variables). theme.ts hands bg, select, hover, snap, ghost
@@ -60,10 +60,10 @@
     --bc-danger: #f28b82;
     --bc-warn-tint: #3d2a1a;
     --bc-on-danger: #1c1e21;
-    --bc-acc-tint: #1f3a36;
-    --bc-acc-ink: #9fe0d3;
-    --bc-err-tint: #3d2220;
-    --bc-soft: #3a3e44;
+    --bc-acc-tint: #1d3f39;
+    --bc-acc-ink: #8fd9cb;
+    --bc-err-tint: #3f2120;
+    --bc-soft: #33363b;
     --bc-field-line: #7a8089;
     --bc-vp-bg: #16181b;
     --bc-vp-select: #4db6a3;

@@ -5,7 +5,7 @@
   gap: 6px;
   box-sizing: border-box;
   min-height: 28px;
-  padding: 0 12px;
+  padding: 0 12px 0 10px;
   font: inherit;
   font-weight: 600;
   color: var(--bc-on-verdigris);
@@ -99,6 +99,12 @@
 
 .updates-status:empty {
   display: none;
+}
+
+.updates-failure {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
 .updates-body .banner {

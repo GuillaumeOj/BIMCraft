@@ -107,10 +107,10 @@ function FailureBanner({ code }: { code: NonNullable<Updates["state"]["failure"]
   const { t } = useI18n();
   const [message, hint] = FAILURE_KEYS[failureKind(code)];
   return (
-    <>
+    <div className="updates-failure">
       <Banner>{t(message)}</Banner>
       {hint !== null && <p className="updates-hint">{t(hint)}</p>}
-    </>
+    </div>
   );
 }
 
@@ -263,7 +263,7 @@ function StatusArea({ updates }: { updates: Updates }) {
       );
       break;
     case "available":
-      lines = failedHere ? null : (
+      lines = (
         <>
           <p className="updates-headline">{t("updates.available", { version: offered })}</p>
           {released !== null && (
@@ -277,7 +277,6 @@ function StatusArea({ updates }: { updates: Updates }) {
       lines = (
         <>
           <p className="updates-headline">{t("updates.downloading", { version: offered })}</p>
-          <p className="updates-hint">{t("updates.downloadingHint")}</p>
         </>
       );
       break;
@@ -306,7 +305,12 @@ function StatusArea({ updates }: { updates: Updates }) {
       <div className="updates-status" role="status" aria-live="polite">
         {lines}
       </div>
-      {state.phase === "downloading" && <DownloadProgress progress={state.progress} />}
+      {state.phase === "downloading" && (
+        <>
+          <DownloadProgress progress={state.progress} />
+          <p className="updates-hint">{t("updates.downloadingHint")}</p>
+        </>
+      )}
     </>
   );
 }
@@ -396,8 +400,7 @@ function Footer({ updates }: { updates: Updates }) {
       initial: primary,
       disabled: checking,
     });
-  const close = (initial = false) =>
-    button(t("updates.close"), updates.closeDialog, { initial, primary: initial });
+  const close = (initial = false) => button(t("updates.close"), updates.closeDialog, { initial });
   const tryAgain = button(t("updates.retry"), updates.retry, { primary: true, initial: true });
   const retryIsCheck =
     failure !== null && retryOf(state) === "check" && failureKind(failure) === "other";
@@ -420,6 +423,7 @@ function Footer({ updates }: { updates: Updates }) {
         break;
       case "checking":
         left = checkNow();
+        right = close();
         break;
       case "upToDate":
         left = checkNow();
