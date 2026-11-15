@@ -30,6 +30,8 @@ Press **Esc** to close the list; the focus returns to the eye button. You can al
 
 **Result:** a message reads, for example, "Isolate · only Structure is shown · Esc or “End isolate” to return". The View panel is tagged "Isolated".
 
+If you delete every element you isolated (or every element of the isolated category or discipline), the isolation ends by itself and the other elements show again; elements you hid stay hidden. Undoing the deletion does not isolate them again.
+
 ## Hide the selection
 
 Select elements, then choose **Hide** in the list, or press `H`. The elements are hidden, and hidden elements cannot be selected.

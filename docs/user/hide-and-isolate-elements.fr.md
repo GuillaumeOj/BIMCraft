@@ -30,6 +30,8 @@ Appuyez sur **Échap** pour fermer la liste ; le focus revient sur le bouton en 
 
 **Résultat :** un message indique par exemple « Isoler · seul Structure est affiché · Échap ou « Terminer l’isolement » pour revenir ». Le panneau Vue porte l'étiquette « Isolé ».
 
+Si vous supprimez tous les éléments isolés (ou tous ceux de la catégorie ou de la discipline isolée), l'isolement se termine de lui-même et les autres éléments réapparaissent ; ceux que vous avez masqués restent masqués. Annuler la suppression ne les isole pas de nouveau.
+
 ## Masquer la sélection
 
 Sélectionnez des éléments, puis choisissez **Masquer** dans la liste, ou appuyez sur `H`. Les éléments sont masqués, et des éléments masqués ne peuvent pas être sélectionnés.
