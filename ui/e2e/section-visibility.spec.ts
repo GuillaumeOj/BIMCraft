@@ -73,7 +73,9 @@ test("cut the model with a section box: type an extent, drag a face, turn it off
   // Dragging a face of the box changes an extent.
   await page.getByRole("button", { name: "View presets" }).click();
   await page.getByRole("menuitem", { name: "Top" }).click();
+  // The canvas tool bar and the open View panel both have a Projection toggle: use the panel's.
   await page
+    .getByRole("tabpanel", { name: "View" })
     .getByRole("group", { name: "Projection" })
     .getByRole("button", { name: "Parallel" })
     .click();
