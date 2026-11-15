@@ -6,6 +6,9 @@ import { LocationDialog } from "../georef/LocationDialog";
 import { useI18n } from "../i18n/I18nProvider";
 import { LanguageSelect } from "../i18n/LanguageSelect";
 import { MaterialsDialog } from "../materials/MaterialsDialog";
+import { UpdateButton } from "../updates/UpdateButton";
+import { useUpdates } from "../updates/UpdatesContext";
+import { UpdatesDialogHost } from "../updates/UpdatesDialog";
 import { ViewPanel } from "../viewport/ViewPanel";
 import { ViewportBridgeProvider } from "../viewport/ViewportBridge";
 import { ViewportView } from "../viewport/ViewportView";
@@ -44,7 +47,7 @@ const isChord = (event: globalThis.KeyboardEvent, letter: string) =>
  * "Workspace" boards of the FigCraft design. F6 and Shift+F6 move focus between the regions;
  * Ctrl+` opens and closes the console, Ctrl+Shift+K shows the Coordinates panel and
  * Ctrl+Shift+L opens the Project location dialog, Ctrl+Shift+M the Materials dialog and
- * Ctrl+Shift+B the Build-ups dialog.
+ * Ctrl+Shift+B the Build-ups dialog and Ctrl+Shift+U the Updates dialog.
  */
 export function Shell() {
   const { t } = useI18n();
@@ -52,6 +55,7 @@ export function Shell() {
   const [rightPanel, setRightPanel] = useState<RightPanel>("properties");
   const { dialogOpen, openDialog } = useGeoref();
   const { isModalOpen } = useShellState();
+  const { updatable, openDialog: openUpdates } = useUpdates();
   const [consoleOpen, setConsoleOpen] = useState(false);
   const [materialsOpen, setMaterialsOpen] = useState(false);
   const [buildUpsOpen, setBuildUpsOpen] = useState(false);
@@ -78,6 +82,8 @@ export function Shell() {
       [(event) => isChord(event, "k"), () => selectTab("coordinates")],
       [(event) => isChord(event, "m"), () => setMaterialsOpen(true)],
       [(event) => isChord(event, "b"), () => setBuildUpsOpen(true)],
+      // Hidden builds (development, browser) have no update shortcut either.
+      [(event) => updatable && isChord(event, "u"), () => openUpdates()],
       [(event) => event.key === "F6", (event) => nextRegion(event.shiftKey)?.focus()],
     ];
     const onKeyDown = (event: globalThis.KeyboardEvent) => {
@@ -90,7 +96,7 @@ export function Shell() {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [selectTab, isModalOpen]);
+  }, [selectTab, isModalOpen, updatable, openUpdates]);
 
   const onTabKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
     const at = RIGHT_PANELS.indexOf(rightPanel);
@@ -168,6 +174,7 @@ export function Shell() {
           {t("panel.console")}
         </button>
         <SingleKeysToggle />
+        <UpdateButton />
         <LanguageSelect />
       </header>
       <ViewportBridgeProvider>
@@ -266,6 +273,7 @@ export function Shell() {
         />
       )}
       {buildUpsOpen && <BuildUpsDialog onClose={() => setBuildUpsOpen(false)} />}
+      <UpdatesDialogHost />
     </div>
   );
 }

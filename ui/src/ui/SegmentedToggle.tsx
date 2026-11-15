@@ -10,6 +10,8 @@ type SegmentedToggleProps<V extends string> = {
   value: V;
   options: readonly Option<V>[];
   onChange: (value: V) => void;
+  /** Greys the choices out and ignores them (a disabled fieldset disables its buttons). */
+  disabled?: boolean;
 };
 
 /** Exclusive choices side by side (decimal degrees or DMS; all, walls or slabs). */
@@ -19,10 +21,11 @@ export function SegmentedToggle<V extends string>({
   value,
   options,
   onChange,
+  disabled,
 }: SegmentedToggleProps<V>) {
   const { t } = useI18n();
   return (
-    <fieldset className="segmented">
+    <fieldset className="segmented" disabled={disabled}>
       <legend className="visually-hidden">{label}</legend>
       {options.map((option) => (
         <button

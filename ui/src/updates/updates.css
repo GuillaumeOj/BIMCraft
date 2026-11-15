@@ -1,0 +1,242 @@
+/* The update notice and dialog (boards 8.7-8.18 of the FigCraft design). Colours are theme.css tokens. */
+.update-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  box-sizing: border-box;
+  min-height: 28px;
+  padding: 0 12px;
+  font: inherit;
+  font-weight: 600;
+  color: var(--bc-on-verdigris);
+  background: var(--bc-verdigris);
+  border: 1px solid var(--bc-verdigris);
+  border-radius: 14px;
+  cursor: pointer;
+}
+
+.update-pill[data-kind="downloading"] {
+  color: var(--bc-acc-ink);
+  background: var(--bc-acc-tint);
+}
+
+.update-pill[data-kind="failed"] {
+  color: var(--bc-danger);
+  background: var(--bc-err-tint);
+  border-color: var(--bc-danger);
+}
+
+/* The dot and the icon make the state readable without its colour. */
+.update-pill-dot {
+  width: 6px;
+  height: 6px;
+  background: currentcolor;
+  border-radius: 50%;
+}
+
+.dialog:has(.updates-panel) {
+  width: min(560px, calc(100vw - 32px));
+}
+
+.dialog:has(.updates-confirm) {
+  width: min(480px, calc(100vw - 32px));
+}
+
+.updates-panel,
+.updates-confirm {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.updates-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-right: 12px;
+}
+
+.updates-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.updates-body p {
+  margin: 0;
+}
+
+.updates-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--bc-ink-2);
+}
+
+.updates-hint {
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--bc-muted);
+}
+
+.updates-note {
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--bc-ink-2);
+}
+
+.updates-headline {
+  font-weight: 600;
+}
+
+.updates-status {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-top: 12px;
+  border-top: 1px solid var(--bc-line);
+}
+
+.updates-status:empty {
+  display: none;
+}
+
+.updates-body .banner {
+  margin: 0;
+}
+
+.updates-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+/* A real checkbox (role switch) carries the semantics; its box is hidden and the track drawn. */
+.updates-switch input {
+  position: absolute;
+  opacity: 0;
+}
+
+.updates-switch-track {
+  position: relative;
+  width: 32px;
+  height: 18px;
+  box-sizing: border-box;
+  background: var(--bc-surface);
+  border: 1px solid var(--bc-field-line);
+  border-radius: 9px;
+}
+
+.updates-switch-track::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 12px;
+  height: 12px;
+  background: var(--bc-muted);
+  border-radius: 50%;
+}
+
+.updates-switch input:checked + .updates-switch-track {
+  background: var(--bc-verdigris);
+  border-color: var(--bc-verdigris);
+}
+
+.updates-switch input:checked + .updates-switch-track::after {
+  left: 16px;
+  background: var(--bc-on-verdigris);
+}
+
+.updates-switch input:focus-visible + .updates-switch-track {
+  outline: 2px solid var(--bc-verdigris);
+  outline-offset: 2px;
+}
+
+.segmented:disabled {
+  opacity: 0.4;
+}
+
+.updates-notes {
+  box-sizing: border-box;
+  max-height: 132px;
+  padding: 8px 12px;
+  overflow: auto;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  background: var(--bc-raised);
+  border: 1px solid var(--bc-field-line);
+  border-radius: 6px;
+}
+
+.progress-bar {
+  box-sizing: border-box;
+  height: 8px;
+  overflow: hidden;
+  background: var(--bc-soft);
+  border: 1px solid var(--bc-field-line);
+  border-radius: 4px;
+}
+
+.progress-bar-fill {
+  height: 100%;
+  background: var(--bc-verdigris);
+}
+
+.progress-bar[data-indeterminate="true"] .progress-bar-fill {
+  width: 30%;
+  animation: progress-slide 1.4s ease-in-out infinite;
+}
+
+.updates-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.updates-progress-text {
+  display: flex;
+  justify-content: space-between;
+}
+
+.updates-spinner {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  margin-right: 8px;
+  vertical-align: -2px;
+  border: 2px solid var(--bc-line);
+  border-top-color: var(--bc-verdigris);
+  border-radius: 50%;
+  animation: updates-spin 0.9s linear infinite;
+}
+
+@keyframes updates-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes progress-slide {
+  from {
+    margin-left: -30%;
+  }
+
+  to {
+    margin-left: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .updates-spinner,
+  .progress-bar[data-indeterminate="true"] .progress-bar-fill {
+    animation: none;
+  }
+
+  .progress-bar[data-indeterminate="true"] .progress-bar-fill {
+    margin-left: 35%;
+  }
+}
