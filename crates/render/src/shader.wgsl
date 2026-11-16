@@ -86,7 +86,8 @@ fn fs_main(in: Varyings, @builtin(front_facing) front: bool) -> @location(0) vec
     return vec4<f32>(in.color.rgb * (ambient + (1.0 - ambient) * diffuse), in.color.a);
 }
 
-// Translucent boxes: the colour as it is, since the unit cube has no usable normals.
+// Translucent boxes: the colour as it is, since the unit cube has no usable normals. Occlusion
+// query boxes use it too, unclipped by the planes (renderer.rs, create_pipeline).
 @fragment
 fn fs_flat(in: Varyings) -> @location(0) vec4<f32> {
     return in.color;

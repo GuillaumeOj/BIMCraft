@@ -1282,7 +1282,11 @@ fn create_pipeline(
         multisample: wgpu::MultisampleState::default(),
         fragment: Some(wgpu::FragmentState {
             module: shader,
-            entry_point: Some(if pass == Pass::Box {
+            // Query boxes are tested whole, never clipped: a cut leaves of a box only what lies
+            // on the inside faces it bounds, at their very depth, which a strict GPU then finds
+            // hidden, and the cluster drops out of the next frame. The frustum already removes
+            // what the planes cut away entirely, so the unclipped box stays a safe test.
+            entry_point: Some(if matches!(pass, Pass::Box | Pass::Query) {
                 "fs_flat"
             } else {
                 "fs_main"
