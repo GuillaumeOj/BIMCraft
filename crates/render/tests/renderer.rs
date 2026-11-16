@@ -152,40 +152,65 @@ fn near(pixel: [u8; 4], expected: [u8; 4]) -> bool {
     pixel.iter().zip(expected).all(|(&p, e)| p.abs_diff(e) <= 1)
 }
 
+/// A plane through the cube's centre, facing the camera (`toward`: -1) or facing away (+1).
+/// The camera looks along +y, so a plane across the line of sight is what makes a cut visible:
+/// a plane along it removes one half edge-on, with nothing of the inside to see.
+fn across_the_view(centre: [f64; 3], toward: f64) -> ClipPlane {
+    ClipPlane {
+        point: centre,
+        normal: [0.0, toward, 0.0],
+    }
+}
+
+/// The lit red of a face turned to the camera: 0.25 + 0.75 × 0.80 of full red.
+fn assert_lit_red(pixel: [u8; 4]) {
+    assert!((215..=219).contains(&pixel[0]), "{pixel:?}");
+    assert_eq!(pixel[1..], [0, 0, 255], "{pixel:?}");
+}
+
+fn assert_cut(pixel: [u8; 4]) {
+    assert!(
+        near(pixel, cut_bytes()),
+        "{pixel:?}, expected {:?}",
+        cut_bytes()
+    );
+}
+
 #[test]
 fn a_plane_removes_the_side_of_its_normal_and_the_cut_shows_the_tint() {
     let mut fixture = Fixture::new();
     fixture.add_cube(1.0, [0.0; 3], RED);
-    let plane = ClipPlane {
-        point: [0.0; 3],
-        normal: [1.0, 0.0, 0.0],
-    };
+    let centre = (column(0.0), SIZE / 2);
+
+    // Normal away from the camera: the far half goes, the near face stays, lit as usual.
+    let far_half = across_the_view([0.0; 3], 1.0);
     fixture
         .renderer
-        .set_clip(Clip::new(&[plane], CutFaces::Tinted).unwrap());
+        .set_clip(Clip::new(&[far_half], CutFaces::Tinted).unwrap());
+    assert_lit_red(fixture.frame().pixel(centre.0, centre.1));
+
+    // Normal toward the camera: the near half goes, and the inside of the far face, seen from
+    // behind, shows in the flat cut colour.
+    let near_half = across_the_view([0.0; 3], -1.0);
+    fixture
+        .renderer
+        .set_clip(Clip::new(&[near_half], CutFaces::Tinted).unwrap());
     let frame = fixture.frame();
-    let row = SIZE / 2;
-    // The kept half keeps its lit red (0.25 + 0.75 × 0.80 of full red).
-    let [red, green, blue, alpha] = frame.pixel(column(-0.25), row);
-    assert!((215..=219).contains(&red), "{red}");
-    assert_eq!([green, blue, alpha], [0, 0, 255]);
-    // Where the removed half was, the inside of the far face shows in the flat cut colour.
-    assert!(near(frame.pixel(column(0.25), row), cut_bytes()));
+    assert_cut(frame.pixel(centre.0, centre.1));
     // Beyond the cube there is nothing.
-    assert_eq!(frame.pixel(column(1.5), row), CLEAR_BYTES);
+    assert_eq!(frame.pixel(column(1.5), centre.1), CLEAR_BYTES);
 
     // Untinted, the same pixel is the far face as any back face is drawn: neither clear nor cut.
     fixture
         .renderer
-        .set_clip(Clip::new(&[plane], CutFaces::None).unwrap());
-    let untinted = fixture.frame().pixel(column(0.25), row);
+        .set_clip(Clip::new(&[near_half], CutFaces::None).unwrap());
+    let untinted = fixture.frame().pixel(centre.0, centre.1);
     assert_ne!(untinted, CLEAR_BYTES);
-    assert!(!near(untinted, cut_bytes()));
+    assert!(!near(untinted, cut_bytes()), "{untinted:?}");
 
     // No planes: the whole cube again.
     fixture.renderer.set_clip(Clip::default());
-    let [red, ..] = fixture.frame().pixel(column(0.25), row);
-    assert!((215..=219).contains(&red), "{red}");
+    assert_lit_red(fixture.frame().pixel(centre.0, centre.1));
 }
 
 #[test]
@@ -199,17 +224,17 @@ fn clipping_is_camera_relative_far_from_the_origin() {
         up: Vector3::new(0.0, 0.0, 1.0),
         projection: PERSPECTIVE,
     };
-    let plane = ClipPlane {
-        point: [far, 0.0, 0.0],
-        normal: [1.0, 0.0, 0.0],
-    };
-    fixture
-        .renderer
-        .set_clip(Clip::new(&[plane], CutFaces::Tinted).unwrap());
-    let frame = fixture.frame_through(&moved);
-    let [red, ..] = frame.pixel(column(-0.25), SIZE / 2);
-    assert!((215..=219).contains(&red), "{red}");
-    assert!(near(frame.pixel(column(0.25), SIZE / 2), cut_bytes()));
+    let centre = (column(0.0), SIZE / 2);
+    for (toward, check) in [(1.0, assert_lit_red as fn([u8; 4])), (-1.0, assert_cut)] {
+        fixture.renderer.set_clip(
+            Clip::new(
+                &[across_the_view([far, 0.0, 0.0], toward)],
+                CutFaces::Tinted,
+            )
+            .unwrap(),
+        );
+        check(fixture.frame_through(&moved).pixel(centre.0, centre.1));
+    }
 }
 
 #[test]
