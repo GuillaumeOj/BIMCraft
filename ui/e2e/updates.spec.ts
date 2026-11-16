@@ -116,6 +116,8 @@ test("start-up check → notice → download progress → restart confirmation �
 
 test("Check now with no update says the program is up to date", async ({ page }) => {
   await start(page, { offer: null });
+  // The shortcut works once the host has said that the build can update.
+  await expect(page.getByRole("button", { name: "Updates", exact: true })).toBeVisible();
   await page.keyboard.press("Control+Shift+U");
   const dialog = page.getByRole("dialog", { name: "Updates" });
   await dialog.getByRole("button", { name: "Check now" }).click();

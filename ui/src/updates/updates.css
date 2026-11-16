@@ -124,8 +124,10 @@
   opacity: 0;
 }
 
+/* Drawn over the hidden checkbox: clicks go through to it (or to the label around it). */
 .updates-switch-track {
   position: relative;
+  pointer-events: none;
   width: 32px;
   height: 18px;
   box-sizing: border-box;
