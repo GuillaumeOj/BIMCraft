@@ -294,16 +294,6 @@ describe("errors", () => {
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
-  it("the manifest error tells MSI installations to use Stable", async () => {
-    const api = fakeUpdates();
-    api.checkForUpdate = rejecting("manifest");
-    const { user } = await renderApp(api);
-    await openDialog(user);
-    await user.click(inDialog("Check now"));
-    await screen.findByRole("alert");
-    expect(screen.getByText(/MSI package only receive Stable updates/)).toBeInTheDocument();
-  });
-
   it("the 'other' failures offer only Check now", async () => {
     const api = fakeUpdates();
     api.checkForUpdate = rejecting("unavailable");

@@ -610,7 +610,7 @@
   "updates.error.signature": "The downloaded update could not be verified, so it was not installed. Your current version is unchanged.",
   "updates.error.signatureHint": "Try again later. If this keeps happening, download Fabrilo again from the Fabrilo website.",
   "updates.error.manifest": "The update information could not be read right now.",
-  "updates.error.manifestHint": "Try again later, or download the latest version from the Fabrilo website. Installations made with the MSI package only receive Stable updates: choose Stable if you use Beta.",
+  "updates.error.manifestHint": "Try again later, or download the latest version from the Fabrilo website.",
   "updates.error.install": "Fabrilo could not install the update. Your current version is unchanged.",
   "updates.error.installHint": "Try again, or download the latest version from the Fabrilo website.",
   "updates.error.other": "Something went wrong with the update. Check again to continue.",

@@ -610,7 +610,7 @@
   "updates.error.signature": "La mise à jour téléchargée n'a pas pu être vérifiée ; elle n'a donc pas été installée. Votre version actuelle est inchangée.",
   "updates.error.signatureHint": "Réessayez plus tard. Si le problème persiste, téléchargez de nouveau Fabrilo depuis le site web de Fabrilo.",
   "updates.error.manifest": "Les informations de mise à jour n'ont pas pu être lues pour le moment.",
-  "updates.error.manifestHint": "Réessayez plus tard, ou téléchargez la dernière version depuis le site web de Fabrilo. Les installations faites avec le paquet MSI ne reçoivent que les mises à jour Stable : choisissez Stable si vous utilisiez Bêta.",
+  "updates.error.manifestHint": "Réessayez plus tard, ou téléchargez la dernière version depuis le site web de Fabrilo.",
   "updates.error.install": "Fabrilo n'a pas pu installer la mise à jour. Votre version actuelle est inchangée.",
   "updates.error.installHint": "Réessayez, ou téléchargez la dernière version depuis le site web de Fabrilo.",
   "updates.error.other": "Un problème est survenu avec la mise à jour. Relancez la recherche pour continuer.",
