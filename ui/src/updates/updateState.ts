@@ -65,7 +65,8 @@ export function updateReducer(state: UpdateState, action: UpdateAction): UpdateS
     case "downloadStarted":
       return { ...state, phase: "downloading", progress: null, failure: null };
     case "progress":
-      return { ...state, progress: action.progress };
+      // An event that outruns the end of its download must not leave a stale figure behind.
+      return state.phase === "downloading" ? { ...state, progress: action.progress } : state;
     case "downloaded":
       return { ...state, phase: "ready", progress: null };
     case "downloadFailed":
@@ -154,11 +155,13 @@ export function formatBytes(
 ): string {
   let value = Math.max(0, bytes);
   let unit = 0;
-  while (value >= 1000 && unit < units.length - 1) {
+  // 999.5 already rounds up to 1000: move to the next unit instead of showing "1000 kB".
+  while (value >= 999.5 && unit < units.length - 1) {
     value /= 1000;
     unit += 1;
   }
-  const digits = unit > 0 && value < 10 ? 1 : 0;
+  // 9.95 and above round to 10, which has no decimal.
+  const digits = unit > 0 && value < 9.95 ? 1 : 0;
   const number = new Intl.NumberFormat(locale, {
     minimumFractionDigits: digits,
     maximumFractionDigits: digits,

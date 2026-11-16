@@ -175,12 +175,15 @@ export function UpdatesProvider({
     setAutoCheckState(on);
   }, []);
 
+  // A boolean, not the state: download progress must not give `openDialog` a new identity, which
+  // would re-register the shell's keyboard shortcuts ten times a second.
+  const locked = channelLocked(state);
   const openDialog = useCallback(
     (options: { check?: boolean } = {}) => {
       setDialogOpen(true);
-      if (options.check === true && !channelLocked(state)) void runCheck(channel, false);
+      if (options.check === true && !locked) void runCheck(channel, false);
     },
-    [channel, runCheck, state],
+    [channel, runCheck, locked],
   );
 
   const retry = useCallback(() => {

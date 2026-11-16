@@ -165,6 +165,15 @@ describe("channelLocked", () => {
   });
 });
 
+describe("late progress", () => {
+  it("is ignored once the download is over", () => {
+    const ready = at("ready");
+    expect(updateReducer(ready, { type: "progress", progress: { downloaded: 1, total: 2 } })).toBe(
+      ready,
+    );
+  });
+});
+
 describe("formatBytes", () => {
   const units = ["B", "kB", "MB", "GB"] as const;
   it("uses decimal units and one decimal below 10", () => {
@@ -174,6 +183,11 @@ describe("formatBytes", () => {
     expect(formatBytes(38_400_000, units, "en")).toBe("38 MB");
     expect(formatBytes(1_500, units, "en")).toBe("1.5 kB");
     expect(formatBytes(5_000_000_000_000, units, "en")).toBe("5,000 GB");
+  });
+
+  it("moves to the next unit instead of rounding up to 1000, and drops the decimal at 10", () => {
+    expect(formatBytes(999_600, units, "en")).toBe("1.0 MB");
+    expect(formatBytes(9_960_000, units, "en")).toBe("10 MB");
   });
 
   it("follows the locale and treats negatives as zero", () => {

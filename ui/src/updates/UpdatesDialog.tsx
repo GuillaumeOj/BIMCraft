@@ -321,7 +321,7 @@ function DownloadProgress({ progress }: { progress: UpdateProgress | null }) {
   const percent = percentDownloaded(progress);
   const downloaded = formatBytes(progress?.downloaded ?? 0, units, language);
   const text =
-    progress?.total == null
+    percent === null || progress?.total == null
       ? t("updates.progress.unknown", { downloaded })
       : t("updates.progress.known", {
           downloaded,
