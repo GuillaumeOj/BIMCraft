@@ -9,7 +9,7 @@
 A generic box the user places in the model: the first element the viewport can draw. It stands on its location, a point at the centre of its base, and is turned about the vertical axis. It is exported as an IFC building element proxy.
 
 - **Introduced in:** version 4
-- **IFC:** `IfcBuildingElementProxy`
+- **IFC:** `IfcBuildingElementProxy`, predefined type `ELEMENT`
 
 #### Attributes
 

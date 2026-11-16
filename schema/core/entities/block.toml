@@ -7,6 +7,8 @@ doc = "A generic box the user places in the model: the first element the viewpor
 
 [ifc]
 entity = "IfcBuildingElementProxy"
+# A plain element: not a complex, partial or provision-for-space or -for-void proxy.
+predefined_type = "ELEMENT"
 
 [[attribute]]
 name = "location"
