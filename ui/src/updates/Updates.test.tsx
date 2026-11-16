@@ -54,6 +54,14 @@ async function renderApp(api: UpdatesApi) {
   return view;
 }
 
+// The start-up timer is armed only once appInfo has resolved and the entry is on screen:
+// tests that advance the clock from the start must wait for that, or the timer starts late.
+async function renderAndSettle(api: UpdatesApi) {
+  const view = await renderApp(api);
+  await screen.findByRole("button", { name: "Updates" });
+  return view;
+}
+
 const dialog = () => screen.getByRole("dialog");
 // The X and the footer both say Close: the footer button, the last one, is the action.
 const inDialog = (name: string | RegExp) =>
@@ -410,7 +418,7 @@ describe("lead decisions", () => {
     api.checkForUpdate = vi.fn(
       () => new Promise<UpdateOffer | null>((_, reject) => (fail = reject)),
     );
-    const { user } = await renderApp(api);
+    const { user } = await renderAndSettle(api);
     await act(() => vi.advanceTimersByTimeAsync(5500));
     await user.click(screen.getByRole("button", { name: "Updates" }));
     expect(screen.getByText("Checking for updates…")).toBeInTheDocument();
@@ -527,7 +535,7 @@ describe("the check at start-up", () => {
 
   it("checks once a few seconds after start and announces an offer without opening anything", async () => {
     const api = fakeUpdates();
-    await renderApp(api);
+    await renderAndSettle(api);
     await wait(4000);
     expect(api.checkForUpdate).not.toHaveBeenCalled();
     await wait(1500);
@@ -546,7 +554,7 @@ describe("the check at start-up", () => {
   it("is silent when it fails: plain button, no alert, dialog opens on Idle", async () => {
     const api = fakeUpdates();
     api.checkForUpdate = rejecting("network");
-    const { user } = await renderApp(api);
+    const { user } = await renderAndSettle(api);
     await wait(5500);
     expect(api.checkForUpdate).toHaveBeenCalled();
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
@@ -557,7 +565,7 @@ describe("the check at start-up", () => {
 
   it("does not run when the switch is off, and turning it off cancels the pending check", async () => {
     const api = fakeUpdates();
-    const { user } = await renderApp(api);
+    const { user } = await renderAndSettle(api);
     await wait(1000);
     await user.click(await screen.findByRole("button", { name: "Updates" }));
     await user.click(screen.getByRole("checkbox"));
@@ -567,7 +575,7 @@ describe("the check at start-up", () => {
 
   it("waits for an open dialog to close", async () => {
     const api = fakeUpdates();
-    const { user } = await renderApp(api);
+    const { user } = await renderAndSettle(api);
     await user.click(await screen.findByRole("button", { name: "Updates" }));
     await wait(6000);
     expect(api.checkForUpdate).not.toHaveBeenCalled();
@@ -577,7 +585,7 @@ describe("the check at start-up", () => {
 
   it("leaves a user who already started something alone", async () => {
     const api = fakeUpdates();
-    const { user } = await renderApp(api);
+    const { user } = await renderAndSettle(api);
     await user.click(await screen.findByRole("button", { name: "Updates" }));
     await user.click(inDialog("Check now"));
     await screen.findByText("Fabrilo 0.4.0 is available.");
