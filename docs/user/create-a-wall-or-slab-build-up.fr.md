@@ -12,7 +12,7 @@ Quelques mots employés sur cette page :
 - **Fonction.** Le rôle de la couche : structure, support, isolant, lame d'air, membrane ou finition.
 - **Noyau.** La partie porteuse de la composition. Les couches du noyau doivent être côte à côte.
 - **Priorité de jonction.** Quand deux murs se rencontrent, les couches de priorité plus haute (1) traversent celles de priorité plus basse (5) ; les couches de même priorité se joignent. Chaque fonction a une valeur par défaut : structure 1, support 2, isolant 3, lame d'air 3, membrane 4, finition 5.
-- **Résistance thermique (R).** La capacité d'une couche, ou de toute la composition, à s'opposer au passage de la chaleur, en m²·K/W. BIMCraft la calcule à partir de l'épaisseur et de la conductivité thermique de chaque matériau.
+- **Résistance thermique (R).** La capacité d'une couche, ou de toute la composition, à s'opposer au passage de la chaleur, en m²·K/W. Fabrilo la calcule à partir de l'épaisseur et de la conductivité thermique de chaque matériau.
 
 ## Étapes
 
@@ -28,7 +28,7 @@ Quelques mots employés sur cette page :
 
 ## Vérifier la section et les totaux
 
-Pendant que vous modifiez, la boîte de dialogue montre un **Aperçu de la section** (schématique, pas à l'échelle), l'**Épaisseur totale** et la **Résistance thermique**. BIMCraft demande ces valeurs à son noyau de calcul : ce sont toujours les valeurs réelles.
+Pendant que vous modifiez, la boîte de dialogue montre un **Aperçu de la section** (schématique, pas à l'échelle), l'**Épaisseur totale** et la **Résistance thermique**. Fabrilo demande ces valeurs à son noyau de calcul : ce sont toujours les valeurs réelles.
 
 Si une couche a un matériau sans conductivité thermique, comme une lame d'air, sa résistance affiche « — ». Le total compte les autres couches et une note indique combien de couches ont été laissées de côté. Les résistances superficielles et le coefficient U ne font pas partie de ce total.
 
@@ -57,7 +57,7 @@ Utilisez **Murs**, **Planchers** ou **Toutes** pour filtrer la liste.
 
 ## Abandonner vos modifications
 
-Choisissez **Annuler** ou appuyez sur Échap. Si vous avez modifié quelque chose, BIMCraft demande « Abandonner vos modifications ? » : **Continuer la modification** est sélectionné par défaut.
+Choisissez **Annuler** ou appuyez sur Échap. Si vous avez modifié quelque chose, Fabrilo demande « Abandonner vos modifications ? » : **Continuer la modification** est sélectionné par défaut.
 
 ## Dépannage
 

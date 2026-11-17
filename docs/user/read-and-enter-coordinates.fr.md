@@ -27,7 +27,7 @@ Saisissez un point dans l’un des trois systèmes de coordonnées et lisez-le d
 ## Conseils
 
 - Vous pouvez taper un point ou une virgule décimale. En DMS, écrivez par exemple `48°51′10,8″N`, ou `S 10 15 30`.
-- La hauteur du bloc Géographique est approximative : BIMCraft ne modélise pas encore le géoïde (la forme du niveau moyen de la mer).
+- La hauteur du bloc Géographique est approximative : Fabrilo ne modélise pas encore le géoïde (la forme du niveau moyen de la mer).
 
 ## Dépannage
 

@@ -11,8 +11,8 @@ Quelques termes employés sur cette page :
 - **Système de coordonnées (SCR).** Le système cartographique qui donne à chaque lieu deux nombres, en mètres. En France, le Lambert 93 et les zones CC (CC42 à CC50) sont courants. Chacun a un code numérique (EPSG 2154 pour le Lambert 93).
 - **Point de base.** Les coordonnées sur la carte de l’origine de votre modèle, le point (0, 0, 0). L’Est est la distance vers l’est, le Nord la distance vers le nord, la Hauteur l’altitude.
 - **Rotation de la grille.** L’angle entre la grille de la carte et celle de votre projet, dans le sens trigonométrique. Laissez 0 si les axes de votre bâtiment suivent la carte.
-- **Nord de la grille et nord géographique.** Le nord de la grille est la direction des lignes verticales de la carte. Le nord géographique pointe vers le pôle Nord. Ils diffèrent légèrement, et l’écart augmente en s’éloignant du centre de la zone. BIMCraft calcule l’angle du nord géographique et dessine côte à côte le nord du projet, le nord de la grille et le nord géographique.
-- **Point de repère topographique.** Un repère dont vous connaissez les coordonnées, comme un piquet ou un angle de parcelle. Une fois saisi, BIMCraft montre sa position dans votre modèle.
+- **Nord de la grille et nord géographique.** Le nord de la grille est la direction des lignes verticales de la carte. Le nord géographique pointe vers le pôle Nord. Ils diffèrent légèrement, et l’écart augmente en s’éloignant du centre de la zone. Fabrilo calcule l’angle du nord géographique et dessine côte à côte le nord du projet, le nord de la grille et le nord géographique.
+- **Point de repère topographique.** Un repère dont vous connaissez les coordonnées, comme un piquet ou un angle de parcelle. Une fois saisi, Fabrilo montre sa position dans votre modèle.
 
 ## Étapes
 
@@ -26,7 +26,7 @@ Quelques termes employés sur cette page :
 
 **Résultat :** la boîte de dialogue se ferme et un message confirme « Localisation du projet appliquée ».
 
-Quand vous rouvrez la boîte de dialogue, elle montre ce que vous avez saisi et les informations calculées par BIMCraft : l’angle du nord géographique, la latitude et la longitude du point de base, la convergence des méridiens (l’angle entre le nord de la grille et le nord géographique), le coefficient d’échelle au point et la position du repère dans le modèle.
+Quand vous rouvrez la boîte de dialogue, elle montre ce que vous avez saisi et les informations calculées par Fabrilo : l’angle du nord géographique, la latitude et la longitude du point de base, la convergence des méridiens (l’angle entre le nord de la grille et le nord géographique), le coefficient d’échelle au point et la position du repère dans le modèle.
 
 ## Options
 
@@ -57,10 +57,10 @@ L’Est et le Nord ne tombent pas dans la zone du système choisi. Vérifiez le 
 Saisissez une échelle proche de 1, comme `1` ou `0,9996`.
 
 **« Ce projet contient plusieurs sites. »**
-BIMCraft ne peut placer sur la Terre qu’un projet ayant un seul site. Supprimez d’abord les sites en trop.
+Fabrilo ne peut placer sur la Terre qu’un projet ayant un seul site. Supprimez d’abord les sites en trop.
 
 **Je ne trouve pas mon système de coordonnées.**
-Seuls les systèmes intégrés à BIMCraft sont proposés, et uniquement ceux en mètres. Les systèmes en latitude et longitude ne servent pas à placer un projet.
+Seuls les systèmes intégrés à Fabrilo sont proposés, et uniquement ceux en mètres. Les systèmes en latitude et longitude ne servent pas à placer un projet.
 
 ## Voir aussi
 

@@ -8,7 +8,7 @@ Sélectionnez des éléments dans la vue 3D pour les mettre en évidence, puis d
 
 Quelques mots employés sur cette page :
 
-- **Accroche.** Pendant que vous pointez, BIMCraft capte le point remarquable le plus proche à quelques pixels près : une extrémité (un angle), le milieu d'une arête, un point d'une arête ou d'une face, ou le sol. Un repère et une étiquette indiquent lequel.
+- **Accroche.** Pendant que vous pointez, Fabrilo capte le point remarquable le plus proche à quelques pixels près : une extrémité (un angle), le milieu d'une arête, un point d'une arête ou d'une face, ou le sol. Un repère et une étiquette indiquent lequel.
 - **Point de départ / point d'arrivée.** Le point d'où part le déplacement et celui où il arrive.
 
 ## Sélectionner des éléments
@@ -32,7 +32,7 @@ Il n'est pas encore possible de désigner un élément au clavier seul ; les uti
 ## Déplacer précisément avec l'outil Déplacer
 
 1. Sélectionnez les éléments à déplacer.
-2. Choisissez **Déplacer** dans la barre d'outils en bas. **Raccourci :** `M`. Sans sélection, BIMCraft affiche « Sélectionnez d'abord un élément à déplacer ».
+2. Choisissez **Déplacer** dans la barre d'outils en bas. **Raccourci :** `M`. Sans sélection, Fabrilo affiche « Sélectionnez d'abord un élément à déplacer ».
 3. Cliquez sur le point de départ ; l'accroche vous aide à prendre un angle ou un milieu.
 4. Pointez dans la direction du déplacement. Une ligne élastique et une étiquette montrent la distance.
 5. Cliquez sur le point d'arrivée, ou saisissez la distance en mètres (par exemple `2.5`, avec un point comme séparateur décimal) et appuyez sur **Entrée**.

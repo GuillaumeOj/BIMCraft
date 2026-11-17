@@ -143,7 +143,7 @@ Une valeur est négative, nulle ou non physique, par exemple un coefficient de P
 Une valeur n'a pas de document ou pas d'article. Chaque valeur a besoin des deux.
 
 **« the library source is not valid at line …, column … »**
-Le fichier n'est pas un JSON valide, ou utilise une clé que BIMCraft ne connaît pas. Vérifiez l'endroit indiqué par le message.
+Le fichier n'est pas un JSON valide, ou utilise une clé que Fabrilo ne connaît pas. Vérifiez l'endroit indiqué par le message.
 
 ## Voir aussi
 

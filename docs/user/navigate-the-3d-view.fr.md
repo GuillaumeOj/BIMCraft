@@ -20,7 +20,7 @@ Quelques mots employés sur cette page :
 | Panoramique | Clic molette et glisser, ou Maj + glisser | Deux doigts |
 | Zoom | Molette, ou Ctrl + molette | Pincer |
 
-À la première ouverture, une carte **Se déplacer dans le modèle** rappelle ces gestes. **J'ai compris** la masque jusqu'au prochain démarrage de BIMCraft ; **Ne plus afficher** la masque définitivement.
+À la première ouverture, une carte **Se déplacer dans le modèle** rappelle ces gestes. **J'ai compris** la masque jusqu'au prochain démarrage de Fabrilo ; **Ne plus afficher** la masque définitivement.
 
 ## Se déplacer au clavier
 
@@ -54,7 +54,7 @@ L'infobulle de chaque commande indique son raccourci. La barre d'état, en bas �
 
 ## Désactiver les raccourcis à une touche
 
-Les raccourcis d'une seule lettre (`V`, `M`, `B`, `P`, `S`) peuvent être déclenchés par erreur, par exemple par un logiciel de reconnaissance vocale. Pour les désactiver, décochez **Raccourcis à une touche** dans la barre de titre, à côté du choix de la langue. BIMCraft retient ce choix.
+Les raccourcis d'une seule lettre (`V`, `M`, `B`, `P`, `S`) peuvent être déclenchés par erreur, par exemple par un logiciel de reconnaissance vocale. Pour les désactiver, décochez **Raccourcis à une touche** dans la barre de titre, à côté du choix de la langue. Fabrilo retient ce choix.
 
 **Résultat :** ces lettres ne fonctionnent plus que lorsque la vue 3D a le clavier (cliquez dedans, ou atteignez-la avec Tab). Les raccourcis avec une touche de modification, comme Ctrl + Maj + M, et les touches propres à la vue 3D (flèches, `F`, Échap, valeurs saisies) restent actifs. Les infobulles ne citent plus les raccourcis à une touche.
 
@@ -66,16 +66,16 @@ Les raccourcis d'une seule lettre (`V`, `M`, `B`, `P`, `S`) peuvent être décle
 ## Dépannage
 
 **La vue 3D affiche « La vue 3D n'est pas disponible sur cet ordinateur ».**
-BIMCraft affiche la 3D avec votre carte graphique grâce à une fonction du navigateur appelée WebGPU. Certains ordinateurs ne la proposent pas encore, notamment sous Linux. Votre projet, ses panneaux et l'édition restent disponibles ; seule la vue 3D manque. Mettez à jour votre système et vos pilotes graphiques ; sous Linux, une prochaine version de BIMCraft affichera la 3D sans WebGPU.
+Fabrilo affiche la 3D avec votre carte graphique grâce à une fonction du navigateur appelée WebGPU. Certains ordinateurs ne la proposent pas encore, notamment sous Linux. Votre projet, ses panneaux et l'édition restent disponibles ; seule la vue 3D manque. Mettez à jour votre système et vos pilotes graphiques ; sous Linux, une prochaine version de Fabrilo affichera la 3D sans WebGPU.
 
 **La vue 3D affiche « La vue 3D s'est arrêtée ».**
-La carte graphique ne répond plus, ou le modèle est trop volumineux pour elle. Votre modèle est intact. Choisissez **Recharger la vue**. Si cela recommence peu après, redémarrez BIMCraft. **Copier les détails** copie une courte description technique (sans contenu du modèle) pour signaler le problème.
+La carte graphique ne répond plus, ou le modèle est trop volumineux pour elle. Votre modèle est intact. Choisissez **Recharger la vue**. Si cela recommence peu après, redémarrez Fabrilo. **Copier les détails** copie une courte description technique (sans contenu du modèle) pour signaler le problème.
 
 **La vue reste sur « Chargement de la vue 3D… ».**
 Au bout de dix secondes, elle affiche « Toujours en cours… » et propose **Annuler**. Annulez, puis choisissez **Recharger la vue**.
 
 **Un lien vers le guide ne s'ouvre pas.**
-BIMCraft ouvre les pages du guide dans votre navigateur web et a besoin d'une connexion internet pour cela. S'il n'y parvient pas, il affiche l'adresse de la page pour que vous puissiez la copier dans votre navigateur.
+Fabrilo ouvre les pages du guide dans votre navigateur web et a besoin d'une connexion internet pour cela. S'il n'y parvient pas, il affiche l'adresse de la page pour que vous puissiez la copier dans votre navigateur.
 
 **Les lettres comme `P` ou `S` ne font rien.**
 Ces raccourcis sont inactifs quand une boîte de dialogue est ouverte ou pendant la saisie dans un champ. Fermez la boîte de dialogue ou cliquez d'abord dans la vue 3D. Si **Raccourcis à une touche** est décoché, elles ne fonctionnent que lorsque la vue 3D a le clavier (voir plus haut).
