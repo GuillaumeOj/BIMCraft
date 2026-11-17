@@ -1,5 +1,5 @@
 import { defineConfig, devices } from "@playwright/test";
-import { browserLogFile } from "./e2e/support/browser-log";
+import { browserLogFile, outputDir } from "./e2e/support/browser-log";
 
 // WebGPU for the 3D viewport specs. Chromium's Dawn uses Metal on macOS, so it needs no adapter flag.
 // Elsewhere there is no graphics card (CI), so it falls back to SwiftShader, a software Vulkan.
@@ -42,6 +42,8 @@ const chromium = {
 
 export default defineConfig({
   testDir: "e2e",
+  // Where Chromium's logs go as well (e2e/support/browser-log.ts).
+  outputDir,
   forbidOnly: true,
   retries: CI ? 1 : 0,
   reporter: [["list"], ["html", { open: "never" }]],
@@ -57,7 +59,7 @@ export default defineConfig({
     {
       name: "gpu",
       testMatch: gpuSpecs,
-      dependencies: process.env["CI"] ? ["chromium"] : [],
+      dependencies: CI ? ["chromium"] : [],
       workers: 1,
       use: chromium,
     },

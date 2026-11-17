@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, type Locator, type Page, type TestInfo, test } from "@playwright/test";
-import { browserLogSize, gpuLogLines } from "./browser-log";
+import { browserLogSize, gpuLogLines, type KeptLines } from "./browser-log";
 
 // Scene deltas written by a Rust test from known documents (fixtures/README.md).
 const fixture = (name: string) => [
@@ -188,7 +188,7 @@ export async function selectAnElement(page: Page, canvas: Locator) {
   );
 }
 
-const logs = new WeakMap<Page, { kept: string[]; dropped: number; browserLogFrom: number }>();
+const logs = new WeakMap<Page, KeptLines & { browserLogFrom: number }>();
 /** A GPU fault can log on every frame: the first lines name the cause, the rest only repeat it. */
 const KEPT_LINES = 200;
 
@@ -216,7 +216,7 @@ const UNREADABLE = "(the page can no longer be read)";
 const ADAPTER_WAIT_MS = 2000;
 
 /** Kept lines, then how many were left out. */
-const withDropped = ({ kept, dropped }: { kept: string[]; dropped: number }) =>
+const withDropped = ({ kept, dropped }: KeptLines) =>
   dropped ? [...kept, `(${dropped} more lines not kept)`] : kept;
 
 /** The browser and the WebGPU adapter the test ran on, which a software renderer's faults depend on. */
