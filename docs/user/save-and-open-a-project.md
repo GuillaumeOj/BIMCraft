@@ -28,7 +28,7 @@ A project saved by an earlier version of BIMCraft opens like any other. Its cont
 ## Troubleshooting
 
 **"The file is not a Fabrilo project"**
-The file was made by another program, or is not a database at all. Check that you picked the right file. Fabrilo refuses to change files that are not its own. Projects saved under the former name, BIMCraft, are refused too: Fabrilo does not open them.
+The file was made by another program, or is not a database at all. Check that you picked the right file. Fabrilo refuses to change files that are not its own.
 
 **"The project uses file format … this version reads up to …" or "The project uses version … of the "core" schema"**
 The project was saved by a newer version of BIMCraft. Update BIMCraft to open it. The file is left unchanged.
