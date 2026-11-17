@@ -45,7 +45,7 @@ export function GeorefProvider({ children }: { children: ReactNode }) {
   const api = useApi();
   const [state, setState] = useState<GeorefState>({ status: "loading" });
   const [dialogOpen, setDialogOpen] = useState(false);
-  const { modalOpen } = useShellState();
+  const { isModalOpen } = useShellState();
   const latest = useRef(0);
 
   const load = useCallback(async () => {
@@ -88,13 +88,13 @@ export function GeorefProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       // A modal dialog keeps the keyboard.
-      if (!isOpenShortcut(event) || modalOpen) return;
+      if (!isOpenShortcut(event) || isModalOpen()) return;
       event.preventDefault();
       setDialogOpen(true);
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [modalOpen]);
+  }, [isModalOpen]);
 
   const value = useMemo<Georef>(
     () => ({

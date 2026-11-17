@@ -23,6 +23,11 @@ export type ShellState = {
   /** Tells the shell that a modal dialog opened; the returned call tells it that it closed. */
   registerModal: () => () => void;
   /**
+   * Whether a modal dialog is open right now. Unlike `modalOpen` it never lags a commit behind, so
+   * a key handler reads it at event time; its identity never changes.
+   */
+  isModalOpen: () => boolean;
+  /**
    * Shows `message` for a few seconds and announces it. With `undoable`, the toast offers Undo for
    * as long as the step it announces is the last one of the history.
    */
@@ -71,10 +76,18 @@ export function ShellStateProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => () => clearTimeout(timer.current), []);
 
+  // The count also lives in a ref, updated at once: a key pressed before the state reaches the
+  // listeners (a commit is not yet painted) must still see the dialog that just opened or closed.
+  const openModals = useRef(0);
   const registerModal = useCallback(() => {
+    openModals.current += 1;
     setModals((count) => count + 1);
-    return () => setModals((count) => count - 1);
+    return () => {
+      openModals.current -= 1;
+      setModals((count) => count - 1);
+    };
   }, []);
+  const isModalOpen = useCallback(() => openModals.current > 0, []);
 
   const notify = useCallback(
     (message: string, options: { undoable?: boolean } = {}) => {
@@ -123,8 +136,15 @@ export function ShellStateProvider({ children }: { children: ReactNode }) {
   };
 
   const value = useMemo<ShellState>(
-    () => ({ modalOpen: modals > 0, registerModal, notify, singleKeys, setSingleKeys }),
-    [modals, registerModal, notify, singleKeys, setSingleKeys],
+    () => ({
+      modalOpen: modals > 0,
+      registerModal,
+      isModalOpen,
+      notify,
+      singleKeys,
+      setSingleKeys,
+    }),
+    [modals, registerModal, isModalOpen, notify, singleKeys, setSingleKeys],
   );
 
   return (
