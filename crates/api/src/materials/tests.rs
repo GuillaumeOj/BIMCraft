@@ -721,7 +721,7 @@ fn errors_carry_a_reason_and_no_values() {
     for (error, reason, key) in cases {
         assert_eq!(error.reason(), reason);
         assert_eq!(error.key(), key);
-        assert!(!error.to_string().is_empty());
+        assert_ne!(error.to_string(), "");
         let response = crate::jsonrpc::error_response(&json!(1), &ApiError::Materials(error));
         assert_eq!(response["error"]["code"], codes::REJECTED);
         assert_eq!(response["error"]["data"]["reason"], reason);

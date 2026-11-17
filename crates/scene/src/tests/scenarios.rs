@@ -57,7 +57,7 @@ fn editing_one_wall_remeshes_exactly_that_wall() {
         assert_eq!(after[index], before[index], "the others keep their mesh");
     }
     // Reading the meshes did not generate anything.
-    assert!(h.calls.take().is_empty());
+    assert_eq!(h.calls.take(), [] as [(String, EntityId); 0]);
 }
 
 #[test]
@@ -107,11 +107,11 @@ fn a_command_that_changes_no_geometry_remeshes_nothing() {
     h.run(create(20, "Storey", Vec::new()));
     let update = h.run(set_real(20, "elevation", 3.0));
     assert_eq!(update.remeshed(), 0);
-    assert!(h.calls.take().is_empty());
+    assert_eq!(h.calls.take(), [] as [(String, EntityId); 0]);
     // A second update with no new event has nothing to do either.
     let again = h.scene.update(h.doc.model());
     assert_eq!(again, crate::SceneUpdate::default());
-    assert!(h.calls.take().is_empty());
+    assert_eq!(h.calls.take(), [] as [(String, EntityId); 0]);
 }
 
 #[test]
@@ -123,7 +123,7 @@ fn creating_a_wall_adds_it_and_deleting_it_removes_it() {
     let update = h.run(delete(7));
     assert_eq!(update.removed, ids([7]));
     assert_eq!(update.remeshed(), 0);
-    assert!(h.calls.take().is_empty());
+    assert_eq!(h.calls.take(), [] as [(String, EntityId); 0]);
     assert_eq!(mesh_of(&mut h, 7), None);
     // Objects that are not elements with a representation are not meshed.
     let update = h.run(create(20, "Storey", Vec::new()));
@@ -316,14 +316,14 @@ fn mesh_meshes_a_stale_element_on_demand_and_the_update_still_reports_it() {
     let event = h.execute(set_real(1, "height", 3.0));
     h.scene.apply(&event, h.doc.model());
     // Nothing was computed by `apply`.
-    assert!(h.calls.take().is_empty());
+    assert_eq!(h.calls.take(), [] as [(String, EntityId); 0]);
     let fresh = mesh_of(&mut h, 1);
     assert_ne!(fresh, before);
     assert_eq!(h.calls.elements(), vec![id(1)]);
     // The update reports it without generating it again.
     let update = h.scene.update(h.doc.model());
     assert_eq!(update.changed, ids([1]));
-    assert!(h.calls.take().is_empty());
+    assert_eq!(h.calls.take(), [] as [(String, EntityId); 0]);
     assert_eq!(mesh_of(&mut h, 1), fresh);
 }
 

@@ -164,7 +164,7 @@ fn a_move_remeshes_only_the_elements_it_moves() {
     move_blocks(&host, &[2, 4], [1.0, 0.0, 0.0]);
     let update = delta(&host, Some(seen));
     assert_eq!(element_ids(&update), [2, 4]);
-    assert!(update.meshes.is_empty());
+    assert_eq!(update.meshes.len(), 0);
 }
 
 #[test]
@@ -190,7 +190,7 @@ fn deleting_an_element_removes_it_and_its_mesh_when_nothing_else_uses_it() {
     delete(&host, 2);
     let update = delta(&host, Some(seen));
     assert!(update.removed_meshes.contains(&unit_mesh));
-    assert!(delta(&host, None).elements.is_empty());
+    assert_eq!(delta(&host, None).elements.len(), 0);
 }
 
 #[test]
@@ -215,7 +215,7 @@ fn undo_and_redo_are_deltas_too() {
     history(&host, "history.undo");
     let gone = delta(&host, Some(seen));
     assert_eq!(removed_ids(&gone), [1]);
-    assert!(gone.elements.is_empty());
+    assert_eq!(gone.elements.len(), 0);
     assert_eq!(gone.removed_meshes.len(), 1);
     history(&host, "history.redo");
     let back = delta(&host, None);
@@ -357,7 +357,7 @@ fn a_block_that_draws_nothing_is_not_sent() {
     let host = DocumentHost::open_new().unwrap();
     // A zero height gives no geometry: the element fails and the viewport never hears of it.
     place_block(&host, 1, [0.0; 3], [1.0, 1.0, 0.0]);
-    assert!(delta(&host, None).elements.is_empty());
+    assert_eq!(delta(&host, None).elements.len(), 0);
     assert_eq!(host_revision(&host), 0);
 }
 

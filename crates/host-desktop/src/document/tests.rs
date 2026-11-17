@@ -38,5 +38,5 @@ fn a_scene_delta_the_viewport_would_refuse_is_an_error_not_bytes() {
     // At the limit it is sent; one byte under the limit of the decoder it is not.
     assert_eq!(host.scene_within(None, bytes.len()), Ok(bytes.clone()));
     assert_eq!(host.scene_within(None, bytes.len() - 1), Err(SceneTooLarge));
-    assert!(!SceneTooLarge.to_string().is_empty());
+    assert_ne!(SceneTooLarge.to_string(), "");
 }

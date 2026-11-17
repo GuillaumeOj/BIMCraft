@@ -74,7 +74,7 @@ fn a_query_answers_with_its_result_and_notifies_nothing() {
         response,
         Some(json!({ "jsonrpc": "2.0", "id": "q", "result": result }))
     );
-    assert!(notifications.is_empty());
+    assert_eq!(notifications.len(), 0);
 }
 
 #[test]
@@ -129,7 +129,7 @@ fn errors_carry_the_request_id_and_their_code() {
         assert_eq!(response["id"], method);
         assert_eq!(code(&response), expected, "{method}");
         assert!(response.get("result").is_none());
-        assert!(notifications.is_empty());
+        assert_eq!(notifications.len(), 0);
     }
     send(
         &mut server,
@@ -300,7 +300,7 @@ fn a_change_with_no_effect_notifies_nothing() {
     let empty = json!({ "commands": [] });
     let (response, notifications) = send(&mut server, &request(&json!(1), "model.batch", &empty));
     assert_eq!(response.unwrap()["result"], Value::Null);
-    assert!(notifications.is_empty());
+    assert_eq!(notifications.len(), 0);
     assert_eq!(server.session().document().history().count(), 1);
 }
 
@@ -358,7 +358,7 @@ fn assert_valid_output(handled: &Handled) {
         let response: Value = serde_json::from_str(text).unwrap();
         match &response {
             Value::Array(responses) => {
-                assert!(!responses.is_empty());
+                assert_ne!(responses.len(), 0);
                 responses.iter().for_each(assert_response);
             }
             response => assert_response(response),

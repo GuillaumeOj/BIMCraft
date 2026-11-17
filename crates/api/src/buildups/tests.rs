@@ -558,7 +558,7 @@ fn errors_carry_a_reason_and_the_layer_and_no_values() {
     ];
     for problem in all {
         let mapped = BuildUpsError::from(problem);
-        assert!(!mapped.reason.is_empty());
+        assert_ne!(mapped.reason, "");
         assert_eq!(
             mapped.index.is_some(),
             mapped.reason.ends_with("_thickness")

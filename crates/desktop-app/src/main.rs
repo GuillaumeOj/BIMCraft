@@ -50,7 +50,7 @@ mod tests {
     fn a_closed_window_exits_successfully_and_quietly() {
         let mut log = Vec::new();
         assert_eq!(exit_code(Ok(()), &mut log), ExitCode::SUCCESS);
-        assert!(log.is_empty());
+        assert_eq!(log.len(), 0);
     }
 
     #[test]

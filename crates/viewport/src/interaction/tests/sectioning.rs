@@ -1,10 +1,5 @@
 //! The section box, the clipping planes and the visibility through the interaction (VP-03).
 
-#![expect(
-    clippy::float_cmp,
-    reason = "exact values: typed extents and unit normals"
-)]
-
 use render::{ClipPlane, CutFaces};
 
 use super::*;
@@ -82,7 +77,7 @@ fn hiding_a_category_hides_its_elements_and_they_cannot_be_picked() {
     viewport.command(ViewCommand::Show(VisibilityTarget::Categories(names(&[
         "Wall",
     ]))));
-    assert!(hidden_states(&viewport).is_empty());
+    assert_eq!(hidden_states(&viewport).len(), 0);
     assert_eq!(selected(&mut viewport, CORNER_1), [id(1)]);
     let keys = announced(&mut viewport, &[]);
     assert!(keys.contains(&AnnouncementKey::SelectionCount), "{keys:?}");
@@ -112,7 +107,7 @@ fn hiding_a_discipline_or_the_selection_works_and_drops_the_selection() {
     viewport.command(ViewCommand::Hide(VisibilityTarget::Selection));
     assert_eq!(hidden_states(&viewport), [id(1)]);
     viewport.command(ViewCommand::Show(VisibilityTarget::Selection));
-    assert!(hidden_states(&viewport).is_empty());
+    assert_eq!(hidden_states(&viewport).len(), 0);
     assert_eq!(view_state(&viewport).hidden_selection, 0);
 }
 
@@ -129,20 +124,20 @@ fn isolating_shows_only_the_target_and_escape_ends_it_before_the_selection() {
     assert_eq!(viewport.selection(), [id(2)]);
     // Esc: first the isolation, then the selection.
     viewport.command(ViewCommand::Cancel);
-    assert!(hidden_states(&viewport).is_empty());
+    assert_eq!(hidden_states(&viewport).len(), 0);
     assert_eq!(viewport.selection(), [id(2)]);
     assert!(!view_state(&viewport).isolating);
     viewport.command(ViewCommand::Cancel);
-    assert!(viewport.selection().is_empty());
+    assert_eq!(viewport.selection().len(), 0);
     // Isolating the selection, an empty one first.
     viewport.command(ViewCommand::Isolate(VisibilityTarget::Selection));
-    assert!(hidden_states(&viewport).is_empty());
+    assert_eq!(hidden_states(&viewport).len(), 0);
     click_on(&mut viewport, CORNER_1, NONE);
     viewport.command(ViewCommand::Isolate(VisibilityTarget::Selection));
     assert_eq!(hidden_states(&viewport), [id(2)]);
     viewport.command(ViewCommand::EndIsolate);
     viewport.command(ViewCommand::EndIsolate);
-    assert!(hidden_states(&viewport).is_empty());
+    assert_eq!(hidden_states(&viewport).len(), 0);
     let keys = announced(&mut viewport, &[]);
     assert!(keys.contains(&AnnouncementKey::VisibilityReset), "{keys:?}");
 }
@@ -159,7 +154,7 @@ fn resetting_the_visibility_shows_everything() {
     ))));
     assert_eq!(hidden_states(&viewport), [id(1)]);
     viewport.command(ViewCommand::ResetVisibility);
-    assert!(hidden_states(&viewport).is_empty());
+    assert_eq!(hidden_states(&viewport).len(), 0);
     let state = view_state(&viewport);
     assert!(!state.isolating && state.categories.iter().all(|c| !c.hidden));
 }
@@ -261,7 +256,7 @@ fn an_isolation_whose_elements_are_all_gone_ends_and_a_partial_one_stays() {
     assert_eq!(hidden_states(&viewport), [id(2)]);
     viewport.apply_delta(&removal(2, &[id(2)])).unwrap();
     assert!(view_state(&viewport).isolating);
-    assert!(hidden_states(&viewport).is_empty());
+    assert_eq!(hidden_states(&viewport).len(), 0);
 }
 
 #[test]
@@ -274,7 +269,7 @@ fn a_category_isolation_whose_elements_are_all_gone_ends() {
     viewport.drain_events();
     viewport.apply_delta(&removal(2, &[id(1)])).unwrap();
     assert!(!view_state(&viewport).isolating);
-    assert!(hidden_states(&viewport).is_empty());
+    assert_eq!(hidden_states(&viewport).len(), 0);
     let keys = announced(&mut viewport, &[]);
     assert!(keys.contains(&AnnouncementKey::VisibilityReset), "{keys:?}");
 }
@@ -380,7 +375,7 @@ fn a_plane_removes_what_its_normal_points_to_and_is_flipped_and_removed() {
     viewport.command(ViewCommand::ClipPlaneFlip(5));
     viewport.command(ViewCommand::ClipPlaneRemove(5));
     viewport.command(ViewCommand::ClipPlaneRemove(0));
-    assert!(view_state(&viewport).clip_planes.is_empty());
+    assert_eq!(view_state(&viewport).clip_planes.len(), 0);
     viewport.command(ViewCommand::ClipPlanesClear);
     let keys = announced(&mut viewport, &[]);
     assert!(
@@ -396,7 +391,7 @@ fn planes_are_limited_and_a_plane_without_direction_is_refused() {
         point: [0.0; 3],
         normal: [0.0; 3],
     });
-    assert!(viewport.sect.clipping.planes.is_empty());
+    assert_eq!(viewport.sect.clipping.planes.len(), 0);
     for i in 0..7 {
         viewport.command(ViewCommand::ClipPlaneAdd {
             point: [20.0 + f64::from(i), 0.0, 0.0],
@@ -408,7 +403,7 @@ fn planes_are_limited_and_a_plane_without_direction_is_refused() {
     viewport.command(ViewCommand::ClipPlanePick);
     assert_eq!(viewport.tool_step(), ToolStep::Idle);
     viewport.command(ViewCommand::ClipPlanesClear);
-    assert!(view_state(&viewport).clip_planes.is_empty());
+    assert_eq!(view_state(&viewport).clip_planes.len(), 0);
     viewport.command(ViewCommand::CutFaces(CutFaces::None));
     assert_eq!(view_state(&viewport).cut_faces, CutFaces::None);
     assert_eq!(viewport.sink().clip.1, CutFaces::None);
@@ -431,7 +426,7 @@ fn picking_a_face_puts_a_plane_on_it_facing_the_eye() {
     // Over nothing, a click adds no plane and leaves the pick.
     click(&mut viewport, [2.0, 2.0], NONE);
     assert_eq!(viewport.tool_step(), ToolStep::Idle);
-    assert!(viewport.sect.clipping.planes.is_empty());
+    assert_eq!(viewport.sect.clipping.planes.len(), 0);
     viewport.command(ViewCommand::ClipPlanePick);
     click_on(&mut viewport, [0.0, -0.5, 0.5], NONE);
     assert_eq!(viewport.tool_step(), ToolStep::Idle);

@@ -1,6 +1,7 @@
 # cargo-audit configuration (SEC-05). scripts/check-all.sh runs every audit from the repository
 # root, so this file serves fuzz/ too and a personal ~/.cargo/audit.toml never applies.
-# Keep `ignore` in sync with `[advisories] ignore` in deny.toml, with the reason for each entry.
+# Keep `ignore` in sync with `[advisories] ignore` in deny.toml, with the reason for each entry;
+# the exceptions (RUSTSEC-2024-0429, RUSTSEC-2026-0543) are ignored here only, see deny.toml.
 
 [advisories]
 ignore = [

@@ -461,7 +461,7 @@ mod tests {
         );
         assert_eq!(Property::SpecificHeat.quantity().name(), "specific_heat");
         for property in Property::ALL {
-            assert!(!property.quantity().name().is_empty());
+            assert_ne!(property.quantity().name().len(), 0);
         }
     }
 }

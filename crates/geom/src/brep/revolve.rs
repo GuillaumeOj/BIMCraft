@@ -727,7 +727,6 @@ mod tests {
     }
 
     #[test]
-    #[expect(clippy::float_cmp, reason = "whole numbers")]
     fn small_radii_still_turn_by_steps_of_at_most_90_degrees() {
         // Below half the tolerance the chord clamp allows a half turn per chord; the 90° cap
         // then gives a full turn 4 steps.

@@ -55,7 +55,7 @@ fn removes_values() {
     run(storage.remove("a")).unwrap();
 
     assert_eq!(run(storage.read("a")), Err(StorageError::NotFound));
-    assert!(entries(dir.path()).is_empty());
+    assert_eq!(entries(dir.path()).len(), 0);
 }
 
 #[test]
@@ -104,7 +104,7 @@ fn rejects_keys_outside_the_root_without_touching_the_disk() {
     ] {
         assert!(matches!(result, Err(StorageError::Other { .. })));
     }
-    assert!(entries(dir.path()).is_empty());
+    assert_eq!(entries(dir.path()).len(), 0);
 }
 
 #[test]

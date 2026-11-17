@@ -165,7 +165,6 @@ mod tests {
     }
 
     #[test]
-    #[expect(clippy::float_cmp, reason = "whole numbers")]
     fn step_count_follows_the_sagitta_formula_and_its_limits() {
         // r = 2 m: half angle acos(1 − 1e-3 / 2) = 0.03162, so a full turn needs
         // ⌈2π / 0.06325⌉ = 100 steps, whichever the sign of the sweep.

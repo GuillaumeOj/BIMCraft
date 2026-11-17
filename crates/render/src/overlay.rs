@@ -629,10 +629,6 @@ fn to_f32(value: f64) -> f32 {
 }
 
 #[cfg(test)]
-#[expect(
-    clippy::float_cmp,
-    reason = "the coordinates and colours compared are exact: pure channels and small integers"
-)]
 mod tests {
     use super::*;
     use crate::{Camera, Projection};

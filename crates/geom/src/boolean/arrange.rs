@@ -496,7 +496,7 @@ mod tests {
             (1, BTreeSet::from([Support::Meet(3, 4)])),
         ]);
         assert_eq!(held((0, 1), &cut), [Support::Meet(3, 4)]);
-        assert!(held((0, 2), &cut).is_empty());
+        assert_eq!(held((0, 2), &cut).len(), 0);
     }
 
     #[test]

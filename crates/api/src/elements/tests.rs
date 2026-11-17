@@ -236,7 +236,7 @@ fn a_refusal_over_json_rpc_carries_its_reason() {
     let response: Value = serde_json::from_str(&handled.response.unwrap()).unwrap();
     assert_eq!(response["error"]["code"], codes::REJECTED);
     assert_eq!(response["error"]["data"]["reason"], "empty");
-    assert!(handled.notifications.is_empty());
+    assert_eq!(handled.notifications, [] as [String; 0]);
 }
 
 #[test]

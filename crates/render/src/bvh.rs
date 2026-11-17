@@ -394,10 +394,6 @@ impl Bvh {
     /// the right height, the free list and the
     /// tree share no node, and every item is reachable once. Returns the items found.
     #[cfg(test)]
-    #[expect(
-        clippy::float_cmp,
-        reason = "the areas are added up by the same operations, so they agree exactly"
-    )]
     fn check(&self) -> Vec<u32> {
         let mut items = Vec::new();
         let mut reachable = 0;
@@ -484,8 +480,8 @@ mod tests {
     #[test]
     fn an_empty_tree_finds_nothing() {
         let mut tree = Bvh::new();
-        assert!(overlapping(&mut tree, &cube([0.0; 3], 1e9)).is_empty());
-        assert!(tree.check().is_empty());
+        assert_eq!(overlapping(&mut tree, &cube([0.0; 3], 1e9)).len(), 0);
+        assert_eq!(tree.check().len(), 0);
     }
 
     #[test]
@@ -508,11 +504,14 @@ mod tests {
             overlapping(&mut tree, &cube([1e7 - 1.0, 1e7 - 1.0, -1.0], 3.0)),
             vec![0]
         );
-        assert!(overlapping(&mut tree, &cube([-0.5, -0.5, -0.5], 1.0)).is_empty());
+        assert_eq!(
+            overlapping(&mut tree, &cube([-0.5, -0.5, -0.5], 1.0)).len(),
+            0
+        );
         for leaf in leaves {
             tree.remove(leaf);
         }
-        assert!(tree.check().is_empty());
+        assert_eq!(tree.check().len(), 0);
         // Removed nodes are reused.
         let nodes = tree.nodes.len();
         tree.insert(cube([0.0; 3], 1.0), 7);
@@ -557,7 +556,7 @@ mod tests {
     #[test]
     fn clusters_split_the_tree_into_small_neighbourhoods() {
         let mut tree = Bvh::new();
-        assert!(clusters(&mut tree, 4).is_empty());
+        assert_eq!(clusters(&mut tree, 4).len(), 0);
         // A row of 4 cubes 2 m apart: one cluster, or one per cube.
         for i in 0..4_u32 {
             tree.insert(cube([f64::from(i) * 2.0, 0.0, 0.0], 1.0), i);
