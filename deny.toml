@@ -8,7 +8,9 @@ version = 2
 yanked = "deny"
 # Keep in sync with .cargo/audit.toml. Each entry says why it cannot be fixed here.
 # RUSTSEC-2024-0429 (glib, unsound) is ignored there only: cargo-deny does not report unsound
-# advisories of dependencies, and an unused ignore here warns.
+# advisories of dependencies, and an unused ignore here warns. The same goes for RUSTSEC-2026-0543
+# (chrono, unmaintained, via serde_with and Tauri 2.12.5's tauri-utils, no flaw known): cargo-deny
+# does not encounter it, so only .cargo/audit.toml ignores it, with its reason.
 ignore = [
   # Through gtk 0.18 (gtk3-macros), the GTK 3 stack Tauri 2 uses for its Linux webview; no
   # Tauri 2 release moves off it. A compile-time macro helper only, unmaintained, no flaw known.
@@ -18,9 +20,6 @@ ignore = [
   { id = "RUSTSEC-2026-0370", reason = "zvariant via tauri-plugin-opener 2.7.2's zbus 5 (Linux), no flaw known" },
   { id = "RUSTSEC-2026-0371", reason = "zbus_names via tauri-plugin-opener 2.7.2's zbus 5 (Linux), no flaw known" },
   { id = "RUSTSEC-2026-0372", reason = "zvariant_derive via tauri-plugin-opener 2.7.2's zbus 5 (Linux), no flaw known" },
-  # Through serde_with, which tauri-utils =2.10.2 (our Tauri =2.12.5 pin) needs; not ours to replace.
-  # Unmaintained, all versions, no flaw known; drop it when Tauri moves off chrono.
-  { id = "RUSTSEC-2026-0543", reason = "chrono via Tauri 2.12.5's tauri-utils and serde_with, no flaw known" },
 ]
 
 [licenses]
