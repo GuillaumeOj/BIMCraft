@@ -1,10 +1,10 @@
-# BIMCraft — Specifications v0.1
+# Fabrilo — Specifications v0.1
 
 Status: draft for discussion · October 13, 2026
 
 ## 1. Purpose and vision
 
-BIMCraft is an open-source (MIT licence), multi-discipline BIM authoring tool, written from scratch in Rust, that takes a construction project from early studies to construction drawings in one shared model. It runs on desktop first and in the browser later, from the same core code.
+Fabrilo is an open-source (MIT licence), multi-discipline BIM authoring tool, written from scratch in Rust, that takes a construction project from early studies to construction drawings in one shared model. It runs on desktop first and in the browser later, from the same core code.
 
 The product produces three kinds of deliverables from a single source of truth: 3D models, 2D documentation (plans, sections, elevations, sheets) and calculation reports. It covers buildings and civil works, including bridges, across architecture, structure, MEP and thermal engineering.
 
@@ -393,7 +393,7 @@ IFC 4.3 is the primary exchange format and MUST round-trip without loss for ever
 | Point clouds (E57, LAS/LAZ) | Import | Streaming, octree-indexed display | V1 |
 | LandXML | Import | Terrain and alignments | V1 |
 | gbXML | Export | Thermal zones and envelope | Later |
-| RVT | Import (indirect) | A Revit add-in, written in C#, exports from inside Revit to the BIMCraft native format | Later |
+| RVT | Import (indirect) | A Revit add-in, written in C#, exports from inside Revit to the Fabrilo native format | Later |
 | SAF (Structural Analysis Format) | Import + export | Analytical model exchange with other analysis software | V1 |
 | BVBS, DSTV/NC1 | Export | Rebar and steel fabrication data | MVP |
 | glTF 2.0 | Export | Meshes with materials (INT-06) | V1 |
@@ -410,9 +410,9 @@ IFC 4.3 is the primary exchange format and MUST round-trip without loss for ever
 - INT-07 (MVP): components MUST export to IFC as type objects with shared geometry (representation maps), each carrying its library reference (component ID and version) and its parameter values in a property set; instances export as occurrences with their overridden values, plus their own geometry when an override touches a parameter the component declares geometric.
 - INT-08 (MVP): on IFC import, a type carrying a library reference MUST be rebuilt as parametric through the normal type-creation command when that component version is available; otherwise, or when the command rejects its values, it stays static. A rebuilt type replaces the geometry stored in the file. The import report (INT-02) MUST list static types, version mismatches and rejected values.
 - INT-09 (V1): a component library MUST be exportable as an IFC project library (IfcProjectLibrary) of static types for other tools.
-- INT-10 (MVP): location lines (ARC-30) and points (STR-14) MUST map to IFC. Walls and slabs use IfcMaterialLayerSetUsage (OffsetFromReferenceLine, DirectionSense, LayerSetDirection). Columns and beams use IfcMaterialProfileSetUsage (CardinalPoint 1–9 for the bounding-box points, 10 for the centroid, 15 for the shear centre, and ReferenceExtent where it applies). Custom offsets MUST round-trip through the IFC offset values without loss. On import, the cardinal points BIMCraft does not support (11–14 and 16–19) map to the nearest supported point, and the import report (INT-02) lists them.
+- INT-10 (MVP): location lines (ARC-30) and points (STR-14) MUST map to IFC. Walls and slabs use IfcMaterialLayerSetUsage (OffsetFromReferenceLine, DirectionSense, LayerSetDirection). Columns and beams use IfcMaterialProfileSetUsage (CardinalPoint 1–9 for the bounding-box points, 10 for the centroid, 15 for the shear centre, and ReferenceExtent where it applies). Custom offsets MUST round-trip through the IFC offset values without loss. On import, the cardinal points Fabrilo does not support (11–14 and 16–19) map to the nearest supported point, and the import report (INT-02) lists them.
 
-**RVT position.** The .rvt format is closed, undocumented and changes with each Revit version. Native reading is a non-goal; the only planned route is the Revit add-in. The add-in writes the BIMCraft native format directly, so no information is lost through an intermediate IFC step.
+**RVT position.** The .rvt format is closed, undocumented and changes with each Revit version. Native reading is a non-goal; the only planned route is the Revit add-in. The add-in writes the Fabrilo native format directly, so no information is lost through an intermediate IFC step.
 
 **Information management**
 
@@ -555,13 +555,13 @@ Phase 0 is invisible to users but decides the rest: the schema, transactions and
 
 **16.2 Open questions**
 
-- [x] Product name and licensing model — decided: BIMCraft, open source under the MIT licence.
+- [x] Product name and licensing model — decided: Fabrilo, open source under the MIT licence. Changed from BIMCraft on 2026-11-17, see [ADR 0025](dev/adr/0025-rename-to-fabrilo.md) for the reasons and the identifiers.
 - [x] Which CRS set does the MVP cover, and is a full EPSG implementation worth building from scratch? Decided: see the CRS strategy in section 7.
-- [x] Revit add-in output: IFC, or the BIMCraft native format? Decided: the add-in writes the BIMCraft native format directly.
+- [x] Revit add-in output: IFC, or the Fabrilo native format? Decided: the add-in writes the Fabrilo native format directly.
 - [x] Which national annexes beyond France, and in what order? Decided: France, Germany, Spain, Italy, then other European countries; then North America, then South America; long term, every country worldwide.
 - [x] Is collaboration built on serialized commands alone, or on a CRDT layer? Decided: server-ordered commands, last-writer-wins per property, plus element or discipline ownership.
 - [ ] Hosting and pricing model for the browser product and server-side solvers? Currently none planned: every server-side part is self-hostable.
-- [ ] Register the BIMCraft trademark before public launch (deferred in the specialist review).
+- [ ] Register the Fabrilo trademark (word mark, classes 9 and 42) before public launch (deferred in the specialist review).
 
 **16.3 Glossary**
 
