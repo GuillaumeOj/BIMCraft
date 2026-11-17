@@ -1,6 +1,6 @@
 # EPSG definitions of the MVP CRS set
 
-`epsg.tsv` holds the coordinate reference systems BIMCraft offers (GEOREF-02): WGS 84, ETRS89 and
+`epsg.tsv` holds the coordinate reference systems Fabrilo offers (GEOREF-02): WGS 84, ETRS89 and
 RGF93 geographic CRSs, Lambert-93 (2154), the conic zones CC42 to CC50 (3942 to 3950), ETRS89 /
 UTM zones 28N to 38N (25828 to 25838) and WGS 84 / UTM zones 1N to 60N and 1S to 60S (32601 to
 32660, 32701 to 32760), with their datums, ellipsoids, prime meridian, areas of use and the

@@ -8,7 +8,7 @@
 
 use std::f64::consts::TAU;
 
-use bimcraft_fuzz::{RawProfile, profile_loops};
+use fabrilo_fuzz::{RawProfile, profile_loops};
 use geom::{Point2, Profile, RevolutionAxis, RevolutionError, Solid, Vector2};
 use libfuzzer_sys::fuzz_target;
 

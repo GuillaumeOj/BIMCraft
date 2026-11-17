@@ -1,4 +1,4 @@
-//! Georeferencing for `BIMCraft` (spec §7): where a project lies on Earth.
+//! Georeferencing for `Fabrilo` (spec §7): where a project lies on Earth.
 //!
 //! A [`Georeference`] links the local engineering frame of the model to a projected coordinate
 //! reference system, named by its [`EpsgCode`] (GEOREF-01): the projected coordinates of the

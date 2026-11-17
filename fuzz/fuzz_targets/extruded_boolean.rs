@@ -18,7 +18,7 @@
 
 #![no_main]
 
-use bimcraft_fuzz::{
+use fabrilo_fuzz::{
     Contract, RawProfile, all_located, check_tessellation, direction, profile_loops,
     unless_too_close, volume_slack,
 };

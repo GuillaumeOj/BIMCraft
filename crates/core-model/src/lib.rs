@@ -1,4 +1,4 @@
-//! The `BIMCraft` model kernel: entities, attribute tables, relationships, IDs and units (spec §5),
+//! The `Fabrilo` model kernel: entities, attribute tables, relationships, IDs and units (spec §5),
 //! and the dependency graph that keeps derived data up to date (CORE-08).
 //!
 //! This crate builds for native targets and `wasm32-unknown-unknown` (ARCH-01) and never touches

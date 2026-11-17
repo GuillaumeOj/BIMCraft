@@ -1,4 +1,4 @@
-//! Interfaces between the `BIMCraft` core and the platform it runs on.
+//! Interfaces between the `Fabrilo` core and the platform it runs on.
 //!
 //! Core crates never touch the operating system directly (ARCH-02), so the same code builds for
 //! desktop and for `wasm32-unknown-unknown` (ARCH-01). Each host (desktop, browser) implements

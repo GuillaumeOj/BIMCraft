@@ -4,7 +4,7 @@
 # How to run: docs/dev/quality.md.
 
 [package]
-name = "bimcraft-fuzz"
+name = "fabrilo-fuzz"
 version = "0.0.0"
 edition = "2024"
 license = "MIT"

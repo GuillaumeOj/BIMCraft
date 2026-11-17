@@ -1,4 +1,4 @@
-//! The public extension interfaces of the `BIMCraft` core (ARCH-03, spec §8).
+//! The public extension interfaces of the `Fabrilo` core (ARCH-03, spec §8).
 //!
 //! Discipline crates (`disc-*`) and third-party plugins reach the core through this crate only,
 //! plus the `platform` traits. It holds no logic: each module re-exports, by name, the items an
