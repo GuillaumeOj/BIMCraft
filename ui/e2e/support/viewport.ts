@@ -211,26 +211,38 @@ function watchViewStops(page: Page) {
   page.on("crash", () => keep("the page crashed"));
 }
 
+const UNREADABLE = "(the page can no longer be read)";
+/** How long the failure report waits for an adapter: a hung GPU process never gives one. */
+const ADAPTER_WAIT_MS = 2000;
+
+/** Kept lines, then how many were left out. */
+const withDropped = ({ kept, dropped }: { kept: string[]; dropped: number }) =>
+  dropped ? [...kept, `(${dropped} more lines not kept)`] : kept;
+
 /** The browser and the WebGPU adapter the test ran on, which a software renderer's faults depend on. */
 async function describeGpu(page: Page) {
   const browser = page.context().browser()?.version() ?? "unknown";
   const adapter = await page
-    .evaluate(async () => {
-      const found = await navigator.gpu?.requestAdapter();
+    .evaluate(async (wait) => {
+      const timeout = new Promise<"no answer">((resolve) =>
+        setTimeout(() => resolve("no answer"), wait),
+      );
+      const found = await Promise.race([navigator.gpu?.requestAdapter(), timeout]);
+      if (found === "no answer") return found;
       if (!found) return "none";
       const { vendor, architecture, device, description } = found.info;
       return [vendor, architecture, device, description].filter(Boolean).join(" / ") || "unnamed";
-    })
-    .catch(() => "(the page can no longer be read)");
+    }, ADAPTER_WAIT_MS)
+    .catch(() => UNREADABLE);
   return [`Chromium: ${browser}`, `WebGPU adapter: ${adapter}`];
 }
 
 /** What Chromium itself logged about its GPU process during the test: a hang, a crash, a lost context. */
-function browserGpuLog(from: number) {
+function browserGpuLog(from: number | undefined) {
+  if (from === undefined) return ["Browser GPU log: unknown start"];
   const logged = gpuLogLines(from, KEPT_LINES);
   if (logged === null) return ["Browser GPU log: none written"];
-  const dropped = logged.dropped ? [`(${logged.dropped} more lines not kept)`] : [];
-  return [`Browser GPU log: ${logged.kept.length} lines`, ...logged.kept, ...dropped];
+  return [`Browser GPU log: last ${logged.kept.length} lines`, ...withDropped(logged)];
 }
 
 /**
@@ -242,23 +254,23 @@ function browserGpuLog(from: number) {
  */
 async function attachViewStop(page: Page, testInfo: TestInfo) {
   if (testInfo.status === testInfo.expectedStatus) return;
+  const logged = logs.get(page);
+  // Read before asking for an adapter below, whose own lines are not the test's.
+  const browser = browserGpuLog(logged?.browserLogFrom);
   const read = (locator: Locator) =>
     locator
       .allInnerTexts()
       .then((texts) => texts.join(" / "))
-      .catch(() => "(the page can no longer be read)");
-  const [shown, card, gpu] = await Promise.all([
+      .catch(() => UNREADABLE);
+  const [shown, card] = await Promise.all([
     read(status(page)),
     read(page.locator(".vp-card-error")),
-    describeGpu(page),
   ]);
+  const gpu = await describeGpu(page);
   const state = [`Status: ${shown || "none"}`, `Error card: ${card || "none"}`, ...gpu];
-  const logged = logs.get(page);
-  const lines = logged?.kept ?? [];
-  const dropped = logged?.dropped ? [`(${logged.dropped} more lines not kept)`] : [];
-  const browser = browserGpuLog(logged?.browserLogFrom ?? 0);
+  const lines = logged ? withDropped(logged) : [];
   await testInfo.attach("3D view", {
-    body: [...state, "", ...lines, ...dropped, "", ...browser].join("\n"),
+    body: [...state, "", ...lines, "", ...browser].join("\n"),
     contentType: "text/plain",
   });
 }

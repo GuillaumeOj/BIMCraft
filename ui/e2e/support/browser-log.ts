@@ -1,18 +1,26 @@
-import { closeSync, fstatSync, openSync, readSync, statSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { closeSync, fstatSync, mkdirSync, openSync, readSync, statSync } from "node:fs";
 import { join } from "node:path";
 
 /**
  * Where Chromium writes its own log (`--log-file`). Playwright keeps the browser's stderr in its
  * debug log only, so a GPU process that hangs or dies would leave no trace in the report. Each
  * worker launches one browser, and the config and the specs are loaded in that same process, so
- * the process id gives the worker its own file.
+ * the process id gives the worker its own file. A browser launched elsewhere (UI mode, a reused
+ * browser) writes no such file, and the attachment says so. The folder is Playwright's output
+ * folder, which it empties at the start of each run, so the logs do not pile up.
  */
-export const browserLogFile = join(tmpdir(), `bimcraft-e2e-chromium-${process.pid}.log`);
+const folder = join(import.meta.dirname, "..", "..", "test-results");
+mkdirSync(folder, { recursive: true });
+export const browserLogFile = join(folder, `e2e-chromium-${process.pid}.log`);
 
-/** The lines that tell why a WebGPU device was lost; the rest of Chromium's log is noise here. */
-const GPU_LINE = /gpu|webgpu|dawn|swiftshader|vulkan|context lost|watchdog|hung|crash/i;
-/** What one test may add to the log before the rest is not read: a bound on the attachment. */
+/**
+ * Chromium prefixes each line with its level and source file
+ * (`[pid:tid:time:LEVEL:gpu/…/file.cc(12)] message`). The source path names `gpu` on every line of
+ * the GPU process, so the words are looked for in the message only.
+ */
+const LINE = /^\[[^\]]*:(INFO|WARNING|ERROR|FATAL|VERBOSE\d*):[^\]]*\]\s?(.*)$/;
+const ABOUT_GPU = /webgpu|dawn|swiftshader|vulkan|context|lost|watchdog|hung|crash|exited|gpu/i;
+/** How much of the log one test may add before only its end is read: a bound on the read. */
 const MAX_BYTES = 8 * 1024 * 1024;
 
 /** The current length of the log, to read only what a test adds to it. */
@@ -24,28 +32,42 @@ export function browserLogSize(): number {
   }
 }
 
-/**
- * The GPU-related lines Chromium logged since `from`, at most `limit` of them, and how many more
- * were left out. `null` when the browser wrote no log.
- */
-export function gpuLogLines(
-  from: number,
-  limit: number,
-): { kept: string[]; dropped: number } | null {
-  let text: string;
+/** The log from `from` to its end, or its last `MAX_BYTES` when the test logged more. */
+function readFrom(from: number): string | null {
   try {
     const file = openSync(browserLogFile, "r");
     try {
-      const length = Math.min(MAX_BYTES, Math.max(0, fstatSync(file).size - from));
-      const buffer = Buffer.alloc(length);
-      readSync(file, buffer, 0, length, from);
-      text = buffer.toString("utf8");
+      const size = fstatSync(file).size;
+      const start = Math.max(from, size - MAX_BYTES);
+      const buffer = Buffer.alloc(Math.max(0, size - start));
+      readSync(file, buffer, 0, buffer.length, start);
+      return buffer.toString("utf8");
     } finally {
       closeSync(file);
     }
   } catch {
     return null;
   }
-  const lines = text.split("\n").filter((line) => GPU_LINE.test(line));
-  return { kept: lines.slice(0, limit), dropped: Math.max(0, lines.length - limit) };
+}
+
+/** Whether a line is a warning or worse, or speaks of the GPU in its message. */
+function aboutGpu(line: string): boolean {
+  const parsed = LINE.exec(line);
+  if (parsed === null) return ABOUT_GPU.test(line);
+  const [, level = "", message = ""] = parsed;
+  return level === "WARNING" || level === "ERROR" || level === "FATAL" || ABOUT_GPU.test(message);
+}
+
+/**
+ * The GPU-related lines Chromium logged since `from`: the last `limit` of them, where a loss
+ * shows up, and how many earlier ones were left out. `null` when the browser wrote no log.
+ */
+export function gpuLogLines(
+  from: number,
+  limit: number,
+): { kept: string[]; dropped: number } | null {
+  const text = readFrom(from);
+  if (text === null) return null;
+  const lines = text.split("\n").filter(aboutGpu);
+  return { kept: lines.slice(-limit), dropped: Math.max(0, lines.length - limit) };
 }
