@@ -32,5 +32,5 @@ The app icon is an isometric building seen like an X-ray: the finished facade at
   - `32x32.png` (from the small master), `128x128.png`, `128x128@2x.png` and `icon.png` for Linux and the window icon;
   - `icon.ico` for Windows, with 16, 24 and 32 px images from the small master and 48, 64 and 256 px from the full one;
   - `icon.icns`, the macOS icon before macOS 26, shrunk onto Apple's 824 px icon grid;
-  - `BIMCraft.icon`, an Icon Composer file for macOS 26 and later: the master's background colour as the fill, and one glass group per layer (`facade`, `frame`, `rebar`, as 1024 px PNG images). When bundling on macOS, Tauri compiles it with `actool` (Xcode 26 or later) into `Assets.car`, which gives the Liquid Glass icon in its default, dark, clear and tinted appearances.
-- **Preview:** open `BIMCraft.icon` in Icon Composer (Xcode 26 or later) to check the glass appearances, and look at the 16 and 32 px PNG files at full zoom.
+  - `Fabrilo.icon`, an Icon Composer file for macOS 26 and later: the master's background colour as the fill, and one glass group per layer (`facade`, `frame`, `rebar`, as 1024 px PNG images). When bundling on macOS, Tauri compiles it with `actool` (Xcode 26 or later) into `Assets.car`, which gives the Liquid Glass icon in its default, dark, clear and tinted appearances.
+- **Preview:** open `Fabrilo.icon` in Icon Composer (Xcode 26 or later) to check the glass appearances, and look at the 16 and 32 px PNG files at full zoom.
