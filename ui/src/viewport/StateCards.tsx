@@ -104,7 +104,7 @@ export function FailedCard({ reason, repeated, onReload }: FailedProps) {
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(
-        `BIMCraft 3D view stopped: ${reason}\n${navigator.userAgent}`,
+        `Fabrilo 3D view stopped: ${reason}\n${navigator.userAgent}`,
       );
       notify(t("viewport.error.copied"));
     } catch {

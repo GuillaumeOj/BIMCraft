@@ -7,7 +7,7 @@ import { readStored, writeStored } from "../ui/storage";
  * Where the card's dismissal is remembered: "Got it" in session storage (until the application
  * restarts), "Don't show again" in local storage.
  */
-export const HINT_STORAGE_KEY = "bimcraft.viewport.navigationHint";
+export const HINT_STORAGE_KEY = "fabrilo.viewport.navigationHint";
 
 const ROWS = ["orbit", "pan", "zoom", "fit", "fitSelection", "trackpad"] as const;
 

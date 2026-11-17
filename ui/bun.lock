@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "bimcraft-ui",
+      "name": "fabrilo-ui",
       "dependencies": {
         "@tauri-apps/api": "2.12.4",
         "react": "19.3.1",

@@ -18,7 +18,7 @@ describe("Shell", () => {
   it("lays out the title bar, viewport and labelled panel slots", () => {
     renderShell();
     const banner = screen.getByRole("banner");
-    expect(within(banner).getByRole("heading", { level: 1, name: "BIMCraft" })).toBeInTheDocument();
+    expect(within(banner).getByRole("heading", { level: 1, name: "Fabrilo" })).toBeInTheDocument();
     expect(within(banner).getByRole("navigation", { name: "Open views" })).toBeInTheDocument();
     expect(within(banner).getByRole("combobox", { name: "Language" })).toBeInTheDocument();
     expect(screen.getByRole("main", { name: "Viewport" })).toBeInTheDocument();

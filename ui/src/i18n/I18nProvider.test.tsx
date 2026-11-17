@@ -19,7 +19,7 @@ describe("I18nProvider", () => {
     setSystemLanguages(["fr-FR"]);
     const { result } = renderHook(() => useI18n(), { wrapper: I18nProvider });
     expect(result.current.language).toBe("fr");
-    expect(result.current.t("app.name")).toBe("BIMCraft");
+    expect(result.current.t("app.name")).toBe("Fabrilo");
     expect(document.documentElement.lang).toBe("fr");
   });
 
@@ -71,7 +71,7 @@ describe("I18nProvider", () => {
 
   it("renders translated text for its children", () => {
     render(<Name />, { wrapper: I18nProvider });
-    expect(screen.getByText("BIMCraft")).toBeInTheDocument();
+    expect(screen.getByText("Fabrilo")).toBeInTheDocument();
   });
 });
 

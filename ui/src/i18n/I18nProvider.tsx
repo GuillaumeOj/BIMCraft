@@ -18,7 +18,7 @@ import {
 } from "./i18n";
 
 /** Where the manual language choice is kept between sessions. */
-export const OVERRIDE_STORAGE_KEY = "bimcraft.language";
+export const OVERRIDE_STORAGE_KEY = "fabrilo.language";
 
 export type I18n = {
   language: Language;
