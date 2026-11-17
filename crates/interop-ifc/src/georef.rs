@@ -1,5 +1,5 @@
 //! The georeference of a project in IFC 4.3: `IfcProjectedCRS` and `IfcMapConversion`, plus the
-//! survey point in a `BIMCraft_SurveyPoint` property set on `IfcSite` (GEOREF-01, GEOREF-02,
+//! survey point in a `Fabrilo_SurveyPoint` property set on `IfcSite` (GEOREF-01, GEOREF-02,
 //! ADR 0017).
 //!
 //! [`read_georeference`] finds the `IfcMapConversion` from the 3D `'Model'`
@@ -35,7 +35,7 @@ use crate::ifc::{
 use crate::step::{Instance, InstanceBody, Parameter, Record};
 
 /// The name of the property set that holds the survey point.
-pub const SURVEY_POINT_SET: &str = "BIMCraft_SurveyPoint";
+pub const SURVEY_POINT_SET: &str = "Fabrilo_SurveyPoint";
 
 /// The `ContextType` of the context a georeference starts from.
 const MODEL_CONTEXT: &str = "Model";
@@ -166,9 +166,9 @@ pub struct Imported {
     /// The georeference. Its survey point is the one read, if the file holds a valid one.
     pub georeference: Georeference,
     /// The ids of the instances read into the georeference: the map conversion, the projected
-    /// CRS and the `BIMCraft_SurveyPoint` property set found, its relationship and, when valid,
+    /// CRS and the `Fabrilo_SurveyPoint` property set found, its relationship and, when valid,
     /// its properties. The importer maps them; [`Preserved`](crate::preserve::Preserved) keeps
-    /// the others. A survey point set that is not valid is mapped too: `BIMCraft` owns that
+    /// the others. A survey point set that is not valid is mapped too: Fabrilo owns that
     /// set, and an export replaces it instead of adding a second one.
     pub mapped: BTreeSet<u64>,
     /// The model context the map conversion starts from, the `IfcSite` that holds a valid
@@ -692,7 +692,7 @@ pub enum GeorefExportError {
 /// Writes `georeference` as new instances numbered from `first_id`, in a file whose length unit
 /// is `length_unit` metres: an `IfcProjectedCRS` named `EPSG:<code>`, an `IfcMapConversion`
 /// from `targets.context` to it and, with a survey point, three `IfcPropertySingleValue`, the
-/// `BIMCraft_SurveyPoint` `IfcPropertySet` and the `IfcRelDefinesByProperties` attaching it to
+/// `Fabrilo_SurveyPoint` `IfcPropertySet` and the `IfcRelDefinesByProperties` attaching it to
 /// `targets.site`. What `kept` holds is written back as read: the other attributes of the CRS
 /// while it keeps its code, and the `GlobalId`s of the survey point instances; new `GlobalId`s
 /// come from `ids`.

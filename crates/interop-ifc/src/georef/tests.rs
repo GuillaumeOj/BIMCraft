@@ -453,7 +453,7 @@ fn survey_error(edits: &[(u64, &str)], extra: &str) -> SurveyPointError {
         .expect("the survey point is not valid")
 }
 
-const SET: &str = "IFCPROPERTYSET('1kTvXnbbzCWw8lcMd1dR4o',$,'BIMCraft_SurveyPoint',$,";
+const SET: &str = "IFCPROPERTYSET('1kTvXnbbzCWw8lcMd1dR4o',$,'Fabrilo_SurveyPoint',$,";
 const REL: &str = "IFCRELDEFINESBYPROPERTIES('2kTvXnbbzCWw8lcMd1dR4o',$,$,$,";
 
 #[test]
@@ -653,7 +653,7 @@ fn other_property_sets_and_relationships_are_not_the_survey_point() {
                  #21=IFCRELDEFINESBYPROPERTIES('7kTvXnbbzCWw8lcMd1dR4o',$,$,$,(#9),#17);\n\
                  #22=IFCRELDEFINESBYPROPERTIES('8kTvXnbbzCWw8lcMd1dR4o',$,$,$,(#9));\n\
                  #23=IFCRELDEFINESBYPROPERTIES('9kTvXnbbzCWw8lcMd1dR4o',$,$,$,(#9),#24);\n\
-                 #24=(IFCPROPERTYSET('AkTvXnbbzCWw8lcMd1dR4o',$,'BIMCraft_SurveyPoint',$,(#10)));\n\
+                 #24=(IFCPROPERTYSET('AkTvXnbbzCWw8lcMd1dR4o',$,'Fabrilo_SurveyPoint',$,(#10)));\n\
                  #25=(IFCRELDEFINESBYPROPERTIES('BkTvXnbbzCWw8lcMd1dR4o',$,$,$,(#9),#13));";
     let imported = import_ok(&edited(&[], extra));
     assert!(imported.georeference.survey_point().is_some());
@@ -723,7 +723,7 @@ fn writes_the_map_unit_and_the_survey_point_in_metres_whatever_the_project_unit(
              #4=IFCPROPERTYSINGLEVALUE('Eastings',$,IFCLENGTHMEASURE(652010.5),#3);\n\
              #5=IFCPROPERTYSINGLEVALUE('Northings',$,IFCLENGTHMEASURE(6862020.25),#3);\n\
              #6=IFCPROPERTYSINGLEVALUE('OrthogonalHeight',$,IFCLENGTHMEASURE(36.125),#3);\n\
-             #7=IFCPROPERTYSET('{set_id}',$,'BIMCraft_SurveyPoint',$,(#4,#5,#6));\n\
+             #7=IFCPROPERTYSET('{set_id}',$,'Fabrilo_SurveyPoint',$,(#4,#5,#6));\n\
              #8=IFCRELDEFINESBYPROPERTIES('{relationship_id}',$,$,$,(#9),#7);\n"
         )
     );

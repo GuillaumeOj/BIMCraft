@@ -29,7 +29,7 @@ fn writes_the_wall_file_in_canonical_form() {
         written,
         "ISO-10303-21;\nHEADER;\n\
          FILE_DESCRIPTION(('ViewDefinition [ReferenceView]'),'2;1');\n\
-         FILE_NAME('wall.ifc','2026-10-13T12:00:00',('Author'),('Office'),'','BIMCraft','');\n\
+         FILE_NAME('wall.ifc','2026-10-13T12:00:00',('Author'),('Office'),'','Fabrilo','');\n\
          FILE_SCHEMA(('IFC4X3_ADD2'));\nENDSEC;\nDATA;\n\
          #1=IFCPROJECT('0YvctVUKr0kugbFTf53O9L',$,'Project',$,$,$,$,(#4),#2);\n\
          #2=IFCUNITASSIGNMENT((#3));\n\
