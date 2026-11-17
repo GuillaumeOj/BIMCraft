@@ -18,6 +18,9 @@ ignore = [
   { id = "RUSTSEC-2026-0370", reason = "zvariant via tauri-plugin-opener 2.7.2's zbus 5 (Linux), no flaw known" },
   { id = "RUSTSEC-2026-0371", reason = "zbus_names via tauri-plugin-opener 2.7.2's zbus 5 (Linux), no flaw known" },
   { id = "RUSTSEC-2026-0372", reason = "zvariant_derive via tauri-plugin-opener 2.7.2's zbus 5 (Linux), no flaw known" },
+  # Through serde_with, which tauri-utils =2.10.2 (our Tauri =2.12.5 pin) needs; not ours to replace.
+  # Unmaintained, all versions, no flaw known; drop it when Tauri moves off chrono.
+  { id = "RUSTSEC-2026-0543", reason = "chrono via Tauri 2.12.5's tauri-utils and serde_with, no flaw known" },
 ]
 
 [licenses]
