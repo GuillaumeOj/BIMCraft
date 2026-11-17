@@ -21,7 +21,7 @@ fn core_dir() -> PathBuf {
 /// The sample's identifiers are the `u64` of `generated_sample.rs`.
 fn sample_options() -> JsonSchemaOptions {
     JsonSchemaOptions {
-        id: "urn:bimcraft:schema:sample".into(),
+        id: "urn:fabrilo:schema:sample".into(),
         object_id: json!({ "type": "integer", "minimum": 0 }),
     }
 }
@@ -31,7 +31,7 @@ fn sample_options() -> JsonSchemaOptions {
 /// carries the top two of the 128 bits.
 fn core_options() -> JsonSchemaOptions {
     JsonSchemaOptions {
-        id: "urn:bimcraft:schema:core".into(),
+        id: "urn:fabrilo:schema:core".into(),
         object_id: json!({
             "type": "string",
             "pattern": "^[0-3][0-9A-Za-z_$]{21}$",
@@ -76,7 +76,7 @@ fn published_core_schema_is_up_to_date() {
 fn describes_the_namespace() {
     let document: Value =
         serde_json::from_str(include_str!("snapshots/sample.schema.json")).unwrap();
-    assert_eq!(document["$id"], "urn:bimcraft:schema:sample");
+    assert_eq!(document["$id"], "urn:fabrilo:schema:sample");
     assert_eq!(
         document["description"],
         "Objects of the `core` schema, version 2."

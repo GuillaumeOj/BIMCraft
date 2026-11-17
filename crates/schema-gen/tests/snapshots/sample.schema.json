@@ -333,8 +333,8 @@
       "type": "object"
     }
   },
-  "$id": "urn:bimcraft:schema:sample",
+  "$id": "urn:fabrilo:schema:sample",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "description": "Objects of the `core` schema, version 2.",
-  "title": "BIMCraft `core` schema"
+  "title": "Fabrilo `core` schema"
 }
