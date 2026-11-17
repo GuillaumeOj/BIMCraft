@@ -268,7 +268,9 @@ fn a_survey_point_set_under_the_old_name_is_foreign_and_preserved() {
     let unchanged = |exported: &[Instance]| {
         for id in [10, 11, 12, 13, 14] {
             let find = |all: &[Instance]| all.iter().find(|i| i.id == id).cloned();
-            assert_eq!(find(exported), find(&instances), "#{id} changed");
+            let original = find(&instances);
+            assert!(original.is_some(), "#{id} is not in the file");
+            assert_eq!(find(exported), original, "#{id} changed");
         }
     };
 
