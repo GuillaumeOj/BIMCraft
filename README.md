@@ -1,8 +1,8 @@
-# BIMCraft
+# Fabrilo
 
 **An open-source BIM authoring tool for buildings and civil works, written from scratch in Rust.**
 
-BIMCraft takes a construction project from early studies to construction drawings in one shared model, across architecture, structure, MEP and thermal engineering. From that single model it produces 3D models, live 2D documentation (plans, sections, sheets) and traceable calculation reports.
+Fabrilo takes a construction project from early studies to construction drawings in one shared model, across architecture, structure, MEP and thermal engineering. From that single model it produces 3D models, live 2D documentation (plans, sections, sheets) and traceable calculation reports.
 
 > **Status: specification phase.** There is no code yet. The current work is the [specification](docs/specifications.md); reviews and comments from practitioners are the most useful contribution right now.
 
@@ -29,7 +29,7 @@ See the [roadmap](docs/specifications.md#15-roadmap-and-phases) for phases and t
 ## Documentation
 
 - [Specifications v0.1](docs/specifications.md): vision, architecture, requirements (with stable IDs such as `CORE-01`), roadmap and open questions.
-- [User guide](docs/user/introduction.md): how to use BIMCraft, by task.
+- [User guide](docs/user/introduction.md): how to use Fabrilo, by task.
 - [AGENTS.md](AGENTS.md): rules for contributors and coding agents; [quality rationale](docs/dev/quality.md).
 
 ## Contributing
@@ -38,8 +38,8 @@ Contributions are welcome, from code to domain expertise in any engineering fiel
 
 ## Licence
 
-BIMCraft is released under the [MIT licence](LICENSE).
+Fabrilo is released under the [MIT licence](LICENSE).
 
 ## Disclaimer
 
-BIMCraft is provided without warranty. Calculation results must always be checked by a qualified engineer before being used for design or construction.
+Fabrilo is provided without warranty. Calculation results must always be checked by a qualified engineer before being used for design or construction.

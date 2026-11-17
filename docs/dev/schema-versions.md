@@ -1,6 +1,6 @@
 # Schema and file format versions
 
-Project files must open in every later version of BIMCraft (PERS-01). Two versions protect them, and CI fails when a change to either lands without a migration. Background: [ADR 0002](adr/0002-schema-definition-format.md#versioning-and-migrations) (schema history) and [ADR 0016](adr/0016-project-file-layout.md) (what a file holds).
+Project files must open in every later version of Fabrilo (PERS-01). Two versions protect them, and CI fails when a change to either lands without a migration. Background: [ADR 0002](adr/0002-schema-definition-format.md#versioning-and-migrations) (schema history) and [ADR 0016](adr/0016-project-file-layout.md) (what a file holds).
 
 | Version | What it covers | Where it lives | Checked by |
 | --- | --- | --- | --- |

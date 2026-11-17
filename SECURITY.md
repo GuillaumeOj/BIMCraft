@@ -8,7 +8,7 @@ We acknowledge reports within 5 working days and agree a disclosure date with th
 
 ## Supported versions
 
-BIMCraft has no release yet. Once releases exist, this section will list which versions receive security fixes.
+Fabrilo has no release yet. Once releases exist, this section will list which versions receive security fixes.
 
 ## Scope
 

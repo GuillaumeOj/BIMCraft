@@ -54,7 +54,7 @@ Resolution uses only addition, subtraction, multiplication and division, so it i
 
 ### IFC mapping (INT-10)
 
-| BIMCraft | IFC 4.3 |
+| Fabrilo | IFC 4.3 |
 | --- | --- |
 | Layer set of a wall | `IfcMaterialLayerSetUsage` with `LayerSetDirection = AXIS2` (`AXIS3` for slabs) |
 | Not flipped / flipped | `DirectionSense = POSITIVE` / `NEGATIVE` |
@@ -64,7 +64,7 @@ Resolution uses only addition, subtraction, multiplication and division, so it i
 | Member offset (Δy, Δz) | Translation of the swept area's 2D position relative to the cardinal point |
 | Tapered members | `ReferenceExtent` where it applies, once tapering exists |
 
-**Export** writes the resolved offset as an exact `f64`, so the geometry round-trips without loss. The user's choice (layer id, position, anchor face) is written in a BIMCraft property set, so a BIMCraft file rebuilds the same choice.
+**Export** writes the resolved offset as an exact `f64`, so the geometry round-trips without loss. The user's choice (layer id, position, anchor face) is written in a Fabrilo property set, so a Fabrilo file rebuilds the same choice.
 
 **Import without that property set** maps the offset back to the core centre or a snap point within `LINEAR_TOLERANCE`. Otherwise it maps it to a custom offset from the exterior face of the first layer, at exactly the imported distance.
 

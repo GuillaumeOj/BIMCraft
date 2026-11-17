@@ -21,7 +21,7 @@ body:
   - type: input
     id: version
     attributes:
-      label: BIMCraft version and operating system
+      label: Fabrilo version and operating system
     validations:
       required: true
   - type: textarea

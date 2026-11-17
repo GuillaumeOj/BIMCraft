@@ -66,13 +66,13 @@ The thermal resistance is d / λ per layer and their sum over the layers whose m
 
 **IFC mapping**, declared now and implemented with the element export (INT-07):
 
-| BIMCraft | IFC 4.3 |
+| Fabrilo | IFC 4.3 |
 | --- | --- |
 | `Material` | `IfcMaterial` (`Name`, `Category` from the category) |
 | common properties | `Pset_MaterialCommon` (`MassDensity`), `Pset_MaterialMechanical` (`YoungModulus`, `ShearModulus`, `PoissonRatio`, `ThermalExpansionCoefficient`), `Pset_MaterialThermal` (`ThermalConductivity`, `SpecificHeatCapacity`) |
-| concrete, steel, timber properties | `Pset_MaterialConcrete`, `Pset_MaterialSteel`, `Pset_MaterialWood`, and `BIMCraft_Material*` sets for values IFC has no property for |
+| concrete, steel, timber properties | `Pset_MaterialConcrete`, `Pset_MaterialSteel`, `Pset_MaterialWood`, and `Fabrilo_Material*` sets for values IFC has no property for |
 | each source | the property's `Specification` (ADR 0018) |
-| `MaterialOriginal` | `IfcMaterialProperties` named `BIMCraft_LibraryValues` |
+| `MaterialOriginal` | `IfcMaterialProperties` named `Fabrilo_LibraryValues` |
 | `MaterialLayerSet` / `MaterialLayer` | `IfcMaterialLayerSet` / `IfcMaterialLayer` (`LayerThickness`, `IsVentilated` for an air gap, `Category` from the function) |
 | layer priority 1 … 5 | `IfcMaterialLayer.Priority` 0 … 100: (5 − p) × 25, so 1 → 100 and 5 → 0; on import, p = 5 − round(Priority / 25) |
 

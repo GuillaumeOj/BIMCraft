@@ -8,7 +8,7 @@
 
 A project is placed on Earth through a projected coordinate reference system (CRS), identified by its EPSG code (GEOREF-01), and its local engineering frame is linked to that CRS by a translation, a rotation and a scale (GEOREF-02). Modelling stays in the local frame near the origin, because projected coordinates of millions of metres would eat the precision the geometry kernel relies on ([ADR 0001](0001-geometry-tolerance-policy.md)).
 
-IFC 4.3 describes this link with `IfcMapConversion` from the model's `IfcGeometricRepresentationContext` to an `IfcProjectedCRS`. The georeference must survive an IFC round trip, both ours (BIMCraft → IFC → BIMCraft) and other tools' (their file → BIMCraft → file), without changing what the file means to them.
+IFC 4.3 describes this link with `IfcMapConversion` from the model's `IfcGeometricRepresentationContext` to an `IfcProjectedCRS`. The georeference must survive an IFC round trip, both ours (Fabrilo → IFC → Fabrilo) and other tools' (their file → Fabrilo → file), without changing what the file means to them.
 
 Forces:
 
@@ -53,7 +53,7 @@ The scale applies to all three axes. `IfcMapConversion.Scale` is the conversion 
 `interop_ifc::georef` reads and writes the georeference:
 
 - The project georeference is the `IfcMapConversion` whose `SourceCRS` is the 3D `IfcGeometricRepresentationContext` with `ContextType` `'Model'` (not a sub-context). More than one from the model context is an error. Only that conversion is decoded, strictly. The others, from other contexts or CRSs, are not the project's: they are left alone and kept by `Preserved`, however malformed. The context is recognised by its name, `ContextType` and dimension only, so a context that is malformed in another attribute does not stop the import.
-- `TargetCRS` must be an `IfcProjectedCRS` named `EPSG:<code>` (prefix case-insensitive, spaces trimmed). Other names are the error `UnknownCrsName`, because BIMCraft cannot tell which CRS they mean.
+- `TargetCRS` must be an `IfcProjectedCRS` named `EPSG:<code>` (prefix case-insensitive, spaces trimmed). Other names are the error `UnknownCrsName`, because Fabrilo cannot tell which CRS they mean.
 - **Units.** In IFC, an `IfcLengthMeasure` with no unit of its own is in the project's length unit, and an absent `IfcProjectedCRS.MapUnit` is commonly read the same way. The caller gives the size of the project's length unit, f metres.
   - *Import.* The map unit is `MapUnit` when it is the metre or an SI-prefixed metre (any prefix), otherwise the import is refused (`UnsupportedMapUnit`). When `MapUnit` is absent, it is f. The base point is in the map unit, and the model's scale is `Scale` × map unit ÷ f. A survey point property with a `Unit` is in that unit (metre or SI-prefixed metre, otherwise `UnsupportedUnit`), and without one it is in f.
   - *Export.* The map unit and the unit of the three survey point properties are always written, as an `IfcSIUnit(LENGTHUNIT, $, METRE)`: the one the CRS used on import (`Targets::metre_unit`, which the import fills when the CRS's map unit is the plain metre), or a new instance. The base point and the survey point are written in metres, whatever f is, and `Scale` is the model's scale times f. A millimetre file therefore holds `Scale` 0.001 for a model scale of 1, and no tool reads a survey length in millimetres by mistake.
@@ -62,9 +62,9 @@ The scale applies to all three axes. `IfcMapConversion.Scale` is the conversion 
 - **What a round trip keeps.** The import records what the export writes back as it was read (`Kept`): the CRS's `Description`, `GeodeticDatum`, `VerticalDatum`, `MapProjection` and `MapZone`, while the CRS keeps its EPSG code, and the `GlobalId`s of the survey point set and of its relationship. Tools that track objects by `GlobalId` therefore see the same objects.
 - **Validation.** Every value read is checked: dangling references, wrong entities, non-finite numbers, a scale that is not positive and a zero x-axis are typed errors, never panics. Messages never quote file content (SEC-03).
 
-### Survey point: a `BIMCraft_SurveyPoint` property set on `IfcSite`
+### Survey point: a `Fabrilo_SurveyPoint` property set on `IfcSite`
 
-- **Where it goes.** The survey point is an `IfcPropertySet` named `BIMCraft_SurveyPoint`, attached to the `IfcSite` by an `IfcRelDefinesByProperties`.
+- **Where it goes.** The survey point is an `IfcPropertySet` named `Fabrilo_SurveyPoint`, attached to the `IfcSite` by an `IfcRelDefinesByProperties`.
 - **Properties.** The set holds three `IfcPropertySingleValue`: `Eastings`, `Northings` and `OrthogonalHeight`. Each is an `IFCLENGTHMEASURE` whose `Unit` is the metre, as the map unit is: see Units above.
 - **Identifiers.** The `GlobalId`s of a new set and relationship come from the model's `IdSource`, so a seeded source makes exports deterministic. Those read from a file are written back.
 - **Name.** It has no `Pset_` prefix, which buildingSMART reserves for its own sets.
@@ -75,7 +75,7 @@ The scale applies to all three axes. `IfcMapConversion.Scale` is the conversion 
   - a unit that is not a metre
   - an unknown property, or a set that does not decode
 
-  The error does not fail the import: `Imported::survey_error` holds it, and the georeference has no survey point. The set and its relationship are still in `Imported::mapped`, because `BIMCraft` owns a set of that name: an export replaces it, so a file never holds two. The properties of an invalid set are not mapped, as they may belong to other sets.
+  The error does not fail the import: `Imported::survey_error` holds it, and the georeference has no survey point. The set and its relationship are still in `Imported::mapped`, because `Fabrilo` owns a set of that name: an export replaces it, so a file never holds two. The properties of an invalid set are not mapped, as they may belong to other sets.
 - **Writing.** Writing a survey point with no site to attach it to is the error `SurveyPointWithoutSite`. It is never dropped silently.
 
 ## The CRS registry

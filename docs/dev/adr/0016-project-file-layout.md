@@ -15,7 +15,7 @@
 - **File format version**, in `PRAGMA user_version`: the layout of the tables the file keeps about itself (`project_property`, `schema_namespace`). `open_project` refuses a newer one; an older one is brought up to date by a chain of format migrations.
 - **Schema version of each namespace**, one row per namespace in `schema_namespace (name, version)`, as [ADR 0002](0002-schema-definition-format.md) requires. It governs the entity tables of that namespace. `open_model` and `save_model` refuse a newer one.
 
-`PRAGMA application_id` marks the database as a BIMCraft project, as before.
+`PRAGMA application_id` marks the database as a Fabrilo project, as before.
 
 ### One table per entity and per type
 

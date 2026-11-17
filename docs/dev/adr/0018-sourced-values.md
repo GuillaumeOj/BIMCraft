@@ -13,7 +13,7 @@ The convention has costs that grow with every sourced value:
 - Each sourced value is defined twice in the schema, and the copies drift (their docs were copy-pasted).
 - The rule "a value has a source" is only checked when the `material` crate reads, so the API, plugins and IFC import can write a value without its source, or a source without its value.
 - The source format is invisible to the schema, the JSON Schema and the reference pages.
-- IFC property sets cannot hold the companion properties, so material values live in `BIMCraft_*` sets instead of the IFC sets they belong to.
+- IFC property sets cannot hold the companion properties, so material values live in `Fabrilo_*` sets instead of the IFC sets they belong to.
 
 National annex parameters, partial factors and EPD data will all need the same thing.
 

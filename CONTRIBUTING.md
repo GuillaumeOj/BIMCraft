@@ -1,10 +1,10 @@
-# Contributing to BIMCraft
+# Contributing to Fabrilo
 
-Thank you for your interest in BIMCraft. The project needs two kinds of contributors equally: software developers, and practitioners (architects, engineers, draftspeople, BIM managers) who know what the tool must do.
+Thank you for your interest in Fabrilo. The project needs two kinds of contributors equally: software developers, and practitioners (architects, engineers, draftspeople, BIM managers) who know what the tool must do.
 
 ## Where the project stands
 
-BIMCraft is in its specification phase. Until the first crates land, the most valuable contributions are:
+Fabrilo is in its specification phase. Until the first crates land, the most valuable contributions are:
 
 - **Reviewing the [specification](docs/specifications.md).** Open an issue that names the requirement ID you are discussing (e.g. `STR-07`), or the section if you propose something new.
 - **Bringing domain knowledge.** National practices, design codes, drawing conventions and real project workflows all shape the requirements.
