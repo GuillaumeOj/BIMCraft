@@ -2,7 +2,7 @@ ISO-10303-21;
 HEADER;
 /* Written for this test; covers the syntax wall.ifc does not use. */
 FILE_DESCRIPTION((''),'2;1');
-FILE_NAME('syntax.ifc','2026-10-14T12:00:00',(''),(''),'','BIMCraft','');
+FILE_NAME('syntax.ifc','2026-10-14T12:00:00',(''),(''),'','Fabrilo','');
 FILE_SCHEMA(('IFC4X3_ADD2'));
 ENDSEC;
 DATA;

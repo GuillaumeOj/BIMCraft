@@ -4,7 +4,7 @@ HEADER;
    writer must reproduce: complex instances, binaries, nested lists and typed values, extreme
    reals, encoded and wrapped strings, user-defined keywords and several data sections. */
 FILE_DESCRIPTION(('ViewDefinition [ReferenceView]'),'2;1');
-FILE_NAME('edge-cases.ifc','2026-10-14T09:00:00',('Author'),('Office'),'','BIMCraft','');
+FILE_NAME('edge-cases.ifc','2026-10-14T09:00:00',('Author'),('Office'),'','Fabrilo','');
 FILE_SCHEMA(('IFC4X3_ADD2'));
 ENDSEC;
 DATA;

@@ -1,4 +1,4 @@
-//! IFC import and export for `BIMCraft` (spec §11).
+//! IFC import and export for Fabrilo (spec §11).
 //!
 //! The [`step`] module reads ISO 10303-21 (STEP Part 21) files, the text encoding of IFC, as a
 //! stream of instances with bounded memory, so a hostile file cannot exhaust memory or crash the

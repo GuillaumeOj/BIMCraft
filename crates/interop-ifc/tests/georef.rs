@@ -163,13 +163,13 @@ fn named<'a>(instances: &'a [Instance], name: &str) -> Vec<&'a Instance> {
         .collect()
 }
 
-/// How many `BIMCraft_SurveyPoint` property sets `instances` holds.
+/// How many `Fabrilo_SurveyPoint` property sets `instances` holds.
 fn survey_sets(instances: &[Instance]) -> usize {
     named(instances, "IFCPROPERTYSET")
         .into_iter()
         .filter(|instance| {
             matches!(&instance.body, InstanceBody::Simple(record)
-                if record.parameters.get(2) == Some(&Parameter::String("BIMCraft_SurveyPoint".into())))
+                if record.parameters.get(2) == Some(&Parameter::String("Fabrilo_SurveyPoint".into())))
         })
         .count()
 }
@@ -242,6 +242,62 @@ fn re_exporting_replaces_a_survey_point_set_that_was_not_valid() {
         (again.survey_error, again.georeference.survey_point()),
         (None, Some(point))
     );
+}
+
+/// The fixture with its survey point set under the name earlier versions wrote. This is the
+/// only place the old name stays: nothing reads it any more, so such a set is a foreign one.
+fn old_name_fixture() -> String {
+    FIXTURE.replace("Fabrilo_SurveyPoint", "BIMCraft_SurveyPoint")
+}
+
+#[test]
+fn a_survey_point_set_under_the_old_name_is_foreign_and_preserved() {
+    let (_, instances) = read(old_name_fixture().as_bytes()).unwrap();
+    let imported = read_georeference(&instances, 1.0).unwrap().unwrap();
+    assert_eq!(imported.survey_error, None);
+    assert_eq!(imported.georeference.survey_point(), None);
+    for id in [10, 11, 12, 13, 14] {
+        assert!(!imported.mapped.contains(&id), "#{id} is mapped");
+    }
+
+    let (_, preserved) = Preserved::split_ids(instances.clone(), &imported.mapped);
+    let site = Targets {
+        site: Some(9),
+        ..imported.targets
+    };
+    let unchanged = |exported: &[Instance]| {
+        for id in [10, 11, 12, 13, 14] {
+            let find = |all: &[Instance]| all.iter().find(|i| i.id == id).cloned();
+            assert_eq!(find(exported), find(&instances), "#{id} changed");
+        }
+    };
+
+    let without = export(
+        &preserved,
+        &imported.georeference,
+        site,
+        &imported.kept,
+        imported.crs,
+        1.0,
+    )
+    .unwrap();
+    unchanged(&without);
+    assert_eq!(survey_sets(&without), 0);
+
+    let point = ProjectedPoint::new(652_100.0, 6_862_200.0, 40.0);
+    let with = export(
+        &preserved,
+        &with_survey_point(&imported.georeference, point).unwrap(),
+        site,
+        &imported.kept,
+        imported.crs,
+        1.0,
+    )
+    .unwrap();
+    unchanged(&with);
+    assert_eq!(survey_sets(&with), 1);
+    let again = read_georeference(&with, 1.0).unwrap().unwrap();
+    assert_eq!(again.georeference.survey_point(), Some(point));
 }
 
 /// A file with the fixture's context and site but no georeference.
@@ -345,7 +401,7 @@ proptest! {
         ..proptest::test_runner::Config::default()
     })]
 
-    /// BIMCraft → IFC → BIMCraft gives every value back, the survey point included.
+    /// Fabrilo → IFC → Fabrilo gives every value back, the survey point included.
     #[test]
     fn any_georeference_round_trips(
         code in 1..=EpsgCode::MAX,

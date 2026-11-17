@@ -2,7 +2,7 @@ ISO-10303-21;
 HEADER;
 /* Written for this test; not taken from a real project. */
 FILE_DESCRIPTION(('ViewDefinition [ReferenceView]'),'2;1');
-FILE_NAME('wall.ifc','2026-10-13T12:00:00',('Author'),('Office'),'','BIMCraft','');
+FILE_NAME('wall.ifc','2026-10-13T12:00:00',('Author'),('Office'),'','Fabrilo','');
 FILE_SCHEMA(('IFC4X3_ADD2'));
 ENDSEC;
 DATA;
