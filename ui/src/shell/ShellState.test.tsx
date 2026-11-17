@@ -1,15 +1,26 @@
 import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { fakeCore } from "../test-support/fakeCore";
 import { renderWithCore } from "../test-support/render";
-import { useShellState } from "./ShellState";
+import { type ShellState, useShellState } from "./ShellState";
+
+/** Hands the shell state to the test, to call its functions outside React. */
+function Grab({ onState }: { onState: (state: ShellState) => void }) {
+  onState(useShellState());
+  return null;
+}
 
 function Probe() {
-  const { notify, registerModal, modalOpen } = useShellState();
+  const { notify, registerModal, isModalOpen } = useShellState();
+  const [seen, setSeen] = useState("");
   return (
     <>
-      <p>{modalOpen ? "modal" : "no modal"}</p>
+      <p>{seen}</p>
+      <button type="button" onClick={() => setSeen(isModalOpen() ? "modal" : "no modal")}>
+        Check modal
+      </button>
       <button type="button" onClick={() => notify("Hello")}>
         Notify
       </button>
@@ -33,9 +44,41 @@ describe("ShellStateProvider", () => {
   it("counts the modal dialogs that are open", async () => {
     const user = userEvent.setup();
     renderWithCore(<Probe />, fakeCore());
+    await user.click(screen.getByRole("button", { name: "Check modal" }));
     expect(screen.getByText("no modal")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Open modal" }));
+    await user.click(screen.getByRole("button", { name: "Check modal" }));
     expect(screen.getByText("modal")).toBeInTheDocument();
+  });
+
+  it("answers isModalOpen at once, through nested dialogs, before the state renders", () => {
+    let state: ShellState | undefined;
+    renderWithCore(
+      <Grab
+        onState={(value) => {
+          state = value;
+        }}
+      />,
+      fakeCore(),
+    );
+    const shell = () => {
+      if (state === undefined) throw new Error("not rendered");
+      return state;
+    };
+    const { isModalOpen, registerModal } = shell();
+    let first = () => {};
+    let second = () => {};
+    act(() => {
+      first = registerModal();
+      expect(isModalOpen()).toBe(true);
+      second = registerModal();
+      first();
+      expect(isModalOpen()).toBe(true);
+      second();
+      second();
+      expect(isModalOpen()).toBe(false);
+    });
+    expect(shell().isModalOpen).toBe(isModalOpen);
   });
 
   it("shows a plain toast for a few seconds, without Undo", () => {

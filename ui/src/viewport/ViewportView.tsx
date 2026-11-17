@@ -174,7 +174,7 @@ function drawPreview(chip: HTMLElement | null, label: PreviewLabel | null, text:
 export function ViewportView() {
   const api = useApi();
   const { t, language } = useI18n();
-  const { modalOpen, notify, singleKeys } = useShellState();
+  const { isModalOpen, notify, singleKeys } = useShellState();
   const [selection, setSelection] = useState<readonly string[]>([]);
   const [tool, setTool] = useState<Tool>("select");
   const [step, setStep] = useState<ToolStep>("idle");
@@ -353,8 +353,9 @@ export function ViewportView() {
 
   // V, M, B, P, S, H, I and Alt+H, Alt+B, outside the canvas too; quiet behind a modal dialog and in text fields.
   useEffect(() => {
-    if (!ready || modalOpen) return;
+    if (!ready) return;
     const onKeyDown = (event: KeyboardEvent) => {
+      if (isModalOpen()) return;
       const shortcut = viewportShortcut(event, { singleKeys, canvas: canvasRef.current });
       if (shortcut === null) return;
       event.preventDefault();
@@ -362,13 +363,16 @@ export function ViewportView() {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [ready, modalOpen, singleKeys, canvasRef]);
+  }, [ready, isModalOpen, singleKeys, canvasRef]);
 
   useEffect(() => {
-    if (!ready || modalOpen || !cancellable) return;
-    window.addEventListener("keydown", onEscape);
-    return () => window.removeEventListener("keydown", onEscape);
-  }, [ready, modalOpen, cancellable]);
+    if (!ready || !cancellable) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!isModalOpen()) onEscape(event);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [ready, isModalOpen, cancellable]);
 
   // The View panel sits beside the view: it renders this report and sends commands through it.
   const publish = usePublishViewReport();

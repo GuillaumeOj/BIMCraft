@@ -1,5 +1,7 @@
 import { screen, within } from "@testing-library/react";
+import { useLayoutEffect, useRef } from "react";
 import { describe, expect, it, vi } from "vitest";
+import { useGeoref } from "../georef/GeorefContext";
 import { fakeCore } from "../test-support/fakeCore";
 import { renderWithCore } from "../test-support/render";
 import { Shell } from "./Shell";
@@ -10,6 +12,24 @@ vi.mock("../viewport/module", () => ({ loadViewportModule: () => new Promise(() 
 // jsdom reports an English system language (navigator.languages is ["en-US", "en"]).
 function renderShell() {
   return renderWithCore(<Shell />, fakeCore()).user;
+}
+
+/**
+ * Presses `key` (with Ctrl+Shift) in the very commit that closes the Project location dialog:
+ * layout effects run before the passive ones, as a key does between a commit and its paint.
+ */
+function PressWhenDialogCloses({ chord }: { chord: string }) {
+  const { dialogOpen } = useGeoref();
+  const wasOpen = useRef(false);
+  useLayoutEffect(() => {
+    if (wasOpen.current && !dialogOpen) {
+      window.dispatchEvent(
+        new KeyboardEvent("keydown", { key: chord, ctrlKey: true, shiftKey: true }),
+      );
+    }
+    wasOpen.current = dialogOpen;
+  }, [dialogOpen, chord]);
+  return null;
 }
 
 const region = (name: string) => screen.getByRole("region", { name });
@@ -177,6 +197,35 @@ describe("Shell", () => {
     await user.keyboard("{Control>}{Shift>}K{/Shift}{/Control}");
     expect(dialog).toContainElement(document.activeElement as HTMLElement);
     expect(screen.getByRole("tab", { name: "Properties" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+  });
+
+  it("reads the modal state when a key arrives in the commit that closes a dialog: Ctrl+Shift+L", async () => {
+    const { user } = renderWithCore(
+      <>
+        <Shell />
+        <PressWhenDialogCloses chord="L" />
+      </>,
+      fakeCore(),
+    );
+    await user.click(screen.getByRole("button", { name: "Project location…" }));
+    await user.keyboard("{Escape}");
+    expect(screen.getByRole("dialog", { name: "Project location" })).toBeInTheDocument();
+  });
+
+  it("reads the modal state when a key arrives in the commit that closes a dialog: Ctrl+Shift+K", async () => {
+    const { user } = renderWithCore(
+      <>
+        <Shell />
+        <PressWhenDialogCloses chord="K" />
+      </>,
+      fakeCore(),
+    );
+    await user.click(screen.getByRole("button", { name: "Project location…" }));
+    await user.keyboard("{Escape}");
+    expect(screen.getByRole("tab", { name: "Coordinates" })).toHaveAttribute(
       "aria-selected",
       "true",
     );

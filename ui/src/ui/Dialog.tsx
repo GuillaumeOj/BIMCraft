@@ -1,4 +1,11 @@
-import { type KeyboardEvent, type ReactNode, useEffect, useRef, useState } from "react";
+import {
+  type KeyboardEvent,
+  type ReactNode,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import { useShellState } from "../shell/ShellState";
 import "./forms.css";
 
@@ -52,7 +59,8 @@ export function Dialog({ titleId, onCancel, children }: DialogProps) {
   const [opener] = useState(() => document.activeElement);
   const { registerModal } = useShellState();
 
-  useEffect(registerModal, [registerModal]);
+  // A layout effect: the count is right within the commit that mounts or unmounts the dialog.
+  useLayoutEffect(registerModal, [registerModal]);
 
   useEffect(() => {
     if (!dialog.current?.contains(document.activeElement)) dialog.current?.focus();

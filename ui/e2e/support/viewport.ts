@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, type Locator, type Page, type TestInfo, test } from "@playwright/test";
+import { browserLogSize, gpuLogLines, type KeptLines } from "./browser-log";
 
 // Scene deltas written by a Rust test from known documents (fixtures/README.md).
 const fixture = (name: string) => [
@@ -187,7 +188,7 @@ export async function selectAnElement(page: Page, canvas: Locator) {
   );
 }
 
-const logs = new WeakMap<Page, { kept: string[]; dropped: number }>();
+const logs = new WeakMap<Page, KeptLines & { browserLogFrom: number }>();
 /** A GPU fault can log on every frame: the first lines name the cause, the rest only repeat it. */
 const KEPT_LINES = 200;
 
@@ -196,7 +197,7 @@ const KEPT_LINES = 200;
  * warnings.
  */
 function watchViewStops(page: Page) {
-  const logged = { kept: [] as string[], dropped: 0 };
+  const logged = { kept: [] as string[], dropped: 0, browserLogFrom: browserLogSize() };
   logs.set(page, logged);
   const keep = (line: string) => {
     if (logged.kept.length < KEPT_LINES) logged.kept.push(line);
@@ -210,29 +211,71 @@ function watchViewStops(page: Page) {
   page.on("crash", () => keep("the page crashed"));
 }
 
+const UNREADABLE = "(the page can no longer be read)";
 /**
- * Attaches to a failed test the 3D view's status and error card, and what the page logged. The
- * View panel shows only what a running view reports, so a view that stopped makes its controls
- * vanish: the attachment says why, where the failure itself only says "element(s) not found".
- * A crashed page can no longer be read: the log then says so.
+ * How long the failure report waits for an adapter: a hung GPU process never gives one, and a
+ * hung page never answers at all, so the wait is kept here rather than in the page.
+ */
+const ADAPTER_WAIT_MS = 2000;
+
+/** Kept lines, then how many were left out. */
+const withDropped = ({ kept, dropped }: KeptLines) =>
+  dropped ? [...kept, `(${dropped} more lines not kept)`] : kept;
+
+/** The browser and the WebGPU adapter the test ran on, which a software renderer's faults depend on. */
+async function describeGpu(page: Page) {
+  const browser = page.context().browser()?.version() ?? "unknown";
+  const query = page
+    .evaluate(async () => {
+      const found = await navigator.gpu?.requestAdapter();
+      if (!found) return "none";
+      const { vendor, architecture, device, description } = found.info;
+      return [vendor, architecture, device, description].filter(Boolean).join(" / ") || "unnamed";
+    })
+    .catch(() => UNREADABLE);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<string>((resolve) => {
+    timer = setTimeout(() => resolve("no answer"), ADAPTER_WAIT_MS);
+  });
+  const adapter = await Promise.race([query, timeout]);
+  clearTimeout(timer);
+  return [`Chromium: ${browser}`, `WebGPU adapter: ${adapter}`];
+}
+
+/** What Chromium itself logged about its GPU process during the test: a hang, a crash, a lost context. */
+function browserGpuLog(from: number | undefined) {
+  if (from === undefined) return ["Browser GPU log: unknown start"];
+  const logged = gpuLogLines(from, KEPT_LINES);
+  if (logged === null) return ["Browser GPU log: none written"];
+  return [`Browser GPU log: last ${logged.kept.length} lines`, ...withDropped(logged)];
+}
+
+/**
+ * Attaches to a failed test the 3D view's status and error card, what the page logged, and what
+ * the browser logged about its GPU process. The View panel shows only what a running view
+ * reports, so a view that stopped makes its controls vanish: the attachment says why, where the
+ * failure itself only says "element(s) not found". A crashed page can no longer be read: the log
+ * then says so.
  */
 async function attachViewStop(page: Page, testInfo: TestInfo) {
   if (testInfo.status === testInfo.expectedStatus) return;
+  const logged = logs.get(page);
+  // Read before asking for an adapter below, whose own lines are not the test's.
+  const browser = browserGpuLog(logged?.browserLogFrom);
   const read = (locator: Locator) =>
     locator
       .allInnerTexts()
       .then((texts) => texts.join(" / "))
-      .catch(() => "(the page can no longer be read)");
+      .catch(() => UNREADABLE);
   const [shown, card] = await Promise.all([
     read(status(page)),
     read(page.locator(".vp-card-error")),
   ]);
-  const state = [`Status: ${shown || "none"}`, `Error card: ${card || "none"}`];
-  const logged = logs.get(page);
-  const lines = logged?.kept ?? [];
-  const dropped = logged?.dropped ? [`(${logged.dropped} more lines not kept)`] : [];
+  const gpu = await describeGpu(page);
+  const state = [`Status: ${shown || "none"}`, `Error card: ${card || "none"}`, ...gpu];
+  const lines = logged ? withDropped(logged) : [];
   await testInfo.attach("3D view", {
-    body: [...state, "", ...lines, ...dropped].join("\n"),
+    body: [...state, "", ...lines, "", ...browser].join("\n"),
     contentType: "text/plain",
   });
 }

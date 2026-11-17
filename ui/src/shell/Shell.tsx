@@ -51,7 +51,7 @@ export function Shell() {
   const ids = useId();
   const [rightPanel, setRightPanel] = useState<RightPanel>("properties");
   const { dialogOpen, openDialog } = useGeoref();
-  const { modalOpen } = useShellState();
+  const { isModalOpen } = useShellState();
   const [consoleOpen, setConsoleOpen] = useState(false);
   const [materialsOpen, setMaterialsOpen] = useState(false);
   const [buildUpsOpen, setBuildUpsOpen] = useState(false);
@@ -82,7 +82,7 @@ export function Shell() {
     ];
     const onKeyDown = (event: globalThis.KeyboardEvent) => {
       // A modal dialog keeps the keyboard: these shortcuts would move focus behind it.
-      if (modalOpen) return;
+      if (isModalOpen()) return;
       const action = shortcuts.find(([matches]) => matches(event))?.[1];
       if (action === undefined) return;
       event.preventDefault();
@@ -90,7 +90,7 @@ export function Shell() {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [selectTab, modalOpen]);
+  }, [selectTab, isModalOpen]);
 
   const onTabKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
     const at = RIGHT_PANELS.indexOf(rightPanel);
