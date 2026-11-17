@@ -4,7 +4,13 @@ import { useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { fakeCore } from "../test-support/fakeCore";
 import { renderWithCore } from "../test-support/render";
-import { useShellState } from "./ShellState";
+import { type ShellState, useShellState } from "./ShellState";
+
+/** Hands the shell state to the test, to call its functions outside React. */
+function Grab({ onState }: { onState: (state: ShellState) => void }) {
+  onState(useShellState());
+  return null;
+}
 
 function Probe() {
   const { notify, registerModal, isModalOpen } = useShellState();
@@ -46,12 +52,15 @@ describe("ShellStateProvider", () => {
   });
 
   it("answers isModalOpen at once, through nested dialogs, before the state renders", () => {
-    let state: ReturnType<typeof useShellState> | undefined;
-    function Grab() {
-      state = useShellState();
-      return null;
-    }
-    renderWithCore(<Grab />, fakeCore());
+    let state: ShellState | undefined;
+    renderWithCore(
+      <Grab
+        onState={(value) => {
+          state = value;
+        }}
+      />,
+      fakeCore(),
+    );
     const shell = () => {
       if (state === undefined) throw new Error("not rendered");
       return state;
