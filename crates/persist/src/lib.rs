@@ -415,18 +415,11 @@ mod tests {
     }
 
     #[test]
-    fn a_database_with_the_former_bimc_marker_is_refused() {
-        let mut conn = Connection::open_in_memory().unwrap();
-        conn.execute_batch("PRAGMA application_id = 1112100163; PRAGMA user_version = 1;")
-            .unwrap();
-        let err = open_project(&mut conn).unwrap_err();
-        assert!(matches!(err, PersistError::NotAProject));
-    }
-
-    #[test]
     fn databases_of_other_applications_are_refused_and_left_alone() {
         let cases = [
             "PRAGMA application_id = 7;".to_owned(),
+            // The marker of the files written under the former name ("BIMC"), no longer read.
+            "PRAGMA application_id = 1112100163; PRAGMA user_version = 1;".to_owned(),
             "PRAGMA user_version = 3;".to_owned(),
             "CREATE TABLE invoices (id INTEGER);".to_owned(),
             format!(
