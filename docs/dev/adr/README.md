@@ -7,7 +7,7 @@ An architecture decision record (ADR) captures one significant technical decisio
 - One decision per file, named `NNNN-kebab-case-title.md` with the next free four-digit number. Numbers are never reused.
 - Status is one of **Proposed**, **Accepted** or **Superseded by NNNN** (linking the newer record).
 - A record is written as Accepted in the pull request that introduces it: merging that pull request is the acceptance. Use Proposed only for a record merged before its decision is final.
-- Accepted records are not rewritten. To change a decision, write a new record that supersedes the old one and update the old one's status line only. The one exception is renaming an identifier, which is editorial: see [ADR 0025](0025-rename-to-fabrilo.md).
+- Accepted records are not rewritten. To change a decision, write a new record that supersedes the old one and update the old one's status line only. The one exception is renaming an identifier, which is editorial: see [ADR 0028](0028-rename-to-fabrilo.md).
 - Name the requirement IDs from the [specification](../../specifications.md) and link the issues the decision affects.
 - Add the record to the index below in the same pull request.
 
@@ -46,6 +46,6 @@ Copy [`_template.md`](_template.md) and follow its comments.
 | [0025](0025-instancing-culling-and-level-of-detail.md) | Instancing, culling and level of detail | Accepted |
 | [0026](0026-viewport-in-webassembly-with-a-binary-scene-channel.md) | Viewport in WebAssembly with a binary scene channel | Accepted |
 | [0027](0027-clipping-and-visibility-in-the-viewport.md) | Clipping and visibility in the viewport | Accepted |
-| [0025](0025-rename-to-fabrilo.md) | Rename to Fabrilo | Accepted |
+| [0028](0028-rename-to-fabrilo.md) | Rename to Fabrilo | Accepted |
 
 One decision predates this folder and stays in the specification: the web UI over an all-Rust UI ([specification §13](../../specifications.md#13-ui-and-rendering), "Decision record").

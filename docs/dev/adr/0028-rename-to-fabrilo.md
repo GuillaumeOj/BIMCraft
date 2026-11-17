@@ -1,4 +1,4 @@
-# 0025. Rename to Fabrilo
+# 0028. Rename to Fabrilo
 
 - Status: Accepted
 - Requirements: none (product-name decision, specification §16.2); PERS-01 and UI-04 are affected
@@ -39,7 +39,7 @@ The product is renamed to Fabrilo. Each identifier that carries the old name cha
 
 There is one rename sub-issue per area: #382 core and host crates, #383 IFC, #384 schema and API, #385 desktop, #386 web UI, #387 user guide, #388 repository files and developer documentation, #389 the guard. They can run in parallel once this record is merged.
 
-Open pull requests #370 and #378 adopt the new identifiers, or are renamed after they merge.
+Pull request #370 (3D viewport) merged before this record and added mentions of the old name, which the area sub-issues rename. Open pull request #378 adopts the new identifiers, or is renamed after it merges.
 
 The owner's tasks outside the code are listed in #380, not here: reserving names, the trademark filing, renaming the repository, the project board and the design file.
 

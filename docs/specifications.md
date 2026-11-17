@@ -555,7 +555,7 @@ Phase 0 is invisible to users but decides the rest: the schema, transactions and
 
 **16.2 Open questions**
 
-- [x] Product name and licensing model — decided: Fabrilo, open source under the MIT licence. Changed from BIMCraft on 2026-11-17, see [ADR 0025](dev/adr/0025-rename-to-fabrilo.md) for the reasons and the identifiers.
+- [x] Product name and licensing model — decided: Fabrilo, open source under the MIT licence. Changed from BIMCraft on 2026-11-17, see [ADR 0028](dev/adr/0028-rename-to-fabrilo.md) for the reasons and the identifiers.
 - [x] Which CRS set does the MVP cover, and is a full EPSG implementation worth building from scratch? Decided: see the CRS strategy in section 7.
 - [x] Revit add-in output: IFC, or the Fabrilo native format? Decided: the add-in writes the Fabrilo native format directly.
 - [x] Which national annexes beyond France, and in what order? Decided: France, Germany, Spain, Italy, then other European countries; then North America, then South America; long term, every country worldwide.
