@@ -1,4 +1,5 @@
 import { defineConfig, devices } from "@playwright/test";
+import { browserLogFile } from "./e2e/support/browser-log";
 
 // WebGPU for the 3D viewport specs. Chromium's Dawn uses Metal on macOS, so it needs no adapter flag.
 // Elsewhere there is no graphics card (CI), so it falls back to SwiftShader, a software Vulkan.
@@ -13,9 +14,20 @@ const webgpuArgs = [
         "--enable-unsafe-swiftshader",
         "--use-angle=swiftshader",
       ]),
+  // Chromium's own log, GPU process included, goes to a file: a failed viewport test attaches its
+  // GPU lines (e2e/support/viewport.ts), and the job's output stays quiet.
+  "--enable-logging",
+  `--log-file=${browserLogFile}`,
 ];
 
 const { CI } = process.env;
+
+// `channel: "chromium"` selects the full browser in its new headless mode: the old headless shell has no WebGPU.
+const chromium = {
+  ...devices["Desktop Chrome"],
+  channel: "chromium",
+  launchOptions: { args: webgpuArgs },
+};
 
 export default defineConfig({
   testDir: "e2e",
@@ -30,14 +42,6 @@ export default defineConfig({
     reuseExistingServer: !CI,
   },
   projects: [
-    {
-      name: "chromium",
-      // `channel: "chromium"` selects the full browser in its new headless mode: the old headless shell has no WebGPU.
-      use: {
-        ...devices["Desktop Chrome"],
-        channel: "chromium",
-        launchOptions: { args: webgpuArgs },
-      },
-    },
+    { name: "chromium", use: chromium },
   ],
 });
