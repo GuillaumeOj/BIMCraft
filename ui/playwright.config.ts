@@ -16,6 +16,7 @@ const webgpuArgs = [
       ]),
   // Chromium's own log, GPU process included, goes to a file: a failed viewport test attaches its
   // GPU lines (e2e/support/viewport.ts), and the job's output stays quiet.
+  // `--enable-logging` without a value logs to a file; `--log-file` says which.
   "--enable-logging",
   `--log-file=${browserLogFile}`,
 ];
@@ -24,10 +25,13 @@ const { CI } = process.env;
 
 // Every page mounts the 3D view, and on CI each browser renders it on the CPU. The specs that
 // draw the most run alone, one at a time, after the others: two software renderers at once
-// starve the GPU process until the browser loses its WebGPU context. A failure in the first
-// project skips the second for that run; that is the price of never running them side by side.
-// A new spec lands in the parallel project unless it is listed here.
-const gpuSpecs = ["**/viewport.spec.ts", "**/section-visibility.spec.ts", "**/webgpu.spec.ts"];
+// starve the GPU processes until a browser loses its WebGPU context. On CI, a failure in the
+// first project skips the second for that run; that is the price of never running them side by
+// side. Locally, with a graphics card, they keep no such order, so one GPU spec runs on its own.
+// A new spec lands in the parallel project unless it is listed here. The WebGPU risk check
+// (webgpu.spec.ts) draws one small triangle and stays in the first project, so that a browser
+// without an adapter is named before anything else fails.
+const gpuSpecs = ["**/viewport.spec.ts", "**/section-visibility.spec.ts"];
 
 // `channel: "chromium"` selects the full browser in its new headless mode: the old headless shell has no WebGPU.
 const chromium = {
@@ -53,7 +57,7 @@ export default defineConfig({
     {
       name: "gpu",
       testMatch: gpuSpecs,
-      dependencies: ["chromium"],
+      dependencies: process.env["CI"] ? ["chromium"] : [],
       workers: 1,
       use: chromium,
     },
