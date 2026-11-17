@@ -8,7 +8,7 @@ use tempfile::Builder;
 
 /// Suffix of the file a value is written to before it replaces the previous one. Keys cannot
 /// end with it, so a temporary file never overwrites a stored value.
-const TEMP_SUFFIX: &str = ".bimcraft-tmp";
+const TEMP_SUFFIX: &str = ".fabrilo-tmp";
 
 /// Characters Windows does not allow in file names; `/` already separates names in keys.
 const FORBIDDEN: [char; 8] = ['<', '>', ':', '"', '\\', '|', '?', '*'];
@@ -162,7 +162,7 @@ mod tests {
             "lpt",
             "nul-model",
             " a b",
-            "a.bimcraft-tmp.x",
+            "a.fabrilo-tmp.x",
         ] {
             assert!(storage.path(name).is_ok(), "{name:?}");
         }
@@ -198,7 +198,7 @@ mod tests {
             "lpt9",
             "com²",
             "conin$",
-            "model.bim.bimcraft-tmp",
+            "model.bim.fabrilo-tmp",
         ] {
             assert_eq!(storage.path(key), Err(invalid_key()), "{key:?}");
         }
