@@ -1,6 +1,7 @@
 import { act, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { Georeference } from "../api";
+import { OVERRIDE_STORAGE_KEY } from "../i18n/I18nProvider";
 import { fakeCore, refusal } from "../test-support/fakeCore";
 import { renderWithCore } from "../test-support/render";
 import { useGeoref } from "./GeorefContext";
@@ -411,7 +412,7 @@ describe("LocationDialog, dialog behaviour", () => {
   });
 
   it("is in French, with a decimal comma, when the language is French", async () => {
-    localStorage.setItem("bimcraft.language", "fr");
+    localStorage.setItem(OVERRIDE_STORAGE_KEY, "fr");
     await waitFor(() => undefined);
     renderWithCore(<Harness />, fakeCore({ georeference: PLACED }));
     const { default: userEvent } = await import("@testing-library/user-event");

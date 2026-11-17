@@ -1,5 +1,6 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { OVERRIDE_STORAGE_KEY } from "../i18n/I18nProvider";
 import { fakeCore } from "../test-support/fakeCore";
 import { fakeViewport } from "../test-support/fakeViewport";
 import { renderWithCore } from "../test-support/render";
@@ -35,7 +36,7 @@ afterEach(() => vi.unstubAllGlobals());
 
 /** The 3D view and the View panel side by side, as in the shell. */
 async function setUp(options: { language?: "fr" } = {}) {
-  if (options.language === "fr") localStorage.setItem("bimcraft.language", "fr");
+  if (options.language === "fr") localStorage.setItem(OVERRIDE_STORAGE_KEY, "fr");
   const core = fakeCore();
   core.blocks.add(BLOCK);
   core.setSceneRevision(3);
@@ -126,7 +127,7 @@ describe("View panel", () => {
         min: [-1, -2.5, 0],
         max: [4, 5, 3],
       });
-      localStorage.removeItem("bimcraft.language");
+      localStorage.removeItem(OVERRIDE_STORAGE_KEY);
     });
 
     it("refuses a minimum that is not below the maximum, says why, and sends nothing", async () => {

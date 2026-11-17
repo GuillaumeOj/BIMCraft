@@ -1,6 +1,6 @@
 # UI design
 
-The BIMCraft interface is designed in [FigCraft](https://github.com/GuillaumeOj/figcraft), an open-source interface design tool. The file [`docs/BIMCraft.figcraft`](../BIMCraft.figcraft) is the source of truth for screen layout, components, colours, typography and icons. The design was moved there from Penpot, which is no longer used for it.
+The Fabrilo interface is designed in [FigCraft](https://github.com/GuillaumeOj/figcraft), an open-source interface design tool. The file [`docs/Fabrilo.figcraft`](../Fabrilo.figcraft) is the source of truth for screen layout, components, colours, typography and icons. The design was moved there from Penpot, which is no longer used for it.
 
 The file is stored with Git LFS (`*.figcraft` in `.gitattributes`). Run `git lfs install` once, then `git lfs pull` if the file shows as a short text pointer.
 
@@ -12,7 +12,7 @@ The file is stored with Git LFS (`*.figcraft` in `.gitattributes`). Run `git lfs
 
 ## Reading the design
 
-- **In FigCraft:** open `docs/BIMCraft.figcraft`. Pages and layers are in the left panel; Inspect shows sizes, colours and variable names.
+- **In FigCraft:** open `docs/Fabrilo.figcraft`. Pages and layers are in the left panel; Inspect shows sizes, colours and variable names.
 - **From a coding agent:** connect the FigCraft MCP server (`figcraft` for a headless session, `figcraft-app` to drive the running app) and open the file. Use `inspect_document` or `get_node` for the layer tree, `screenshot` to look at a board, and the `inspect.code` command for generated CSS or React. The repository commits no MCP configuration; each contributor connects their own.
 
 ## Rules

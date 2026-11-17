@@ -1,6 +1,7 @@
 import { act, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "../api";
+import { OVERRIDE_STORAGE_KEY } from "../i18n/I18nProvider";
 import { SINGLE_KEYS_STORAGE_KEY } from "../shell/ShellState";
 import { fakeCore } from "../test-support/fakeCore";
 import { fakeViewport } from "../test-support/fakeViewport";
@@ -154,7 +155,7 @@ describe("ViewportView", () => {
     const alert = await screen.findByRole("alert");
     expect(alert).toHaveTextContent("The 3D view stopped");
     expect(alert).toHaveTextContent("The graphics card stopped responding. Your model is safe.");
-    expect(alert).not.toHaveTextContent("restart BIMCraft");
+    expect(alert).not.toHaveTextContent("restart Fabrilo");
     expect(screen.getByRole("button", { name: "Reload view" })).toHaveFocus();
     expect(viewport.free).toHaveBeenCalled();
     expect(status()).toHaveTextContent("3D view stopped");
@@ -204,7 +205,7 @@ describe("ViewportView", () => {
     await waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument());
     viewport.emit({ kind: "error", key: "out_of_memory" });
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "If it keeps happening, restart BIMCraft.",
+      "If it keeps happening, restart Fabrilo.",
     );
   });
 
@@ -358,7 +359,7 @@ describe("Esc in the step hints", () => {
   });
 
   it("is worded in French too", async () => {
-    localStorage.setItem("bimcraft.language", "fr");
+    localStorage.setItem(OVERRIDE_STORAGE_KEY, "fr");
     const { viewport } = await ready();
     viewport.emit({ kind: "tool_state", tool: "move", step: "target_point" });
     expect(hint()).toHaveTextContent(/Échap : étape précédente$/);
@@ -367,7 +368,7 @@ describe("Esc in the step hints", () => {
     viewport.emit({ kind: "tool_state", tool: "move", step: "base_point" });
     viewport.emit(label("move.distance", null));
     expect(hint()).toHaveTextContent(/Échap : annuler$/);
-    localStorage.removeItem("bimcraft.language");
+    localStorage.removeItem(OVERRIDE_STORAGE_KEY);
   });
 });
 
@@ -526,7 +527,7 @@ describe("ViewportView feedback", () => {
   });
 
   it("formats the announcements in French", async () => {
-    localStorage.setItem("bimcraft.language", "fr");
+    localStorage.setItem(OVERRIDE_STORAGE_KEY, "fr");
     const { viewport } = await ready();
     viewport.emit({ kind: "announce", key: "move.distance", values: { distance: 2.5 } });
     expect(liveRegion()).toHaveTextContent("Déplacé de 2,500 mètres");
@@ -623,7 +624,7 @@ describe("ViewportView feedback", () => {
   });
 
   it("says why a move was refused, in French", async () => {
-    localStorage.setItem("bimcraft.language", "fr");
+    localStorage.setItem(OVERRIDE_STORAGE_KEY, "fr");
     const { core, viewport } = await ready();
     const move = () =>
       viewport.emit({
@@ -642,7 +643,7 @@ describe("ViewportView feedback", () => {
     expect(
       await screen.findByText("Cet élément n’existe plus. Il a peut-être été supprimé."),
     ).toBeVisible();
-    localStorage.removeItem("bimcraft.language");
+    localStorage.removeItem(OVERRIDE_STORAGE_KEY);
   });
 
   it("derives the empty state from the categories the viewport reports, not from the model", async () => {

@@ -36,7 +36,7 @@ export type ShellState = {
 };
 
 /** Where the single-key shortcuts choice is kept. */
-export const SINGLE_KEYS_STORAGE_KEY = "bimcraft.singleKeyShortcuts";
+export const SINGLE_KEYS_STORAGE_KEY = "fabrilo.singleKeyShortcuts";
 
 // Without storage, the shortcuts stay on and a choice lasts only for this session.
 const readSingleKeys = () => readStored(SINGLE_KEYS_STORAGE_KEY) !== "off";
