@@ -59,6 +59,7 @@ describe("ShellStateProvider", () => {
       first();
       expect(isModalOpen()).toBe(true);
       second();
+      second();
       expect(isModalOpen()).toBe(false);
     });
     expect(shell().isModalOpen).toBe(isModalOpen);

@@ -82,7 +82,10 @@ export function ShellStateProvider({ children }: { children: ReactNode }) {
   const registerModal = useCallback(() => {
     openModals.current += 1;
     setModals((count) => count + 1);
+    let released = false;
     return () => {
+      if (released) return;
+      released = true;
       openModals.current -= 1;
       setModals((count) => count - 1);
     };

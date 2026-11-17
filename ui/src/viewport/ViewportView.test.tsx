@@ -1,4 +1,5 @@
 import { act, screen, waitFor, within } from "@testing-library/react";
+import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "../api";
 import { OVERRIDE_STORAGE_KEY } from "../i18n/I18nProvider";
@@ -7,6 +8,7 @@ import { fakeCore } from "../test-support/fakeCore";
 import { fakeViewport } from "../test-support/fakeViewport";
 import { renderWithCore } from "../test-support/render";
 import { group, viewState } from "../test-support/viewState";
+import { Dialog } from "../ui/Dialog";
 import { HINT_STORAGE_KEY } from "./HintCard";
 import type { ViewportEvent, ViewportHandle, ViewportModule } from "./types";
 import { ViewportView } from "./ViewportView";
@@ -41,13 +43,19 @@ afterEach(() => {
 });
 
 /** Renders the view on a fake core holding `blocks`, with a fake viewport module. */
-async function setUp(options: { blocks?: string[]; webgpu?: boolean } = {}) {
+async function setUp(options: { blocks?: string[]; webgpu?: boolean; beside?: ReactNode } = {}) {
   const core = fakeCore();
   for (const id of options.blocks ?? [BLOCK]) core.blocks.add(id);
   core.setSceneRevision(3);
   const viewport = fakeViewport({ webgpu: options.webgpu ?? true });
   loader.load = async () => viewport.module;
-  const { user, unmount } = renderWithCore(<ViewportView />, core);
+  const { user, unmount } = renderWithCore(
+    <>
+      <ViewportView />
+      {options.beside}
+    </>,
+    core,
+  );
   return { core, viewport, user, unmount };
 }
 
@@ -796,5 +804,20 @@ describe("section box and visibility shortcuts", () => {
     viewport.emit({ kind: "tool_state", tool: "select", step: "pick_face" });
     await user.keyboard("{Escape}");
     expect(viewport.commands).toEqual([{ kind: "cancel" }]);
+  });
+
+  it("leaves B and Escape to an open dialog", async () => {
+    const { viewport, user } = await ready({
+      beside: (
+        <Dialog titleId="t" onCancel={() => undefined}>
+          <h2 id="t">Title</h2>
+        </Dialog>
+      ),
+    });
+    viewport.emit({ kind: "tool_state", tool: "select", step: "pick_face" });
+    (document.activeElement as HTMLElement).blur();
+    await user.keyboard("b{Escape}");
+    expect(viewport.tools).toEqual([]);
+    expect(viewport.commands).toEqual([]);
   });
 });
