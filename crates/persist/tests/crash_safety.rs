@@ -30,8 +30,7 @@ struct TempDir(PathBuf);
 
 impl TempDir {
     fn new(name: &str) -> Result<Self> {
-        let dir =
-            std::env::temp_dir().join(format!("bimcraft-crash-{}-{name}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("fabrilo-crash-{}-{name}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir)?;
         Ok(Self(dir))
@@ -282,7 +281,7 @@ fn refused_files_keep_their_journal_mode() -> Result<()> {
         ),
         (
             "newer.bim",
-            "PRAGMA application_id = 1112100163; PRAGMA user_version = 99; CREATE TABLE t (x);",
+            "PRAGMA application_id = 1178681938; PRAGMA user_version = 99; CREATE TABLE t (x);",
         ),
     ] {
         let path = dir.0.join(name);

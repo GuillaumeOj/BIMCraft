@@ -1,4 +1,4 @@
-//! `BIMCraft` project files, stored as `SQLite` databases (specification §5.3).
+//! `Fabrilo` project files, stored as `SQLite` databases (specification §5.3).
 //!
 //! This crate never opens a file: the host opens the [`Connection`] on its own storage (a path on
 //! desktop, the browser's OPFS through a `SQLite` VFS) and hands it in, so the crate stays free of
@@ -74,9 +74,9 @@ impl<'a> Schema<'a> {
     }
 }
 
-/// Marks a database as a `BIMCraft` project in the file header ("BIMC" in ASCII), so other
+/// Marks a database as a `Fabrilo` project in the file header ("FABR" in ASCII), so other
 /// `SQLite` files are refused instead of being modified.
-const APPLICATION_ID: i32 = 0x4249_4D43;
+const APPLICATION_ID: i32 = 0x4641_4252;
 
 /// Why a project file could not be opened or written.
 ///
@@ -84,7 +84,7 @@ const APPLICATION_ID: i32 = 0x4249_4D43;
 #[derive(Debug, thiserror::Error)]
 pub enum PersistError {
     /// The database belongs to another application.
-    #[error("the file is not a BIMCraft project")]
+    #[error("the file is not a Fabrilo project")]
     NotAProject,
     /// The file was saved by a newer version of the application.
     #[error("the project uses file format {found}; this version reads up to {supported}")]
@@ -415,6 +415,15 @@ mod tests {
     }
 
     #[test]
+    fn a_database_with_the_former_bimc_marker_is_refused() {
+        let mut conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch("PRAGMA application_id = 1112100163; PRAGMA user_version = 1;")
+            .unwrap();
+        let err = open_project(&mut conn).unwrap_err();
+        assert!(matches!(err, PersistError::NotAProject));
+    }
+
+    #[test]
     fn databases_of_other_applications_are_refused_and_left_alone() {
         let cases = [
             "PRAGMA application_id = 7;".to_owned(),
@@ -430,7 +439,7 @@ mod tests {
             conn.execute_batch(&setup).unwrap();
             let err = open_project(&mut conn).unwrap_err();
             assert!(matches!(err, PersistError::NotAProject), "{setup}");
-            assert_eq!(err.to_string(), "the file is not a BIMCraft project");
+            assert_eq!(err.to_string(), "the file is not a Fabrilo project");
             let tables: i64 = conn
                 .query_row(
                     "SELECT count(*) FROM sqlite_schema WHERE name = 'project_property'",

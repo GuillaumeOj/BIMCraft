@@ -17,10 +17,8 @@ struct TempFile(PathBuf);
 
 impl TempFile {
     fn new(name: &str) -> Self {
-        let path = std::env::temp_dir().join(format!(
-            "bimcraft-persist-{}-{name}.bim",
-            std::process::id()
-        ));
+        let path =
+            std::env::temp_dir().join(format!("fabrilo-persist-{}-{name}.bim", std::process::id()));
         let _ = std::fs::remove_file(&path);
         Self(path)
     }
