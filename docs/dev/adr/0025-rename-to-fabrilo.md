@@ -53,7 +53,7 @@ The owner's tasks outside the code are listed in #380, not here: reserving names
 ## References
 
 - Issues [#380](https://github.com/GuillaumeOj/BIMCraft/issues/380) and [#381](https://github.com/GuillaumeOj/BIMCraft/issues/381).
-- [Specification §16.2](../../specifications.md#162-open-questions).
+- [Specification §16.2](../../specifications.md#16-risks-open-questions-and-glossary).
 - [ADR 0006](0006-sqlite-binding.md): SQLite binding and `application_id`.
 - [ADR 0016](0016-project-file-layout.md): project file layout.
 - [ADR 0017](0017-georeference-storage-and-ifc-mapping.md): georeference storage and IFC mapping (survey point property set).

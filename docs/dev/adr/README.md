@@ -7,7 +7,7 @@ An architecture decision record (ADR) captures one significant technical decisio
 - One decision per file, named `NNNN-kebab-case-title.md` with the next free four-digit number. Numbers are never reused.
 - Status is one of **Proposed**, **Accepted** or **Superseded by NNNN** (linking the newer record).
 - A record is written as Accepted in the pull request that introduces it: merging that pull request is the acceptance. Use Proposed only for a record merged before its decision is final.
-- Accepted records are not rewritten. To change a decision, write a new record that supersedes the old one and update the old one's status line only.
+- Accepted records are not rewritten. To change a decision, write a new record that supersedes the old one and update the old one's status line only. The one exception is renaming an identifier, which is editorial: see [ADR 0025](0025-rename-to-fabrilo.md).
 - Name the requirement IDs from the [specification](../../specifications.md) and link the issues the decision affects.
 - Add the record to the index below in the same pull request.
 
