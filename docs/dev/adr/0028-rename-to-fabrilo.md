@@ -8,7 +8,7 @@
 
 "BIMCraft" is already used by other products. A naming study and a trademark screening chose **Fabrilo** (fa-BREE-lo) on 2026-11-17. The name comes from the Latin *fabrilis*, "of the craftsman", and from the Esperanto *fabr-ilo*, "making tool".
 
-No version has been released: there is no tag, no release, and no project file or IFC export in users' hands. The repository mentions the old name about 310 times in about 135 files.
+No version has been released: there is no release (the only tag, `old-stack-32`, marks an abandoned earlier stack) and no project file or IFC export in users' hands. When this record was written, the repository mentioned the old name about 440 times in about 150 files, outside the orchestrator working files.
 
 ## Decision
 
@@ -29,7 +29,7 @@ The product is renamed to Fabrilo. Each identifier that carries the old name cha
 
 **Casing.** The product name is written `Fabrilo` in prose and in mixed-case identifiers (`Fabrilo_SurveyPoint`), `fabrilo` in lowercase identifiers and `FABRILO` in upper-case ones. The four-character file header is `FABR`, the ASCII bytes `0x46 0x41 0x42 0x52`. It fits a positive `i32`, as the SQLite `application_id` needs.
 
-**No compatibility.** Nothing reads or writes the old identifiers after the rename. There is no alias for `bimcraft/` material keys, no import of `BIMCraft_SurveyPoint`, no acceptance of the `BIMC` header, no migration of the `bimcraft.language` key and no old environment variable. Nothing was released, so no file, export, script or browser holds them. PERS-01 (open files from earlier versions) is not broken: the only `BIMC` files are developers' scratch files. A developer's saved language choice resets to the default once. The project file format version (`user_version`) does not change, because the header marks the application, not the layout.
+**No compatibility.** Nothing reads or writes the old identifiers after the rename. There is no alias for `bimcraft/` material keys, no import of `BIMCraft_SurveyPoint`, no acceptance of the `BIMC` header, no migration of the `bimcraft.language` key and no old environment variable. Nothing was released, so no file, export, script or browser holds them. PERS-01 (open files from earlier versions) is not broken: the only `BIMC` files are developers' scratch files and the test fixtures in `crates/persist/tests/fixtures/`. A developer's saved language choice resets to the default once. The project file format version (`user_version`) does not change, because the header marks the application, not the layout. The fixtures are the one exception to "written once and never rewritten" in the schema versions guide: issue #382 regenerates them with the `FABR` header, so the migration tests keep opening every file version.
 
 **Earlier ADRs.** Renaming an identifier in an earlier record is an editorial change, not a change of decision. Issue #388 updates the name in records 0001 to 0024 in place, and they keep their status. This is the one exception to "accepted records are not rewritten". This record keeps the old name, as the record of the change.
 
