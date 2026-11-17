@@ -1,4 +1,4 @@
-//! The material library (MAT-02): the European grades shipped with `BIMCraft`, extensible with
+//! The material library (MAT-02): the European grades shipped with `Fabrilo`, extensible with
 //! libraries from users and plugins in the same JSON format.
 //!
 //! A library source is `{"format": 1, "materials": [...]}`. Each material gives its `name`,
@@ -30,10 +30,10 @@ pub const MAX_MATERIALS: usize = 4096;
 /// The longest source name accepted, in characters.
 pub const MAX_SOURCE_NAME: usize = 32;
 
-/// The source name of the grades shipped with `BIMCraft`, for those without a design code.
-const BUILTIN_SOURCE: &str = "bimcraft";
+/// The source name of the grades shipped with `Fabrilo`, for those without a design code.
+const BUILTIN_SOURCE: &str = "fabrilo";
 
-/// The grades shipped with `BIMCraft`, one file per family.
+/// The grades shipped with `Fabrilo`, one file per family.
 const BUILTIN: [&str; 5] = [
     include_str!("../data/en1992-1-1.json"),
     include_str!("../data/en1993-1-1.json"),
@@ -138,7 +138,7 @@ struct ValueEntry {
 }
 
 impl Library {
-    /// The grades shipped with `BIMCraft`.
+    /// The grades shipped with `Fabrilo`.
     ///
     /// # Errors
     ///

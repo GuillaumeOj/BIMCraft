@@ -46,10 +46,10 @@ fn project() -> Session {
     let mut session = session();
     for (raw, key) in [
         (CONCRETE, "en1992-1-1/C30/37"),
-        (WOOL, "bimcraft/Rock wool"),
-        (PLASTER, "bimcraft/Gypsum plaster"),
+        (WOOL, "fabrilo/Rock wool"),
+        (PLASTER, "fabrilo/Gypsum plaster"),
         (STEEL, "en1993-1-1/S355"),
-        (BRICK, "bimcraft/Clay brick"),
+        (BRICK, "fabrilo/Clay brick"),
     ] {
         ok(
             &mut session,
