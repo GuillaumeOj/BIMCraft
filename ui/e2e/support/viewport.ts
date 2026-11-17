@@ -212,7 +212,10 @@ function watchViewStops(page: Page) {
 }
 
 const UNREADABLE = "(the page can no longer be read)";
-/** How long the failure report waits for an adapter: a hung GPU process never gives one. */
+/**
+ * How long the failure report waits for an adapter: a hung GPU process never gives one, and a
+ * hung page never answers at all, so the wait is kept here rather than in the page.
+ */
 const ADAPTER_WAIT_MS = 2000;
 
 /** Kept lines, then how many were left out. */
@@ -222,18 +225,20 @@ const withDropped = ({ kept, dropped }: KeptLines) =>
 /** The browser and the WebGPU adapter the test ran on, which a software renderer's faults depend on. */
 async function describeGpu(page: Page) {
   const browser = page.context().browser()?.version() ?? "unknown";
-  const adapter = await page
-    .evaluate(async (wait) => {
-      const timeout = new Promise<"no answer">((resolve) =>
-        setTimeout(() => resolve("no answer"), wait),
-      );
-      const found = await Promise.race([navigator.gpu?.requestAdapter(), timeout]);
-      if (found === "no answer") return found;
+  const query = page
+    .evaluate(async () => {
+      const found = await navigator.gpu?.requestAdapter();
       if (!found) return "none";
       const { vendor, architecture, device, description } = found.info;
       return [vendor, architecture, device, description].filter(Boolean).join(" / ") || "unnamed";
-    }, ADAPTER_WAIT_MS)
+    })
     .catch(() => UNREADABLE);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<string>((resolve) => {
+    timer = setTimeout(() => resolve("no answer"), ADAPTER_WAIT_MS);
+  });
+  const adapter = await Promise.race([query, timeout]);
+  clearTimeout(timer);
   return [`Chromium: ${browser}`, `WebGPU adapter: ${adapter}`];
 }
 

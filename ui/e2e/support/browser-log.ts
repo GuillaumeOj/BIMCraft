@@ -36,16 +36,21 @@ export function browserLogSize(): number {
   }
 }
 
-/** The log from `from` to its end, or its last `MAX_BYTES` when the test logged more. */
+/**
+ * The log from `from` to its end, or its last `MAX_BYTES` when the test logged more. A log shorter
+ * than `from` was started again during the test (a new browser truncates it), so all of it is the
+ * test's.
+ */
 function readFrom(from: number): string | null {
   try {
     const file = openSync(browserLogFile, "r");
     try {
       const size = fstatSync(file).size;
-      const start = Math.max(from, size - MAX_BYTES);
+      const start = Math.max(from > size ? 0 : from, size - MAX_BYTES);
       const buffer = Buffer.allocUnsafe(Math.max(0, size - start));
-      readSync(file, buffer, 0, buffer.length, start);
-      return buffer.toString("utf8");
+      // Only the bytes read: the rest of an unsafe buffer is whatever memory it was given.
+      const read = readSync(file, buffer, 0, buffer.length, start);
+      return buffer.subarray(0, read).toString("utf8");
     } finally {
       closeSync(file);
     }
