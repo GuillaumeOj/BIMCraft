@@ -1,8 +1,8 @@
 #!/usr/bin/env bun
-// Builds the BIMCraft app icons for every platform from the two SVG masters in
+// Builds the Fabrilo app icons for every platform from the two SVG masters in
 // crates/desktop-app/icons/source: logo.svg (48 px and up) and logo-small.svg (16 to 32 px, where
 // the full drawing turns to noise). It writes the PNG images (Linux, window icon), icon.ico (Windows),
-// icon.icns (macOS before 26) and BIMCraft.icon, the layered Icon Composer file that macOS 26
+// icon.icns (macOS before 26) and Fabrilo.icon, the layered Icon Composer file that macOS 26
 // renders in Liquid Glass. The pinned Tauri CLI rasterises the SVGs, so run `bun install` in ui/
 // first. The outputs are committed; run this again after changing a master.
 // Usage: bun scripts/build-icons.ts [repo-root]
@@ -12,7 +12,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 export const ICONS_DIR = "crates/desktop-app/icons";
-export const GLASS_ICON = "BIMCraft.icon";
+export const GLASS_ICON = "Fabrilo.icon";
 // Icon Composer layers, front to back. The background layer becomes the file's solid fill, so the
 // system can tint it in the dark and tinted appearances.
 export const GLASS_LAYERS = ["facade", "frame", "rebar"];
@@ -121,7 +121,7 @@ export function build(root: string, tauri: Tauri): string[] {
   const source = join(root, ICONS_DIR, "source");
   const full = readFileSync(join(source, "logo.svg"), "utf8");
   const small = readFileSync(join(source, "logo-small.svg"), "utf8");
-  const work = mkdtempSync(join(tmpdir(), "bimcraft-icons-"));
+  const work = mkdtempSync(join(tmpdir(), "fabrilo-icons-"));
   try {
     const render = (name: string, svg: string, sizes?: number[]) => {
       const dir = join(work, name);

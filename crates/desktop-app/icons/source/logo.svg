@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
-<title>BIMCraft</title>
-<!-- BIMCraft app icon, full detail (48 px and up). An isometric building seen like an X-ray:
+<title>Fabrilo</title>
+<!-- Fabrilo app icon, full detail (48 px and up). An isometric building seen like an X-ray:
      finished facade at the bottom, fading into the concrete frame, fading into the rebar cage.
      Each layer sits between "layer:<name>" markers so scripts/build-icons.ts can export it alone
      for the macOS Icon Composer file. Keep shapes flat: macOS adds the glass, light and depth. -->
