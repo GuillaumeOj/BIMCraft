@@ -27,7 +27,7 @@ georef = { path = "crates/georef" }
 host-desktop = { path = "crates/host-desktop" }
 js-sys = "=0.3.106"
 # Without the default features, which fetch remote and file `$ref`s over HTTP and TLS.
-jsonschema = { version = "=0.58.5", default-features = false }
+jsonschema = { version = "=0.60.2", default-features = false }
 libm = "=0.2.16"
 material = { path = "crates/material" }
 num-rational = { version = "=0.4.2", default-features = false, features = [
@@ -37,7 +37,7 @@ persist = { path = "crates/persist" }
 platform = { path = "crates/platform" }
 # Blocks on the renderer's async device requests in its tests only.
 pollster = "=1.0.1"
-proptest = "=1.11.0"
+proptest = "=1.12.0"
 rayon = "=1.12.0"
 render = { path = "crates/render" }
 robust = "=1.2.0"
@@ -54,7 +54,7 @@ rust-names = { path = "crates/rust-names" }
 serde = { version = "=1.0.229", features = ["derive"] }
 # float_roundtrip: parse every finite f64 back to the exact value it was written from, which
 # replaying serialised commands relies on (CORE-11).
-serde_json = { version = "=1.0.151", features = ["float_roundtrip"] }
+serde_json = { version = "=1.0.154", features = ["float_roundtrip"] }
 # The desktop window and its IPC (UI-01, API-04). Without the default features: desktop-app
 # adds the webview runtime (wry), so host-desktop's IPC builds and tests without a webview.
 tauri = { version = "=2.12.5", default-features = false }
@@ -63,7 +63,7 @@ tauri-build = { version = "=2.7.4", default-features = false }
 tauri-plugin-opener = { version = "=2.7.2", default-features = false }
 tempfile = "=3.27.0"
 thiserror = "=2.0.21"
-toml = "=1.1.6"
+toml = "=1.1.8"
 # The browser glue of the viewport (VP-01): wasm32 only, at the versions wgpu's WebGPU backend
 # already locks, so no second copy is built.
 wasm-bindgen = "=0.2.129"
