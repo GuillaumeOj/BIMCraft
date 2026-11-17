@@ -20,7 +20,7 @@ Nothing in the core uses these methods yet. This record picks one implementation
 
 Core crates (`scripts/wasm-crates.txt`) compute every transcendental function with the **[`libm`](https://crates.io/crates/libm) crate**, version pinned in `[workspace.dependencies]`. They call it directly (`libm::sin(x)`, `libm::atan2(y, x)`); there is no wrapper crate.
 
-`libm` is a pure-Rust port of musl's maths library, compiled from one source. Its only hardware code paths (default `arch` feature) are for exactly rounded operations such as `sqrt`, `fma` and `floor`, so it produces the same bits on every supported target, given the same `libm` version. Its x87 paths apply only to 32-bit x86 without SSE2, which BIMCraft does not target.
+`libm` is a pure-Rust port of musl's maths library, compiled from one source. Its only hardware code paths (default `arch` feature) are for exactly rounded operations such as `sqrt`, `fma` and `floor`, so it produces the same bits on every supported target, given the same `libm` version. Its x87 paths apply only to 32-bit x86 without SSE2, which Fabrilo does not target.
 
 ### Banned std methods
 

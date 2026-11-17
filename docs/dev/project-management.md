@@ -1,6 +1,6 @@
 # Project management
 
-BIMCraft tracks work in GitHub Issues and plans it on a single GitHub Project board. Everything is public and free, contributors need nothing beyond a GitHub account, and pull requests close issues automatically. This page describes the board, the workflow and the one-time setup.
+Fabrilo tracks work in GitHub Issues and plans it on a single GitHub Project board. Everything is public and free, contributors need nothing beyond a GitHub account, and pull requests close issues automatically. This page describes the board, the workflow and the one-time setup.
 
 ## Principles
 
@@ -27,7 +27,7 @@ One milestone per roadmap phase of the [specification](../specifications.md#15-r
 
 ## The board
 
-A single user-level project, **BIMCraft**, linked to the repository.
+A single user-level project, **Fabrilo**, linked to the repository.
 
 ### Fields
 
@@ -97,7 +97,7 @@ for title in "Phase 0 – Foundations" "Phase 1 – MVP" "Phase 2 – V1" "Phase
 done
 
 # Project, linked to the repository
-NUMBER=$(gh project create --owner @me --title BIMCraft --format json --jq .number)
+NUMBER=$(gh project create --owner @me --title Fabrilo --format json --jq .number)
 gh project link "$NUMBER" --owner @me --repo "$REPO"
 gh project field-create "$NUMBER" --owner @me --name Priority --data-type SINGLE_SELECT --single-select-options "Urgent,High,Medium,Low"
 gh project field-create "$NUMBER" --owner @me --name Size     --data-type SINGLE_SELECT --single-select-options "XS,S,M,L,XL"
