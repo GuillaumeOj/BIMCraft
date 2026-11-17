@@ -12,7 +12,7 @@ A few words used on this page:
 - **Function.** What the layer is for: structure, substrate, insulation, air gap, membrane or finish.
 - **Core.** The load-bearing part of the build-up. The core layers must be next to each other.
 - **Join priority.** When two walls meet, the layers with a higher priority (1) run through the layers with a lower priority (5); layers with the same priority meet. Each function has a default: structure 1, substrate 2, insulation 3, air gap 3, membrane 4, finish 5.
-- **Thermal resistance (R).** How well a layer, or the whole build-up, resists the flow of heat, in m²·K/W. BIMCraft calculates it from the thickness and the thermal conductivity of each material.
+- **Thermal resistance (R).** How well a layer, or the whole build-up, resists the flow of heat, in m²·K/W. Fabrilo calculates it from the thickness and the thermal conductivity of each material.
 
 ## Steps
 
@@ -28,7 +28,7 @@ A few words used on this page:
 
 ## Check the section and the totals
 
-While you edit, the dialog shows a **Section preview** (a schematic, not to scale) and the **Total thickness** and **Thermal resistance**. BIMCraft asks its calculation core for these figures, so they are always the real ones.
+While you edit, the dialog shows a **Section preview** (a schematic, not to scale) and the **Total thickness** and **Thermal resistance**. Fabrilo asks its calculation core for these figures, so they are always the real ones.
 
 If a layer has a material without a thermal conductivity, such as an air gap, its resistance shows "—". The total counts the other layers and a note says how many layers were left out. Surface resistances and the U-value are not part of this total.
 
@@ -57,7 +57,7 @@ Use **Walls**, **Slabs** or **All** to filter the list.
 
 ## Cancel your changes
 
-Choose **Cancel** or press Esc. If you changed something, BIMCraft asks "Discard your changes?": **Keep editing** is selected by default.
+Choose **Cancel** or press Esc. If you changed something, Fabrilo asks "Discard your changes?": **Keep editing** is selected by default.
 
 ## Troubleshooting
 

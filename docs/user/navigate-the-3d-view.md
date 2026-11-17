@@ -20,7 +20,7 @@ A few words used on this page:
 | Pan | Middle-click and drag, or Shift + drag | Two fingers |
 | Zoom | Wheel, or Ctrl + wheel | Pinch |
 
-The first time the view opens, a card titled **Moving around the model** lists these moves. **Got it** hides it until you restart BIMCraft; **Don't show again** hides it for good.
+The first time the view opens, a card titled **Moving around the model** lists these moves. **Got it** hides it until you restart Fabrilo; **Don't show again** hides it for good.
 
 ## Move around with the keyboard
 
@@ -54,7 +54,7 @@ Each control names its shortcut in its tooltip. The status bar at the bottom lef
 
 ## Turn off single-key shortcuts
 
-Shortcuts made of one letter (`V`, `M`, `B`, `P`, `S`) can be pressed by accident, for example by speech recognition software. To turn them off, untick **Single-key shortcuts** in the title bar, next to the language choice. BIMCraft remembers the choice.
+Shortcuts made of one letter (`V`, `M`, `B`, `P`, `S`) can be pressed by accident, for example by speech recognition software. To turn them off, untick **Single-key shortcuts** in the title bar, next to the language choice. Fabrilo remembers the choice.
 
 **Result:** these letters then work only while the 3D view has the keyboard (click it first, or reach it with Tab). Keys with a modifier, such as Ctrl + Shift + M, and the keys of the 3D view itself (arrows, `F`, Esc, typed values) still work. Tooltips stop naming the single-key shortcuts.
 
@@ -66,16 +66,16 @@ Shortcuts made of one letter (`V`, `M`, `B`, `P`, `S`) can be pressed by acciden
 ## Troubleshooting
 
 **The 3D view says "The 3D view isn't available on this computer".**
-BIMCraft draws in 3D with your graphics card through a browser feature called WebGPU. Some computers don't offer it yet, notably Linux. Your project, its panels and editing still work; only the 3D view is missing. Update your operating system and graphics drivers; on Linux, a later version of BIMCraft will draw without WebGPU.
+Fabrilo draws in 3D with your graphics card through a browser feature called WebGPU. Some computers don't offer it yet, notably Linux. Your project, its panels and editing still work; only the 3D view is missing. Update your operating system and graphics drivers; on Linux, a later version of Fabrilo will draw without WebGPU.
 
 **The 3D view says "The 3D view stopped".**
-The graphics card stopped responding, or the model was too big for it. Your model is safe. Choose **Reload view**. If it happens again within a short time, restart BIMCraft. **Copy details** copies a short technical description (no model content) for a bug report.
+The graphics card stopped responding, or the model was too big for it. Your model is safe. Choose **Reload view**. If it happens again within a short time, restart Fabrilo. **Copy details** copies a short technical description (no model content) for a bug report.
 
 **The view stays on "Loading the 3D view…".**
 After ten seconds it says "Still working…" and offers **Cancel**. Cancel, then choose **Reload view**.
 
 **A link to the guide does not open.**
-BIMCraft opens guide pages in your web browser, and needs an internet connection for them. If it cannot, it shows the address of the page so you can copy it into your browser.
+Fabrilo opens guide pages in your web browser, and needs an internet connection for them. If it cannot, it shows the address of the page so you can copy it into your browser.
 
 **Letters such as `P` or `S` do nothing.**
 These shortcuts are off while a dialog is open or while you type in a text field. Close the dialog or click the 3D view first. If **Single-key shortcuts** is unticked, they work only while the 3D view has the keyboard (see below).

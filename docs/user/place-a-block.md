@@ -9,7 +9,7 @@ A block is a simple box: use it for massing studies, placeholders or anything yo
 A few words used on this page:
 
 - **Footprint.** The rectangle the block covers on the ground: its width and its depth.
-- **Snapping.** While you point, BIMCraft catches the nearest corner, edge midpoint, edge, face or the ground, and shows a marker and its name.
+- **Snapping.** While you point, Fabrilo catches the nearest corner, edge midpoint, edge, face or the ground, and shows a marker and its name.
 
 ## Steps
 

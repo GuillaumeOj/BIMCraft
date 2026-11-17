@@ -27,7 +27,7 @@ Type a point in any one of three coordinate systems and read it in the other two
 ## Tips
 
 - You can type a decimal point or a decimal comma. In DMS, write for example `48°51′10.8″N`, or `S 10 15 30`.
-- The height in the Geographic block is approximate: BIMCraft does not model the geoid (the shape of mean sea level) yet.
+- The height in the Geographic block is approximate: Fabrilo does not model the geoid (the shape of mean sea level) yet.
 
 ## Troubleshooting
 

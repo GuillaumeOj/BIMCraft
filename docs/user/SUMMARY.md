@@ -4,7 +4,7 @@
 
 # Getting started
 
-- [Install BIMCraft](getting-started.md)
+- [Install Fabrilo](getting-started.md)
 - [Change the interface language](change-the-interface-language.md)
 - [Use the workspace with the keyboard](use-the-workspace-with-the-keyboard.md)
 
