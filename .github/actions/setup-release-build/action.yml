@@ -1,10 +1,10 @@
-# Shared by the two build jobs of release.yml (ENG-05): Bun and the pinned Tauri CLI, the updater
-# public key (UPDATER_PUBLIC_KEY, exported to the job) merged into a Tauri configuration file
-# ($RUNNER_TEMP/updater.conf.json), and the interface build (ui/dist). A dry run gets a throw-away
-# key pair (scripts/release/dry-run-updater-key.sh). Callers run setup-rust first: it loads
-# scripts/tool-versions.env.
+# Shared by the two build jobs of release.yml (ENG-05): Bun, the pinned Tauri CLI and wasm-bindgen,
+# the updater public key (UPDATER_PUBLIC_KEY, exported to the job) merged into a Tauri configuration
+# file ($RUNNER_TEMP/updater.conf.json), and the interface build (the 3D view's module, then
+# ui/dist). A dry run gets a throw-away key pair (scripts/release/dry-run-updater-key.sh). Callers
+# run setup-rust first: it loads scripts/tool-versions.env.
 name: Set up a release build
-description: Install Bun and the Tauri CLI, configure the updater public key and build the interface.
+description: Install Bun, the Tauri CLI and wasm-bindgen, configure the updater public key and build the interface.
 
 inputs:
   publish:
@@ -22,7 +22,7 @@ runs:
         bun-version: ${{ env.BUN_VERSION }}
     - uses: taiki-e/install-action@f7e5d7c961414b23f5b25b2da9294395d08513ad # v2.87.26
       with:
-        tool: tauri-cli@${{ env.TAURI_CLI_VERSION }}
+        tool: tauri-cli@${{ env.TAURI_CLI_VERSION }},wasm-bindgen@${{ env.WASM_BINDGEN_VERSION }}
     - name: Use the release's updater public key
       if: inputs.publish == 'true'
       shell: bash
@@ -37,7 +37,8 @@ runs:
       shell: bash
       run: |
         jq -n --arg key "$UPDATER_PUBLIC_KEY" '{plugins: {updater: {pubkey: $key}}}' > "$RUNNER_TEMP/updater.conf.json"
+    # The 3D view's WebAssembly module and its bindings first (ADR 0026): the bundle imports them.
     - name: Build the interface
       shell: bash
       working-directory: ui
-      run: bun install --frozen-lockfile && bunx vite build
+      run: bun install --frozen-lockfile && bun run build:viewport && bunx vite build
