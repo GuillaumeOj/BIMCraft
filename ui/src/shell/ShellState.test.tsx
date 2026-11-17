@@ -1,15 +1,20 @@
 import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { fakeCore } from "../test-support/fakeCore";
 import { renderWithCore } from "../test-support/render";
 import { useShellState } from "./ShellState";
 
 function Probe() {
-  const { notify, registerModal, modalOpen } = useShellState();
+  const { notify, registerModal, isModalOpen } = useShellState();
+  const [seen, setSeen] = useState("");
   return (
     <>
-      <p>{modalOpen ? "modal" : "no modal"}</p>
+      <p>{seen}</p>
+      <button type="button" onClick={() => setSeen(isModalOpen() ? "modal" : "no modal")}>
+        Check modal
+      </button>
       <button type="button" onClick={() => notify("Hello")}>
         Notify
       </button>
@@ -33,8 +38,10 @@ describe("ShellStateProvider", () => {
   it("counts the modal dialogs that are open", async () => {
     const user = userEvent.setup();
     renderWithCore(<Probe />, fakeCore());
+    await user.click(screen.getByRole("button", { name: "Check modal" }));
     expect(screen.getByText("no modal")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Open modal" }));
+    await user.click(screen.getByRole("button", { name: "Check modal" }));
     expect(screen.getByText("modal")).toBeInTheDocument();
   });
 
