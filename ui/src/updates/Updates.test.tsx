@@ -7,6 +7,9 @@ import { renderWithCore } from "../test-support/render";
 import { AUTO_CHECK_STORAGE_KEY, CHANNEL_STORAGE_KEY } from "./settings";
 import { useUpdates } from "./UpdatesContext";
 
+// The 3D view stays loading: jsdom has no WebGPU, and its error card is an alert of its own.
+vi.mock("../viewport/module", () => ({ loadViewportModule: () => new Promise(() => undefined) }));
+
 const OFFER: UpdateOffer = {
   version: "0.4.0",
   date: "2026-11-12T12:00:00Z",
@@ -568,7 +571,7 @@ describe("the check at start-up", () => {
     const { user } = await renderAndSettle(api);
     await wait(1000);
     await user.click(await screen.findByRole("button", { name: "Updates" }));
-    await user.click(screen.getByRole("checkbox"));
+    await user.click(screen.getByRole("checkbox", { name: "Check for updates automatically" }));
     await wait(10_000);
     expect(api.checkForUpdate).not.toHaveBeenCalled();
   });
