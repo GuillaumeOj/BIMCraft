@@ -46,5 +46,6 @@ Copy [`_template.md`](_template.md) and follow its comments.
 | [0025](0025-instancing-culling-and-level-of-detail.md) | Instancing, culling and level of detail | Accepted |
 | [0026](0026-viewport-in-webassembly-with-a-binary-scene-channel.md) | Viewport in WebAssembly with a binary scene channel | Accepted |
 | [0027](0027-clipping-and-visibility-in-the-viewport.md) | Clipping and visibility in the viewport | Accepted |
+| [0025](0025-rename-to-fabrilo.md) | Rename to Fabrilo | Accepted |
 
 One decision predates this folder and stays in the specification: the web UI over an all-Rust UI ([specification §13](../../specifications.md#13-ui-and-rendering), "Decision record").
