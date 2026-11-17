@@ -36,7 +36,7 @@ fn exit_code(result: Result<(), Box<dyn Error>>, log: &mut impl Write) -> ExitCo
     match result {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => {
-            let _ = writeln!(log, "BIMCraft could not start: {error}");
+            let _ = writeln!(log, "Fabrilo could not start: {error}");
             ExitCode::FAILURE
         }
     }
@@ -60,7 +60,7 @@ mod tests {
         assert_eq!(exit_code(Err(error), &mut log), ExitCode::FAILURE);
         assert_eq!(
             String::from_utf8(log).unwrap(),
-            "BIMCraft could not start: the built-in core schema is invalid: []\n"
+            "Fabrilo could not start: the built-in core schema is invalid: []\n"
         );
     }
 }
