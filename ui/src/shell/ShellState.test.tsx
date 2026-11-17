@@ -38,6 +38,32 @@ describe("ShellStateProvider", () => {
     expect(screen.getByText("modal")).toBeInTheDocument();
   });
 
+  it("answers isModalOpen at once, through nested dialogs, before the state renders", () => {
+    let state: ReturnType<typeof useShellState> | undefined;
+    function Grab() {
+      state = useShellState();
+      return null;
+    }
+    renderWithCore(<Grab />, fakeCore());
+    const shell = () => {
+      if (state === undefined) throw new Error("not rendered");
+      return state;
+    };
+    const { isModalOpen, registerModal } = shell();
+    let first = () => {};
+    let second = () => {};
+    act(() => {
+      first = registerModal();
+      expect(isModalOpen()).toBe(true);
+      second = registerModal();
+      first();
+      expect(isModalOpen()).toBe(true);
+      second();
+      expect(isModalOpen()).toBe(false);
+    });
+    expect(shell().isModalOpen).toBe(isModalOpen);
+  });
+
   it("shows a plain toast for a few seconds, without Undo", () => {
     renderWithCore(<Probe />, fakeCore());
     vi.useFakeTimers();
