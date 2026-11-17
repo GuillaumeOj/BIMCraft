@@ -29,7 +29,7 @@ export function ClipPlanesSection({ report }: { report: ViewReport }) {
     notify(t("view.clip.cleared"));
   };
 
-  const describe = (plane: ClipPlane) => {
+  const planeSummary = (plane: ClipPlane) => {
     const along = axisNormal(plane.normal);
     if (along === null) return t("view.clip.oblique");
     const name = AXIS_NAMES[along.axis];
@@ -62,7 +62,7 @@ export function ClipPlanesSection({ report }: { report: ViewReport }) {
               >
                 <ClipPlaneIcon />
                 <span className="plane-name">{name}</span>
-                <span className="plane-detail">{describe(plane)}</span>
+                <span className="plane-detail">{planeSummary(plane)}</span>
                 <button
                   type="button"
                   className="vp-icon-button"

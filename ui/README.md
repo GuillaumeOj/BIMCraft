@@ -8,15 +8,15 @@ The interface is designed in FigCraft (`docs/BIMCraft.figcraft`); see [docs/dev/
 
 Run them from `ui/` after `bun install`:
 
-| Task | Command |
-| --- | --- |
-| Development server | `bun run dev` |
-| Production build | `bun run build` |
-| Desktop window around the development server (see [docs/dev/desktop.md](../docs/dev/desktop.md)) | `cargo run -p desktop-app` |
-| Unit tests with coverage | `bunx vitest run --coverage` |
-| End-to-end tests (first run: `bunx playwright install chromium`) | `bunx playwright test` |
-| Lint, format and imports | `bunx biome ci .` |
-| Type check (all code, then the app without Node types) | `bun run typecheck` |
+| Task                                                                                             | Command                      |
+| ------------------------------------------------------------------------------------------------ | ---------------------------- |
+| Development server                                                                               | `bun run dev`                |
+| Production build                                                                                 | `bun run build`              |
+| Desktop window around the development server (see [docs/dev/desktop.md](../docs/dev/desktop.md)) | `cargo run -p desktop-app`   |
+| Unit tests with coverage                                                                         | `bunx vitest run --coverage` |
+| End-to-end tests (first run: `bunx playwright install chromium`)                                 | `bunx playwright test`       |
+| Lint, format and imports                                                                         | `bunx biome ci .`            |
+| Type check (all code, then the app without Node types)                                           | `bun run typecheck`          |
 
 ## Configuration
 
