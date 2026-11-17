@@ -31,7 +31,7 @@ The product is renamed to Fabrilo. Each identifier that carries the old name cha
 
 **No compatibility.** Nothing reads or writes the old identifiers after the rename. There is no alias for `bimcraft/` material keys, no import of `BIMCraft_SurveyPoint`, no acceptance of the `BIMC` header, no migration of the `bimcraft.language` key and no old environment variable. Nothing was released, so no file, export, script or browser holds them. PERS-01 (open files from earlier versions) is not broken: the only `BIMC` files are developers' scratch files and the test fixtures in `crates/persist/tests/fixtures/`. A developer's saved language choice resets to the default once. The project file format version (`user_version`) does not change, because the header marks the application, not the layout. The fixtures are the one exception to "written once and never rewritten" in the schema versions guide: issue #382 regenerates them with the `FABR` header, so the migration tests keep opening every file version.
 
-**Earlier ADRs.** Renaming an identifier in an earlier record is an editorial change, not a change of decision. Issue #388 updates the name in records 0001 to 0024 in place, and they keep their status. This is the one exception to "accepted records are not rewritten". This record keeps the old name, as the record of the change.
+**Earlier ADRs.** Renaming an identifier in an earlier record is an editorial change, not a change of decision. Issue #388 updates the name in records 0001 to 0027 in place, and they keep their status. This is the one exception to "accepted records are not rewritten". This record keeps the old name, as the record of the change.
 
 **Where the old name may remain.** This record, the §16.2 entry in the specification, and the allowlist of the guard in issue #389. Links to `github.com/GuillaumeOj/BIMCraft` stay until the owner renames the repository, because GitHub redirects them. Issues #388 and #389 handle them.
 
@@ -48,7 +48,7 @@ The owner's tasks outside the code are listed in #380, not here: reserving names
 - **Keep BIMCraft.** Other products already use it, and the trademark risk remains.
 - **Read the old identifiers alongside the new ones for one release.** No release exists, so this would be dead code to maintain and test.
 - **Bump the file format version instead of changing the header.** The header identifies the application. A version bump would hide the rename.
-- **Supersede every ADR that names an old identifier.** That would supersede 24 records for one word. It adds noise, and the decisions themselves do not change.
+- **Supersede every ADR that names an old identifier.** That would supersede 27 records for one word. It adds noise, and the decisions themselves do not change.
 
 ## References
 
