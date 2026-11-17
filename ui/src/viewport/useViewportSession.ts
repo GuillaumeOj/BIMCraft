@@ -18,7 +18,7 @@ export type Phase =
 
 /** After this long, the loading state says it is still working and offers Cancel. */
 export const SLOW_LOADING_MS = 10_000;
-/** A second failure within this long adds "restart BIMCraft" to the error card. */
+/** A second failure within this long adds "restart Fabrilo" to the error card. */
 export const REPEATED_FAILURE_MS = 30_000;
 
 export type ViewportSession = {

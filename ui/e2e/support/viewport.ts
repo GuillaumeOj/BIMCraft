@@ -130,9 +130,7 @@ export function fakeCore({ scenes, start }: { scenes: Scenes; start: "empty" | "
 
 export async function open(page: Page, start: "empty" | "blocks") {
   // The navigation hint would cover part of the model.
-  await page.addInitScript(() =>
-    localStorage.setItem("bimcraft.viewport.navigationHint", "hidden"),
-  );
+  await page.addInitScript(() => localStorage.setItem("fabrilo.viewport.navigationHint", "hidden"));
   await page.addInitScript(fakeCore, { scenes: SCENES, start });
   await page.goto("/");
   return page.getByRole("application", { name: "3D view" });
