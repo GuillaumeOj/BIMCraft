@@ -19,3 +19,5 @@ api
 platform
 render
 core-ext
+scene-wire
+viewport

@@ -54,6 +54,7 @@ Updates come in groups, so that versions that must agree move together and CI ru
 | `actions` | every GitHub Action | Monday before 6am |
 | `toolchains` | `scripts/tool-versions.env` but gitleaks and actionlint (one pull request each, as CI pins their tarball checksums), the stable Rust toolchain, Bun | Monday before 6am |
 | `tauri` | the tauri crates and `@tauri-apps/api` | Monday before 6am |
+| `wasm-bindgen` | the `wasm-bindgen`, `js-sys`, `web-sys` and `wasm-bindgen-futures` crates and `wasm-bindgen-cli` in `scripts/tool-versions.env`, which must equal the crate ([viewport.md](viewport.md)) | Monday before 6am |
 | `fuzz-nightly` | `fuzz/rust-toolchain.toml` | first day of the month |
 | lock-file maintenance | the transitive dependencies of `Cargo.lock`, `fuzz/Cargo.lock` and `ui/bun.lock` | first day of the month |
 
@@ -87,7 +88,7 @@ The renderer's tests in `crates/render/tests/` draw offscreen on a real GPU adap
 
 ## Benchmarks
 
-Hot paths keep [criterion](https://docs.rs/criterion) benchmarks in their crate's `benches/`: the exact predicates of the geometry kernel (`cargo bench -p geom`) and the attribute tables of the model (`cargo bench -p core-model`). CI compiles them through `clippy --all-targets` but does not run them: timings on shared runners are too noisy to gate on. Run them before and after a change to a hot path and quote the numbers in the pull request. Reference numbers, and the memory measured per object (NFR-08), live in [performance-baselines.md](performance-baselines.md).
+Hot paths keep [criterion](https://docs.rs/criterion) benchmarks in their crate's `benches/`: the exact predicates of the geometry kernel (`cargo bench -p geom`), the attribute tables of the model (`cargo bench -p core-model`) and the frame preparation of the renderer on its reference model (`cargo bench -p render`). The CI of pull requests compiles them through `clippy --all-targets` but does not run them: timings on shared runners are too noisy to gate on. The `Benchmarks` workflow (`.github/workflows/bench.yml`) runs them weekly and on demand, never as a required check, and keeps criterion's output (`target/criterion`) as an artefact, to compare one week with the next on the same kind of runner. Run them before and after a change to a hot path and quote the numbers in the pull request. Reference numbers, and the memory measured per object (NFR-08), live in [performance-baselines.md](performance-baselines.md).
 
 ## Linters, formatters and import sorting
 

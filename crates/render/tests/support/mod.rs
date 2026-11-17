@@ -114,9 +114,14 @@ pub struct Boxes {
 
 impl Boxes {
     /// Adds the box from `min` to `max`: four vertices per face, so each face has its own normal.
+    /// Triangles turn counterclockwise seen from outside, as geom's tessellation makes them: the
+    /// cut tint finds the inside of a solid by its winding.
     pub fn add(&mut self, min: [f64; 3], max: [f64; 3]) {
         for axis in 0..3 {
-            for (side, normal_sign) in [(min, -1.0_f32), (max, 1.0)] {
+            for (side, normal_sign, order) in [
+                (min, -1.0_f32, [0, 2, 1, 0, 3, 2]),
+                (max, 1.0, [0, 1, 2, 0, 2, 3]),
+            ] {
                 let (u, v) = ((axis + 1) % 3, (axis + 2) % 3);
                 let first = u32::try_from(self.positions.len()).unwrap();
                 for (a, b) in [(min, min), (max, min), (max, max), (min, max)] {
@@ -130,15 +135,16 @@ impl Boxes {
                     normal[axis] = normal_sign;
                     self.normals.push(normal);
                 }
-                self.indices
-                    .extend([0, 1, 2, 0, 2, 3].map(|corner| first + corner));
+                self.indices.extend(order.map(|corner| first + corner));
             }
         }
     }
 
     /// The mesh of the boxes, with its origin at the centre of their bounding box.
     pub fn mesh(self) -> MeshData {
-        MeshData::from_world(&self.positions, self.normals, self.indices).unwrap()
+        let mesh = MeshData::from_world(&self.positions, self.normals, self.indices).unwrap();
+        assert_wound_outwards(&mesh);
+        mesh
     }
 
     /// The mesh of a classic pipeline: world positions each rounded to `f32`, with the mesh origin
@@ -162,5 +168,21 @@ impl Boxes {
             normals: self.normals,
             indices: self.indices,
         }
+    }
+}
+
+/// Fails unless every triangle of `mesh` turns counterclockwise around its vertex normal.
+fn assert_wound_outwards(mesh: &MeshData) {
+    for triangle in mesh.indices.as_chunks::<3>().0 {
+        let [a, b, c] = triangle.map(|i| mesh.positions[i as usize]);
+        let (ab, ac) = (
+            [0, 1, 2].map(|k| b[k] - a[k]),
+            [0, 1, 2].map(|k| c[k] - a[k]),
+        );
+        let cross = [0, 1, 2]
+            .map(|k| ab[(k + 1) % 3] * ac[(k + 2) % 3] - ab[(k + 2) % 3] * ac[(k + 1) % 3]);
+        let normal = mesh.normals[triangle[0] as usize];
+        let along: f32 = (0..3).map(|k| cross[k] * normal[k]).sum();
+        assert!(along > 0.0, "triangle {triangle:?} is wound inwards");
     }
 }

@@ -36,7 +36,7 @@ Depth has the same problem in another form: a standard depth buffer spends most 
 ## Consequences
 
 - Precision no longer depends on where the project sits in the world: georeferenced models need no offset applied by the user.
-- The CPU recomputes one matrix per object per frame, O(objects). Instancing (#70) may move them to an instance buffer behind the same public API.
+- The CPU recomputes one matrix per object per frame, O(objects). Instancing (#70) may move them to an instance buffer behind the same public API: it does, see [ADR 0025](0025-instancing-culling-and-level-of-detail.md).
 - Everything that maps between screen and world, such as picking and snapping (#71) or clipping planes (#72), must do the same: work in `f64` relative to the camera, never in `f32` world coordinates.
 - Mesh data never needs re-uploading when the camera moves.
 

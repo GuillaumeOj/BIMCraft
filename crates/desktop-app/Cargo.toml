@@ -19,6 +19,8 @@ host-desktop = { workspace = true }
 # dialogs and menus, and on Windows it stops every test program that links Tauri from starting
 # (STATUS_ENTRYPOINT_NOT_FOUND): only the program carries the manifest those controls need.
 tauri = { workspace = true, features = ["wry", "x11", "compression"] }
+# Help links open in the system browser; capabilities/main.json limits it to the user guide.
+tauri-plugin-opener = { workspace = true }
 
 [build-dependencies]
 tauri-build = { workspace = true }

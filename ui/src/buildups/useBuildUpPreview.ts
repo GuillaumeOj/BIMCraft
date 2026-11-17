@@ -15,7 +15,7 @@ export function useBuildUpPreview(draft: Draft, revision: number): BuildUpPrevie
   const { usage } = draft;
   const inputs = useMemo(() => layerInputs(draft), [draft]);
   // A name or description edit leaves the question as it was: no new call.
-  const question = useDebounced(
+  const [question] = useDebounced(
     useMemo(() => JSON.stringify([usage, inputs, revision]), [usage, inputs, revision]),
     DELAY_MS,
   );

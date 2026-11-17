@@ -15,18 +15,33 @@ platform = { workspace = true }
 rayon = { workspace = true }
 schema = { workspace = true }
 schema-gen = { workspace = true }
+scene = { workspace = true }
+scene-wire = { workspace = true }
+serde_json = { workspace = true }
 tempfile = { workspace = true }
 tauri = { workspace = true }
 thiserror = { workspace = true }
 
 [dev-dependencies]
+geom = { workspace = true }
 api = { workspace = true, features = ["conformance"] }
 material = { workspace = true }
 persist = { workspace = true }
 platform = { workspace = true, features = ["testing"] }
 proptest = { workspace = true }
-serde_json = { workspace = true }
 tauri = { workspace = true, features = ["test"] }
+
+# Native only, like the benches it runs.
+[target.'cfg(not(target_family = "wasm"))'.dev-dependencies]
+criterion = { workspace = true }
+
+# Only the criterion harness benches; libtest would reject criterion's options.
+[lib]
+bench = false
+
+[[bench]]
+name = "move"
+harness = false
 
 # Test fixture: a stand-in solver that the compute tests start as a child process.
 [[bin]]

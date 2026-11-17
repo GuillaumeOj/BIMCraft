@@ -56,6 +56,12 @@
       matchDepNames: ["bun"],
       groupName: "toolchains",
     },
+    // The wasm-bindgen CLI must equal the wasm-bindgen crate in Cargo.lock, so the crates and the
+    // CLI pin move in one pull request; after the toolchains group so it overrides it.
+    {
+      matchDepNames: ["wasm-bindgen", "wasm-bindgen-cli", "wasm-bindgen-futures", "js-sys", "web-sys"],
+      groupName: "wasm-bindgen",
+    },
     // CI checks their release tarballs against a SHA-256 that Renovate cannot update.
     {
       matchDepNames: ["gitleaks/gitleaks", "rhysd/actionlint"],

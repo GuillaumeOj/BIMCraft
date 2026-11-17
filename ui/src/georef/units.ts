@@ -39,11 +39,24 @@ export function parseNumber(text: string): number | null {
 export function formatNumber(value: number, decimals: number, language: Language): string {
   // Adding 0 turns a rounded -0 into 0, so that -0.0001 does not read "-0.000".
   const rounded = Number(value.toFixed(decimals)) + 0;
-  return new Intl.NumberFormat(language, {
-    minimumFractionDigits: decimals,
-    maximumFractionDigits: decimals,
-    useGrouping: false,
-  }).format(rounded);
+  return numberFormat(language, decimals).format(rounded);
+}
+
+// Building a formatter costs far more than formatting, and the 3D view formats at pointer speed.
+const FORMATS = new Map<string, Intl.NumberFormat>();
+
+function numberFormat(language: Language, decimals: number): Intl.NumberFormat {
+  const key = `${language}:${decimals}`;
+  let format = FORMATS.get(key);
+  if (format === undefined) {
+    format = new Intl.NumberFormat(language, {
+      minimumFractionDigits: decimals,
+      maximumFractionDigits: decimals,
+      useGrouping: false,
+    });
+    FORMATS.set(key, format);
+  }
+  return format;
 }
 
 /** `value` with at most `decimals` decimals, none when it is whole: the scale. */

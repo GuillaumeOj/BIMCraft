@@ -26,6 +26,8 @@ const TEXT_PAIRS = [
   ["on-danger", "danger"],
   // The insulation band of the build-up preview carries its number.
   ["ink", "warn-tint"],
+  // The chips the 3D view draws next to the pointer.
+  ["vp-chip-ink", "vp-chip"],
 ] as const;
 
 // Interface parts against their surroundings (WCAG 2.2 AA: 3:1): the focus outline and the borders of form fields.
@@ -35,6 +37,11 @@ const NON_TEXT_PAIRS = [
   ["verdigris", "selected"],
   ["field-line", "surface"],
   ["field-line", "raised"],
+  // 3D view overlays sit on their halo, whatever the model's colour behind it.
+  ["vp-select", "vp-halo"],
+  ["vp-hover", "vp-halo"],
+  ["vp-snap", "vp-halo"],
+  ["vp-ghost", "vp-halo"],
 ] as const;
 
 describe("contrastRatio", () => {

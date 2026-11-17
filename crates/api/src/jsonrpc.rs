@@ -251,6 +251,11 @@ pub(crate) fn error_response(id: &Value, error: &ApiError) -> Value {
             response["error"]["data"] = json!({ "reason": "in_use", "count": count });
             return response;
         }
+        ApiError::Elements(elements) => {
+            let mut response = failure(id, codes::REJECTED, &error.to_string());
+            response["error"]["data"] = json!({ "reason": elements.reason() });
+            return response;
+        }
         ApiError::BuildUps(build_up) => {
             let mut response = failure(id, codes::REJECTED, &error.to_string());
             response["error"]["data"] = json!({ "reason": build_up.reason });

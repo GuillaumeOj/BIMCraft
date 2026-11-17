@@ -22,7 +22,11 @@ fn main() -> ExitCode {
 /// Opens the window on a new document and runs until it closes.
 fn run() -> Result<(), Box<dyn Error>> {
     let host = DocumentHost::open_new()?;
-    ipc::serve(tauri::Builder::default(), host).run(tauri::generate_context!())?;
+    ipc::serve(
+        tauri::Builder::default().plugin(tauri_plugin_opener::init()),
+        host,
+    )
+    .run(tauri::generate_context!())?;
     Ok(())
 }
 

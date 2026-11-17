@@ -185,10 +185,12 @@ check_corpus() {
 check_ui() {
   has_ui || { step "UI: no package.json yet, skipped"; return; }
   step "UI: lint, format, imports, types, unit tests + coverage, audit"
-  require bun
+  require bun; require wasm-bindgen
   (
     cd ui
     bun install --frozen-lockfile
+    # The typecheck reads the generated bindings of the viewport (ADR 0026).
+    bun run build:viewport
     bunx biome ci .
     # Everything, then the app code alone without Node types (it runs in the browser).
     bun run typecheck
@@ -200,14 +202,16 @@ check_ui() {
 check_e2e() {
   has_e2e || { step "E2E: no Playwright tests yet, skipped"; return; }
   step "UI: end-to-end tests"
+  require bun; require wasm-bindgen
+  # The Playwright web server builds the viewport module before the bundle (playwright.config.ts).
   (cd ui && bun install --frozen-lockfile && bunx playwright test)
 }
 
 check_desktop() {
   has_ui || { step "Desktop: no UI yet, skipped"; return; }
   step "Desktop program: the window with the bundled UI (UI-01)"
-  require bun
-  (cd ui && bun install --frozen-lockfile && bunx vite build)
+  require bun; require wasm-bindgen
+  (cd ui && bun install --frozen-lockfile && bun run build:viewport && bunx vite build)
   # tauri/custom-protocol embeds ui/dist, as in a release; without it the window loads the dev server.
   cargo build --locked --package desktop-app --features tauri/custom-protocol
 }

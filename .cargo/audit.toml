@@ -8,4 +8,9 @@ ignore = [
   "RUSTSEC-2024-0370",
   # glib 0.18 VariantStrIter unsoundness, via the same GTK 3 stack; never called.
   "RUSTSEC-2024-0429",
+  # zvariant, zbus_names and zvariant_derive, unmaintained (folded into zbus 6), via the zbus 5
+  # that tauri-plugin-opener =2.7.2 needs on Linux; no flaw known. Drop when the plugin is on zbus 6.
+  "RUSTSEC-2026-0370",
+  "RUSTSEC-2026-0371",
+  "RUSTSEC-2026-0372",
 ]

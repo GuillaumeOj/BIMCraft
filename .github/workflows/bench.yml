@@ -1,0 +1,41 @@
+# Benchmarks (VP-02, NFR-02): weekly and on demand, never on pull requests. Not a required check:
+# timings on shared runners are too noisy to gate on, so the job only keeps criterion's output as
+# an artefact to compare runs with. Method and reference numbers: docs/dev/performance-baselines.md.
+name: Benchmarks
+
+on:
+  schedule:
+    - cron: "43 4 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bench-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: -D warnings
+
+jobs:
+  bench:
+    name: Benchmarks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-rust
+      # The renderer's benches need an adapter; on lavapipe they skip the GPU frame time.
+      - name: Install a software GPU (Mesa lavapipe)
+        run: scripts/linux-gpu-deps.sh
+      - run: cargo bench -p geom -p core-model -p render
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: criterion
+          path: target/criterion
+          if-no-files-found: error

@@ -27,12 +27,16 @@
 mod error;
 mod generator;
 mod mesh;
+mod placement;
 mod scene;
 mod view;
+
+pub mod builtin;
 
 pub use error::SceneError;
 pub use generator::{Generated, Generator, GeneratorError, Generators};
 pub use mesh::ElementMesh;
+pub use placement::Placement;
 pub use scene::{Scene, SceneUpdate};
 pub use view::View;
 

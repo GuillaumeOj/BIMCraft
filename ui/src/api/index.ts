@@ -16,6 +16,13 @@ export {
   updateBuildUp,
 } from "./buildups";
 export { ApiClient, type Transport } from "./client";
+export {
+  type BlockPlacement,
+  type MoveRefusal,
+  moveElements,
+  moveRefusal,
+  placeBlock,
+} from "./elements";
 export { apiReason, type GeoreferenceValue, newEntityId, setGeoreference } from "./georef";
 export { ApiError, TransportError } from "./jsonrpc";
 export {
@@ -40,5 +47,7 @@ export {
   setPropertyValue,
   undoLastStep,
 } from "./materials";
+export { inDesktopWindow, openInSystemBrowser } from "./opener";
 export type * from "./protocol.gen";
+export { type SceneFailure, type SceneFeed, type SceneSink, startSceneFeed } from "./scene";
 export { tauriTransport } from "./tauri";
