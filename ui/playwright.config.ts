@@ -22,6 +22,13 @@ const webgpuArgs = [
 
 const { CI } = process.env;
 
+// Every page mounts the 3D view, and on CI each browser renders it on the CPU. The specs that
+// draw the most run alone, one at a time, after the others: two software renderers at once
+// starve the GPU process until the browser loses its WebGPU context. A failure in the first
+// project skips the second for that run; that is the price of never running them side by side.
+// A new spec lands in the parallel project unless it is listed here.
+const gpuSpecs = ["**/viewport.spec.ts", "**/section-visibility.spec.ts", "**/webgpu.spec.ts"];
+
 // `channel: "chromium"` selects the full browser in its new headless mode: the old headless shell has no WebGPU.
 const chromium = {
   ...devices["Desktop Chrome"],
@@ -42,6 +49,13 @@ export default defineConfig({
     reuseExistingServer: !CI,
   },
   projects: [
-    { name: "chromium", use: chromium },
+    { name: "chromium", testIgnore: gpuSpecs, use: chromium },
+    {
+      name: "gpu",
+      testMatch: gpuSpecs,
+      dependencies: ["chromium"],
+      workers: 1,
+      use: chromium,
+    },
   ],
 });
