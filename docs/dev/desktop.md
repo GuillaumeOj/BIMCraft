@@ -1,6 +1,6 @@
 # Desktop window
 
-The desktop program, `bimcraft`, is a [Tauri 2](https://tauri.app) window around the web interface in `ui/`, with the document in the same process (spec §13, `UI-01`). The `desktop-app` crate is the program and opens the window; the `host-desktop` crate holds the document and the IPC, so they build and are tested without a webview.
+The desktop program, `fabrilo`, is a [Tauri 2](https://tauri.app) window around the web interface in `ui/`, with the document in the same process (spec §13, `UI-01`). The `desktop-app` crate is the program and opens the window; the `host-desktop` crate holds the document and the IPC, so they build and are tested without a webview.
 
 ## How the window reaches the core
 
