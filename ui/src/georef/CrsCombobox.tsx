@@ -76,26 +76,24 @@ export function CrsCombobox({
   };
 
   const onKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
-    const keys: Partial<Record<string, () => void>> = {
-      ArrowDown: () => move(open ? active + 1 : active),
-      ArrowUp: () => move(active - 1),
-      Home: () => open && move(0),
-      End: () => open && move(results.length - 1),
-      Enter: () => {
-        const crs = results[active];
-        if (open && crs !== undefined) choose(crs);
-      },
-      Escape: close,
+    const chooseActive = () => {
+      const crs = results[active];
+      if (crs !== undefined) choose(crs);
     };
     // Esc closes only the list; Enter only chooses while the list is open (else it applies).
-    const action = keys[event.key];
-    if (action === undefined) return;
-    if (event.key === "Escape" && !open) return;
-    if (event.key === "Enter" && !open) return;
     // Home and End move the caret while the list is closed.
-    if ((event.key === "Home" || event.key === "End") && !open) return;
+    const actions = new Map<string, { whenClosed: boolean; run: () => void }>([
+      ["ArrowDown", { whenClosed: true, run: () => move(open ? active + 1 : active) }],
+      ["ArrowUp", { whenClosed: true, run: () => move(active - 1) }],
+      ["Home", { whenClosed: false, run: () => move(0) }],
+      ["End", { whenClosed: false, run: () => move(results.length - 1) }],
+      ["Enter", { whenClosed: false, run: chooseActive }],
+      ["Escape", { whenClosed: false, run: close }],
+    ]);
+    const action = actions.get(event.key);
+    if (action === undefined || (!open && !action.whenClosed)) return;
     event.preventDefault();
-    action();
+    action.run();
   };
 
   let status = "";

@@ -10,6 +10,10 @@ afterEach(() => {
   document.documentElement.lang = "";
 });
 
+function Name() {
+  return <p>{useI18n().t("app.name")}</p>;
+}
+
 describe("I18nProvider", () => {
   it("follows the system language and sets the document language", () => {
     setSystemLanguages(["fr-FR"]);
@@ -66,9 +70,6 @@ describe("I18nProvider", () => {
   });
 
   it("renders translated text for its children", () => {
-    function Name() {
-      return <p>{useI18n().t("app.name")}</p>;
-    }
     render(<Name />, { wrapper: I18nProvider });
     expect(screen.getByText("BIMCraft")).toBeInTheDocument();
   });
