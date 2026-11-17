@@ -29,7 +29,7 @@ A command runs with the caller's `Origin`, which the history records (API-05), a
 
 ## The protocol schema
 
-`schema/api/protocol.schema.json` (API-02, JSON Schema draft 2020-12, `$id` `urn:bimcraft:api`) is generated from the registry. `cargo test -p api` fails when it is stale.
+`schema/api/protocol.schema.json` (API-02, JSON Schema draft 2020-12, `$id` `urn:fabrilo:api`) is generated from the registry. `cargo test -p api` fails when it is stale.
 
 | Path | Content |
 | --- | --- |

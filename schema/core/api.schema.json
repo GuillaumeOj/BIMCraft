@@ -1431,8 +1431,8 @@
       ]
     }
   },
-  "$id": "urn:bimcraft:schema:core",
+  "$id": "urn:fabrilo:schema:core",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "description": "Objects of the `core` schema, version 4.",
-  "title": "BIMCraft `core` schema"
+  "title": "Fabrilo `core` schema"
 }
