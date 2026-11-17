@@ -1,4 +1,4 @@
-//! The interaction of the `BIMCraft` 3D viewport (VP-01, spec D2 and D5).
+//! The interaction of the `Fabrilo` 3D viewport (VP-01, spec D2 and D5).
 //!
 //! Everything that happens at pointer speed runs here, in Rust: the [`Viewport`] holds the scene
 //! as the core sends it (deltas of the binary scene channel, `scene-wire`), a camera controller

@@ -51,4 +51,6 @@ Steps run in this order: declared renames, inferred additions, the other declare
 - `format-NNNN.bim`: a project of each file format version, and `format-NNNN.sql`, the tables of the current one.
 - `sample-NNNN.bim`: a model of each version of a sample namespace defined in the test, which exercises every kind of migration step.
 
+The single exception: the fixtures were rewritten once, for the file header change of [ADR 0028](adr/0028-rename-to-fabrilo.md); only the header changed, not their content.
+
 The core namespace gets its own fixtures once it stores entities; until then its history is checked by `schema-gen` alone.

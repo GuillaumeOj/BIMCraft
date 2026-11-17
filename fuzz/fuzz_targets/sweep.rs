@@ -4,7 +4,7 @@
 
 #![no_main]
 
-use bimcraft_fuzz::{RawProfile, direction, profile_loops};
+use fabrilo_fuzz::{RawProfile, direction, profile_loops};
 use geom::{Path, PathSegment, Point3, Profile, Solid};
 use libfuzzer_sys::fuzz_target;
 

@@ -1,6 +1,6 @@
 # Library data
 
-The grades shipped with BIMCraft (MAT-02), one JSON file per family, loaded by
+The grades shipped with Fabrilo (MAT-02), one JSON file per family, loaded by
 `Library::builtin` (format in `crates/material/src/library.rs`).
 
 | File | Grades | Documents (editions used) |
@@ -20,7 +20,7 @@ The grades shipped with BIMCraft (MAT-02), one JSON file per family, loaded by
 - Annex-dependent partial factors come twice: the recommended value (`gamma_c`) and the French
   annex (`gamma_c_fr`), each with its own document.
 - A grade is known by its key, `<design code>/<name>`, such as `en1992-1-1/C25/30`; grades without
-  a design code take `bimcraft/<name>`. Keys never change once shipped.
+  a design code take `fabrilo/<name>`. Keys never change once shipped.
 - The derived values the codes define by formula are checked by the tests in
   `src/library/tests.rs` (ENG-03).
 

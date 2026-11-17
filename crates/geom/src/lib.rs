@@ -1,4 +1,4 @@
-//! The `BIMCraft` geometry kernel (spec §6): exact predicates first, then profiles, solids and
+//! The `Fabrilo` geometry kernel (spec §6): exact predicates first, then profiles, solids and
 //! booleans.
 //!
 //! This crate builds for native targets and `wasm32-unknown-unknown` (ARCH-01), never touches the

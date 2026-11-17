@@ -1,4 +1,4 @@
-//! Commands and transactions: every change to a `BIMCraft` model is a serialisable [`Command`],
+//! Commands and transactions: every change to a `Fabrilo` model is a serialisable [`Command`],
 //! so history, macros, replay and collaboration share one mechanism (CORE-11), and runs as an
 //! atomic [`Transaction`] that a [`Document`]'s history can undo and redo (CORE-06). Each
 //! transaction, undo and redo emits a [`ChangeEvent`] listing the objects it changed (CORE-07),

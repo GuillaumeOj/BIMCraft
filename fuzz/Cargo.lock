@@ -24,27 +24,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3bc62ac97cc33321f50863d514c3bc38a453947a8f9e781137e47c7401020aed"
 
 [[package]]
-name = "bimcraft-fuzz"
-version = "0.0.0"
-dependencies = [
- "api",
- "core-model",
- "core-txn",
- "express",
- "geom",
- "georef",
- "interop-ifc",
- "libfuzzer-sys",
- "libm",
- "material",
- "persist",
- "scene-wire",
- "schema",
- "schema-gen",
- "serde_json",
-]
-
-[[package]]
 name = "bitflags"
 version = "2.13.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -104,6 +83,27 @@ version = "0.0.0"
 dependencies = [
  "rust-names",
  "thiserror",
+]
+
+[[package]]
+name = "fabrilo-fuzz"
+version = "0.0.0"
+dependencies = [
+ "api",
+ "core-model",
+ "core-txn",
+ "express",
+ "geom",
+ "georef",
+ "interop-ifc",
+ "libfuzzer-sys",
+ "libm",
+ "material",
+ "persist",
+ "scene-wire",
+ "schema",
+ "schema-gen",
+ "serde_json",
 ]
 
 [[package]]

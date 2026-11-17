@@ -6,7 +6,7 @@
 
 #![no_main]
 
-use bimcraft_fuzz::{Contract, RawProfile, check_tessellation, direction, profile_loops};
+use fabrilo_fuzz::{Contract, RawProfile, check_tessellation, direction, profile_loops};
 use geom::{Edge, ExtrusionError, Profile, Solid};
 use libfuzzer_sys::fuzz_target;
 

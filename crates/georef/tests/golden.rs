@@ -3,7 +3,7 @@
 //! target that rounds differently fails with the first value that diverges.
 //!
 //! After a deliberate change (a `libm` upgrade, a new case), regenerate the file natively with
-//! `BIMCRAFT_BLESS=1 cargo test -p georef --test golden` and review the diff.
+//! `FABRILO_BLESS=1 cargo test -p georef --test golden` and review the diff.
 
 // Blessing writes the golden file; tests may opt out of the ARCH-02 lints (docs/dev/quality.md).
 #![allow(clippy::disallowed_methods, clippy::disallowed_types)]
@@ -252,14 +252,14 @@ fn first_divergence(expected: &str, actual: &str) -> Option<String> {
 #[test]
 fn projection_results_match_golden_output() {
     let actual = compute();
-    if std::env::var_os("BIMCRAFT_BLESS").is_some() {
+    if std::env::var_os("FABRILO_BLESS").is_some() {
         std::fs::write(GOLDEN_PATH, &actual).unwrap();
         return;
     }
     if let Some(divergence) = first_divergence(GOLDEN, &actual) {
         panic!(
             "projection results differ from golden.txt on this target (ENG-04), first at {divergence}. \
-             If the change is deliberate, regenerate with BIMCRAFT_BLESS=1 (see this file's docs)."
+             If the change is deliberate, regenerate with FABRILO_BLESS=1 (see this file's docs)."
         );
     }
 }

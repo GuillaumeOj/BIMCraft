@@ -30,7 +30,7 @@ impl RayonExecutor {
     pub fn new(threads: usize) -> Result<Self, ExecutorError> {
         let pool = ThreadPoolBuilder::new()
             .num_threads(threads)
-            .thread_name(|index| format!("bimcraft-worker-{index}"))
+            .thread_name(|index| format!("fabrilo-worker-{index}"))
             // Rayon aborts the process on a panicking task by default. The panic hook has already
             // reported it, and the task has no caller waiting for its result.
             .panic_handler(|_payload| {})
@@ -94,7 +94,7 @@ mod tests {
         assert!(workers.iter().all(|worker| {
             worker
                 .as_deref()
-                .is_some_and(|name| name.starts_with("bimcraft-worker-"))
+                .is_some_and(|name| name.starts_with("fabrilo-worker-"))
         }));
     }
 

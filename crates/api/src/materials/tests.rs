@@ -107,7 +107,7 @@ fn the_library_lists_filters_and_pages_its_grades() {
         .iter()
         .map(|item| item["key"].as_str().unwrap())
         .collect();
-    assert_eq!(keys, ["bimcraft/Glass wool", "bimcraft/Rock wool"]);
+    assert_eq!(keys, ["fabrilo/Glass wool", "fabrilo/Rock wool"]);
     let searched = ok(
         &mut session,
         "materials.library",
@@ -206,7 +206,7 @@ fn laws_are_named_for_the_wire() {
         (json!("elastic_brittle"), Value::Null)
     );
     assert_eq!(
-        kind(&mut session, "bimcraft/Rock wool"),
+        kind(&mut session, "fabrilo/Rock wool"),
         (json!("none"), Value::Null)
     );
     assert_eq!(

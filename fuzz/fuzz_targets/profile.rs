@@ -5,7 +5,7 @@
 
 #![no_main]
 
-use bimcraft_fuzz::{RawProfile, profile_loops, reversed};
+use fabrilo_fuzz::{RawProfile, profile_loops, reversed};
 use geom::Profile;
 use libfuzzer_sys::fuzz_target;
 

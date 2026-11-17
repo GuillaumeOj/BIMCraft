@@ -303,7 +303,7 @@ fn the_builtin_library_holds_thirty_eight_grades_in_every_family() {
         ("en1993-1-1/", 5),
         ("en1995-1-1/", 10),
         ("en1996-1-1/", 3),
-        ("bimcraft/", 8),
+        ("fabrilo/", 8),
     ] {
         assert_eq!(grades(prefix).len(), count, "{prefix}");
     }
@@ -524,23 +524,23 @@ fn the_engineer_review_corrections_are_in_the_library() {
     near("en1995-1-1/C35", Property::CharacteristicDensity, 390.0);
     near("en1995-1-1/C35", Property::MeanDensity, 470.0);
     // Règles Th-Bât, Fascicule Matériaux (2017): conductivities and the removed entry.
-    near("bimcraft/Rock wool", Property::ThermalConductivity, 0.044);
-    near("bimcraft/Clay brick", Property::ThermalConductivity, 0.69);
-    assert!(library.get("bimcraft/Wood-fibre board").is_none());
-    let wool = library.get("bimcraft/Rock wool").unwrap();
+    near("fabrilo/Rock wool", Property::ThermalConductivity, 0.044);
+    near("fabrilo/Clay brick", Property::ThermalConductivity, 0.69);
+    assert!(library.get("fabrilo/Wood-fibre board").is_none());
+    let wool = library.get("fabrilo/Rock wool").unwrap();
     let source = &wool.property(Property::ThermalConductivity).unwrap().source;
     assert_eq!(
         source.document(),
         Some("Règles Th-Bât, Fascicule Matériaux (2017)")
     );
     assert_eq!(source.clause(), Some("2.6.2.1"));
-    assert!(library.get("bimcraft/Mineral wool").is_none());
+    assert!(library.get("fabrilo/Mineral wool").is_none());
 }
 
 #[test]
 fn glass_wool_gives_its_own_conductivity_with_its_source() {
     let library = builtin();
-    let wool = library.get("bimcraft/Glass wool").unwrap();
+    let wool = library.get("fabrilo/Glass wool").unwrap();
     assert!((si(wool, Property::ThermalConductivity) - 0.039).abs() < 1e-12);
     assert!((si(wool, Property::MassDensity) - 30.0).abs() < 1e-12);
     assert!((si(wool, Property::SpecificHeat) - 1030.0).abs() < 1e-12);

@@ -49,7 +49,7 @@ struct Copy(PathBuf);
 
 impl Copy {
     fn of(name: &str) -> Result<Self> {
-        let path = std::env::temp_dir().join(format!("bimcraft-{}-{name}", std::process::id()));
+        let path = std::env::temp_dir().join(format!("fabrilo-{}-{name}", std::process::id()));
         std::fs::copy(fixture(name), &path)?;
         Ok(Self(path))
     }
