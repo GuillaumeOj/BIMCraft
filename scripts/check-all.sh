@@ -195,7 +195,11 @@ check_ui() {
     # Everything, then the app code alone without Node types (it runs in the browser).
     bun run typecheck
     bunx vitest run --coverage
-    bun audit
+    # Accepted on purpose: the picomatch ReDoS advisory has no fixed release. It reaches us
+    # only through vite and vitest dev tooling, which match our own globs and never ship in
+    # the app. Drop the flag once picomatch releases a version newer than 4.0.7 (bun audit
+    # does not warn about an unused ignore).
+    bun audit --ignore=GHSA-fc5q-39xc-vjpf
   )
 }
 
