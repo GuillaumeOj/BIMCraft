@@ -1,8 +1,8 @@
-# AGENTS.md — rules for anyone working on BIMCraft
+# AGENTS.md — rules for anyone working on Fabrilo
 
 This file is the single source of truth for coding agents (Claude Code, Codex, Cursor, Copilot, Gemini…) and for humans. If another instruction file disagrees with it, this one wins. Rationale for each rule: [docs/dev/quality.md](docs/dev/quality.md).
 
-BIMCraft is an open-source BIM authoring tool: a Rust core (native + WebAssembly), a React/TypeScript UI in Tauri, Python plugins later. Read the [specification](docs/specifications.md) before designing anything; requirements have stable IDs such as `CORE-01`.
+Fabrilo is an open-source BIM authoring tool: a Rust core (native + WebAssembly), a React/TypeScript UI in Tauri, Python plugins later. Read the [specification](docs/specifications.md) before designing anything; requirements have stable IDs such as `CORE-01`.
 
 ## 1. Golden rules (never break)
 

@@ -517,8 +517,8 @@ describe("main", () => {
 
   describe("issues closed by the pull requests", () => {
     beforeEach(() => {
-      gh.issues.set(1, { milestone: "Phase 0", projects: ["BIMCraft"] });
-      gh.issues.set(2, { milestone: "Phase 0", projects: ["BIMCraft"] });
+      gh.issues.set(1, { milestone: "Phase 0", projects: ["Fabrilo"] });
+      gh.issues.set(2, { milestone: "Phase 0", projects: ["Fabrilo"] });
       gh.issues.set(3, { projects: [] });
     });
 
@@ -527,8 +527,8 @@ describe("main", () => {
       const argv = ["--stack", "--branch", "one", "--body", "Closes #1", "--branch", "two", "--body", "Fixes #2"];
       expect(ship(...argv, "--branch", "three", "--body", "Closes #3")).toBe(0);
       expect(gh.prs.map((p) => [p.milestone, p.projects, p.links])).toEqual([
-        ["Phase 0", ["BIMCraft"], []],
-        ["Phase 0", ["BIMCraft"], [2]],
+        ["Phase 0", ["Fabrilo"], []],
+        ["Phase 0", ["Fabrilo"], [2]],
         [undefined, [], [3]],
       ]);
       calls = [];
@@ -540,7 +540,7 @@ describe("main", () => {
     test("give a single pull request into main its milestone and project; GitHub links it", () => {
       featureBranch("feat: add thing\n\nCloses #1");
       expect(ship()).toBe(0);
-      expect(gh.prs[0]).toMatchObject({ milestone: "Phase 0", projects: ["BIMCraft"], links: [] });
+      expect(gh.prs[0]).toMatchObject({ milestone: "Phase 0", projects: ["Fabrilo"], links: [] });
       expect(ran("gh api graphql")).toEqual([]);
     });
 
@@ -561,7 +561,7 @@ describe("main", () => {
     test("show in --dry-run the milestone and project a new pull request gets", () => {
       featureBranch("feat: add thing\n\nCloses #1");
       expect(ship("--dry-run")).toBe(0);
-      expect(wouldRun("gh pr create")[0]).toEndWith("--milestone 'Phase 0' --project BIMCraft");
+      expect(wouldRun("gh pr create")[0]).toEndWith("--milestone 'Phase 0' --project Fabrilo");
     });
 
     test("stop before pushing when an issue cannot be read", () => {
