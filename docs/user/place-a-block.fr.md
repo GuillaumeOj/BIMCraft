@@ -9,7 +9,7 @@ Un bloc est une simple boîte : utilisez-le pour une étude de volumétrie, comm
 Quelques mots employés sur cette page :
 
 - **Emprise.** Le rectangle que le bloc occupe au sol : sa largeur et sa profondeur.
-- **Accroche.** Pendant que vous pointez, BIMCraft capte l'angle, le milieu d'arête, l'arête, la face ou le sol le plus proche, et affiche un repère et son nom.
+- **Accroche.** Pendant que vous pointez, Fabrilo capte l'angle, le milieu d'arête, l'arête, la face ou le sol le plus proche, et affiche un repère et son nom.
 
 ## Étapes
 

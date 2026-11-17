@@ -1,6 +1,6 @@
 ---
 name: new-feature
-description: Implement a new BIMCraft feature or change an existing one following the project's Definition of Done — spec requirement, tests first, coverage, e2e, end-user docs. Use whenever the user asks to add, build, implement or change a feature.
+description: Implement a new Fabrilo feature or change an existing one following the project's Definition of Done — spec requirement, tests first, coverage, e2e, end-user docs. Use whenever the user asks to add, build, implement or change a feature.
 ---
 
 # New feature

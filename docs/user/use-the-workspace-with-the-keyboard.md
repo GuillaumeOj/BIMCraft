@@ -1,6 +1,6 @@
 # Use the workspace with the keyboard
 
-Every area of the BIMCraft window can be reached without a mouse, which also lets screen readers announce each area by name.
+Every area of the Fabrilo window can be reached without a mouse, which also lets screen readers announce each area by name.
 
 ## The areas of the window
 
@@ -24,7 +24,7 @@ Every area of the BIMCraft window can be reached without a mouse, which also let
 
 ## Tips
 
-- Right after opening BIMCraft, press **Tab** once: the first stop is **Skip to viewport**, which takes you straight to the drawing.
+- Right after opening Fabrilo, press **Tab** once: the first stop is **Skip to viewport**, which takes you straight to the drawing.
 
 ## Troubleshooting
 

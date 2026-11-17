@@ -1,6 +1,6 @@
 [book]
-title = "BIMCraft User Guide"
-authors = ["BIMCraft contributors"]
+title = "Fabrilo User Guide"
+authors = ["Fabrilo contributors"]
 language = "en"
 src = "."
 

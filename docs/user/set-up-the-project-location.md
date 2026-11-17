@@ -11,8 +11,8 @@ A few words used on this page:
 - **Coordinate system (CRS).** The map system that gives every place a pair of numbers, in metres. In France, Lambert 93 and the CC zones (CC42 to CC50) are common. Each one has a numeric code (for Lambert 93, EPSG 2154).
 - **Base point.** The map coordinates of your model's origin, the point (0, 0, 0). Easting is the distance towards the east, northing the distance towards the north, and height the altitude.
 - **Grid rotation.** The angle between the map's grid and your project's grid, counter-clockwise. Leave it at 0 if your building axes follow the map.
-- **Grid north and true north.** Grid north is where the vertical lines of the map point. True north points to the geographic North Pole. They differ slightly, and the difference grows away from the centre of the map zone. BIMCraft computes the true north angle for you and draws project north, grid north and true north side by side.
-- **Survey point.** A benchmark you know in map coordinates, such as a peg or a property corner. Once you enter it, BIMCraft shows where it sits in your model.
+- **Grid north and true north.** Grid north is where the vertical lines of the map point. True north points to the geographic North Pole. They differ slightly, and the difference grows away from the centre of the map zone. Fabrilo computes the true north angle for you and draws project north, grid north and true north side by side.
+- **Survey point.** A benchmark you know in map coordinates, such as a peg or a property corner. Once you enter it, Fabrilo shows where it sits in your model.
 
 ## Steps
 
@@ -26,7 +26,7 @@ A few words used on this page:
 
 **Result:** the dialog closes and a message confirms "Project location applied".
 
-When you reopen the dialog, it shows what you entered together with the information BIMCraft derived from it: the true north angle, the latitude and longitude of the base point, the meridian convergence (the angle between grid north and true north), the point scale factor, and the survey point's position in the model.
+When you reopen the dialog, it shows what you entered together with the information Fabrilo derived from it: the true north angle, the latitude and longitude of the base point, the meridian convergence (the angle between grid north and true north), the point scale factor, and the survey point's position in the model.
 
 ## Options
 
@@ -57,10 +57,10 @@ The Easting and Northing do not fall inside the area of the chosen system. Check
 Enter a scale close to 1, such as `1` or `0.9996`.
 
 **"This project has several sites."**
-BIMCraft can place a project that has exactly one site on Earth. Remove the extra sites first.
+Fabrilo can place a project that has exactly one site on Earth. Remove the extra sites first.
 
 **I cannot find my coordinate system.**
-Only the systems built into BIMCraft are listed, and only those that give coordinates in metres. Latitude and longitude systems cannot be used to place a project.
+Only the systems built into Fabrilo are listed, and only those that give coordinates in metres. Latitude and longitude systems cannot be used to place a project.
 
 ## See also
 

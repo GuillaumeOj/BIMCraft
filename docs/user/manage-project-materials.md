@@ -143,7 +143,7 @@ A value is negative, zero or not physical, such as a Poisson's ratio of 0.5 or m
 A value has no document or no clause. Every value needs both.
 
 **"the library source is not valid at line …, column …"**
-The file is not valid JSON, or uses a key BIMCraft does not know. Check the place the message gives.
+The file is not valid JSON, or uses a key Fabrilo does not know. Check the place the message gives.
 
 ## See also
 

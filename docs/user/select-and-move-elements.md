@@ -8,7 +8,7 @@ Select elements in the 3D view to see them highlighted, then move them, either b
 
 A few words used on this page:
 
-- **Snapping.** While you point, BIMCraft catches the nearest remarkable point within a few pixels: an endpoint (corner), the midpoint of an edge, a point on an edge or a face, or the ground. A marker and a label show which one.
+- **Snapping.** While you point, Fabrilo catches the nearest remarkable point within a few pixels: an endpoint (corner), the midpoint of an edge, a point on an edge or a face, or the ground. A marker and a label show which one.
 - **Base point / target point.** The point you move from and the point you move to.
 
 ## Select elements
@@ -32,7 +32,7 @@ There is no way yet to pick an element with the keyboard alone; keyboard users w
 ## Move precisely with the Move tool
 
 1. Select the elements to move.
-2. Choose **Move** in the tool bar at the bottom. **Shortcut:** `M`. Without a selection, BIMCraft says "Select something to move".
+2. Choose **Move** in the tool bar at the bottom. **Shortcut:** `M`. Without a selection, Fabrilo says "Select something to move".
 3. Click the base point; snapping helps you pick a corner or a midpoint.
 4. Point in the direction of the move. A rubber-band line and a chip show the distance.
 5. Either click the target point, or type the distance in metres (for example `2.5`, with a point as the decimal separator) and press **Enter**.
