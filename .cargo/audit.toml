@@ -13,4 +13,7 @@ ignore = [
   "RUSTSEC-2026-0370",
   "RUSTSEC-2026-0371",
   "RUSTSEC-2026-0372",
+  # chrono, unmaintained (all versions), via serde_with, which tauri-utils =2.10.2 (Tauri =2.12.5)
+  # needs; no flaw known. Drop when Tauri moves off chrono.
+  "RUSTSEC-2026-0543",
 ]
