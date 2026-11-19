@@ -5,21 +5,21 @@ import { join } from "node:path";
 import { assetUrl, buildManifest, findPackage, main } from "./update-manifest";
 
 const NOW = new Date("2026-11-15T10:00:00Z");
-const MAC = "BIMCraft_universal.app.tar.gz";
-const WIN = "BIMCraft_0.4.0-beta.1_x64-setup.exe";
+const MAC = "Fabrilo_universal.app.tar.gz";
+const WIN = "Fabrilo_0.4.0-beta.1_x64-setup.exe";
 
 describe("buildManifest", () => {
   const input = {
     version: "0.4.0-beta.1",
     tag: "v0.4.0-beta.1",
-    repo: "GuillaumeOj/BIMCraft",
+    repo: "GuillaumeOj/Fabrilo",
     pubDate: NOW,
     macos: { file: MAC, signature: "bWFj\n" },
     windows: { file: WIN, signature: "d2lu" },
   };
 
   test("lists the universal macOS package for both architectures and the NSIS installer for Windows", () => {
-    const base = "https://github.com/GuillaumeOj/BIMCraft/releases/download/v0.4.0-beta.1";
+    const base = "https://github.com/GuillaumeOj/Fabrilo/releases/download/v0.4.0-beta.1";
     expect(buildManifest(input)).toEqual({
       version: "0.4.0-beta.1",
       pub_date: "2026-11-15T10:00:00.000Z",
@@ -38,8 +38,8 @@ describe("buildManifest", () => {
   });
 
   test("encodes the file names in the addresses", () => {
-    expect(assetUrl("o/r", "v1.0.0", "BIMCraft 1.app.tar.gz")).toBe(
-      "https://github.com/o/r/releases/download/v1.0.0/BIMCraft%201.app.tar.gz",
+    expect(assetUrl("o/r", "v1.0.0", "Fabrilo 1.app.tar.gz")).toBe(
+      "https://github.com/o/r/releases/download/v1.0.0/Fabrilo%201.app.tar.gz",
     );
   });
 });
@@ -49,7 +49,7 @@ describe("findPackage", () => {
   writeFileSync(join(dir, `${MAC}.sig`), "sig");
 
   test("finds the single package and reads its signature", () => {
-    expect(findPackage(dir, [MAC, `${MAC}.sig`, "BIMCraft.dmg"], ".app.tar.gz")).toEqual({ file: MAC, signature: "sig" });
+    expect(findPackage(dir, [MAC, `${MAC}.sig`, "Fabrilo.dmg"], ".app.tar.gz")).toEqual({ file: MAC, signature: "sig" });
   });
 
   test("fails when the package is missing, repeated or unsigned", () => {
