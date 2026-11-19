@@ -30,7 +30,9 @@ export function parseAllowlist(content: string): AllowEntry[] {
     .map((raw) => {
       const [path = "", ...rest] = raw.split("|");
       const phrase = rest.length > 0 ? rest.join("|").trim() : undefined;
-      return { raw, path: path.trim(), ...(phrase ? { phrase } : {}) };
+      // An empty phrase would silently allow the whole file, the opposite of a phrase entry.
+      if (phrase === "") throw new Error(`${ALLOWLIST}: empty phrase in "${raw}"`);
+      return { raw, path: path.trim(), ...(phrase === undefined ? {} : { phrase }) };
     });
 }
 

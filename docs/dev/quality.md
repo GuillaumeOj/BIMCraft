@@ -126,7 +126,7 @@ Adding a crate: list it in `scripts/crate-layers.txt`, and in `scripts/wasm-crat
 
 ## Old name guard
 
-The product was renamed from BIMCraft to Fabrilo ([ADR 0028](adr/0028-rename-to-fabrilo.md)). A name that comes back through a copied snippet, a stale branch or an old habit confuses users and splits searches, so `scripts/check-old-name.ts` fails when "bimcraft", in any case, appears in the path or the content of a tracked file (binary files by path only). It runs in `scripts/check-all.sh repo`, so in CI, and in the pre-commit hook on the staged files. The failure lists each file and line and points to the identifier table of ADR 0028.
+The product was renamed to Fabrilo ([ADR 0028](adr/0028-rename-to-fabrilo.md)). The previous name coming back through a copied snippet, a stale branch or an old habit confuses users and splits searches, so `scripts/check-old-name.ts` fails when that name, in any case, appears in the path or the content of a tracked file (binary files by path only). It runs in `scripts/check-all.sh repo`, so in CI, and in the pre-commit hook on the staged files. The failure lists each file and line and points to the identifier table of ADR 0028.
 
 `scripts/old-name-allowlist.txt` lists the few justified exceptions: a file, a directory, or a phrase that allows only the lines containing it (so a big file such as the specification stays guarded everywhere else). Each entry has a reason comment. An entry that allows nothing fails the check, so the list only shrinks deliberately. The guard's own script, test and allowlist spell the name out and are exempt in the script itself.
 

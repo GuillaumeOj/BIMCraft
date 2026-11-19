@@ -23,6 +23,10 @@ describe("parseAllowlist", () => {
   });
 });
 
+test("parseAllowlist rejects an entry with an empty phrase", () => {
+  expect(() => parseAllowlist("a.md |")).toThrow("empty phrase");
+});
+
 describe("findHits", () => {
   test.each([OLD, OLD.toLowerCase(), OLD.toUpperCase()])("flags %s in a file", (name) => {
     const hits = findHits([file("README.md", `ok\nthe ${name} tool\n`)], []);
