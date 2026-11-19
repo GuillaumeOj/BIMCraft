@@ -431,19 +431,20 @@ describe("lead decisions", () => {
   });
 });
 
-describe("overlapping checks", () => {
-  function Probe() {
-    const { checkNow, state } = useUpdates();
-    return (
-      <>
-        <button type="button" onClick={checkNow}>
-          probe
-        </button>
-        <output>{state.phase}</output>
-      </>
-    );
-  }
+/** Starts a check on each click and shows the phase it reaches. */
+function Probe() {
+  const { checkNow, state } = useUpdates();
+  return (
+    <>
+      <button type="button" onClick={checkNow}>
+        probe
+      </button>
+      <output>{state.phase}</output>
+    </>
+  );
+}
 
+describe("overlapping checks", () => {
   type Call = { resolve: (offer: UpdateOffer | null) => void; reject: (error: unknown) => void };
 
   async function start() {

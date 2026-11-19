@@ -574,7 +574,7 @@ fn a_finished_download_resolves_at_once_without_downloading_again() {
     download(&fixture.host).0.unwrap();
     let (result, events) = download(&fixture.host);
     assert_eq!(result, Ok(()));
-    assert!(events.is_empty());
+    assert_eq!(events, []);
     assert_eq!(package.downloaded.load(Ordering::SeqCst), 1);
 }
 
@@ -761,7 +761,7 @@ fn a_download_whose_offer_a_check_replaces_fails_and_reports_no_progress() {
         block_on(running)
     };
     assert_eq!(code(result), ErrorCode::NoUpdate);
-    assert!(events.is_empty());
+    assert_eq!(events, []);
     assert_eq!(code(host.install()), ErrorCode::NotDownloaded);
 }
 
