@@ -41,6 +41,11 @@ elif [ -n "$ui" ]; then
   skip "biome (run 'bun install' in ui/)"
 fi
 
+if has bun; then
+  printf '%s\n' "$staged" | xargs bun scripts/check-old-name.ts
+else skip bun
+fi
+
 manifests=$(staged_match '(Cargo\.toml|package\.json|rust-toolchain\.toml|^\.github/workflows/.*\.ya?ml)$')
 if [ -n "$manifests" ]; then
   if has bun; then bun scripts/check-pinned-deps.ts; else skip bun; fi
