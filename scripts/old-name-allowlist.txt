@@ -1,0 +1,24 @@
+# Where the old product name may still appear (checked by scripts/check-old-name.ts, see
+# docs/dev/adr/0028-rename-to-fabrilo.md). One entry per line:
+#   <path>              a file, or a directory when it ends with "/"
+#   <path> | <phrase>   only the lines of that file containing the phrase (literal, case-sensitive)
+#   * | <phrase>        the same, in any file
+# An entry that allows nothing fails the check: remove it when its reason is gone.
+
+# The record of the change.
+docs/dev/adr/0028-rename-to-fabrilo.md
+
+# Historical feature records, left untouched by the rename.
+.orchestrator/
+
+# The decision entry of specification section 16.2.
+docs/specifications.md | Changed from BIMCraft on 2026-11-17
+
+# The name-change note of the user guide.
+docs/user/introduction.md | was called BIMCraft until November 2026
+
+# The test that the old property set is foreign (ADR 0028, "No compatibility").
+crates/interop-ifc/tests/georef.rs | "BIMCraft_SurveyPoint"
+
+# Repository URLs and REPO= until the owner renames the repository (ADR 0028); remove then.
+* | GuillaumeOj/BIMCraft
