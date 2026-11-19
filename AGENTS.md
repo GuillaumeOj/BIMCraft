@@ -139,6 +139,7 @@ Users are architects and engineers, not developers. For every user-facing featur
 | Pinned versions | `bun scripts/check-pinned-deps.ts` |
 | Renovate config (downloads Renovate) | `scripts/check-all.sh renovate` |
 | Crate layering and core-crate lint scope | `bun scripts/check-architecture.ts` |
+| Old name guard | `bun scripts/check-old-name.ts` |
 | UI lint/format/imports | `cd ui && bunx biome ci .` |
 | UI types | `cd ui && bunx tsc --noEmit` |
 | UI tests + coverage | `cd ui && bunx vitest run --coverage` |

@@ -124,6 +124,12 @@ Disciplines depend only on the public extension interfaces of the core, the same
 
 Adding a crate: list it in `scripts/crate-layers.txt`, and in `scripts/wasm-crates.txt` (then add the `forbid` line) and `scripts/critical-crates.txt` when they apply. A `disc-*` crate depends on `core-ext` and `platform` only; when it needs more of the core, add the items to `core-ext` and its surface test.
 
+## Old name guard
+
+The product was renamed from BIMCraft to Fabrilo ([ADR 0028](adr/0028-rename-to-fabrilo.md)). A name that comes back through a copied snippet, a stale branch or an old habit confuses users and splits searches, so `scripts/check-old-name.ts` fails when "bimcraft", in any case, appears in the path or the content of a tracked file (binary files by path only). It runs in `scripts/check-all.sh repo`, so in CI, and in the pre-commit hook on the staged files. The failure lists each file and line and points to the identifier table of ADR 0028.
+
+`scripts/old-name-allowlist.txt` lists the few justified exceptions: a file, a directory, or a phrase that allows only the lines containing it (so a big file such as the specification stays guarded everywhere else). Each entry has a reason comment. An entry that allows nothing fails the check, so the list only shrinks deliberately. The guard's own script, test and allowlist spell the name out and are exempt in the script itself.
+
 ## End-user documentation
 
 Fabrilo users are architects and engineers. A feature they cannot find or understand does not exist for them. The user guide (`docs/user/`, built with mdBook) is organised by task and written in plain language, and `scripts/check-pr.sh` fails a pull request whose `feat`/`fix` commits change product code without touching `docs/user/`, unless it carries the `no-user-docs` label with a reason.
