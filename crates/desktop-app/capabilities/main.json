@@ -1,10 +1,15 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "main",
-  "description": "The main window: the API command and its notification events, and opening the user guide in the system browser, nothing else.",
+  "description": "The main window: the API and scene commands and the API's notification events, the update commands and their progress events, and opening the user guide in the system browser; no other plugin command, the updater's included.",
   "windows": ["main"],
   "permissions": [
     "allow-api",
+    "allow-scene",
+    "allow-app-info",
+    "allow-update-check",
+    "allow-update-download",
+    "allow-update-install",
     "core:event:allow-listen",
     "core:event:allow-unlisten",
     {

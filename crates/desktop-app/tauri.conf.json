@@ -22,7 +22,15 @@
       "devCsp": null
     }
   },
+  "plugins": {
+    "updater": {
+      "requireSignedVersion": true
+    }
+  },
   "bundle": {
+    "active": true,
+    "targets": ["nsis", "msi", "dmg", "app"],
+    "createUpdaterArtifacts": true,
     "icon": [
       "icons/icon.png",
       "icons/32x32.png",
@@ -31,6 +39,18 @@
       "icons/icon.icns",
       "icons/icon.ico",
       "icons/Fabrilo.icon"
-    ]
+    ],
+    "windows": {
+      "webviewInstallMode": {
+        "type": "embedBootstrapper"
+      },
+      "nsis": {
+        "installMode": "currentUser"
+      }
+    },
+    "macOS": {
+      "minimumSystemVersion": "11.0",
+      "hardenedRuntime": true
+    }
   }
 }
